@@ -1,0 +1,2037 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object within a bucket or between buckets, without transferring the content through the client.\n\nBoth buckets must be reachable with the connection's credentials.",
+          "message": "Копіює об’єкт у межах бакета або між бакетами без передавання вмісту через клієнт.\n\nОбидва бакети мають бути доступні за обліковими даними підключення."
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "Копіювати об’єкт"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.desc": {
+          "source": "The bucket to copy the object into",
+          "message": "Бакет, у який потрібно скопіювати об’єкт"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.display_name": {
+          "source": "Target Bucket",
+          "message": "Цільовий бакет"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.YnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "Бакет, у який потрібно скопіювати об’єкт"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to copy the object to",
+          "message": "Ключ призначення для копіювання об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Target Key",
+          "message": "Ключ призначення"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The key to copy the object to",
+          "message": "Ключ призначення для копіювання об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The bucket holding the object to copy",
+          "message": "Бакет, що містить об'єкт для копіювання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Вихідний бакет"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the object to copy",
+          "message": "Бакет, що містить об'єкт для копіювання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.desc": {
+          "source": "The key of the object to copy",
+          "message": "Ключ об'єкта для копіювання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.display_name": {
+          "source": "Source Key",
+          "message": "Вихідний ключ"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c291cmNlX2tleQ.short_desc": {
+          "source": "The key of the object to copy",
+          "message": "Ключ об'єкта для копіювання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Довговічні дані з нечастим доступом, що зберігаються в одній зоні доступності; дешевше за `STANDARD_IA`, але втрачаються у разі знищення зони"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Дані з нечастим доступом в одній зоні доступності"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Довгостроковий архів з отриманням протягом кількох годин"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Архівні дані, що витягуються від кількох хвилин до кількох годин; об'єкти необхідно відновити перед читанням"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Архівні дані з отриманням від кількох хвилин до кількох годин"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Архівні дані, що потребують мілісекундного часу отримання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Архівні дані, що потребують негайного доступу"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Дані зі змінними або невідомими шаблонами доступу; Amazon S3 переміщує об'єкти між рівнями доступу"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Дані зі змінними або невідомими шаблонами доступу"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Дані з частим доступом; клас сховища за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Стандартний"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Дані з частим доступом"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Довговічні дані з нечастим доступом; стягується плата за отримання"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Довговічні дані з нечастим доступом"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the copy; if not set, the source object's class is used",
+          "message": "Клас сховища для копії; якщо не вказано, використовується клас вихідного об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Клас сховища"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "Клас сховища для копії"
+        },
+        "app.QW1hem9uUzM.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object within or between buckets",
+          "message": "Копіювати об'єкт у межах бакета або між бакетами"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.desc": {
+          "source": "Creates a new bucket in the connection's region.\n\nBucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names, so a name already taken by another account is rejected.",
+          "message": "Створює новий бакет у регіоні підключення.\n\nІмена бакетів є глобально унікальними в межах усього Amazon S3 і мають бути DNS-сумісними іменами в нижньому регістрі, тому ім'я, яке вже зайняте іншим обліковим записом, відхиляється."
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.display_name": {
+          "source": "Create Bucket",
+          "message": "Створити бакет"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.desc": {
+          "source": "Any authenticated AWS user can read the bucket contents, not only users in this account",
+          "message": "Будь-який автентифікований користувач AWS може читати вміст бакета, не лише користувачі цього облікового запису"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.display_name": {
+          "source": "Authenticated Read",
+          "message": "Authenticated Read"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOmF1dGhlbnRpY2F0ZWQtcmVhZA.short_desc": {
+          "source": "Any authenticated AWS user can read the bucket contents",
+          "message": "Будь-який автентифікований користувач AWS може читати вміст бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.desc": {
+          "source": "Anyone on the internet can read the bucket contents; **use with care**, as this exposes every object in the bucket",
+          "message": "Будь-хто в інтернеті може читати вміст бакета; **використовуйте з обережністю**, оскільки це відкриває доступ до кожного об'єкта в бакеті"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.display_name": {
+          "source": "Public Read",
+          "message": "Public Read"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFk.short_desc": {
+          "source": "Anyone can read the bucket contents",
+          "message": "Будь-хто може читати вміст бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.desc": {
+          "source": "Anyone on the internet can read and write the bucket contents; **strongly discouraged**, as it allows anyone to store objects at the account owner's expense",
+          "message": "Будь-хто в інтернеті може читати та записувати вміст бакета; **настійно не рекомендується**, оскільки це дозволяє будь-кому зберігати об'єкти за рахунок власника облікового запису"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.display_name": {
+          "source": "Public Read/Write",
+          "message": "Public Read/Write"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnB1YmxpYy1yZWFkLXdyaXRl.short_desc": {
+          "source": "Anyone can read and write the bucket contents",
+          "message": "Будь-хто може читати та записувати вміст бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.desc": {
+          "source": "Only the bucket owner has access; the default and the recommended value",
+          "message": "Доступ має лише власник бакета; значення за замовчуванням і рекомендоване значення"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "Приватний"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.allowed-value.c3RyaW5nOnByaXZhdGU.short_desc": {
+          "source": "Only the bucket owner has access",
+          "message": "Доступ має лише власник бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.desc": {
+          "source": "The access control policy applied to the new bucket",
+          "message": "Політика керування доступом, що застосовується до нового бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.display_name": {
+          "source": "Canned ACL",
+          "message": "Шаблонний ACL"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YWNs.short_desc": {
+          "source": "The access control policy for the new bucket",
+          "message": "Політика керування доступом для нового бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to create; bucket names are globally unique across all of Amazon S3 and must be DNS-compatible lower-case names",
+          "message": "Ім'я бакета, який потрібно створити; імена бакетів є глобально унікальними в межах усього Amazon S3 і мають бути DNS-сумісними іменами в нижньому регістрі"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.desc": {
+          "source": "Enable object lock on the new bucket; object lock cannot be enabled after creation and requires versioning, which is enabled automatically when this is set",
+          "message": "Увімкнути блокування об'єктів для нового бакета; блокування об'єктів не можна ввімкнути після створення і вимагає версіонування, яке вмикається автоматично, якщо це налаштування вибрано"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.display_name": {
+          "source": "Object Lock Enabled",
+          "message": "Блокування об'єктів увімкнено"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.option.b2JqZWN0X2xvY2tfZW5hYmxlZA.short_desc": {
+          "source": "Enable object lock on the new bucket",
+          "message": "Увімкнути блокування об'єктів для нового бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLWJ1Y2tldA.short_desc": {
+          "source": "Create a new bucket",
+          "message": "Створити новий бакет"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates an object directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and marker objects.",
+          "message": "Створює об'єкт безпосередньо з текстового вмісту без потреби у файлі.\n\nКорисно для запису згенерованих звітів, маніфестів і маркерних об'єктів."
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text Object",
+          "message": "Створити текстовий об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content to store in the object",
+          "message": "Текстовий вміст для збереження в об'єкті"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content to store",
+          "message": "Текстовий вміст для збереження"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store with the object",
+          "message": "Тип MIME для збереження разом з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store with the object",
+          "message": "Тип MIME для збереження разом з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.desc": {
+          "source": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used",
+          "message": "Ключ AWS KMS для шифрування об'єкта у вигляді ID ключа, псевдоніма або ARN.\n\nВикористовується лише тоді, коли `server_side_encryption` вибирає схему KMS; якщо не вказано, використовується ключ KMS бакета за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.a21zX2tleV9pZA.short_desc": {
+          "source": "The AWS KMS key to encrypt with",
+          "message": "Ключ AWS KMS для шифрування"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "Визначені користувачем метадані для збереження з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Метадані"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "Визначені користувачем метадані для збереження з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.desc": {
+          "source": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed",
+          "message": "Шифрувати об'єкт ключами, якими повністю керує Amazon S3; більше нічого не потрібно"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.display_name": {
+          "source": "S3-Managed Keys (SSE-S3)",
+          "message": "Ключі під керуванням S3 (SSE-S3)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.short_desc": {
+          "source": "Encrypt with keys Amazon S3 manages",
+          "message": "Шифрувати ключами під керуванням Amazon S3"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.desc": {
+          "source": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket",
+          "message": "Шифрувати об'єкт ключем AWS KMS.\n\nВкажіть назву ключа в `kms_key_id`; якщо поле не заповнено, використовується стандартний ключ KMS для бакета. Облікові дані повинні мати дозвіл на використання ключа, інакше вивантаження завершиться помилкою, навіть якщо вони мають право запису до бакета"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.display_name": {
+          "source": "KMS Keys (SSE-KMS)",
+          "message": "Ключі KMS (SSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.short_desc": {
+          "source": "Encrypt with an AWS KMS key",
+          "message": "Шифрувати ключем AWS KMS"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.desc": {
+          "source": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it",
+          "message": "Застосувати два незалежні рівні шифрування ключем AWS KMS для даних, які підпадають під таку вимогу"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.display_name": {
+          "source": "Dual-Layer KMS (DSSE-KMS)",
+          "message": "Дворівневий KMS (DSSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.short_desc": {
+          "source": "Encrypt twice with an AWS KMS key",
+          "message": "Шифрувати двічі ключем AWS KMS"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.desc": {
+          "source": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object",
+          "message": "Шифрувати неактивний об'єкт (at rest) за допомогою вибраної схеми.\n\nЯкщо не встановлено, застосовується конфігурація шифрування за замовчуванням для бакета; встановлення значення тут замінює її для цього об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.display_name": {
+          "source": "Server-Side Encryption",
+          "message": "Шифрування на стороні сервера"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.short_desc": {
+          "source": "Encrypt the object at rest",
+          "message": "Шифрувати неактивний об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Довговічні дані з нечастим доступом, що зберігаються в одній зоні доступності; дешевше за `STANDARD_IA`, але втрачаються у разі знищення зони"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Дані з нечастим доступом в одній зоні доступності"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Довгостроковий архів з отриманням протягом кількох годин"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Архівні дані, що витягуються від кількох хвилин до кількох годин; об'єкти необхідно відновити перед читанням"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Архівні дані з отриманням від кількох хвилин до кількох годин"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Архівні дані, що потребують мілісекундного часу отримання"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Архівні дані, що потребують негайного доступу"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Дані зі змінними або невідомими шаблонами доступу; Amazon S3 переміщує об'єкти між рівнями доступу"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Дані зі змінними або невідомими шаблонами доступу"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Дані з частим доступом; клас сховища за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Стандартний"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Дані з частим доступом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Довговічні дані з нечастим доступом; стягується плата за отримання"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Довговічні дані з нечастим доступом"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object",
+          "message": "Клас зберігання для нового об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Клас сховища"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the new object",
+          "message": "Клас зберігання для нового об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create an object from text content",
+          "message": "Створити об'єкт із текстового вмісту"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.desc": {
+          "source": "Retrieves an object's metadata and, unless `include_content` is cleared, its content.\n\nClear `include_content` to check an object's size, type, or modification time without transferring it, which is much cheaper for large objects.",
+          "message": "Отримує метадані об'єкта і, якщо не очищено `include_content`, його вміст.\n\nОчистіть `include_content`, щоб перевірити розмір, тип або час змінення об'єкта без його передавання, що значно дешевше для великих об'єктів."
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.display_name": {
+          "source": "Get Object",
+          "message": "Отримати об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.desc": {
+          "source": "Return the object content in the `content` field as well as its metadata; when `False` only the metadata is retrieved, which is much cheaper for large objects",
+          "message": "Повернути вміст об'єкта в полі `content`, а також його метадані; якщо `False`, витягуються лише метадані, що значно дешевше для великих об'єктів"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.display_name": {
+          "source": "Include Content",
+          "message": "Включити вміст"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.aW5jbHVkZV9jb250ZW50.short_desc": {
+          "source": "Return the object content as well as its metadata",
+          "message": "Повернути вміст об'єкта разом із його метаданими"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdA.short_desc": {
+          "source": "Retrieve an object and its metadata",
+          "message": "Отримати об'єкт та його метадані"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.desc": {
+          "source": "Reads the tags stored with an object.\n\nObject tags drive lifecycle rules, access policies, and cost allocation, so they are how a bucket is organized without changing any key.",
+          "message": "Зчитує теги, збережені з об'єктом.\n\nТеги об'єктів визначають правила життєвого циклу, політики доступу та розподіл витрат, тому за їх допомогою впорядковується бакет без зміни ключів."
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.display_name": {
+          "source": "Get Object Tags",
+          "message": "Отримати теги об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.Z2V0LW9iamVjdC10YWdnaW5n.short_desc": {
+          "source": "Read the tags stored with an object",
+          "message": "Зчитати теги, збережені з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads an object's content along with its metadata.\n\nUse `get-object` with `include_content` cleared instead when only the metadata is needed.",
+          "message": "Завантажує вміст об'єкта разом із його метаданими.\n\nВикористовуйте `get-object` з очищеним `include_content`, якщо потрібні лише метадані."
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Завантажити файл"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download an object's content",
+          "message": "Завантажити вміст об'єкта"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object from a bucket.\n\nOn a version-enabled bucket this adds a delete marker rather than removing the data, unless a specific `version_id` is given.",
+          "message": "Видаляє об'єкт із бакета.\n\nУ бакеті з підтримкою версійності це додає маркер видалення замість видалення даних, якщо не вказано конкретний `version_id`."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Видалити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object from a bucket",
+          "message": "Видалити об'єкт із бакета"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.desc": {
+          "source": "Deletes up to `1000` objects in a single call.\n\nAmazon S3 charges per request, so clearing a large prefix this way costs a fraction of one delete per key.\n\n**A batch delete does not fail as a whole**: individual keys can be refused - by an object-lock retention, or by a policy that allows some prefixes and not others - while the request itself succeeds.  Check `errors` rather than assuming everything was removed.",
+          "message": "Видаляє до `1000` об'єктів за один виклик.\n\nAmazon S3 стягує плату за запит, тому очищення великого префікса таким чином коштує значно менше, ніж окреме видалення кожного ключа.\n\n**Пакетне видалення не завершується помилкою повністю**: для окремих ключів може бути відмовлено — через блокування утримання об'єктів або через політику, яка дозволяє одні префікси та забороняє інші — тоді як сам запит буде успішним. Перевіряйте `errors`, а не вважайте, що все було видалено."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.display_name": {
+          "source": "Delete Objects",
+          "message": "Видалити об'єкти"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.desc": {
+          "source": "Remove objects that are under a governance-mode object-lock retention.\n\nThe credentials must be allowed `s3:BypassGovernanceRetention`; objects under a **compliance**-mode lock cannot be removed by anyone until the lock expires",
+          "message": "Видалити об'єкти, які перебувають під блокуванням утримання в режимі управління.\n\nОблікові дані повинні мати дозвіл `s3:BypassGovernanceRetention`; об'єкти під блокуванням у режимі **compliance** ніхто не може видалити до завершення терміну дії блокування"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.display_name": {
+          "source": "Bypass Governance Retention",
+          "message": "Обійти утримання в режимі управління"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.YnlwYXNzX2dvdmVybmFuY2VfcmV0ZW50aW9u.short_desc": {
+          "source": "Remove objects under a governance-mode retention lock",
+          "message": "Видалити об'єкти під блокуванням утримання в режимі управління"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.desc": {
+          "source": "The keys to delete; at most `1000` per call.\n\nAmazon S3 charges per request, so removing many objects this way costs a fraction of one delete per key",
+          "message": "Ключі для видалення; щонайбільше `1000` на виклик.\n\nAmazon S3 стягує плату за запит, тому видалення багатьох об'єктів таким чином коштує значно менше, ніж окреме видалення кожного ключа"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.display_name": {
+          "source": "Object Keys",
+          "message": "Ключі об'єктів"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.b2JqZWN0X2tleXM.short_desc": {
+          "source": "The keys to delete",
+          "message": "Ключі для видалення"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.desc": {
+          "source": "Report only the keys that failed rather than every key processed; useful when deleting a large batch",
+          "message": "Повідомляти лише про ключі з помилками, а не про всі оброблені ключі; корисно під час видалення великого пакета"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.display_name": {
+          "source": "Quiet",
+          "message": "Тихий режим"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.option.cXVpZXQ.short_desc": {
+          "source": "Report only the keys that failed",
+          "message": "Повідомляти лише про ключі з помилками"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLW9iamVjdHM.short_desc": {
+          "source": "Delete up to 1000 objects in a single call",
+          "message": "Видалити до 1000 об'єктів за один виклик"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.desc": {
+          "source": "Deletes a bucket.\n\n**The bucket must already be empty**, including every non-current version and delete marker if it has versioning enabled; Amazon S3 refuses to delete a bucket that still holds anything.  Use `delete-objects` to clear it first.",
+          "message": "Видаляє бакет.\n\n**Бакет уже має бути порожнім**, включно з усіма неактуальними версіями та маркерами видалення, якщо ввімкнено версійність; Amazon S3 відмовляється видаляти бакет, у якому все ще щось є. Спочатку скористайтеся `delete-objects`, щоб очистити його."
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.display_name": {
+          "source": "Delete Bucket",
+          "message": "Видалити бакет"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to delete; it must already be empty",
+          "message": "Назва бакета для видалення; він уже має бути порожнім"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.ZGVsZXRlLWJ1Y2tldA.short_desc": {
+          "source": "Delete an empty bucket",
+          "message": "Видалити порожній бакет"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.desc": {
+          "source": "Reads the objects in a bucket as a stream of records.\n\nUnlike `list-objects`, which answers one page and leaves the continuation token to the caller, this walks the whole listing: pages are fetched as they are reached, so a bucket holding more than `1000` keys is read without the caller knowing how Amazon paginates.\n\nNarrow the read with `prefix` wherever possible.  It is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for.",
+          "message": "Зчитує об'єкти в бакеті як потік записів.\n\nНа відміну від `list-objects`, який повертає одну сторінку і залишає токен продовження викликачу, цей метод обходить увесь список: сторінки завантажуються в міру досягнення, тому бакет, що містить понад `1000` ключів, зчитується без необхідності викликачу знати, як Amazon розбиває на сторінки.\n\nЗвужуйте вибірку за допомогою `prefix`, де це можливо. Він застосовується на стороні Amazon S3, а не після отримання списку, тому зменшує обсяг переданих даних і витрати."
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.display_name": {
+          "source": "Find Objects",
+          "message": "Знайти об'єкти"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The bucket to read objects from",
+          "message": "Бакет для зчитування об'єктів"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to read",
+          "message": "Бакет для зчитування"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to read one level of a key hierarchy rather than every key below it",
+          "message": "Групувати ключі зі спільним префіксом до першого входження цього символу; встановіть значення `/` разом із `prefix`, щоб зчитати один рівень ієрархії ключів замість усіх ключів під ним"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Розділювач"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Group keys sharing a prefix up to this character",
+          "message": "Групувати ключі зі спільним префіксом до цього символу"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.desc": {
+          "source": "Begin reading after this key; Amazon S3 returns keys in lexical order, so this resumes a walk from where an earlier one stopped",
+          "message": "Почати зчитування після цього ключа; Amazon S3 повертає ключі в лексикографічному порядку, тому це дозволяє відновити обхід з місця, де зупинився попередній"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.display_name": {
+          "source": "Start After",
+          "message": "Почати після"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.short_desc": {
+          "source": "Begin reading after this key",
+          "message": "Почати зчитування після цього ключа"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.desc": {
+          "source": "How many keys to fetch per request; Amazon S3 caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "Скільки ключів отримувати за один запит; Amazon S3 обмежує це значення до `1000`.\n\nЦе впливає на те, як обхід розбивається на запити, а не на кількість повернутих записів — ітератор завантажує наступні сторінки за потреби"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many keys to fetch per request",
+          "message": "Скільки ключів отримувати за один запит"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "Read only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so it reduces what is transferred and paid for, not only what is examined",
+          "message": "Зчитувати лише ключі, які починаються з цього рядка.\n\nПрефікс застосовується на стороні Amazon S3, а не після отримання списку, тому це зменшує обсяг переданих даних і витрати, а не лише обсяг перевірених ключів"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "Read only keys beginning with this string",
+          "message": "Зчитувати лише ключі, які починаються з цього рядка"
+        },
+        "app.QW1hem9uUzM.action.ZmluZC1vYmplY3Rz.short_desc": {
+          "source": "Read the objects in a bucket as records",
+          "message": "Зчитати об'єкти в бакеті як записи"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists every bucket owned by the authenticated account, with the date each was created.",
+          "message": "Перелічує всі бакети, які належать автентифікованому обліковому запису, із датою створення кожного."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "Отримати список бакетів"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets owned by the account",
+          "message": "Перелічити бакети, які належать обліковому запису"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.desc": {
+          "source": "Lists every version of the objects in a bucket, along with the delete markers.\n\nOn a bucket with versioning enabled, deleting an object does not remove the data: it adds a marker that hides it.  This shows what is actually there, so an earlier version can be retrieved by passing its `version_id` to `get-object` or `download-file`, and a deletion can be undone by removing its marker with `delete-object`.\n\nA listing is paginated; when `truncated` is set, pass `next_key_marker` and `next_version_id_marker` back to retrieve the following page.",
+          "message": "Перелічує всі версії об'єктів у бакеті разом із маркерами видалення.\n\nУ бакеті з увімкненим керуванням версіями видалення об'єкта не видаляє дані: воно додає маркер, який його приховує. Це показує, що насправді там є, тому попередню версію можна отримати, передавши її `version_id` до `get-object` або `download-file`, а видалення можна скасувати, видаливши цей маркер за допомогою `delete-object`.\n\nСписок розбито на сторінки; коли встановлено `truncated`, передайте `next_key_marker` і `next_version_id_marker` у відповідь, щоб отримати наступну сторінку."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.display_name": {
+          "source": "List Object Versions",
+          "message": "Отримати список версій об'єктів"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.desc": {
+          "source": "The `next_key_marker` value returned by a previous truncated listing",
+          "message": "Значення `next_key_marker`, повернуте попереднім усіченим списком"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.display_name": {
+          "source": "Key Marker",
+          "message": "Маркер ключа"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.a2V5X21hcmtlcg.short_desc": {
+          "source": "The key to continue a truncated listing from",
+          "message": "Ключ, з якого слід продовжити усічений список"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.desc": {
+          "source": "The maximum number of versions to return per page; Amazon S3 caps this at `1000`",
+          "message": "Максимальна кількість версій для повернення на сторінку; Amazon S3 обмежує це значення до `1000`"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.display_name": {
+          "source": "Maximum Versions",
+          "message": "Максимальна кількість версій"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.bWF4X2tleXM.short_desc": {
+          "source": "The maximum number of versions to return per page",
+          "message": "Максимальна кількість версій для повернення на сторінку"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.desc": {
+          "source": "List only keys beginning with this string",
+          "message": "Показувати лише ключі, що починаються з цього рядка"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.cHJlZml4.short_desc": {
+          "source": "List only keys beginning with this string",
+          "message": "Показувати лише ключі, що починаються з цього рядка"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.desc": {
+          "source": "The `next_version_id_marker` value returned by a previous truncated listing; it is used together with `key_marker`",
+          "message": "Значення `next_version_id_marker`, повернуте попереднім усіченим списком; використовується разом із `key_marker`"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.display_name": {
+          "source": "Version ID Marker",
+          "message": "Маркер ідентифікатора версії"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.option.dmVyc2lvbl9pZF9tYXJrZXI.short_desc": {
+          "source": "The version to continue a truncated listing from",
+          "message": "Версія, з якої слід продовжити усічений список"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3QtdmVyc2lvbnM.short_desc": {
+          "source": "List every version of the objects in a bucket",
+          "message": "Отримати список усіх версій об'єктів у бакеті"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nSet `prefix` to restrict the listing to keys beginning with a given string, and set `delimiter` to `/` as well to list one level of a key hierarchy rather than every key below it - together these make a bucket browsable as though it had folders.\n\nA listing is capped at `1000` keys; when the response is `truncated`, pass its `next_continuation_token` back in `continuation_token` to retrieve the following page.",
+          "message": "Перелічує об'єкти в бакеті.\n\nУстановіть `prefix`, щоб обмежити список ключами, які починаються із заданого рядка, а також установіть `delimiter` на `/`, щоб перелічити один рівень ієрархії ключів замість усіх ключів під ним — разом це дає змогу переглядати бакет так, ніби він містить папки.\n\nСписок обмежено до `1000` ключів; коли відповідь має значення `truncated`, передайте її `next_continuation_token` назад у `continuation_token`, щоб отримати наступну сторінку."
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "Отримати список об'єктів"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.desc": {
+          "source": "The `next_continuation_token` value returned by a previous truncated listing; used to retrieve the following page",
+          "message": "Значення `next_continuation_token`, повернуте попереднім усіченим списком; використовується для отримання наступної сторінки"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.display_name": {
+          "source": "Continuation Token",
+          "message": "Токен продовження"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.Y29udGludWF0aW9uX3Rva2Vu.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "Токен, повернутий попереднім усіченим списком"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Group keys that share a prefix up to the first occurrence of this character; set to `/` together with `prefix` to list one level of a key hierarchy rather than every key below it",
+          "message": "Групувати ключі зі спільним префіксом до першого входження цього символу; установіть на `/` разом із `prefix`, щоб отримати список одного рівня ієрархії ключів, а не всіх ключів під ним"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Розділювач"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Group keys sharing a prefix up to this character",
+          "message": "Групувати ключі зі спільним префіксом до цього символу"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.desc": {
+          "source": "The maximum number of keys to return per page; Amazon S3 caps this at `1000`",
+          "message": "Максимальна кількість ключів для повернення на сторінку; Amazon S3 обмежує це значення до `1000`"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.display_name": {
+          "source": "Maximum Keys",
+          "message": "Максимальна кількість ключів"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.bWF4X2tleXM.short_desc": {
+          "source": "The maximum number of keys to return per page",
+          "message": "Максимальна кількість ключів для повернення на сторінку"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.desc": {
+          "source": "Begin listing after this key; keys are returned in ascending order",
+          "message": "Починати список після цього ключа; ключі повертаються за зростанням"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.display_name": {
+          "source": "Start After",
+          "message": "Почати після"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfYWZ0ZXI.short_desc": {
+          "source": "Begin listing after this key",
+          "message": "Починати список після цього ключа"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "Return only keys beginning with this prefix; used with `delimiter` to emulate browsing a directory tree",
+          "message": "Повертати лише ключі, що починаються з цього префікса; використовується з `delimiter` для імітації перегляду дерева каталогів"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "Return only keys beginning with this prefix",
+          "message": "Повертати лише ключі, що починаються з цього префікса"
+        },
+        "app.QW1hem9uUzM.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "Отримати список об'єктів у бакеті"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.desc": {
+          "source": "Moves an object to a different key, a different bucket, or both.\n\nAmazon S3 has no move operation, so this copies the object and then deletes the original.  The copy is performed by Amazon S3 itself, so the content is never transferred through this system, and **the original is removed only after the copy has been confirmed** - a failure part-way through leaves it in place rather than losing it.",
+          "message": "Переміщує об'єкт до іншого ключа, іншого бакета або до обох.\n\nВ Amazon S3 немає операції переміщення, тому ця дія копіює об'єкт, а потім видаляє оригінал. Копіювання виконується самим сервісом Amazon S3, тому вміст ніколи не передається через цю систему, а **оригінал видаляється лише після підтвердження копіювання** — збій під час виконання залишає його на місці, запобігаючи втраті."
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.display_name": {
+          "source": "Move Object",
+          "message": "Перемістити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.desc": {
+          "source": "The bucket to move the object into; it may be the same as the source bucket",
+          "message": "Бакет, у який потрібно перемістити об'єкт; може збігатися з вихідним бакетом"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.display_name": {
+          "source": "Target Bucket",
+          "message": "Цільовий бакет"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.YnVja2V0.short_desc": {
+          "source": "The bucket to move the object into",
+          "message": "Бакет, у який потрібно перемістити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to move the object to",
+          "message": "Ключ, до якого потрібно перемістити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Target Key",
+          "message": "Ключ призначення"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The key to move the object to",
+          "message": "Ключ, до якого потрібно перемістити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The bucket holding the object to move",
+          "message": "Бакет, що містить об'єкт для переміщення"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Вихідний бакет"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the object to move",
+          "message": "Бакет, що містить об'єкт для переміщення"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.desc": {
+          "source": "The key of the object to move",
+          "message": "Ключ об'єкта для переміщення"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.display_name": {
+          "source": "Source Key",
+          "message": "Вихідний ключ"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c291cmNlX2tleQ.short_desc": {
+          "source": "The key of the object to move",
+          "message": "Ключ об'єкта для переміщення"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Довговічні дані з нечастим доступом, що зберігаються в одній зоні доступності; дешевше за `STANDARD_IA`, але втрачаються у разі знищення зони"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Дані з нечастим доступом в одній зоні доступності"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Довгостроковий архів з отриманням протягом кількох годин"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Архівні дані, що витягуються від кількох хвилин до кількох годин; об'єкти необхідно відновити перед читанням"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Архівні дані з отриманням від кількох хвилин до кількох годин"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Архівні дані, що потребують мілісекундного часу отримання"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Архівні дані, що потребують негайного доступу"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Дані зі змінними або невідомими шаблонами доступу; Amazon S3 переміщує об'єкти між рівнями доступу"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Дані зі змінними або невідомими шаблонами доступу"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Дані з частим доступом; клас сховища за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Стандартний"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Дані з частим доступом"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Довговічні дані з нечастим доступом; стягується плата за отримання"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Довговічні дані з нечастим доступом"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class to store the moved object under",
+          "message": "Клас сховища для збереження переміщеного об'єкта"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Клас сховища"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the moved object",
+          "message": "Клас сховища для переміщеного об'єкта"
+        },
+        "app.QW1hem9uUzM.action.bW92ZS1vYmplY3Q.short_desc": {
+          "source": "Move an object within or between buckets",
+          "message": "Перемістити об'єкт усередині бакета або між бакетами"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Amazon S3** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Amazon S3**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QW1hem9uUzM.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Amazon S3",
+          "message": "Виконати довільний виклик API до Amazon S3"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.desc": {
+          "source": "Fires when an object is created or updated in the bucket being watched.\n\nAmazon S3 offers no change feed, so this lists the bucket's keys at each poll interval and compares their modification times.  Two consequences are worth knowing before pointing this at a production bucket:\n- **Set `prefix`** whenever the objects of interest share one.  It is applied by S3 rather than after the listing arrives, so it reduces what each poll transfers and costs.\n- **A poll examines at most `max_scan_keys` keys**, and logs a warning when it reaches that bound rather than stopping silently.\n\n**Deletions are not reported**: a listing shows what is present, so an object that has gone leaves nothing to report.",
+          "message": "Спрацьовує, коли об'єкт створюється або оновлюється у відстежуваному бакеті.\n\nAmazon S3 не надає стрічки змін, тому цей тригер перелічує ключі бакета під час кожного інтервалу опитування та порівнює час їх модифікації. Перед використанням у робочому бакеті слід врахувати два наслідки:\n- **Установіть `prefix`**, якщо потрібні об'єкти мають спільний префікс. Він застосовується безпосередньо в S3, а не після отримання списку, що зменшує обсяг переданих даних і витрати під час кожного опитування.\n- **Одне опитування перевіряє щонайбільше `max_scan_keys` ключів** і записує попередження в журнал у разі досягнення цього ліміту, замість тихої зупинки.\n\n**Видалення не фіксуються**: список показує лише наявні елементи, тому видалений об'єкт не генерує звітів."
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.display_name": {
+          "source": "New or Updated File",
+          "message": "Новий або оновлений файл"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.desc": {
+          "source": "The bucket to watch for new and updated objects",
+          "message": "Бакет для відстеження нових та оновлених об'єктів"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket to watch",
+          "message": "Бакет для відстеження"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.desc": {
+          "source": "The maximum number of keys examined in one poll (default `10000`).\n\nS3 cannot filter a listing by modification time, so every poll examines the keys under `prefix` to find the changed ones.  This bounds that work; a poll that reaches the bound logs a warning, since a scan that stopped early would otherwise be indistinguishable from a bucket in which nothing had changed",
+          "message": "Максимальна кількість ключів, що перевіряються за одне опитування (за замовчуванням `10000`).\n\nS3 не може фільтрувати список за часом модифікації, тому кожне опитування перевіряє ключі за шляхом `prefix`, щоб знайти змінені. Це обмежує обсяг роботи; опитування, яке досягає ліміту, записує попередження в журнал, оскільки завчасно зупинене сканування інакше не можна було б відрізнити від бакета, в якому нічого не змінилося"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.display_name": {
+          "source": "Maximum Keys Scanned",
+          "message": "Максимальна кількість сканованих ключів"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.bWF4X3NjYW5fa2V5cw.short_desc": {
+          "source": "The maximum number of keys examined in one poll",
+          "message": "Максимальна кількість ключів, що перевіряються за одне опитування"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs",
+          "message": "Не повідомляти про об'єкти, старіші за цю дату.\n\nЯкщо не встановлено, відстеження повідомлятиме лише про те, що з'явилося після його запуску, тому наявний бакет не створюватиме лавину подій під час першого запуску"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Do not report anything older than this",
+          "message": "Не повідомляти про об'єкти, старіші за це значення"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time",
+          "message": "Як часто перевіряти наявність змін, у секундах (мінімум `30`, за замовчуванням `60`).\n\nAmazon S3 стягує плату за кожен запит, тому короткий інтервал для великого бакета призводить до витрат коштів і часу"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Як часто перевіряти наявність змін, у секундах"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.desc": {
+          "source": "Watch only keys beginning with this string.\n\nThe prefix is applied by Amazon S3 rather than after the listing arrives, so narrowing a large bucket with it reduces what each poll transfers and costs, not only what it examines",
+          "message": "Відстежувати лише ключі, що починаються з цього рядка.\n\nПрефікс застосовується самим Amazon S3, а не після отримання списку, тому звуження вибірки у великому бакеті зменшує обсяг переданих даних і витрати під час кожного опитування, а не лише кількість перевірених ключів"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.option.cHJlZml4.short_desc": {
+          "source": "Watch only keys beginning with this string",
+          "message": "Відстежувати лише ключі, що починаються з цього рядка"
+        },
+        "app.QW1hem9uUzM.action.bmV3LW9yLXVwZGF0ZWQtZmlsZQ.short_desc": {
+          "source": "React to an object being created or updated in a bucket",
+          "message": "Реагувати на створення або оновлення об'єкта в бакеті"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.desc": {
+          "source": "Fires when a bucket is created in the account.\n\nAmazon S3 offers no change feed, so this checks the account's bucket list at each poll interval; a bucket created and removed between two polls is not reported.\n\nOne request covers the whole account, so this costs the same whatever the account holds.",
+          "message": "Спрацьовує, коли в обліковому записі створюється бакет.\n\nAmazon S3 не надає стрічки змін, тому цей тригер перевіряє список бакетів облікового запису під час кожного інтервалу опитування; про бакет, створений і видалений між двома опитуваннями, не повідомляється.\n\nОдин запит охоплює весь обліковий запис, тому вартість однакова незалежно від вмісту облікового запису."
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.display_name": {
+          "source": "New Bucket",
+          "message": "Новий бакет"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Do not report anything older than this date.\n\nIf not set, the watch reports only what appears after it starts, so an existing bucket does not produce a flood of events the first time it runs",
+          "message": "Не повідомляти про об'єкти, старіші за цю дату.\n\nЯкщо не встановлено, відстеження повідомлятиме лише про те, що з'явилося після його запуску, тому наявний бакет не створюватиме лавину подій під час першого запуску"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Do not report anything older than this",
+          "message": "Не повідомляти про об'єкти, старіші за це значення"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`).\n\nAmazon S3 charges per request, so a short interval on a large bucket costs money as well as time",
+          "message": "Як часто перевіряти наявність змін, у секундах (мінімум `30`, за замовчуванням `60`).\n\nAmazon S3 стягує плату за кожен запит, тому короткий інтервал для великого бакета призводить до витрат коштів і часу"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Як часто перевіряти наявність змін, у секундах"
+        },
+        "app.QW1hem9uUzM.action.bmV3LWJ1Y2tldA.short_desc": {
+          "source": "React to a bucket being created in the account",
+          "message": "Реагувати на створення бакета в обліковому записі"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.desc": {
+          "source": "Creates a URL carrying its own authorization, so that a system that cannot authenticate to AWS can still reach the object.\n\nThis is how a file is handed to an external party: a customer downloading an invoice, a partner collecting an export, or a browser uploading directly to the bucket without the content passing through this system at all.\n\n**The URL is the credential.**  Anyone holding it can perform the operation it was signed for until it expires, so give it the shortest useful lifetime and treat it as a secret.\n\nNo request is made to Amazon S3, so a URL can be created for an object that does not exist yet - which is exactly what an upload URL is for.",
+          "message": "Створює URL-адресу з власною авторизацією, що дозволяє системі, яка не може автентифікуватися в AWS, отримати доступ до об'єкта.\n\nСаме так файл передається зовнішній стороні: клієнт завантажує рахунок-фактуру, партнер отримує експортовані дані або браузер завантажує файл безпосередньо в бакет без проходження вмісту через цю систему.\n\n**URL-адреса є обліковими даними.** Будь-хто, хто має її, може виконувати дію, для якої її було підписано, доки не закінчиться термін її дії, тому встановлюйте якомога коротший корисний термін дії та поводьтеся з нею як із конфіденційними даними.\n\nЗапит до Amazon S3 не виконується, тому URL-адресу можна створити для об'єкта, якого ще не існує — саме для цього і призначена URL-адреса для вивантаження."
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.display_name": {
+          "source": "Create Presigned URL",
+          "message": "Створити попередньо підписану URL-адресу"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.desc": {
+          "source": "How long the URL remains usable, in seconds (default `3600`, maximum `604800`, which is 7 days).\n\n**The URL is the credential**: anyone holding it can perform the operation until it expires, so give it the shortest lifetime that serves the purpose",
+          "message": "Скільки часу URL-адреса залишається дійсною, у секундах (за замовчуванням `3600`, максимум `604800`, що становить 7 днів).\n\n**URL-адреса є обліковими даними**: будь-хто, хто має її, може виконувати дію до закінчення терміну дії, тому встановлюйте найкоротший термін, достатній для виконання завдання"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.display_name": {
+          "source": "Valid For (seconds)",
+          "message": "Термін дії (секунди)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.ZXhwaXJhdGlvbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL remains usable, in seconds",
+          "message": "Скільки часу URL-адреса залишається дійсною, у секундах"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "The holder can delete the object; **this cannot be undone on a bucket without versioning**",
+          "message": "Власник може видалити об'єкт; **це неможливо скасувати в бакеті без версійності**"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "Delete (DELETE)",
+          "message": "Видалити (DELETE)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "The holder can delete the object",
+          "message": "Власник може видалити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "The holder can download the object",
+          "message": "Власник може завантажити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "Download (GET)",
+          "message": "Завантаження (GET)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "The holder can download the object",
+          "message": "Власник може завантажити об'єкт"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "The holder can read the object's size, type, and modification time without downloading it",
+          "message": "Власник може зчитувати розмір, тип і час змінення об'єкта без його завантаження"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "Metadata Only (HEAD)",
+          "message": "Лише метадані (HEAD)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "The holder can read the object's metadata but not its content",
+          "message": "Власник може зчитувати метадані об'єкта, але не його вміст"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "The holder can upload content to the key, **replacing whatever is there**",
+          "message": "Власник може вивантажувати вміст за ключем, **замінюючи все, що там є**"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "Upload (PUT)",
+          "message": "Вивантаження (PUT)"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "The holder can upload to the key",
+          "message": "Власник може вивантажувати за ключем"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.desc": {
+          "source": "The operation the URL grants.\n\nA URL is signed for exactly one operation: one signed for a download cannot be used to upload",
+          "message": "Операція, яку надає URL-адреса.\n\nURL-адреса підписується рівно для однієї операції: адреса, підписана для завантаження, не може використовуватися для вивантаження"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.display_name": {
+          "source": "Operation",
+          "message": "Операція"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.bWV0aG9k.short_desc": {
+          "source": "The operation the URL grants",
+          "message": "Операція, яку надає URL-адреса"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.desc": {
+          "source": "The `Content-Type` Amazon S3 should serve the download with, overriding the type stored with the object",
+          "message": "Заголовок `Content-Type`, з яким Amazon S3 має видавати завантаження, перекриваючи тип, збережений з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.display_name": {
+          "source": "Response Content Type",
+          "message": "Content-Type відповіді"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF90eXBl.short_desc": {
+          "source": "The Content-Type the download should be served with",
+          "message": "Content-Type, з яким має видаватися завантаження"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` Amazon S3 should serve the download with; use this to make a browser save the object under a chosen name rather than display it",
+          "message": "Заголовок `Content-Disposition`, з яким Amazon S3 має видавати завантаження; використовуйте це, щоб браузер зберігав об'єкт під вибраним іменем замість його відображення"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Response Content Disposition",
+          "message": "Content-Disposition відповіді"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.cmVzcG9uc2VfY29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition the download should be served with",
+          "message": "Content-Disposition, з яким має видаватися завантаження"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.cHJlc2lnbmVkLXVybA.short_desc": {
+          "source": "Create a temporary URL granting access without AWS credentials",
+          "message": "Створити тимчасову URL-адресу, що надає доступ без облікових даних AWS"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.desc": {
+          "source": "Replaces the tags stored with an object.\n\n**This replaces the whole tag set** rather than adding to it: a tag not listed is removed.  Read the existing tags first if some are to be kept.  Amazon S3 allows at most `10` tags per object.",
+          "message": "Замінює теги, збережені з об'єктом.\n\n**Це замінює весь набір тегів**, а не доповнює його: не вказаний тег видаляється. Спочатку зчитайте наявні теги, якщо деякі потрібно зберегти. Amazon S3 дозволяє не більше ніж `10` тегів для одного об'єкта."
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.display_name": {
+          "source": "Set Object Tags",
+          "message": "Встановити теги об'єкта"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The full key of the object within the bucket, including any prefix; S3 keys are flat strings, so `/` characters are part of the key rather than directory separators",
+          "message": "Повний ключ об'єкта в бакеті, включаючи будь-який префікс; ключі S3 є плоскими рядками, тому символи `/` є частиною ключа, а не роздільниками каталогів"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.desc": {
+          "source": "The tags to store with the object, as a hash of name to value.\n\n**This replaces the object's tags entirely** rather than adding to them: a tag not listed here is removed.  Amazon S3 allows at most `10` tags per object",
+          "message": "Теги для збереження з об'єктом у вигляді хешу «ім'я-значення».\n\n**Це повністю замінює теги об'єкта**, а не доповнює їх: тег, не вказаний тут, видаляється. Amazon S3 дозволяє не більше ніж `10` тегів для одного об'єкта"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dGFncw.short_desc": {
+          "source": "The tags to store with the object",
+          "message": "Теги для збереження з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.desc": {
+          "source": "A specific version of the object to address; only meaningful on version-enabled buckets. If not set, the current version is used",
+          "message": "Конкретна версія об'єкта для звернення; має сенс лише для бакетів із підтримкою версійності. Якщо не встановлено, використовується поточна версія"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.display_name": {
+          "source": "Version ID",
+          "message": "Ідентифікатор версії"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.option.dmVyc2lvbl9pZA.short_desc": {
+          "source": "A specific object version to address",
+          "message": "Конкретна версія об'єкта для звернення"
+        },
+        "app.QW1hem9uUzM.action.cHV0LW9iamVjdC10YWdnaW5n.short_desc": {
+          "source": "Replace the tags stored with an object",
+          "message": "Замінити теги, збережені з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to a bucket.\n\nIf `object_key` is not set, the file's own name is used as the key.  The MIME type stored with the object is taken from the file when it carries one, and otherwise inferred from the key.",
+          "message": "Вивантажує файл у бакет.\n\nЯкщо `object_key` не вказано, власне ім'я файлу використовується як ключ. MIME-тип, збережений з об'єктом, береться з файлу, якщо він його містить, або визначається за ключем."
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Завантажити файл"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.desc": {
+          "source": "The name of the S3 bucket holding the object",
+          "message": "Ім'я бакета S3, що містить об'єкт"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.YnVja2V0.short_desc": {
+          "source": "The S3 bucket name",
+          "message": "Ім'я бакета S3"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name, content, and MIME type",
+          "message": "Файл для вивантаження, включно з його назвою, вмістом та MIME-типом"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Файл для завантаження"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.desc": {
+          "source": "The AWS KMS key to encrypt the object with, as a key ID, alias, or ARN.\n\nOnly used when `server_side_encryption` selects a KMS scheme; if it is left unset the bucket's default KMS key is used",
+          "message": "Ключ AWS KMS для шифрування об'єкта у вигляді ID ключа, псевдоніма або ARN.\n\nВикористовується лише тоді, коли `server_side_encryption` вибирає схему KMS; якщо не вказано, використовується ключ KMS бакета за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.a21zX2tleV9pZA.short_desc": {
+          "source": "The AWS KMS key to encrypt with",
+          "message": "Ключ AWS KMS для шифрування"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.desc": {
+          "source": "The key to store the object under; if not set, the file name is used",
+          "message": "Ключ, під яким зберігається об'єкт; якщо не вказано, використовується ім'я файлу"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.display_name": {
+          "source": "Object Key",
+          "message": "Ключ об'єкта"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.b2JqZWN0X2tleQ.short_desc": {
+          "source": "The S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store with the object; each key is sent as an `x-amz-meta-<key>` header and is returned when the object is retrieved",
+          "message": "Визначені користувачем метадані для збереження з об'єктом; кожен ключ надсилається як заголовок `x-amz-meta-<key>` і повертається під час отримання об'єкта"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Метадані"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store with the object",
+          "message": "Визначені користувачем метадані для збереження з об'єктом"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.desc": {
+          "source": "Encrypt the object with keys Amazon S3 manages entirely; nothing further is needed",
+          "message": "Шифрувати об'єкт ключами, якими повністю керує Amazon S3; більше нічого не потрібно"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.display_name": {
+          "source": "S3-Managed Keys (SSE-S3)",
+          "message": "Ключі під керуванням S3 (SSE-S3)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOkFFUzI1Ng.short_desc": {
+          "source": "Encrypt with keys Amazon S3 manages",
+          "message": "Шифрувати ключами під керуванням Amazon S3"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.desc": {
+          "source": "Encrypt the object with an AWS KMS key.\n\nName the key in `kms_key_id`; if it is left unset, the bucket's default KMS key is used.  The credentials must be allowed to use the key, or the upload fails even though they can write to the bucket",
+          "message": "Шифрувати об'єкт ключем AWS KMS.\n\nВкажіть назву ключа в `kms_key_id`; якщо поле не заповнено, використовується стандартний ключ KMS для бакета. Облікові дані повинні мати дозвіл на використання ключа, інакше вивантаження завершиться помилкою, навіть якщо вони мають право запису до бакета"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.display_name": {
+          "source": "KMS Keys (SSE-KMS)",
+          "message": "Ключі KMS (SSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM.short_desc": {
+          "source": "Encrypt with an AWS KMS key",
+          "message": "Шифрувати ключем AWS KMS"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.desc": {
+          "source": "Apply two independent layers of encryption with an AWS KMS key, for data subject to a requirement for it",
+          "message": "Застосувати два незалежні рівні шифрування ключем AWS KMS для даних, які підпадають під таку вимогу"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.display_name": {
+          "source": "Dual-Layer KMS (DSSE-KMS)",
+          "message": "Дворівневий KMS (DSSE-KMS)"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.allowed-value.c3RyaW5nOmF3czprbXM6ZHNzZQ.short_desc": {
+          "source": "Encrypt twice with an AWS KMS key",
+          "message": "Шифрувати двічі ключем AWS KMS"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.desc": {
+          "source": "Encrypt the object at rest with the chosen scheme.\n\nIf not set, whatever the bucket's default encryption configuration specifies applies; setting it here overrides that for this object",
+          "message": "Шифрувати неактивний об'єкт (at rest) за допомогою вибраної схеми.\n\nЯкщо не встановлено, застосовується конфігурація шифрування за замовчуванням для бакета; встановлення значення тут замінює її для цього об'єкта"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.display_name": {
+          "source": "Server-Side Encryption",
+          "message": "Шифрування на стороні сервера"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c2VydmVyX3NpZGVfZW5jcnlwdGlvbg.short_desc": {
+          "source": "Encrypt the object at rest",
+          "message": "Шифрувати неактивний об'єкт"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.desc": {
+          "source": "Long-lived, infrequently accessed data stored in a single availability zone; cheaper than `STANDARD_IA` but lost if the zone is destroyed",
+          "message": "Довговічні дані з нечастим доступом, що зберігаються в одній зоні доступності; дешевше за `STANDARD_IA`, але втрачаються у разі знищення зони"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.display_name": {
+          "source": "One Zone-Infrequent Access",
+          "message": "One Zone-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOk9ORVpPTkVfSUE.short_desc": {
+          "source": "Infrequently accessed data in a single availability zone",
+          "message": "Дані з нечастим доступом в одній зоні доступності"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.desc": {
+          "source": "Long-term archive data retrieved in hours; the lowest-cost storage class",
+          "message": "Дані довгострокового архіву, що витягуються протягом кількох годин; найдешевший клас сховища"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.display_name": {
+          "source": "Glacier Deep Archive",
+          "message": "Glacier Deep Archive"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkRFRVBfQVJDSElWRQ.short_desc": {
+          "source": "Long-term archive retrieved in hours",
+          "message": "Довгостроковий архів з отриманням протягом кількох годин"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.desc": {
+          "source": "Archive data retrieved in minutes to hours; objects must be restored before they can be read",
+          "message": "Архівні дані, що витягуються від кількох хвилин до кількох годин; об'єкти необхідно відновити перед читанням"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.display_name": {
+          "source": "Glacier Flexible Retrieval",
+          "message": "Glacier Flexible Retrieval"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVI.short_desc": {
+          "source": "Archive data retrieved in minutes to hours",
+          "message": "Архівні дані з отриманням від кількох хвилин до кількох годин"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.desc": {
+          "source": "Archive data that still requires millisecond retrieval",
+          "message": "Архівні дані, що потребують мілісекундного часу отримання"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.display_name": {
+          "source": "Glacier Instant Retrieval",
+          "message": "Glacier Instant Retrieval"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOkdMQUNJRVJfSVI.short_desc": {
+          "source": "Archive data needing immediate access",
+          "message": "Архівні дані, що потребують негайного доступу"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.desc": {
+          "source": "Data with changing or unknown access patterns; Amazon S3 moves objects between access tiers",
+          "message": "Дані зі змінними або невідомими шаблонами доступу; Amazon S3 переміщує об'єкти між рівнями доступу"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.display_name": {
+          "source": "Intelligent-Tiering",
+          "message": "Intelligent-Tiering"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOklOVEVMTElHRU5UX1RJRVJJTkc.short_desc": {
+          "source": "Data with changing or unknown access patterns",
+          "message": "Дані зі змінними або невідомими шаблонами доступу"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.desc": {
+          "source": "Frequently accessed data; the default storage class",
+          "message": "Дані з частим доступом; клас сховища за замовчуванням"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.display_name": {
+          "source": "Standard",
+          "message": "Стандартний"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJE.short_desc": {
+          "source": "Frequently accessed data",
+          "message": "Дані з частим доступом"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.desc": {
+          "source": "Long-lived but infrequently accessed data; a retrieval charge applies",
+          "message": "Довговічні дані з нечастим доступом; стягується плата за отримання"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.display_name": {
+          "source": "Standard-Infrequent Access",
+          "message": "Standard-Infrequent Access"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.allowed-value.c3RyaW5nOlNUQU5EQVJEX0lB.short_desc": {
+          "source": "Long-lived, infrequently accessed data",
+          "message": "Довговічні дані з нечастим доступом"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object, which determines its cost and retrieval characteristics",
+          "message": "Клас зберігання для нового об'єкта, який визначає його вартість та характеристики отримання"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Клас сховища"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the new object",
+          "message": "Клас зберігання для нового об'єкта"
+        },
+        "app.QW1hem9uUzM.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to a bucket",
+          "message": "Вивантажити файл у бакет"
+        },
+        "app.QW1hem9uUzM.desc": {
+          "source": "Provides access to [Amazon S3](https://aws.amazon.com/s3/) object storage.\n\nS3 stores objects in buckets addressed by a flat key rather than by a directory tree; a `/` in a key is an ordinary character, though listing with a prefix and a delimiter makes a bucket browsable as though it had folders.\n\n**Common use cases**:\n- **File exchange**: publish files for partners to collect, or collect files partners deposit\n- **Archival**: retain documents and records at low cost using the archive storage classes\n- **Data staging**: land extracts for downstream processing, then remove them when consumed\n- **Backups**: store generated reports, exports, and backups durably off-host\n\nAlso works with S3-compatible services such as MinIO and Ceph; those generally require the `path_style` connection option.\n\nAmazon Web Services and Amazon S3 are trademarks of Amazon.com, Inc. or its affiliates",
+          "message": "Надає доступ до об'єктного сховища [Amazon S3](https://aws.amazon.com/s3/).\n\nS3 зберігає об'єкти в бакетах, адресуючи їх плоским ключем, а не деревом каталогів; `/` у ключі є звичайним символом, хоча перелік із префіксом і роздільником дозволяє переглядати бакет так, ніби він містить папки.\n\n**Поширені варіанти використання**:\n- **Обмін файлами**: публікуйте файли для партнерів або збирайте файли, надані партнерами\n- **Архівування**: зберігайте документи та записи з низькими витратами за допомогою архівних класів зберігання\n- **Проміжне збереження даних (staging)**: вивантажуйте витяги для подальшої обробки та видаляйте їх після використання\n- **Резервні копії**: надійно зберігайте згенеровані звіти, експорти та резервні копії за межами хоста\n\nТакож працює з S3-сумісними сервісами, такими як MinIO та Ceph; для них зазвичай потрібен параметр підключення `path_style`.\n\nAmazon Web Services та Amazon S3 є торговельними марками Amazon.com, Inc. або її афілійованих осіб"
+        },
+        "app.QW1hem9uUzM.display_name": {
+          "source": "Amazon S3",
+          "message": "Amazon S3"
+        },
+        "app.QW1hem9uUzM.short_desc": {
+          "source": "Amazon S3 object storage",
+          "message": "Об'єктне сховище Amazon S3"
+        }
+      }
+    }
+  }
+}

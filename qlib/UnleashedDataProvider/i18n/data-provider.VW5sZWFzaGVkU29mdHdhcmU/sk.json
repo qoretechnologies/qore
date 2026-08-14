@@ -1,0 +1,1725 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.desc": {
+          "source": "Mark a credit note as completed in Unleashed.",
+          "message": "Označí dobropis v aplikácii Unleashed ako dokončený."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
+          "source": "Complete Credit Note",
+          "message": "Dokončiť dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to complete",
+          "message": "Jedinečný identifikátor (GUID) dobropisu, ktorý sa má dokončiť"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
+          "source": "Complete a credit note",
+          "message": "Dokončiť dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.desc": {
+          "source": "Mark a sales order as completed in Unleashed.",
+          "message": "Označí predajnú objednávku v aplikácii Unleashed ako dokončenú."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
+          "source": "Complete Sales Order",
+          "message": "Dokončiť predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to complete",
+          "message": "Jedinečný identifikátor (GUID) predajnej objednávky, ktorá sa má dokončiť"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
+          "source": "Complete a sales order",
+          "message": "Dokončiť predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Unleashed with contact information and settings.",
+          "message": "Vytvorí nového zákazníka v aplikácii Unleashed s kontaktnými údajmi a nastaveniami."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Vytvoriť zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.desc": {
+          "source": "First name of the primary contact",
+          "message": "Meno primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.display_name": {
+          "source": "Contact First Name",
+          "message": "Meno kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.short_desc": {
+          "source": "Primary contact first name",
+          "message": "Meno primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.desc": {
+          "source": "Last name of the primary contact",
+          "message": "Priezvisko primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.display_name": {
+          "source": "Contact Last Name",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.short_desc": {
+          "source": "Primary contact last name",
+          "message": "Priezvisko primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Úverový limit zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Úverový limit"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Customer credit limit",
+          "message": "Úverový limit zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The currency for this customer",
+          "message": "Mena pre tohto zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Customer currency",
+          "message": "Mena zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.desc": {
+          "source": "The unique customer code (required, cannot be modified after creation)",
+          "message": "Jedinečný kód zákazníka (povinný, po vytvorení ho nie je možné upraviť)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.display_name": {
+          "source": "Customer Code",
+          "message": "Kód zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.short_desc": {
+          "source": "Unique customer code",
+          "message": "Jedinečný kód zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.desc": {
+          "source": "The customer's display name (required)",
+          "message": "Zobrazované meno zákazníka (povinné)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.display_name": {
+          "source": "Customer Name",
+          "message": "Meno zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.short_desc": {
+          "source": "Customer name",
+          "message": "Meno zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "Zoznam adries pre tohto zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Customer addresses",
+          "message": "Adresy zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.desc": {
+          "source": "The customer's default discount rate",
+          "message": "Predvolená sadzba zľavy zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.display_name": {
+          "source": "Discount Rate",
+          "message": "Sadzba zľavy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.short_desc": {
+          "source": "Default discount rate",
+          "message": "Predvolená sadzba zľavy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.desc": {
+          "source": "Primary email address for the customer",
+          "message": "Primárna e-mailová adresa zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Hlavná e-mailová adresa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.desc": {
+          "source": "Customer's mobile phone number",
+          "message": "Mobilné telefónne číslo zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.display_name": {
+          "source": "Mobile Number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.desc": {
+          "source": "Customer's phone number",
+          "message": "Telefónne číslo zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.desc": {
+          "source": "Whether the customer is taxable",
+          "message": "Určuje, či zákazník podlieha dani"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Zdaniteľné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.short_desc": {
+          "source": "Is customer taxable",
+          "message": "Podlieha zákazník dani"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Vytvoriť nového zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Create a new free credit note in Unleashed.",
+          "message": "Vytvorí nový voľný dobropis v aplikácii Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Create Credit Note",
+          "message": "Vytvoriť dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this credit note",
+          "message": "Komentáre alebo poznámky k tomuto dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáre"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.short_desc": {
+          "source": "Credit note comments",
+          "message": "Komentáre k dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
+          "source": "The credit note number",
+          "message": "Číslo dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
+          "source": "Credit Note Number",
+          "message": "Číslo dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Credit note number",
+          "message": "Číslo dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.desc": {
+          "source": "The credit note date",
+          "message": "Dátum dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.display_name": {
+          "source": "Credit Note Date",
+          "message": "Dátum dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.short_desc": {
+          "source": "Credit note date",
+          "message": "Dátum dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.desc": {
+          "source": "List of line items for this credit note",
+          "message": "Zoznam položiek pre tento dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.display_name": {
+          "source": "Credit Note Lines",
+          "message": "Položky dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.short_desc": {
+          "source": "Credit note line items",
+          "message": "Položky dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer for this credit note. Must include `Guid` (the customer GUID)",
+          "message": "Zákazník pre tento dobropis. Musí obsahovať `Guid` (GUID zákazníka)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer information",
+          "message": "Informácie o zákazníkovi"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Create a new credit note",
+          "message": "Vytvoriť nový dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Create a new line item on an existing credit note.",
+          "message": "Vytvorí novú položku v existujúcom dobropise."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Create Credit Note Line",
+          "message": "Vytvoriť položku dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.desc": {
+          "source": "The product for this line. Must include `Guid` (the product GUID)",
+          "message": "Produkt pre túto položku. Musí obsahovať `Guid` (GUID produktu)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.display_name": {
+          "source": "Product",
+          "message": "Produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.short_desc": {
+          "source": "Product information",
+          "message": "Informácie o produkte"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.desc": {
+          "source": "The quantity for this line",
+          "message": "Množstvo pre túto položku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.display_name": {
+          "source": "Quantity",
+          "message": "Množstvo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.short_desc": {
+          "source": "Line quantity",
+          "message": "Množstvo položky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.desc": {
+          "source": "The unit price for this line",
+          "message": "Jednotková cena pre túto položku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Jednotková cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.short_desc": {
+          "source": "Unit price",
+          "message": "Jednotková cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "Jedinečný identifikátor (GUID) dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Add a line item to a credit note",
+          "message": "Pridať položku do dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in Unleashed with product code, description, and pricing.",
+          "message": "Vytvorí nový produkt v aplikácii Unleashed s kódom produktu, popisom a cenami."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "Vytvoriť produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.desc": {
+          "source": "The product barcode",
+          "message": "Čiarový kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.display_name": {
+          "source": "Barcode",
+          "message": "Čiarový kód"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.short_desc": {
+          "source": "Product barcode",
+          "message": "Čiarový kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.desc": {
+          "source": "The default purchase price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.display_name": {
+          "source": "Default Purchase Price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.short_desc": {
+          "source": "Default purchase price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.desc": {
+          "source": "The default sell price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.display_name": {
+          "source": "Default Sell Price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.short_desc": {
+          "source": "Default sell price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.desc": {
+          "source": "Whether this is an assembled product (made from components)",
+          "message": "Určuje, či ide o zostavený produkt (vyrobený z komponentov)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.display_name": {
+          "source": "Is Assembled Product",
+          "message": "Je zostavený produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.short_desc": {
+          "source": "Is this an assembled product",
+          "message": "Ide o zostavený produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.desc": {
+          "source": "Whether the product can be purchased",
+          "message": "Určuje, či je možné produkt nakupovať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.display_name": {
+          "source": "Is Purchasable",
+          "message": "Je zakúpiteľné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.short_desc": {
+          "source": "Can product be purchased",
+          "message": "Je možné produkt nakupovať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.desc": {
+          "source": "Whether the product can be sold",
+          "message": "Určuje, či je možné produkt predávať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.display_name": {
+          "source": "Is Sellable",
+          "message": "Je predajné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.short_desc": {
+          "source": "Can product be sold",
+          "message": "Je možné produkt predávať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.desc": {
+          "source": "The unique product code (required, cannot be modified after creation)",
+          "message": "Jedinečný kód produktu (povinné, po vytvorení nie je možné upraviť)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.display_name": {
+          "source": "Product Code",
+          "message": "Kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.short_desc": {
+          "source": "Unique product code",
+          "message": "Jedinečný kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.desc": {
+          "source": "The product description (required)",
+          "message": "Popis produktu (povinné)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.display_name": {
+          "source": "Product Description",
+          "message": "Popis produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.short_desc": {
+          "source": "Product description",
+          "message": "Popis produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.desc": {
+          "source": "The unit of measure (e.g., 'Each', 'Box', 'Kg')",
+          "message": "Merná jednotka (napr. 'Each', 'Box', 'Kg')"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.display_name": {
+          "source": "Unit of Measure",
+          "message": "Merná jednotka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.short_desc": {
+          "source": "Unit of measure",
+          "message": "Merná jednotka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Vytvoriť nový produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Unleashed with customer, line items, and delivery information.",
+          "message": "Vytvoriť novú objednávku odberateľa v Unleashed so zákazníkom, položkami a dodacími údajmi."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "Vytvoriť predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this order",
+          "message": "Komentáre alebo poznámky k tejto objednávke"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáre"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Order comments",
+          "message": "Komentáre k objednávke"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer for this sales order. Must include `Guid` (the customer GUID)",
+          "message": "Zákazník pre túto objednávku odberateľa. Musí obsahovať `Guid` (GUID zákazníka)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer information",
+          "message": "Informácie o zákazníkovi"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.desc": {
+          "source": "City for delivery",
+          "message": "Mesto doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.display_name": {
+          "source": "Delivery City",
+          "message": "Mesto doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.short_desc": {
+          "source": "Delivery city",
+          "message": "Mesto doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.desc": {
+          "source": "Country for delivery",
+          "message": "Krajina doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.display_name": {
+          "source": "Delivery Country",
+          "message": "Krajina doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.short_desc": {
+          "source": "Delivery country",
+          "message": "Krajina doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.desc": {
+          "source": "Name of the delivery recipient",
+          "message": "Meno príjemcu doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.display_name": {
+          "source": "Delivery Name",
+          "message": "Meno doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.short_desc": {
+          "source": "Delivery recipient name",
+          "message": "Meno príjemcu doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.desc": {
+          "source": "Postal code for delivery",
+          "message": "Poštové smerovacie číslo pre doručenie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.display_name": {
+          "source": "Delivery Post Code",
+          "message": "PSČ doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.short_desc": {
+          "source": "Delivery postal code",
+          "message": "Poštové smerovacie číslo doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.desc": {
+          "source": "Region or state for delivery",
+          "message": "Región alebo štát doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.display_name": {
+          "source": "Delivery Region",
+          "message": "Región doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.short_desc": {
+          "source": "Delivery region/state",
+          "message": "Región/štát doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.desc": {
+          "source": "Street address for delivery",
+          "message": "Ulica a číslo doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.display_name": {
+          "source": "Delivery Street Address",
+          "message": "Ulica doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.short_desc": {
+          "source": "Delivery street address",
+          "message": "Ulica doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.desc": {
+          "source": "Suburb for delivery",
+          "message": "Mestská časť doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.display_name": {
+          "source": "Delivery Suburb",
+          "message": "Mestská časť doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.short_desc": {
+          "source": "Delivery suburb",
+          "message": "Mestská časť doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.desc": {
+          "source": "The order date",
+          "message": "Dátum objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.display_name": {
+          "source": "Order Date",
+          "message": "Dátum objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.short_desc": {
+          "source": "Order date",
+          "message": "Dátum objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.desc": {
+          "source": "The sales order number",
+          "message": "Číslo objednávky odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.short_desc": {
+          "source": "Order number",
+          "message": "Číslo objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkJhY2tvcmRlcmVk.desc": {
+          "source": "Backordered order",
+          "message": "Doobjednaná objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBhcmtlZA.desc": {
+          "source": "Draft/parked order",
+          "message": "Koncept/odložená objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBsYWNlZA.desc": {
+          "source": "Placed order",
+          "message": "Zadaná objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.desc": {
+          "source": "The order status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.short_desc": {
+          "source": "Order status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.desc": {
+          "source": "List of line items for this sales order",
+          "message": "Zoznam položiek pre túto objednávku odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.display_name": {
+          "source": "Sales Order Lines",
+          "message": "Položky objednávky odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.desc": {
+          "source": "The required delivery date",
+          "message": "Požadovaný dátum doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.display_name": {
+          "source": "Required Date",
+          "message": "Požadovaný dátum"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.short_desc": {
+          "source": "Required delivery date",
+          "message": "Požadovaný dátum doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Vytvoriť novú predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier (GUID).",
+          "message": "Získať podrobné informácie o konkrétnom zákazníkovi podľa jeho jedinečného identifikátora (GUID)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Získať zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "Jedinečný identifikátor (GUID) zákazníka, ktorého chcete získať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.display_name": {
+          "source": "Customer GUID",
+          "message": "GUID zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.short_desc": {
+          "source": "The customer GUID",
+          "message": "GUID zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by GUID",
+          "message": "Získať zákazníka podľa GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.desc": {
+          "source": "Retrieve detailed information about a specific credit note.",
+          "message": "Získať podrobné informácie o konkrétnom dobropise."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Get Credit Note",
+          "message": "Získať dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to retrieve",
+          "message": "Jedinečný identifikátor (GUID) dobropisu na získanie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Get a credit note by GUID",
+          "message": "Získať dobropis podľa GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "Získať podrobné informácie o konkrétnom produkte."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Získať produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "Jedinečný identifikátor (GUID) produktu, ktorý chcete získať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by GUID",
+          "message": "Získať produkt podľa GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific sales order.",
+          "message": "Získať podrobné informácie o konkrétnej objednávke odberateľa."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "Získať predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to retrieve",
+          "message": "Jedinečný identifikátor (GUID) objednávky odberateľa na získanie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get a sales order by GUID",
+          "message": "Získať objednávku odberateľa podľa GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Delete a credit note from Unleashed.",
+          "message": "Odstrániť dobropis z Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Delete Credit Note",
+          "message": "Odstrániť dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to delete",
+          "message": "Jedinečný identifikátor (GUID) dobropisu na odstránenie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Delete a credit note",
+          "message": "Odstrániť dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Remove a line item from a credit note.",
+          "message": "Odstrániť položku z dobropisu."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Delete Credit Note Line",
+          "message": "Odstrániť riadok dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "Jedinečný identifikátor (GUID) dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.desc": {
+          "source": "The unique identifier (GUID) of the line to delete",
+          "message": "Jedinečný identifikátor (GUID) riadku na odstránenie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.display_name": {
+          "source": "Line GUID",
+          "message": "GUID riadku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.short_desc": {
+          "source": "The line item GUID",
+          "message": "GUID položky riadku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Delete a credit note line item",
+          "message": "Odstrániť položku dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Unleashed.",
+          "message": "Odstrániť predajnú objednávku z Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Odstrániť predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to delete",
+          "message": "Jedinečný identifikátor (GUID) predajnej objednávky na odstránenie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Odstrániť predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.desc": {
+          "source": "Mark a product as obsolete in Unleashed, removing it from active use.",
+          "message": "Označiť produkt v Unleashed ako zastaraný a vyradiť ho z aktívneho používania."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
+          "source": "Obsolete Product",
+          "message": "Označiť produkt ako zastaraný"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to mark as obsolete",
+          "message": "Jedinečný identifikátor (GUID) produktu, ktorý sa má označiť ako zastaraný"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
+          "source": "Mark a product as obsolete",
+          "message": "Označiť produkt ako zastaraný"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unleashed Software** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **Unleashed Software** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unleashed Software",
+          "message": "Vytvoriť vlastné volanie API do Unleashed Software"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.desc": {
+          "source": "Fires when a new customer is detected or an existing customer is modified via polling.",
+          "message": "Spustí sa pri zistení nového zákazníka alebo pri úprave existujúceho zákazníka prostredníctvom dopytovania."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
+          "source": "New Customer",
+          "message": "Nový zákazník"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is detected or an existing sales order is modified via polling.",
+          "message": "Spustí sa pri zistení novej predajnej objednávky alebo pri úprave existujúcej predajnej objednávky prostredníctvom dopytovania."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "Nová predajná objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a sales order is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Unleashed with optional filtering by customer code, name, email, customer type, or modification date.",
+          "message": "Získať zoznam zákazníkov z Unleashed s voliteľným filtrovaním podľa kódu zákazníka, mena, e-mailu, typu zákazníka alebo dátumu úpravy."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Vyhľadať zákazníkov"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "Zobraziť a vyhľadať zákazníkov"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.desc": {
+          "source": "Retrieve a list of credit notes from Unleashed with optional filtering.",
+          "message": "Získať zoznam dobropisov z Unleashed s voliteľným filtrovaním."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
+          "source": "Search Credit Notes",
+          "message": "Vyhľadať dobropisy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
+          "source": "List and search credit notes",
+          "message": "Zobraziť zoznam a vyhľadávať dobropisy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Unleashed with optional filtering by product code, description, or barcode.",
+          "message": "Získať zoznam produktov z Unleashed s voliteľným filtrovaním podľa kódu produktu, popisu alebo čiarového kódu."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Vyhľadať produkty"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "Zobraziť a vyhľadať produkty"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.desc": {
+          "source": "Retrieve a list of sales orders from Unleashed with optional filtering.",
+          "message": "Získať zoznam predajných objednávok z Unleashed s voliteľným filtrovaním."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
+          "source": "Search Sales Orders",
+          "message": "Vyhľadať predajné objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Zoznam a vyhľadávanie objednávok odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Unleashed.",
+          "message": "Aktualizovať informácie o existujúcom zákazníkovi v Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Aktualizovať zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.desc": {
+          "source": "First name of the primary contact",
+          "message": "Meno primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.display_name": {
+          "source": "Contact First Name",
+          "message": "Meno kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.short_desc": {
+          "source": "Primary contact first name",
+          "message": "Meno primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.desc": {
+          "source": "Last name of the primary contact",
+          "message": "Priezvisko primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.display_name": {
+          "source": "Contact Last Name",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.short_desc": {
+          "source": "Primary contact last name",
+          "message": "Priezvisko primárneho kontaktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Úverový limit zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Úverový limit"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Customer credit limit",
+          "message": "Úverový limit zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.desc": {
+          "source": "The customer code (must match the existing code)",
+          "message": "Kód zákazníka (musí sa zhodovať s existujúcim kódom)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.display_name": {
+          "source": "Customer Code",
+          "message": "Kód zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.short_desc": {
+          "source": "Customer code",
+          "message": "Kód zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.desc": {
+          "source": "The customer's display name",
+          "message": "Zobrazovaný názov zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.display_name": {
+          "source": "Customer Name",
+          "message": "Meno zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.short_desc": {
+          "source": "Customer name",
+          "message": "Meno zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.desc": {
+          "source": "The customer's default discount rate",
+          "message": "Predvolená sadzba zľavy zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.display_name": {
+          "source": "Discount Rate",
+          "message": "Sadzba zľavy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.short_desc": {
+          "source": "Default discount rate",
+          "message": "Predvolená sadzba zľavy"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.desc": {
+          "source": "Primary email address for the customer",
+          "message": "Primárna e-mailová adresa zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Hlavná e-mailová adresa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.desc": {
+          "source": "Customer's mobile phone number",
+          "message": "Mobilné telefónne číslo zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.display_name": {
+          "source": "Mobile Number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.desc": {
+          "source": "Whether credit is stopped for this customer",
+          "message": "Určuje, či je pre tohto zákazníka pozastavený úver"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.display_name": {
+          "source": "Stop Credit",
+          "message": "Pozastavenie úveru"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.short_desc": {
+          "source": "Credit stop status",
+          "message": "Stav pozastavenia úveru"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.desc": {
+          "source": "Customer's phone number",
+          "message": "Telefónne číslo zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.desc": {
+          "source": "Whether the customer is taxable",
+          "message": "Určuje, či zákazník podlieha dani"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Zdaniteľné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.short_desc": {
+          "source": "Is customer taxable",
+          "message": "Podlieha zákazník dani"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the customer to update",
+          "message": "Jedinečný identifikátor (GUID) zákazníka na aktualizáciu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.display_name": {
+          "source": "Customer GUID",
+          "message": "GUID zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.short_desc": {
+          "source": "The customer GUID",
+          "message": "GUID zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aktualizovať existujúceho zákazníka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Update an existing credit note in Unleashed.",
+          "message": "Aktualizovať existujúci dobropis v Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Update Credit Note",
+          "message": "Aktualizovať dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this credit note",
+          "message": "Komentáre alebo poznámky k tomuto dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáre"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.short_desc": {
+          "source": "Credit note comments",
+          "message": "Komentáre k dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.desc": {
+          "source": "List of line items for this credit note",
+          "message": "Zoznam položiek pre tento dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.display_name": {
+          "source": "Credit Note Lines",
+          "message": "Položky dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.short_desc": {
+          "source": "Credit note line items",
+          "message": "Položky dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to update",
+          "message": "Jedinečný identifikátor (GUID) dobropisu na aktualizáciu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Update an existing credit note",
+          "message": "Aktualizovať existujúci dobropis"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Update an existing line item on a credit note.",
+          "message": "Aktualizovať existujúcu položku v dobropise."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Update Credit Note Line",
+          "message": "Aktualizovať riadok dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.desc": {
+          "source": "The quantity for this line",
+          "message": "Množstvo pre túto položku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.display_name": {
+          "source": "Quantity",
+          "message": "Množstvo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.short_desc": {
+          "source": "Line quantity",
+          "message": "Množstvo položky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.desc": {
+          "source": "The unit price for this line",
+          "message": "Jednotková cena pre túto položku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Jednotková cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.short_desc": {
+          "source": "Unit price",
+          "message": "Jednotková cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "Jedinečný identifikátor (GUID) dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "GUID dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.desc": {
+          "source": "The unique identifier (GUID) of the line to update",
+          "message": "Jedinečný identifikátor (GUID) riadku na aktualizáciu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.display_name": {
+          "source": "Line GUID",
+          "message": "GUID riadku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.short_desc": {
+          "source": "The line item GUID",
+          "message": "GUID položky riadku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Update a credit note line item",
+          "message": "Aktualizovať položku dobropisu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product's information in Unleashed.",
+          "message": "Aktualizovať informácie o existujúcom produkte v Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "Aktualizovať produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.desc": {
+          "source": "The product barcode",
+          "message": "Čiarový kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.display_name": {
+          "source": "Barcode",
+          "message": "Čiarový kód"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.short_desc": {
+          "source": "Product barcode",
+          "message": "Čiarový kód produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.desc": {
+          "source": "The default purchase price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.display_name": {
+          "source": "Default Purchase Price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.short_desc": {
+          "source": "Default purchase price",
+          "message": "Predvolená nákupná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.desc": {
+          "source": "The default sell price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.display_name": {
+          "source": "Default Sell Price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.short_desc": {
+          "source": "Default sell price",
+          "message": "Predvolená predajná cena"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.desc": {
+          "source": "Whether the product can be purchased",
+          "message": "Určuje, či je možné produkt nakupovať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.display_name": {
+          "source": "Is Purchasable",
+          "message": "Je zakúpiteľné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.short_desc": {
+          "source": "Can product be purchased",
+          "message": "Je možné produkt nakupovať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.desc": {
+          "source": "Whether the product can be sold",
+          "message": "Určuje, či je možné produkt predávať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.display_name": {
+          "source": "Is Sellable",
+          "message": "Je predajné"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.short_desc": {
+          "source": "Can product be sold",
+          "message": "Je možné produkt predávať"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.desc": {
+          "source": "The product description",
+          "message": "Popis produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.display_name": {
+          "source": "Product Description",
+          "message": "Popis produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.short_desc": {
+          "source": "Product description",
+          "message": "Popis produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to update",
+          "message": "Jedinečný identifikátor (GUID) produktu na aktualizáciu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "GUID produktu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Aktualizovať existujúci produkt"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Unleashed.",
+          "message": "Aktualizovať existujúcu predajnú objednávku v Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "Aktualizovať predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this order",
+          "message": "Komentáre alebo poznámky k tejto objednávke"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáre"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Order comments",
+          "message": "Komentáre k objednávke"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOk9wZW4.desc": {
+          "source": "Open order",
+          "message": "Otvorená objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkJhY2tvcmRlcmVk.desc": {
+          "source": "Backordered order",
+          "message": "Doobjednaná objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkNvbXBsZXRlZA.desc": {
+          "source": "Completed order",
+          "message": "Dokončená objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkRlbGV0ZWQ.desc": {
+          "source": "Deleted order",
+          "message": "Odstránená objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBhcmtlZA.desc": {
+          "source": "Draft/parked order",
+          "message": "Koncept/odložená objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBsYWNlZA.desc": {
+          "source": "Placed order",
+          "message": "Zadaná objednávka"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.desc": {
+          "source": "The order status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.short_desc": {
+          "source": "Order status",
+          "message": "Stav objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.desc": {
+          "source": "List of line items for this sales order",
+          "message": "Zoznam položiek pre túto objednávku odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.display_name": {
+          "source": "Sales Order Lines",
+          "message": "Položky objednávky odberateľa"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.desc": {
+          "source": "The required delivery date",
+          "message": "Požadovaný dátum doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.display_name": {
+          "source": "Required Date",
+          "message": "Požadovaný dátum"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.short_desc": {
+          "source": "Required delivery date",
+          "message": "Požadovaný dátum doručenia"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to update",
+          "message": "Jedinečný identifikátor (GUID) predajnej objednávky na aktualizáciu"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "GUID predajnej objednávky"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Aktualizovať existujúcu predajnú objednávku"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.desc": {
+          "source": "Unleashed is a comprehensive cloud-based inventory management system that enables you to manage products, customers, sales orders, purchase orders, stock levels, and more.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Manage product catalog and inventory\n- Process credit notes and refunds\n- Track stock levels across warehouses\n- Handle assemblies and manufacturing\n\n**Authentication:**\nUnleashed uses API ID and API Key authentication via HMAC signature. Both credentials are required and can be obtained from your Unleashed account settings under Integration > API Access.",
+          "message": "Unleashed je komplexný cloudový systém na správu zásob, ktorý vám umožňuje spravovať produkty, zákazníkov, predajné objednávky, nákupné objednávky, stav zásob a ďalšie.\n\n**Funkcie:**\n- Správa zákazníkov a dodávateľov\n- Vytváranie a sledovanie predajných objednávok\n- Správa katalógu produktov a zásob\n- Spracovanie dobropisov a refundácií\n- Sledovanie stavu zásob naprieč skladmi\n- Správa montáží a výroby\n\n**Autentifikácia:**\nUnleashed používa autentifikáciu pomocou API ID a API Key cez HMAC podpis. Vyžadujú sa oba prihlasovacie údaje a možno ich získať v nastaveniach účtu Unleashed v sekcii Integration > API Access."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.display_name": {
+          "source": "Unleashed Software",
+          "message": "Unleashed Software"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.short_desc": {
+          "source": "Unleashed inventory and sales management platform",
+          "message": "Platforma Unleashed na správu zásob a predaja"
+        }
+      }
+    }
+  }
+}

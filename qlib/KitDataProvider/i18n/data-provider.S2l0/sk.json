@@ -1,0 +1,1869 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber enrolls in a course in Kit",
+          "message": "Spustí sa, keď sa odberateľ zapíše do kurzu v Kit"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
+          "source": "Course Subscription",
+          "message": "Prihlásenie na kurz"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for course subscriptions",
+          "message": "Sledovať prihlásenia na kurz"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+          "message": "Vytvoriť nové hromadné vysielanie v Kit. Nastavte `send_at` pre naplánovanie alebo nechajte prázdne pre koncept"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Create a Broadcast",
+          "message": "Vytvoriť hromadné vysielanie"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "HTML obsah e-mailu hromadného vysielania"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "HTML obsah hromadného vysielania"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "Popis hromadného vysielania pre interné referencie"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "Popis hromadného vysielania"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "E-mailová adresa použitá ako odosielateľ hromadného vysielania"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "E-mailová adresa odosielateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "Identifikátor e-mailovej šablóny, ktorá sa má použiť pre hromadné vysielanie"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "ID e-mailovej šablóny"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "ID e-mailovej šablóny"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "Časová pečiatka, kedy sa má hromadné vysielanie odoslať; nastavte na `null` pre koncept"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Odoslať o"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "Kedy odoslať hromadné vysielanie"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "Predmet hromadného e-mailu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "Predmet hromadného e-mailu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "Text náhľadu zobrazený v e-mailových klientoch pred otvorením e-mailu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Text náhľadu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "Text náhľadu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Určuje, či je hromadný e-mail verejne prístupný"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Verejné"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Či je hromadný e-mail verejný"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "Časová pečiatka, kedy sa má hromadný e-mail publikovať"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Dátum publikovania"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "Kedy publikovať hromadný e-mail"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "Alternatívny text pre miniatúru hromadného e-mailu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Alternatívny text miniatúry"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "Alternatívny text miniatúry"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "URL adresa miniatúry hromadného e-mailu"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "URL miniatúry"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "URL adresa miniatúry"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Create a new broadcast or draft",
+          "message": "Vytvoriť nový hromadný e-mail alebo koncept"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Kit",
+          "message": "Vytvoriť nové vlastné pole v Kit"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "Vytvoriť vlastné pole"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The display label of the custom field to create",
+          "message": "Zobrazovaný štítok vytváraného vlastného poľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Štítok"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The custom field label",
+          "message": "Štítok vlastného poľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "Vytvoriť nové vlastné pole"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.desc": {
+          "source": "Create a new purchase record in Kit for e-commerce tracking",
+          "message": "Vytvoriť nový záznam o nákupe v Kit na sledovanie elektronického obchodu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
+          "source": "Create a Purchase",
+          "message": "Vytvoriť nákup"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for the purchase (defaults to `USD`)",
+          "message": "Kód meny ISO 4217 pre nákup (predvolené `USD`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "Kód meny"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount applied to the purchase",
+          "message": "Suma zľavy uplatnená na nákup"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Zľava"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.short_desc": {
+          "source": "The discount amount",
+          "message": "Suma zľavy"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the buyer",
+          "message": "E-mailová adresa kupujúceho"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The buyer's email address",
+          "message": "E-mailová adresa kupujúceho"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.desc": {
+          "source": "The shipping cost for the purchase",
+          "message": "Náklady na dopravu pre nákup"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.display_name": {
+          "source": "Shipping",
+          "message": "Doručenie"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.short_desc": {
+          "source": "The shipping cost",
+          "message": "Náklady na dopravu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.desc": {
+          "source": "The current status of the purchase",
+          "message": "Aktuálny stav nákupu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.short_desc": {
+          "source": "The purchase status",
+          "message": "Stav nákupu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.desc": {
+          "source": "The subtotal amount of the purchase before tax, shipping, and discount",
+          "message": "Medzisúčet nákupu pred daňou, dopravou a zľavou"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "Medzisúčet"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.short_desc": {
+          "source": "The purchase subtotal",
+          "message": "Medzisúčet nákupu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.desc": {
+          "source": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`",
+          "message": "Zoznam produktov v nákupe, z ktorých každý obsahuje podrobnosti o produkte ako `name`, `pid`, `lid`, `quantity` a `unit_price`"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Produkty"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.short_desc": {
+          "source": "List of products in the purchase",
+          "message": "Zoznam produktov v nákupe"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.desc": {
+          "source": "The total amount of the purchase",
+          "message": "Celková suma nákupu"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.display_name": {
+          "source": "Total",
+          "message": "Celkom"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.short_desc": {
+          "source": "The total amount",
+          "message": "Celková suma"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.desc": {
+          "source": "The tax amount applied to the purchase",
+          "message": "Suma dane uplatnená na nákup"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.display_name": {
+          "source": "Tax",
+          "message": "Daň"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.short_desc": {
+          "source": "The tax amount",
+          "message": "Suma dane"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The external transaction identifier for the purchase",
+          "message": "Externý identifikátor transakcie pre nákup"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID transakcie"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The external transaction ID",
+          "message": "Externé ID transakcie"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.desc": {
+          "source": "The timestamp when the transaction occurred",
+          "message": "Časová pečiatka, kedy k transakcii došlo"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.display_name": {
+          "source": "Transaction Time",
+          "message": "Čas transakcie"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.short_desc": {
+          "source": "When the transaction occurred",
+          "message": "Kedy k transakcii došlo"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
+          "source": "Create a new purchase record",
+          "message": "Vytvoriť nový záznam o nákupe"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+          "message": "Vytvoriť nového odberateľa v Kit (správanie upsert – aktualizuje, ak e-mail už existuje)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Create a Subscriber",
+          "message": "Vytvoriť odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to create or update (upsert behavior)",
+          "message": "E-mailová adresa odberateľa, ktorého chcete vytvoriť alebo aktualizovať (správanie upsert)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "Hash hodnôt vlastných polí, ktoré sa majú nastaviť pre odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastné polia"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastných polí"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.desc": {
+          "source": "The state of the subscriber (e.g., `active`, `inactive`)",
+          "message": "Stav odberateľa (napr. `active`, `inactive`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.short_desc": {
+          "source": "The subscriber's state",
+          "message": "Stav odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Create or update a subscriber",
+          "message": "Vytvoriť alebo aktualizovať odberateľa"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Kit",
+          "message": "Vytvoriť novú značku v Kit"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Vytvoriť značku"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "Názov značky, ktorá sa má vytvoriť"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Názov štítka"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "Názov značky"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Vytvoriť nový štítok"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.desc": {
+          "source": "Add a subscriber to a form in Kit by email address",
+          "message": "Pridať odberateľa do formulára v Kit podľa e-mailovej adresy"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
+          "source": "Add Subscriber to Form",
+          "message": "Pridať odberateľa do formulára"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the form",
+          "message": "E-mailová adresa odberateľa, ktorý sa má pridať do formulára"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to add the subscriber to",
+          "message": "Jedinečný identifikátor formulára, do ktorého sa má odberateľ pridať"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formulára"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "ID formulára"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
+          "source": "Add a subscriber to a form",
+          "message": "Pridať odberateľa do formulára"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.desc": {
+          "source": "Add a subscriber to an email sequence in Kit",
+          "message": "Pridať odberateľa do e-mailovej sekvencie v Kit"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
+          "source": "Add Subscriber to Sequence",
+          "message": "Pridať odberateľa do sekvencie"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the sequence",
+          "message": "E-mailová adresa odberateľa, ktorý sa má pridať do sekvencie"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.desc": {
+          "source": "The unique identifier of the sequence to add the subscriber to",
+          "message": "Jedinečný identifikátor sekvencie, do ktorej sa má odberateľ pridať"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "ID sekvencie"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence ID",
+          "message": "ID sekvencie"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
+          "source": "Add a subscriber to a sequence",
+          "message": "Pridať odberateľa do sekvencie"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "Apply a tag to multiple subscribers in Kit at once",
+          "message": "Použiť štítok na viacerých odberateľov v Kit naraz"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Tag Subscribers",
+          "message": "Hromadne označiť odberateľov štítkom"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscriber email addresses to tag",
+          "message": "Zoznam e-mailových adries odberateľov na označenie štítkom"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Odberatelia"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscriber email addresses",
+          "message": "Zoznam e-mailových adries odberateľov"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscribers",
+          "message": "Jedinečný identifikátor štítka, ktorý sa má priradiť odberateľom"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Apply a tag to multiple subscribers",
+          "message": "Priradiť štítok viacerým odberateľom"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.desc": {
+          "source": "Bulk create subscribers in Kit (async processing)",
+          "message": "Hromadne vytvoriť odberateľov v Kit (asynchrónne spracovanie)"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Create Subscribers",
+          "message": "Hromadne vytvoriť odberateľov"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.desc": {
+          "source": "A URL that will receive a webhook when the bulk operation completes",
+          "message": "Adresa URL, ktorá prijme webhook po dokončení hromadnej operácie"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.display_name": {
+          "source": "Callback URL",
+          "message": "Callback URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.short_desc": {
+          "source": "URL to receive completion callback",
+          "message": "Adresa URL na prijatie spätného volania o dokončení"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscribers to create, each containing at least an `email_address` field",
+          "message": "Zoznam odberateľov na vytvorenie, z ktorých každý obsahuje aspoň pole `email_address`"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Odberatelia"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscribers to create",
+          "message": "Zoznam odberateľov na vytvorenie"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Create multiple subscribers at once",
+          "message": "Vytvoriť viacerých odberateľov naraz"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a single broadcast by ID from Kit",
+          "message": "Získať jednu hromadnú správu podľa ID z Kit"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get a Broadcast",
+          "message": "Získať hromadnú správu"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ID broadcastu"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "ID hromadnej správy"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a single broadcast by ID",
+          "message": "Získať jednu hromadnú správu podľa ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.desc": {
+          "source": "Get statistics for a specific broadcast in Kit",
+          "message": "Získať štatistiky pre konkrétnu hromadnú správu v Kit"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
+          "source": "Get Broadcast Stats",
+          "message": "Získať štatistiky hromadnej správy"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to get stats for",
+          "message": "Jedinečný identifikátor hromadnej správy, pre ktorú sa majú získať štatistiky"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ID broadcastu"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "ID hromadnej správy"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
+          "source": "Get statistics for a broadcast",
+          "message": "Získať štatistiky pre hromadnú správu"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.desc": {
+          "source": "Retrieve a single purchase record by ID from Kit",
+          "message": "Získať jeden záznam o nákupe podľa ID z Kit"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
+          "source": "Get a Purchase",
+          "message": "Získať nákup"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "ID nákupu"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "The purchase ID",
+          "message": "ID nákupu"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
+          "source": "Get a single purchase by ID",
+          "message": "Získať jeden nákup podľa ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.desc": {
+          "source": "Retrieve a single subscriber by ID from Kit",
+          "message": "Získať jedného odberateľa podľa ID z Kit"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
+          "source": "Get a Subscriber",
+          "message": "Získať odberateľa"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
+          "source": "Get a single subscriber by ID",
+          "message": "Získať jedného odberateľa podľa ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Delete a broadcast from Kit (only before sending)",
+          "message": "Odstrániť hromadnú správu z Kit (iba pred odoslaním)"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Delete a Broadcast",
+          "message": "Odstrániť hromadnú správu"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to delete",
+          "message": "Jedinečný identifikátor hromadnej správy na odstránenie"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ID broadcastu"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to delete",
+          "message": "ID hromadnej správy na odstránenie"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Delete a broadcast",
+          "message": "Odstrániť hromadnú správu"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Kit",
+          "message": "Odstrániť vlastné pole z Kit"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "Odstrániť vlastné pole"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to delete",
+          "message": "Jedinečný identifikátor vlastného poľa na odstránenie"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "ID vlastného poľa"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to delete",
+          "message": "ID vlastného poľa na odstránenie"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "Odstrániť vlastné pole"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.desc": {
+          "source": "Triggers when a subscriber signs up through a form in Kit",
+          "message": "Spustí sa, keď sa odberateľ zaregistruje prostredníctvom formulára v Kit"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
+          "source": "Form Subscription",
+          "message": "Prihlásenie na odber cez formulár"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
+          "source": "Watch for form subscriptions",
+          "message": "Sledovať prihlásenia na odber cez formulár"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "List all subscribers that have a specific tag applied in Kit",
+          "message": "Zoznam všetkých odberateľov, ktorí majú v Kit priradený konkrétny štítok"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "List Tag Subscribers",
+          "message": "Zoznam odberateľov so štítkom"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Stav odberateľa"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filtrovať podľa stavu odberateľa"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag to list subscribers for",
+          "message": "Štítok, pre ktorý sa má zobraziť zoznam odberateľov"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "List subscribers for a tag",
+          "message": "Zoznam odberateľov pre štítok"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Kit with optional filtering",
+          "message": "Zoznam štítkov v Kit s voliteľným filtrovaním"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Zoznam značiek"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filtrovať podľa názvu"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Filtrovať podľa ID značky"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "Zoznam všetkých značiek"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "List broadcasts in Kit",
+          "message": "Zoznam hromadných správ v Kit"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "Zoznam hromadných správ"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ID broadcastu"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "Filter by broadcast ID",
+          "message": "Filtrovať podľa ID hromadnej správy"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List all broadcasts",
+          "message": "Zoznam všetkých hromadných správ"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List all custom fields in Kit",
+          "message": "Zoznam všetkých vlastných polí v Kit"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "Zoznam vlastných polí"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "Zoznam všetkých vlastných polí"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.desc": {
+          "source": "List all subscribers that subscribed through a specific form in Kit",
+          "message": "Zoznam všetkých odberateľov, ktorí sa prihlásili na odber prostredníctvom konkrétneho formulára v Kit"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
+          "source": "List Form Subscribers",
+          "message": "Zoznam odberateľov formulára"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formulára"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list subscribers for",
+          "message": "Formulár, pre ktorý sa má zobraziť zoznam odberateľov"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Stav odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filtrovať podľa stavu odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
+          "source": "List subscribers for a form",
+          "message": "Zoznam odberateľov pre formulár"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in Kit with optional status filter",
+          "message": "Zoznam formulárov v službe Kit s voliteľným filtrom stavu"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "Zoznam formulárov"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formulára"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "Filtrovať podľa ID formulára"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by form status",
+          "message": "Filtrovať podľa stavu formulára"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "Zoznam všetkých formulárov"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.desc": {
+          "source": "List purchase records in Kit",
+          "message": "Zoznam záznamov o nákupoch v službe Kit"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
+          "source": "List Purchases",
+          "message": "Zoznam nákupov"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "ID nákupu"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "Filter by purchase ID",
+          "message": "Filtrovať podľa ID nákupu"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
+          "source": "List all purchases",
+          "message": "Zoznam všetkých nákupov"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.desc": {
+          "source": "List all subscribers in a specific email sequence in Kit",
+          "message": "Zoznam všetkých odberateľov v konkrétnej e-mailovej sekvencii v službe Kit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Sequence Subscribers",
+          "message": "Zoznam odberateľov sekvencie"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "ID sekvencie"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence to list subscribers for",
+          "message": "Sekvencia, pre ktorú sa má získať zoznam odberateľov"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Stav odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Filtrovať podľa stavu odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List subscribers for a sequence",
+          "message": "Zoznam odberateľov pre sekvenciu"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.desc": {
+          "source": "List email sequences in Kit",
+          "message": "Zoznam e-mailových sekvencií v službe Kit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
+          "source": "List Sequences",
+          "message": "Zoznam sekvencií"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "ID sekvencie"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "Filter by sequence ID",
+          "message": "Filtrovať podľa ID sekvencie"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
+          "source": "List all sequences",
+          "message": "Zoznam všetkých sekvencií"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.desc": {
+          "source": "List subscribers in Kit with optional filtering",
+          "message": "Zoznam odberateľov v službe Kit s voliteľným filtrovaním"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Subscribers",
+          "message": "Zoznam odberateľov"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "Vytvorené po"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtrovať podľa dátumu vytvorenia"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "Vytvorené pred"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtrovať podľa dátumu vytvorenia"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovať podľa e-mailu"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Pole radenia"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Pole na zoradenie"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Poradie zoradenia"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Smer zoradenia"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by state",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "Filter by subscriber ID",
+          "message": "Filtrovať podľa ID odberateľa"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "Filtrovať podľa štítka"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "Aktualizované po"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "Filtrovať podľa dátumu aktualizácie"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.display_name": {
+          "source": "Updated Before",
+          "message": "Aktualizované pred"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by update date",
+          "message": "Filtrovať podľa dátumu aktualizácie"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List all subscribers",
+          "message": "Zoznam všetkých odberateľov"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Kit** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API daného pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Kit",
+          "message": "Vykonať vlastné volanie API do služby Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber unsubscribes in Kit",
+          "message": "Spustí sa, keď sa odberateľ odhlási z odberu v službe Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
+          "source": "Subscriber Unsubscribed",
+          "message": "Odberateľ sa odhlásil"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for subscriber unsubscribes",
+          "message": "Sledovať odhlásenia odberateľov"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.desc": {
+          "source": "Triggers when a subscriber is activated in Kit",
+          "message": "Spustí sa, keď je odberateľ aktivovaný v službe Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
+          "source": "Subscriber Activated",
+          "message": "Odberateľ bol aktivovaný"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
+          "source": "Watch for new subscriber activations",
+          "message": "Sledovať aktivácie nových odberateľov"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.desc": {
+          "source": "Triggers when a subscriber's email bounces in Kit",
+          "message": "Spustí sa, keď je e-mail odberateľa v službe Kit vrátený ako nedoručiteľný"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
+          "source": "Subscriber Bounced",
+          "message": "E-mail odberateľa bol vrátený"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
+          "source": "Watch for subscriber bounces",
+          "message": "Sledovať nedoručené e-maily odberateľov"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.desc": {
+          "source": "Triggers when a subscriber marks an email as spam in Kit",
+          "message": "Spustí sa, keď odberateľ označí e-mail ako spam v službe Kit"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
+          "source": "Subscriber Complained",
+          "message": "Odberateľ nahlásil sťažnosť"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
+          "source": "Watch for subscriber complaints",
+          "message": "Sledovať sťažnosti odberateľov"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.desc": {
+          "source": "Apply a tag to a subscriber in Kit by email address",
+          "message": "Priradiť štítok odberateľovi v službe Kit podľa e-mailovej adresy"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
+          "source": "Tag a Subscriber",
+          "message": "Označiť odberateľa štítkom"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to tag",
+          "message": "E-mailová adresa odberateľa, ktorému sa má priradiť štítok"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscriber",
+          "message": "Jedinečný identifikátor štítka, ktorý sa má priradiť odberateľovi"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
+          "source": "Apply a tag to a subscriber",
+          "message": "Priradiť štítok odberateľovi"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.desc": {
+          "source": "Remove a tag from a subscriber in Kit",
+          "message": "Odstrániť štítok odberateľovi v službe Kit"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
+          "source": "Untag a Subscriber",
+          "message": "Odstrániť štítok odberateľovi"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to untag",
+          "message": "Jedinečný identifikátor odberateľa, ktorému sa má odstrániť štítok"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to remove from the subscriber",
+          "message": "Jedinečný identifikátor štítka, ktorý sa má odstrániť odberateľovi"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
+          "source": "Remove a tag from a subscriber",
+          "message": "Odstrániť štítok odberateľovi"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.desc": {
+          "source": "Unsubscribe a subscriber from Kit",
+          "message": "Odhlásiť odberateľa zo služby Kit"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
+          "source": "Unsubscribe a Subscriber",
+          "message": "Odhlásiť odberateľa"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to unsubscribe",
+          "message": "Jedinečný identifikátor odberateľa, ktorý má byť odhlásený z odberu"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to unsubscribe",
+          "message": "ID odberateľa na odhlásenie z odberu"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
+          "source": "Unsubscribe a subscriber",
+          "message": "Odhlásiť odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Update an existing broadcast in Kit",
+          "message": "Aktualizovať existujúcu hromadnú správu v službe Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Update a Broadcast",
+          "message": "Aktualizovať hromadnú správu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "HTML obsah e-mailu hromadného vysielania"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "HTML obsah hromadného vysielania"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to update",
+          "message": "Jedinečný identifikátor hromadnej správy, ktorá sa má aktualizovať"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ID broadcastu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to update",
+          "message": "ID hromadnej správy na aktualizáciu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "Popis hromadného vysielania pre interné referencie"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "Popis hromadného vysielania"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "E-mailová adresa použitá ako odosielateľ hromadného vysielania"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "E-mailová adresa odosielateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "Identifikátor e-mailovej šablóny, ktorá sa má použiť pre hromadné vysielanie"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "ID e-mailovej šablóny"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "ID e-mailovej šablóny"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "Časová pečiatka, kedy sa má hromadné vysielanie odoslať; nastavte na `null` pre koncept"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Odoslať o"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "Kedy odoslať hromadné vysielanie"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "Predmet hromadného e-mailu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "Predmet hromadného e-mailu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "Text náhľadu zobrazený v e-mailových klientoch pred otvorením e-mailu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Text náhľadu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "Text náhľadu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Určuje, či je hromadný e-mail verejne prístupný"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Verejné"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Či je hromadný e-mail verejný"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "Časová pečiatka, kedy sa má hromadný e-mail publikovať"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Dátum publikovania"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "Kedy publikovať hromadný e-mail"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "Alternatívny text pre miniatúru hromadného e-mailu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Alternatívny text miniatúry"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "Alternatívny text miniatúry"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "URL adresa miniatúry hromadného e-mailu"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "URL miniatúry"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "URL adresa miniatúry"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Update an existing broadcast",
+          "message": "Aktualizovať existujúcu hromadnú správu"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update the label of an existing custom field in Kit",
+          "message": "Aktualizovať menovku existujúceho vlastného poľa v službe Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "Aktualizovať vlastné pole"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to update",
+          "message": "Jedinečný identifikátor vlastného poľa, ktoré sa má aktualizovať"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "ID vlastného poľa"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to update",
+          "message": "ID vlastného poľa na aktualizáciu"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new display label for the custom field",
+          "message": "Nová zobrazovaná menovka pre vlastné pole"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Štítok"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The new custom field label",
+          "message": "Nová menovka vlastného poľa"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update a custom field label",
+          "message": "Aktualizovať menovku vlastného poľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Update an existing subscriber in Kit",
+          "message": "Aktualizovať existujúceho odberateľa v službe Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Update a Subscriber",
+          "message": "Aktualizovať odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "E-mailová adresa odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "Hash hodnôt vlastných polí, ktoré sa majú nastaviť pre odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastné polia"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastných polí"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Meno odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to update",
+          "message": "Jedinečný identifikátor odberateľa, ktorý sa má aktualizovať"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "ID odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to update",
+          "message": "ID odberateľa na aktualizáciu"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Update an existing subscriber",
+          "message": "Aktualizovať existujúceho odberateľa"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name of an existing tag in Kit",
+          "message": "Aktualizovať názov existujúcej značky v službe Kit"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Aktualizovať značku"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "Nový názov pre štítok"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Názov štítka"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The new tag name",
+          "message": "Nový názov značky"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "Jedinečný identifikátor štítku, ktorý sa má aktualizovať"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "ID štítku na aktualizáciu"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update a tag name",
+          "message": "Aktualizovať názov značky"
+        },
+        "app.S2l0.desc": {
+          "source": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers.",
+          "message": "Kit (predtým ConvertKit) je e-mailová marketingová platforma pre tvorcov, ktorá podporuje odberateľov, značky, vlastné polia, hromadné správy (broadcasts), formuláre, sekvencie a nákupy.\n\nTáto integrácia podporuje kompletné operácie CRUD pre kľúčové prostriedky a spúšťače založené na udalostiach."
+        },
+        "app.S2l0.display_name": {
+          "source": "Kit",
+          "message": "Kit"
+        },
+        "app.S2l0.short_desc": {
+          "source": "Kit email marketing platform for creators",
+          "message": "E-mailová marketingová platforma Kit pre tvorcov"
+        }
+      }
+    }
+  }
+}

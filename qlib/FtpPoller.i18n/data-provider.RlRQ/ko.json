@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
+          "message": "FTP 서버에 업로드된 파일에 반응합니다. 액션 구성에 따라 이벤트에 파일 데이터 자체가 포함될지 아니면 로컬 파일시스템의 파일 위치 링크가 포함될지 결정됩니다. 어떤 경우든 이 이벤트는 파일 데이터가 이미 다운로드되어 로컬에서 사용 가능함을 나타냅니다"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
+          "source": "FTP File Received",
+          "message": "FTP 파일 수신됨"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.desc": {
+          "source": "Use an atomic transfer mechanism with `local_dir` where remote files are first moved to a temporary location (specified by `tempfile_template`) and then moved to the final location when they have been fully transferred.\n\nThis ensures that files will never be read until they are fully transferred",
+          "message": "원격 파일을 먼저 임시 위치(`tempfile_template`에서 지정)로 이동한 다음 전송이 완전히 완료되면 최종 위치로 이동하는 `local_dir` 기반 원자적 전송 메커니즘을 사용합니다.\n\n이를 통해 파일이 완전히 전송될 때까지 절대 읽히지 않도록 보장합니다"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.display_name": {
+          "source": "Atomic File Transfer",
+          "message": "원자적 파일 전송"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.short_desc": {
+          "source": "Use an atomic file transfer mechanism",
+          "message": "원자적 파일 전송 메커니즘 사용"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
+          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "FTP 오류 발생 후 다시 폴링하기 전까지 대기할 시간(초)입니다. 오류는 error 레벨로 기록되며, 이 지연 시간 이후 폴링이 계속됩니다.\n\n네트워크 중단이나 서버 재시작과 같은 일시적인 문제는 FTP에서 흔히 발생합니다. 낮은 값을 설정하면 이러한 문제를 빠르게 복구할 수 있으며, 높은 값을 설정하면 지속적으로 장애가 발생하는 서버의 부하를 줄일 수 있습니다.\n\n**참고**: 이 지연 시간이 적용되는 동안에는 파일을 폴링하지 않습니다"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.display_name": {
+          "source": "Error Retry Delay",
+          "message": "오류 재시도 지연 시간"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.short_desc": {
+          "source": "The delay in seconds before retrying after an FTP error",
+          "message": "FTP 오류 후 재시도하기 전까지의 지연 시간(초)"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "파일을 가져오는 데 사용할 로컬 디렉터리"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.display_name": {
+          "source": "Local Directory",
+          "message": "로컬 디렉터리"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.short_desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "파일을 가져오는 데 사용할 로컬 디렉터리"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.desc": {
+          "source": "The glob mask to use to match files to poll; will be treated as a regex if `regex` is `true`",
+          "message": "폴링할 파일과 일치시킬 glob 마스크입니다. `regex`이 `true`인 경우 정규식으로 처리됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
+          "source": "Glob Mask",
+          "message": "Glob 마스크"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.short_desc": {
+          "source": "The glob mask to use to match files to poll",
+          "message": "폴링할 파일과 일치시키는 데 사용할 glob 마스크"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "파일이 폴링되기 전의 최소 파일 연령(초)을 지정하는 정수입니다. 이는 비원자적 파일 전송 작업을 우회하기 위한 것입니다.\n\n이 옵션이 필요한 경우, 파일을 전송하는 데 걸리는 가장 긴 시간보다 큰 값으로 설정하세요."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "최소 폴링 연령"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "폴링할 파일의 최소 연령(초)"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "정렬에 사용할 데이터의 `name` 또는 `date`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "정렬 유형"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "파일을 정렬할 필드"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "내림차순 정렬입니다. 지정되지 않고 `sort_type`이 제공된 경우 오름차순 정렬로 간주됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "내림차순 정렬"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "파일을 내림차순으로 정렬"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "파일 폴링 간격(초)"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "`true`인 경우 `mask`은 glob 패턴 대신 정규식으로 처리됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "정규식 일치"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "true인 경우 'mask' 인수가 정규식으로 처리됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.desc": {
+          "source": "Move the remote file after processing; in this case `remote_file_move_target` must be set",
+          "message": "처리 후 원격 파일을 이동합니다. 이 경우 `remote_file_move_target`을 설정해야 합니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.display_name": {
+          "source": "MOVE",
+          "message": "MOVE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.short_desc": {
+          "source": "Move the remote file after processing",
+          "message": "처리 후 원격 파일 이동"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "Leave the file untouched after processing; the file must be moved or deleted manually during post-processing, or the file will appear in subsequent polls as well",
+          "message": "처리 후 파일을 원상태로 유지합니다. 후처리 동안 파일을 수동으로 이동하거나 삭제해야 합니다. 그렇지 않으면 이후 폴링에도 파일이 나타납니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "NONE",
+          "message": "NONE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Leave the file untouched after processing",
+          "message": "처리 후 파일 수정을 하지 않음"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Delete the remote file after processing",
+          "message": "처리 후 원격 파일 삭제"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Delete the remote file after processing",
+          "message": "처리 후 원격 파일 삭제"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.desc": {
+          "source": "Delete or move remote file after processing? If `MOVE`, `remote_file_move_target` must also be set",
+          "message": "처리 후 원격 파일을 삭제하거나 이동하시겠습니까? `MOVE`인 경우 `remote_file_move_target`도 설정해야 합니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.display_name": {
+          "source": "Remote File Disposition",
+          "message": "원격 파일 처리 방식"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.short_desc": {
+          "source": "Delete or move remote file after processing?",
+          "message": "처리 후 원격 파일을 삭제하거나 이동하시겠습니까?"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.desc": {
+          "source": "The target template for the remote file after processing; use `%s` for the original file name. This option is only used when `remote_file_disposition` is `MOVE`, otherwise it is ignored",
+          "message": "처리 후 원격 파일의 대상 템플릿입니다. 원본 파일 이름에는 `%s`을 사용하세요. 이 옵션은 `remote_file_disposition`이 `MOVE`일 때만 사용되며, 그렇지 않으면 무시됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.display_name": {
+          "source": "Remote File Move Target",
+          "message": "원격 파일 이동 대상"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.short_desc": {
+          "source": "The target template for the remote file after processing",
+          "message": "처리 후 원격 파일의 대상 템플릿"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "정규식 옵션의 비트필드(`1` = 대소문자 무시, `2` = EOL을 일반 문자로 처리). `regex`가 `true`이 아니면 무시됩니다."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "정규식 옵션"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "정규식 옵션의 비트필드"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.desc": {
+          "source": "The template for temporary filenames; use `%s` for the original filename",
+          "message": "임시 파일 이름 템플릿입니다. 원본 파일 이름에는 `%s`을 사용하세요."
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.display_name": {
+          "source": "Temporary Filename Template",
+          "message": "임시 파일 이름 템플릿"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.short_desc": {
+          "source": "The template for temporary filenames",
+          "message": "임시 파일 이름 템플릿"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {
+          "source": "A file is uploaded to an FTP server",
+          "message": "FTP 서버에 파일이 업로드됩니다"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "FTP 및 FTPS를 통해 파일을 교환하기 위한 일반 FTP 서버"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP 서버"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "FTP 및 FTPS를 통해 파일을 교환하기 위한 일반 FTP 서버"
+        }
+      }
+    }
+  }
+}

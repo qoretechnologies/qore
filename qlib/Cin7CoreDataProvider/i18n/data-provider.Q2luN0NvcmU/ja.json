@@ -1,0 +1,2649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
+          "message": "連絡先情報、住所、支払条件を指定して Cin7Core に新しい顧客を作成します。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "顧客を作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "顧客に関する追加のメモ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this customer",
+          "message": "この顧客用に作成する連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "連絡先"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "顧客の与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "3文字の ISO 通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "デフォルト通貨"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "売掛金勘定科目コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "売掛金"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "売掛金勘定"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this customer",
+          "message": "この顧客用に作成する住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "デフォルトの割引率"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "デフォルト割引率 (%)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name (required)",
+          "message": "顧客の名前または会社名 (必須)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "顧客名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "有効な顧客"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "非推奨/無効な顧客"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "有効または無効のステータス。デフォルトは Active (有効)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "顧客ステータス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "この顧客の支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "収益勘定科目コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "収益勘定"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "収益勘定"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "顧客の納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "税番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "顧客のカンマ区切りタグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "顧客タグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "新しい顧客を作成します"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Create a new stock adjustment to modify inventory levels.",
+          "message": "在庫レベルを変更するための新しい在庫調整を作成します。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Create Stock Adjustment",
+          "message": "在庫調整を作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The account for the adjustment",
+          "message": "調整用勘定科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Adjustment account",
+          "message": "調整勘定"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the adjustment (defaults to today)",
+          "message": "調整日 (デフォルトは本日)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "調整日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "調整日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment (required)",
+          "message": "調整対象の倉庫ロケーション (必須)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of stock adjustment line items (required)",
+          "message": "在庫調整明細行のリスト (必須)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "調整明細行"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.desc": {
+          "source": "The reason for the stock adjustment",
+          "message": "在庫調整の理由"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "理由"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.short_desc": {
+          "source": "Adjustment reason",
+          "message": "調整理由"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Create a new stock adjustment",
+          "message": "新しい在庫調整を作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.desc": {
+          "source": "Create a new supplier in Cin7Core with contact information and payment terms.",
+          "message": "連絡先情報と支払条件を指定して Cin7Core に新しいサプライヤーを作成します。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Create Supplier",
+          "message": "サプライヤーを作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the supplier",
+          "message": "サプライヤーに関する追加のメモ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this supplier",
+          "message": "このサプライヤー用に作成する連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "連絡先"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "3文字の ISO 通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "デフォルト通貨"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The account payable account code",
+          "message": "買掛金勘定科目コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "買掛金"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "AP account",
+          "message": "買掛金勘定"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this supplier",
+          "message": "このサプライヤー用に作成する住所のリスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "デフォルトの割引率"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "デフォルト割引率 (%)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's name or company name (required)",
+          "message": "サプライヤー名または会社名（必須）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "サプライヤー名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active supplier",
+          "message": "アクティブなサプライヤー"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive supplier",
+          "message": "非推奨/非アクティブなサプライヤー"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "有効または無効のステータス。デフォルトは Active (有効)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "サプライヤーステータス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "このサプライヤーの支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "サプライヤーの納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "税番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the supplier",
+          "message": "サプライヤーのカンマ区切りタグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Supplier tags",
+          "message": "サプライヤータグ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Create a new supplier",
+          "message": "新規サプライヤーを作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.desc": {
+          "source": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
+          "message": "顧客、明細項目、配送詳細を含む新しい販売注文をCin7Coreで作成します。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
+          "source": "Create Sale",
+          "message": "販売を作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.desc": {
+          "source": "The contact name at the customer",
+          "message": "顧客側の担当者名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.short_desc": {
+          "source": "Contact name",
+          "message": "担当者名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "3文字の ISO 通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name (required). Must match an existing customer",
+          "message": "顧客名（必須）。既存の顧客と一致する必要があります"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "顧客名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for the sale",
+          "message": "販売の請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "顧客のメールアドレス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "メール アドレス"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the sale",
+          "message": "販売の倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "List of line items to add to the order",
+          "message": "注文に追加する明細項目のリスト"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Order lines",
+          "message": "注文明細"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "Date when the sale order was created (defaults to today)",
+          "message": "販売注文が作成された日付（デフォルトは本日）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "注文日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Sale order date",
+          "message": "販売注文日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "Date by which the order must be shipped",
+          "message": "注文を出荷する必要がある期日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "出荷期日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "出荷期日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for the sale",
+          "message": "販売の配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.desc": {
+          "source": "Customer phone number",
+          "message": "顧客の電話番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "Date by which the order must be delivered",
+          "message": "注文を納品する必要がある期日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "希望納期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required delivery date",
+          "message": "希望納期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.desc": {
+          "source": "Whether prices include tax",
+          "message": "価格に税金が含まれているかどうか"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.display_name": {
+          "source": "Tax Inclusive",
+          "message": "税込"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.short_desc": {
+          "source": "Prices include tax",
+          "message": "価格は税込です"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "Tax rule to apply",
+          "message": "適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for the sale",
+          "message": "販売の支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
+          "source": "Create a new sale order",
+          "message": "新規販売注文を作成"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is created or modified via polling.",
+          "message": "ポーリングにより顧客が作成または変更されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "顧客更新"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "顧客が作成または更新されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Upload a file attachment to a sale order.",
+          "message": "販売注文に添付ファイルをアップロードします。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Add Sale Attachment",
+          "message": "販売添付ファイルを追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.desc": {
+          "source": "The file content encoded as Base64 string",
+          "message": "Base64文字列としてエンコードされたファイルコンテンツ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.display_name": {
+          "source": "Content (Base64)",
+          "message": "コンテンツ (Base64)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.short_desc": {
+          "source": "File content in Base64",
+          "message": "Base64形式のファイルコンテンツ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.desc": {
+          "source": "The name of the file being attached",
+          "message": "添付するファイルの名前"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "ファイル名"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.short_desc": {
+          "source": "Attachment file name",
+          "message": "添付ファイル名"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale to attach to",
+          "message": "添付先の販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Add an attachment to a sale",
+          "message": "販売に添付ファイルを追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.desc": {
+          "source": "Add shipment details and tracking information to a sale order.",
+          "message": "販売注文に配送詳細と追跡情報を追加します。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
+          "source": "Add Sale Shipment",
+          "message": "販売配送を追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier name",
+          "message": "配送業者名"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of lines to ship with quantities",
+          "message": "数量を含めて出荷する明細のリスト"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Shipment lines",
+          "message": "出荷明細"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.desc": {
+          "source": "The date the items were shipped",
+          "message": "アイテムが出荷された日付"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.display_name": {
+          "source": "Ship Date",
+          "message": "発送日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.short_desc": {
+          "source": "Shipment date",
+          "message": "発送日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes about the shipment",
+          "message": "発送に関するメモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "発送メモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "発送メモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.desc": {
+          "source": "Date by which shipment is required",
+          "message": "発送が必要な期日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.display_name": {
+          "source": "Required By",
+          "message": "希望納期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.short_desc": {
+          "source": "Required by date",
+          "message": "発送期日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The fulfilment task ID to add shipment to",
+          "message": "発送を追加するフルフィルメントタスクID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "Fulfilment task ID",
+          "message": "フルフィルメントタスクID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.desc": {
+          "source": "The shipment tracking number",
+          "message": "発送の追跡番号"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.display_name": {
+          "source": "Tracking Number",
+          "message": "追跡番号"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.short_desc": {
+          "source": "Tracking number",
+          "message": "追跡番号"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.desc": {
+          "source": "URL to track the shipment",
+          "message": "発送を追跡するためのURL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.display_name": {
+          "source": "Tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.short_desc": {
+          "source": "Tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
+          "source": "Add shipment/tracking to a sale",
+          "message": "販売注文に発送/追跡情報を追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Record a payment against a sale order.",
+          "message": "販売注文に対する支払いを記録します。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Add Sale Payment",
+          "message": "販売支払いの追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount (required)",
+          "message": "支払金額（必須）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "支払金額"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment to",
+          "message": "支払いを記録する勘定科目"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Payment account",
+          "message": "支払勘定"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made (defaults to today)",
+          "message": "支払いが行われた日付（デフォルトは本日）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "支払日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "支払日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The GUID of the sale to add the payment to (required)",
+          "message": "支払いを追加する販売注文のGUID（必須）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "Sale identifier",
+          "message": "販売注文識別子"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment",
+          "message": "支払い方法"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "支払い方法"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "支払い方法"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Payment reference or transaction ID",
+          "message": "支払い参照またはトランザクションID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "参照"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "支払い参照"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Add a payment to a sale",
+          "message": "販売注文に支払いを追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.desc": {
+          "source": "Create a pack or pick task for fulfilling a sale order.",
+          "message": "販売注文を履行するための梱包またはピッキングタスクを作成します。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
+          "source": "Add Sale Pack",
+          "message": "販売梱包の追加"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the pack",
+          "message": "梱包を行う倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.short_desc": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.desc": {
+          "source": "List of lines to pack with quantities",
+          "message": "梱包する明細と数量のリスト"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.short_desc": {
+          "source": "Pack lines",
+          "message": "梱包明細"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.desc": {
+          "source": "Notes or memo for the pack operation",
+          "message": "梱包作業に関するメモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "メモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.short_desc": {
+          "source": "Pack memo",
+          "message": "梱包メモ"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.desc": {
+          "source": "The date the items were picked",
+          "message": "アイテムがピッキングされた日付"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.display_name": {
+          "source": "Pick Date",
+          "message": "ピッキング日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.short_desc": {
+          "source": "Pick date",
+          "message": "ピッキング日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
+          "source": "Add a pack/pick record to a sale",
+          "message": "販売注文に梱包/ピッキングレコードを追加"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier.",
+          "message": "一意の識別子によって特定の顧客に関する詳細情報を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "顧客を取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "取得する顧客の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "顧客 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by ID",
+          "message": "IDで顧客を取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "特定の製品に関する詳細情報を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "製品の取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "取得する製品の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.short_desc": {
+          "source": "The product ID",
+          "message": "製品ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by ID",
+          "message": "IDで製品を取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Retrieve detailed information about a specific stock adjustment.",
+          "message": "特定の在庫調整に関する詳細情報を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Get Stock Adjustment",
+          "message": "在庫調整の取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to retrieve",
+          "message": "取得する在庫調整の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "在庫調整タスクID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Get a stock adjustment by ID",
+          "message": "IDで在庫調整を取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.desc": {
+          "source": "Retrieve detailed information about a specific supplier.",
+          "message": "特定のサプライヤーに関する詳細情報を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
+          "source": "Get Supplier",
+          "message": "サプライヤーの取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to retrieve",
+          "message": "取得するサプライヤーの一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "サプライヤーID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID",
+          "message": "サプライヤーID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
+          "source": "Get a supplier by ID",
+          "message": "IDでサプライヤーを取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.desc": {
+          "source": "Retrieve detailed information about a specific sale order.",
+          "message": "特定の販売注文に関する詳細情報を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
+          "source": "Get Sale",
+          "message": "販売注文の取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to retrieve",
+          "message": "取得する販売注文の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
+          "source": "Get a sale order by ID",
+          "message": "IDで販売注文を取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.desc": {
+          "source": "Retrieve pack/pick details for a sale order.",
+          "message": "販売注文の梱包/ピッキング詳細を取得します。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
+          "source": "Get Sale Pack",
+          "message": "販売パックの取得"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.desc": {
+          "source": "Optional task ID to get a specific pack record",
+          "message": "特定のパックレコードを取得するためのオプションのタスクID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.short_desc": {
+          "source": "The fulfilment task ID",
+          "message": "フルフィルメントタスクID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
+          "source": "Get pack details for a sale",
+          "message": "販売のパック詳細を取得"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Delete or void a stock adjustment in Cin7Core.",
+          "message": "Cin7Coreで在庫調整を削除または無効化します。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Delete Stock Adjustment",
+          "message": "在庫調整を削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to delete/void",
+          "message": "削除/無効化する在庫調整の一意識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "在庫調整タスクID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Delete a stock adjustment",
+          "message": "在庫調整を削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.desc": {
+          "source": "Delete or void a sale order in Cin7Core.",
+          "message": "Cin7Coreで販売注文を削除または無効化します。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
+          "source": "Delete Sale",
+          "message": "販売を削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to delete/void",
+          "message": "削除/無効化する販売の一意識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to delete",
+          "message": "削除する販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
+          "source": "Delete (void) a sale order",
+          "message": "販売注文を削除（無効化）"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Remove a file attachment from a sale order.",
+          "message": "販売注文から添付ファイルを削除します。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Delete Sale Attachment",
+          "message": "販売添付ファイルを削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the attachment to delete",
+          "message": "削除する添付ファイルの一意識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.display_name": {
+          "source": "Attachment ID",
+          "message": "添付ファイルID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.short_desc": {
+          "source": "The attachment ID",
+          "message": "添付ファイルID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Delete an attachment from a sale",
+          "message": "販売から添付ファイルを削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Remove a payment from a sale order.",
+          "message": "販売注文から支払いを削除します。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Delete Sale Payment",
+          "message": "販売支払いを削除"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the payment to delete",
+          "message": "削除する支払いの一意識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The payment ID",
+          "message": "支払いID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Delete a payment from a sale",
+          "message": "販売から支払いを削除"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.desc": {
+          "source": "Search for assembly and finished goods tasks.",
+          "message": "組立および完成品タスクを検索します。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
+          "source": "Find Assemblies",
+          "message": "組立を検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
+          "source": "Find assembly/finished goods tasks",
+          "message": "組立/完成品タスクを検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.desc": {
+          "source": "Check product availability and stock levels across warehouse locations.",
+          "message": "倉庫ロケーション全体の製品の在庫状況と在庫レベルを確認します。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
+          "source": "Find Product Availability",
+          "message": "製品の在庫状況を検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
+          "source": "Check product stock levels",
+          "message": "製品の在庫レベルを確認"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Search for credit notes associated with sale orders.",
+          "message": "販売注文に関連付けられたクレジットノートを検索します。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Find Sale Credit Notes",
+          "message": "販売クレジットノートを検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Find credit notes for sales",
+          "message": "販売のクレジットノートを検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.desc": {
+          "source": "Search for fulfilment, pick, and pack tasks for sales.",
+          "message": "販売のフルフィルメント、ピッキング、梱包タスクを検索します。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
+          "source": "Find Sale Fulfilment",
+          "message": "販売フルフィルメントを検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
+          "source": "Find fulfilment tasks for sales",
+          "message": "販売のフルフィルメントタスクを検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.desc": {
+          "source": "Search for invoices associated with sale orders.",
+          "message": "販売注文に関連付けられた請求書を検索します。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
+          "source": "Find Sale Invoices",
+          "message": "販売請求書を検索"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
+          "source": "Find invoices for sales",
+          "message": "販売の請求書を検索"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cin7Core** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Cin7Core** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。応答は、ステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cin7Core",
+          "message": "Cin7CoreへのカスタムAPI呼び出しを実行"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is detected on a sale via polling.",
+          "message": "ポーリングによって販売に対する新しい支払いが検出されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "新規支払い"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "新しい支払いを受領したときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.desc": {
+          "source": "Fires when a new sale credit note is authorized via polling.",
+          "message": "ポーリングによって新しい販売クレジットノートが承認されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
+          "source": "New Sale Credit Note Authorized",
+          "message": "新しい販売クレジットノートの承認"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
+          "source": "Trigger when a credit note is authorized",
+          "message": "クレジットノートが承認されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.desc": {
+          "source": "Fires when a new sale invoice is authorized via polling.",
+          "message": "ポーリングによって新しい販売請求書が承認されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
+          "source": "New Sale Invoice Authorized",
+          "message": "新しい販売請求書の承認"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
+          "source": "Trigger when an invoice is authorized",
+          "message": "請求書が承認されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.desc": {
+          "source": "Fires when sale tracking or shipment information changes via polling.",
+          "message": "ポーリングによって販売の追跡情報または配送情報が変更されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
+          "source": "Sale Tracking Changed",
+          "message": "販売追跡情報の変更"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when tracking information changes",
+          "message": "追跡情報が変更されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.desc": {
+          "source": "Fires when a sale order is voided via polling.",
+          "message": "ポーリングによって販売注文が無効化されたときにトリガーされます。"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
+          "source": "Sale Voided",
+          "message": "販売の無効化"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
+          "source": "Trigger when a sale is voided",
+          "message": "販売が無効化されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, or modification date.",
+          "message": "Cin7Coreから顧客のリストを取得します（名前、ID、または変更日によるフィルタリングのオプションあり）。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "顧客を検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "顧客の一覧表示と検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, category, or brand.",
+          "message": "Cin7Coreから製品のリストを取得します（SKU、名前、カテゴリ、またはブランドによるフィルタリングのオプションあり）。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "商品の検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "製品の一覧表示と検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of stock adjustments from Cin7Core.",
+          "message": "Cin7Coreから在庫調整のリストを取得します。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
+          "source": "Search Stock Adjustments",
+          "message": "在庫調整を検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List and search stock adjustments",
+          "message": "在庫調整の一覧表示と検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.desc": {
+          "source": "Retrieve a list of suppliers from Cin7Core with optional filtering.",
+          "message": "Cin7Coreからサプライヤーのリストを取得します（オプションのフィルタリングあり）。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
+          "source": "Search Suppliers",
+          "message": "サプライヤーを検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
+          "source": "List and search suppliers",
+          "message": "サプライヤーの一覧表示および検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.desc": {
+          "source": "Retrieve a list of payments for sales.",
+          "message": "販売に対する支払いのリストを取得します。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
+          "source": "Search Sale Payments",
+          "message": "売上支払いを検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
+          "source": "List and search sale payments",
+          "message": "売上支払の一覧表示および検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.desc": {
+          "source": "Retrieve a list of sales orders from Cin7Core with optional filtering.",
+          "message": "オプションのフィルターを適用してCin7Coreから販売注文のリストを取得します。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
+          "source": "Search Sales",
+          "message": "販売を検索"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
+          "source": "List and search sales orders",
+          "message": "販売注文の一覧表示および検索"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.desc": {
+          "source": "Fires when product stock/inventory levels change via polling.",
+          "message": "ポーリングによって製品の在庫レベルが変更されたときに発火します。"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
+          "source": "Stock Level Update",
+          "message": "在庫レベルの更新"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
+          "source": "Trigger when stock levels change",
+          "message": "在庫レベルが変更されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a supplier is created or modified via polling.",
+          "message": "ポーリングによってサプライヤーが作成または変更されたときに発火します。"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
+          "source": "Supplier Updated",
+          "message": "サプライヤーが更新されました"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a supplier is created or updated",
+          "message": "サプライヤーが作成または更新されたときにトリガー"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Cin7Core.",
+          "message": "Cin7Core内の既存の顧客情報を更新します。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "顧客を更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "顧客に関する追加のメモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this customer",
+          "message": "この顧客の連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "連絡先"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "顧客の与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "与信限度額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "3文字の ISO 通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "デフォルト通貨"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "売掛金勘定科目コード"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "売掛金"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "売掛金勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "この顧客の住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "デフォルトの割引率"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "デフォルト割引率 (%)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to update (required)",
+          "message": "更新する顧客の一意の識別子（GUID）（必須）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "顧客 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name",
+          "message": "顧客名または会社名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "顧客名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "有効な顧客"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "非推奨/無効な顧客"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status",
+          "message": "有効または無効のステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "顧客ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "この顧客の支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "収益勘定科目コード"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "収益勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "収益勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "顧客の納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "税番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "顧客のカンマ区切りタグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "顧客タグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "既存の顧客を更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Update an existing stock adjustment in Cin7Core.",
+          "message": "Cin7Core内の既存の在庫調整を更新します。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Update Stock Adjustment",
+          "message": "在庫調整を更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The expense account for the adjustment",
+          "message": "調整用の経費勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Expense account",
+          "message": "経費勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the stock adjustment",
+          "message": "在庫調整の日付"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "調整日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "調整日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment",
+          "message": "調整用の倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of products and quantities to adjust",
+          "message": "調整する製品と数量のリスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "調整明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.desc": {
+          "source": "Notes about the adjustment",
+          "message": "調整に関するメモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "メモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.short_desc": {
+          "source": "Memo/notes",
+          "message": "メモ/注記"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.desc": {
+          "source": "The status of the adjustment (Draft, Authorized, Void)",
+          "message": "調整のステータス（Draft、Authorized、Void）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.short_desc": {
+          "source": "Adjustment status",
+          "message": "調整ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to update",
+          "message": "更新する在庫調整の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "在庫調整タスクID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Update an existing stock adjustment",
+          "message": "既存の在庫調整を更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.desc": {
+          "source": "Update an existing supplier's information in Cin7Core.",
+          "message": "Cin7Core内の既存のサプライヤー情報を更新します。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Update Supplier",
+          "message": "サプライヤーを更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional comments or notes about the supplier",
+          "message": "サプライヤーに関する追加のコメントまたはメモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this supplier",
+          "message": "このサプライヤーの連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "連絡先"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "連絡先リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The default currency code for this supplier (e.g., USD, EUR)",
+          "message": "このサプライヤーのデフォルト通貨コード（例: USD、EUR）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "デフォルト通貨"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The accounts payable account for this supplier",
+          "message": "このサプライヤーの買掛金勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "買掛金"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "Accounts payable account",
+          "message": "買掛金勘定"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this supplier",
+          "message": "このサプライヤーの住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "住所リスト"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "The default discount percentage for this supplier",
+          "message": "このサプライヤーのデフォルト割引率"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount",
+          "message": "デフォルト割引"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to update",
+          "message": "更新するサプライヤーの一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "サプライヤーID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID to update",
+          "message": "更新するサプライヤーID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's company or individual name",
+          "message": "サプライヤーの会社名または個人名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "サプライヤー名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "The supplier's status (Active, Deprecated, etc.)",
+          "message": "サプライヤーのステータス（Active、Deprecatedなど）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "サプライヤーステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "このサプライヤーの支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "サプライヤーの納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "税番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax identification number",
+          "message": "納税者番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply to this supplier",
+          "message": "このサプライヤーに適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Tags associated with this supplier",
+          "message": "このサプライヤーに関連付けられたタグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Update an existing supplier",
+          "message": "既存のサプライヤーを更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.desc": {
+          "source": "Update an existing sale order in Cin7Core.",
+          "message": "Cin7Core内の既存の販売注文を更新します。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
+          "source": "Update Sale",
+          "message": "販売を更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.desc": {
+          "source": "External comments for this sale",
+          "message": "この販売に関する外部コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier for this sale",
+          "message": "この販売の配送業者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "配送業者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code for this sale (e.g., USD, EUR)",
+          "message": "この販売の通貨コード（例: USD、EUR）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "The currency exchange rate",
+          "message": "通貨の為替レート"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "為替レート"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate",
+          "message": "為替レート"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name for this sale",
+          "message": "この販売の顧客名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "顧客名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.desc": {
+          "source": "Customer's reference number or PO number",
+          "message": "顧客の参照番号または発注書（PO）番号"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.display_name": {
+          "source": "Customer Reference",
+          "message": "顧客参照"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.short_desc": {
+          "source": "Customer reference",
+          "message": "顧客参照"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.desc": {
+          "source": "Additional charges for this sale",
+          "message": "この販売の追加料金"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.display_name": {
+          "source": "Additional Charges",
+          "message": "追加料金"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.short_desc": {
+          "source": "Additional charges",
+          "message": "追加料金"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for this sale",
+          "message": "この販売の請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "請求先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to update",
+          "message": "更新する販売の一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to update",
+          "message": "更新する販売ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.desc": {
+          "source": "Internal notes not visible to customer",
+          "message": "顧客には表示されない内部メモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.display_name": {
+          "source": "Internal Comments",
+          "message": "内部コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.short_desc": {
+          "source": "Internal comments",
+          "message": "内部コメント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for this sale",
+          "message": "この販売の倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫ロケーション"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "The line items for this sale",
+          "message": "この販売の明細項目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Line items",
+          "message": "明細項目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "The date when the sale order was created",
+          "message": "販売注文が作成された日付"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Sale Order Date",
+          "message": "販売注文日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Date of the order",
+          "message": "注文日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.desc": {
+          "source": "The sales representative for this sale",
+          "message": "この販売の営業担当者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.display_name": {
+          "source": "Sales Representative",
+          "message": "営業担当者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.short_desc": {
+          "source": "Sales rep",
+          "message": "営業担当者"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "The date by which the order should be shipped",
+          "message": "注文を出荷する期日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "出荷期日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "出荷期日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for this sale",
+          "message": "この販売の配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "配送先住所"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes for shipping",
+          "message": "配送に関するメモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "発送メモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "発送メモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.desc": {
+          "source": "The current status of the sale",
+          "message": "販売の現在のステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.short_desc": {
+          "source": "Sale status",
+          "message": "販売ステータス"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.desc": {
+          "source": "The price tier for this sale",
+          "message": "この販売の価格帯"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.display_name": {
+          "source": "Price Tier",
+          "message": "価格帯"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.short_desc": {
+          "source": "Price tier",
+          "message": "価格帯"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "The date by which the customer requires the order",
+          "message": "顧客が注文を必要とする期日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "希望納期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required by date",
+          "message": "発送期日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.desc": {
+          "source": "How taxes should be calculated (Inclusive, Exclusive)",
+          "message": "税の計算方法（税込、税抜）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.display_name": {
+          "source": "Tax Calculation",
+          "message": "税計算"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.short_desc": {
+          "source": "Tax calculation method",
+          "message": "税計算方法"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "適用する税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "税ルール"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for this sale",
+          "message": "この販売の支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "支払条件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
+          "source": "Update an existing sale order",
+          "message": "既存の販売注文を更新します"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Update an existing payment on a sale order.",
+          "message": "販売注文の既存の支払いを更新します。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Update Sale Payment",
+          "message": "販売支払いの更新"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount",
+          "message": "支払金額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "支払金額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment",
+          "message": "支払いを記録するアカウント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Account name",
+          "message": "アカウント名"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made",
+          "message": "支払いが行われた日付"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "支払日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "支払日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the payment to update",
+          "message": "更新する支払いの一意の識別子（GUID）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.short_desc": {
+          "source": "The payment ID",
+          "message": "支払いID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "販売の一意識別子 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "販売ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment (e.g., Cash, Credit Card, Bank Transfer)",
+          "message": "支払い方法（例: 現金、クレジットカード、銀行振込）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "支払い方法"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "支払い方法"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Reference number or note for the payment",
+          "message": "支払いの参照番号またはメモ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "参照"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "支払い参照"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Update an existing payment",
+          "message": "既存の支払いを更新します"
+        },
+        "app.Q2luN0NvcmU.desc": {
+          "source": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required and can be obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, then find the credentials on the Setup tab.",
+          "message": "Cin7Core（旧DEAR Inventory）は、商品、販売、購買、顧客、サプライヤー、在庫レベルを管理できる包括的な在庫管理およびERPプラットフォームです。\n\n**機能:**\n- 顧客およびサプライヤーの管理\n- 販売注文の作成と追跡\n- 支払いと請求書の処理\n- 在庫と在庫レベルの監視\n- 在庫調整の処理\n- 出荷とフルフィルメントの追跡\n\n**認証:**\nCin7CoreはアカウントIDとAPIキー認証を使用します。両方の認証情報が必要であり、https://inventory.dearsystems.com/ExternalApi で取得できます。アプリケーションを作成または選択し、Setupタブで認証情報を確認してください。"
+        },
+        "app.Q2luN0NvcmU.display_name": {
+          "source": "Cin7Core",
+          "message": "Cin7Core"
+        },
+        "app.Q2luN0NvcmU.short_desc": {
+          "source": "Cin7Core inventory management platform",
+          "message": "Cin7Core在庫管理プラットフォーム"
+        }
+      }
+    }
+  }
+}

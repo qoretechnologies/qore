@@ -1,0 +1,2229 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.desc": {
+          "source": "Copies several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Copia più file in una sola chiamata, invece di una richiesta per file.\n\nCiascuna voce specifica un `from_path` e un `to_path`. **Un batch non fallisce nel suo insieme**, quindi ciascuna voce restituisce il proprio esito; un batch di grandi dimensioni viene eseguito in background e la risposta specifica un job da seguire con `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
+          "source": "Copy Files (Batch)",
+          "message": "Copia file (batch)"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Le operazioni da eseguire, come elenco di hash ciascuno contenente `from_path` e `to_path`.\n\n**Esempio**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Voci"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Gli spostamenti o le copie da eseguire"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
+          "source": "Copy several files in one call",
+          "message": "Copia più file in un'unica chiamata"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file or folder to a new path; copying a folder copies everything in it.",
+          "message": "Copia un file o una cartella in un nuovo percorso; la copia di una cartella copia tutto ciò che contiene."
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File or Folder",
+          "message": "Copia file o cartella"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Il percorso del file o della cartella da copiare"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Percorso di origine"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Il percorso del file o della cartella da copiare"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to copy to, including the new name",
+          "message": "Il percorso completo di destinazione della copia, incluso il nuovo nome"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Percorso di destinazione"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to copy to",
+          "message": "Il percorso di destinazione della copia"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file or folder",
+          "message": "Copia un file o una cartella"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.desc": {
+          "source": "Follows an operation Dropbox is performing in the background.\n\n`save-url`, `delete-batch`, `move-batch`, and `copy-batch` each finish immediately when the work is small and hand back a job when it is not; this reports whether that job has finished, and what it produced.",
+          "message": "Segue un'operazione che Dropbox sta eseguendo in background.\n\n`save-url`, `delete-batch`, `move-batch` e `copy-batch` terminano ciascuno immediatamente quando il lavoro è ridotto e restituiscono un processo quando non lo è; questo segnala se tale processo è terminato e cosa ha prodotto."
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
+          "source": "Check Job Status",
+          "message": "Verifica stato processo"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.desc": {
+          "source": "The identifier of the job to check, as returned by the operation that started it",
+          "message": "L'identificatore del processo da verificare, come restituito dall'operazione che lo ha avviato"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.display_name": {
+          "source": "Job ID",
+          "message": "ID processo"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.short_desc": {
+          "source": "The job to check",
+          "message": "Il processo da verificare"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.desc": {
+          "source": "A batch move started by `move-batch`",
+          "message": "Uno spostamento in batch avviato da `move-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.display_name": {
+          "source": "Batch Move",
+          "message": "Spostamento in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.short_desc": {
+          "source": "A batch move",
+          "message": "Uno spostamento in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.desc": {
+          "source": "A batch copy started by `copy-batch`",
+          "message": "Una copia in batch avviata da `copy-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.display_name": {
+          "source": "Batch Copy",
+          "message": "Copia in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.short_desc": {
+          "source": "A batch copy",
+          "message": "Una copia in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.desc": {
+          "source": "A batch delete started by `delete-batch`",
+          "message": "Un'eliminazione in batch avviata da `delete-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.display_name": {
+          "source": "Batch Delete",
+          "message": "Eliminazione in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.short_desc": {
+          "source": "A batch delete",
+          "message": "Un'eliminazione in batch"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.desc": {
+          "source": "A file being fetched from a URL by `save-url`",
+          "message": "Un file recuperato da un URL da `save-url`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.display_name": {
+          "source": "Save URL",
+          "message": "Salva URL"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.short_desc": {
+          "source": "A file being fetched from a URL",
+          "message": "Un file recuperato da un URL"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.desc": {
+          "source": "Which operation started the job.\n\nDropbox has a separate status endpoint per operation, so the kind of job has to be named in order to check it",
+          "message": "Quale operazione ha avviato il processo.\n\nDropbox dispone di un endpoint di stato separato per ciascuna operazione, pertanto il tipo di processo deve essere specificato per poterlo verificare"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.display_name": {
+          "source": "Job Type",
+          "message": "Tipo di processo"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.short_desc": {
+          "source": "Which operation started the job",
+          "message": "Quale operazione ha avviato il processo"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
+          "source": "Follow an operation Dropbox is performing in the background",
+          "message": "Segue un'operazione che Dropbox sta eseguendo in background"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, creating any parent folders that do not yet exist.",
+          "message": "Crea una cartella, creando eventuali cartelle principali non ancora esistenti."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Crea cartella"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The full path of the folder to create; parent folders are created as needed",
+          "message": "Il percorso completo della cartella da creare; le cartelle principali vengono create secondo necessità"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Percorso cartella"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The path of the folder to create",
+          "message": "Il percorso della cartella da creare"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "Crea una cartella"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.desc": {
+          "source": "Creates a link granting access to a file or folder.\n\n**A `public` link makes the file reachable by anyone who has it, without signing in.**  `team_only`, a password, and an expiry all require a paid Dropbox account; where the account does not support the visibility requested, Dropbox narrows it silently, so the visibility Dropbox actually applied is returned in `visibility`.",
+          "message": "Crea un link che concede l'accesso a un file o a una cartella.\n\n**Un link `public` rende il file accessibile a chiunque lo possieda, senza effettuare l'accesso.**  `team_only`, una password e una data di scadenza richiedono tutti un account Dropbox a pagamento; se l'account non supporta la visibilità richiesta, Dropbox la limita silenziosamente, pertanto la visibilità effettivamente applicata da Dropbox viene restituita in `visibility`."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Create Shared Link",
+          "message": "Crea link condiviso"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.desc": {
+          "source": "When the link stops working; requires a paid Dropbox account",
+          "message": "Quando il link smette di funzionare; richiede un account Dropbox a pagamento"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.display_name": {
+          "source": "Expires",
+          "message": "Scadenza"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.short_desc": {
+          "source": "When the link stops working",
+          "message": "Quando il link smette di funzionare"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.desc": {
+          "source": "The password required to use the link; only used when `requested_visibility` is `password`",
+          "message": "La password richiesta per utilizzare il link; utilizzata solo quando `requested_visibility` è `password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.display_name": {
+          "source": "Link Password",
+          "message": "Password link"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.short_desc": {
+          "source": "The password required to use the link",
+          "message": "La password richiesta per utilizzare il link"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to create a shared link for",
+          "message": "Il percorso del file o della cartella per cui creare un link condiviso"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to share",
+          "message": "Il percorso del file o della cartella da condividere"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.desc": {
+          "source": "Anyone with the link can view the file, without signing in; **this makes the file publicly reachable**",
+          "message": "Chiunque disponga del link può visualizzare il file, senza effettuare l'accesso; **questo rende il file accessibile pubblicamente**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Pubblico"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.short_desc": {
+          "source": "Anyone with the link can view the file",
+          "message": "Chiunque disponga del link può visualizzare il file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "Anyone with the link and the password can view the file; requires a paid Dropbox account, and the password must be set in `link_password`",
+          "message": "Chiunque disponga del link e della password può visualizzare il file; richiede un account Dropbox a pagamento e la password deve essere impostata in `link_password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.display_name": {
+          "source": "Password Protected",
+          "message": "Protetto da password"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.short_desc": {
+          "source": "Anyone with the link and the password can view the file",
+          "message": "Chiunque disponga del link e della password può visualizzare il file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.desc": {
+          "source": "Only members of the same Dropbox team can view the file; requires a Dropbox Business account",
+          "message": "Solo i membri dello stesso team Dropbox possono visualizzare il file; richiede un account Dropbox Business"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.display_name": {
+          "source": "Team Only",
+          "message": "Solo team"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.short_desc": {
+          "source": "Only members of the same Dropbox team can view the file",
+          "message": "Solo i membri dello stesso team Dropbox possono visualizzare il file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.desc": {
+          "source": "Who may use the link; if not set, the account's default is used",
+          "message": "Chi può utilizzare il link; se non impostato, viene utilizzato il valore predefinito dell'account"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.display_name": {
+          "source": "Visibility",
+          "message": "Visibilità"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.short_desc": {
+          "source": "Who may use the link",
+          "message": "Chi può utilizzare il link"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Create a link granting access to a file or folder",
+          "message": "Crea un link che concede l'accesso a un file o a una cartella"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "Crea un file direttamente da contenuto di testo, senza dover disporre di un file.\n\nUtile per scrivere report generati, manifest e note."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "Crea file di testo"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "Il contenuto di testo per il nuovo file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Contenuto"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "Il contenuto di testo per il nuovo file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Sostituisce qualsiasi file esistente nel percorso; **il contenuto precedente è recuperabile solo tramite la cronologia delle revisioni del file**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Sovrascrivi"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Sostituisce qualsiasi file esistente nel percorso"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Non sovrascrivere un file esistente; il caricamento non riesce o viene scelto un nuovo nome quando `autorename` è impostato"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Aggiungi"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Non sovrascrivere un file esistente"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Cosa fare quando esiste già un file nel percorso"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Modalità di scrittura"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Cosa fare quando esiste già un file nel percorso"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change",
+          "message": "Non mostrare all'utente una notifica desktop per questa modifica"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Disattiva notifiche"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Non notificare l'utente di questa modifica"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The full path to create the file at, including the file name",
+          "message": "Il percorso completo in cui creare il file, incluso il nome del file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Percorso di destinazione"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path to create the file at",
+          "message": "Il percorso in cui creare il file"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "Crea un file da contenuto di testo"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.desc": {
+          "source": "Grants named people access to a file.\n\n`create-shared-link` hands out a link that anyone holding it can use; this grants access to specific people, which is what an audit trail and a later withdrawal both need.\n\nThe file's membership is returned afterwards, so the result shows who has access rather than only what this call did.",
+          "message": "Concede a persone specifiche l'accesso a un file.\n\n`create-shared-link` distribuisce un link utilizzabile da chiunque lo possieda; questa azione concede l'accesso a persone specifiche, consentendo il tracciamento degli audit e una revoca successiva.\n\nL'elenco dei membri del file viene restituito al termine, mostrando chi ha accesso anziché limitarsi a indicare l'esito della chiamata."
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
+          "source": "Share File with People",
+          "message": "Condividi file con persone"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.desc": {
+          "source": "A message to include in the notification email; ignored when `quiet` is set",
+          "message": "Un messaggio da includere nell'email di notifica; ignorato se `quiet` è impostato"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.display_name": {
+          "source": "Message",
+          "message": "Messaggio"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.short_desc": {
+          "source": "A message to include in the notification email",
+          "message": "Un messaggio da includere nell'email di notifica"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.desc": {
+          "source": "Takes ownership of the file; **the current owner loses it**",
+          "message": "Assume la proprietà del file; **l'attuale proprietario la perderà**"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "Owner",
+          "message": "Proprietario"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.short_desc": {
+          "source": "Takes ownership of the file",
+          "message": "Assume la proprietà del file"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Can view and change the file",
+          "message": "Può visualizzare e modificare il file"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "Editor"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "Può visualizzare e modificare il file"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Can view and comment on the file but not change it",
+          "message": "Può visualizzare e commentare il file, ma non modificarlo"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Visualizzatore"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "Può visualizzare e commentare il file"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.desc": {
+          "source": "The level of access to grant",
+          "message": "Il livello di accesso da concedere"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.display_name": {
+          "source": "Access Level",
+          "message": "Livello di accesso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.short_desc": {
+          "source": "The level of access to grant",
+          "message": "Il livello di accesso da concedere"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.desc": {
+          "source": "The email addresses of the people to grant access to",
+          "message": "Gli indirizzi email delle persone a cui concedere l'accesso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "Indirizzi email"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.short_desc": {
+          "source": "The people to grant access to",
+          "message": "Le persone a cui concedere l'accesso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.desc": {
+          "source": "The file to share, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Il file da condividere, come ID file di Dropbox (`id:...`) o percorso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.short_desc": {
+          "source": "The file to share",
+          "message": "Il file da condividere"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.desc": {
+          "source": "Do not send a notification email to the people given access",
+          "message": "Non inviare un'email di notifica alle persone a cui viene concesso l'accesso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.display_name": {
+          "source": "Quiet",
+          "message": "Silenzioso"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.short_desc": {
+          "source": "Do not send a notification email",
+          "message": "Non inviare un'email di notifica"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
+          "source": "Grant named people access to a file",
+          "message": "Concedi a persone specifiche l'accesso a un file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.desc": {
+          "source": "Retrieves the metadata of a file or folder: its name, size, revision, timestamps, and content hash.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "Recupera i metadati di un file o di una cartella: nome, dimensione, revisione, timestamp e hash del contenuto.\n\nUtilizza `download-file` per recuperare il contenuto stesso."
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
+          "source": "Get File Info",
+          "message": "Ottieni informazioni sul file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.desc": {
+          "source": "The path of the file or folder whose metadata is wanted",
+          "message": "Il percorso del file o della cartella di cui recuperare i metadati"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder",
+          "message": "Il percorso del file o della cartella"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
+          "source": "Get the metadata of a file or folder",
+          "message": "Ottieni i metadati di un file o di una cartella"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.desc": {
+          "source": "Returns information about the Dropbox account the connection authenticates as: who it belongs to, the email address it is registered under, and what kind of account it is.\n\nThe account type matters for several other actions: a shared link cannot be password-protected on a `basic` account, and `team_only` link visibility needs a `business` account.",
+          "message": "Restituisce informazioni sull'account Dropbox utilizzato per l'autenticazione della connessione: proprietario, indirizzo email registrato e tipo di account.\n\nIl tipo di account influisce su diverse altre azioni: un link condiviso non può essere protetto da password su un account `basic`, e la visibilità del link `team_only` richiede un account `business`."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
+          "source": "Get Account Info",
+          "message": "Ottieni informazioni sull'account"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
+          "source": "Get information about the connected Dropbox account",
+          "message": "Ottieni informazioni sull'account Dropbox connesso"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.desc": {
+          "source": "Returns a direct download link for a file, valid for four hours and usable without signing in.\n\nUse this to hand a file to a system that cannot authenticate to Dropbox; use `create-shared-link` for a link that lasts.",
+          "message": "Restituisce un link di download diretto per un file, valido per quattro ore e utilizzabile senza effettuare l'accesso.\n\nUtilizzalo per passare un file a un sistema che non può autenticarsi su Dropbox; usa `create-shared-link` per un link permanente."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
+          "source": "Get Temporary Link",
+          "message": "Ottieni link temporaneo"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.desc": {
+          "source": "The path of the file to produce a temporary link for",
+          "message": "Il percorso del file per cui generare un link temporaneo"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
+          "source": "Get a temporary direct download link for a file",
+          "message": "Ottieni un link temporaneo di download diretto per un file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.desc": {
+          "source": "Returns a PDF preview of a document.\n\nDropbox renders it, so a document in a format this system cannot read - a Word file, a spreadsheet, a presentation - can still be shown or archived as a PDF.",
+          "message": "Restituisce un'anteprima PDF di un documento.\n\nDropbox ne esegue il rendering, consentendo di visualizzare o archiviare come PDF anche documenti in formati non leggibili da questo sistema, come file Word, fogli di calcolo o presentazioni."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
+          "source": "Get Preview",
+          "message": "Ottieni anteprima"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.desc": {
+          "source": "The path of the document to render as a PDF preview",
+          "message": "Il percorso del documento di cui eseguire il rendering come anteprima PDF"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
+          "source": "Get a PDF preview of a document",
+          "message": "Ottieni un'anteprima PDF di un documento"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Dropbox rejects an upload that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.",
+          "message": "Restituisce la quantità di spazio di archiviazione utilizzata e disponibile per l'account.\n\nUtile prima di un caricamento voluminoso: Dropbox rifiuta i caricamenti che superano la quota segnalandoli come normali errori di scrittura anziché come problemi di spazio."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
+          "source": "Get Space Usage",
+          "message": "Ottieni utilizzo dello spazio"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "Ottieni lo spazio di archiviazione utilizzato dall'account"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.desc": {
+          "source": "Returns a thumbnail image of a file.\n\nDropbox renders it, so a preview can be shown without downloading the file itself.  Thumbnails are available for images and for common document formats.",
+          "message": "Restituisce una miniatura di un file.\n\nDropbox ne esegue il rendering, permettendo di visualizzare un'anteprima senza scaricare il file. Le miniature sono disponibili per le immagini e i formati di documento più comuni."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
+          "source": "Get Thumbnail",
+          "message": "Ottieni miniatura"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.desc": {
+          "source": "JPEG; smaller files, but lossy and with no transparency",
+          "message": "JPEG; file più piccoli, ma con perdita di qualità e senza trasparenza"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.short_desc": {
+          "source": "JPEG, smaller but lossy",
+          "message": "JPEG, più piccolo ma con perdita di qualità"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "PNG; larger files, but lossless and with transparency",
+          "message": "PNG; file più grandi, ma senza perdita di qualità e con trasparenza"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.short_desc": {
+          "source": "PNG, larger but lossless",
+          "message": "PNG, più grande ma senza perdita di qualità"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Il formato immagine per la miniatura"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.display_name": {
+          "source": "Format",
+          "message": "Formato"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.short_desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Il formato immagine per la miniatura"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 per 320 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.display_name": {
+          "source": "480 x 320",
+          "message": "480 x 320"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.short_desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 per 320 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 per 480 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.display_name": {
+          "source": "640 x 480",
+          "message": "640 x 480"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.short_desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 per 480 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 per 64 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.display_name": {
+          "source": "64 x 64",
+          "message": "64 x 64"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.short_desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 per 64 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 per 640 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.display_name": {
+          "source": "960 x 640",
+          "message": "960 x 640"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.short_desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 per 640 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 per 768 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.display_name": {
+          "source": "1024 x 768",
+          "message": "1024 x 768"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.short_desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 per 768 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 per 128 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.display_name": {
+          "source": "128 x 128",
+          "message": "128 x 128"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.short_desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 per 128 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 per 1536 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.display_name": {
+          "source": "2048 x 1536",
+          "message": "2048 x 1536"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.short_desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 per 1536 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 per 256 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.display_name": {
+          "source": "256 x 256",
+          "message": "256 x 256"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.short_desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 per 256 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 per 32 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.display_name": {
+          "source": "32 x 32",
+          "message": "32 x 32"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.short_desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 per 32 pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.desc": {
+          "source": "The dimensions of the thumbnail in pixels",
+          "message": "Le dimensioni della miniatura in pixel"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Dimensione"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.short_desc": {
+          "source": "The dimensions of the thumbnail",
+          "message": "Le dimensioni della miniatura"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.desc": {
+          "source": "The path of the file to render",
+          "message": "Il percorso del file di cui eseguire il rendering"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
+          "source": "Get a thumbnail image of a file",
+          "message": "Ottieni un'immagine di anteprima di un file"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nThe content is returned base64-encoded, along with the file's metadata.",
+          "message": "Scarica il contenuto di un file.\n\nIl contenuto viene restituito codificato in base64, insieme ai metadati del file."
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Scarica file"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The path of the file to download",
+          "message": "Il percorso del file da scaricare"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "Scarica il contenuto di un file"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.desc": {
+          "source": "Deletes several files or folders in one call, rather than one request per path.\n\n**A batch does not fail as a whole**: individual paths can be refused while the request succeeds, so each entry carries its own outcome.  A large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Elimina più file o cartelle in un'unica chiamata, anziché con una richiesta per percorso.\n\n**Un batch non fallisce nel suo complesso**: i singoli percorsi possono essere rifiutati mentre la richiesta ha esito positivo, quindi ciascuna voce include il proprio esito. Un batch di grandi dimensioni viene eseguito in background e la risposta specifica un job da monitorare con `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
+          "source": "Delete Files (Batch)",
+          "message": "Elimina file (batch)"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.desc": {
+          "source": "The paths to delete.\n\nDropbox performs a batch in the background when it is large, so the response may name a job to follow rather than the results themselves",
+          "message": "I percorsi da eliminare.\n\nDropbox esegue il batch in background se è di grandi dimensioni, pertanto la risposta potrebbe indicare un job da monitorare anziché i risultati stessi"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.display_name": {
+          "source": "Paths",
+          "message": "Percorsi"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.short_desc": {
+          "source": "The paths to delete",
+          "message": "I percorsi da eliminare"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
+          "source": "Delete several files or folders in one call",
+          "message": "Elimina più file o cartelle in un'unica chiamata"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file or folder.\n\n**Deleting a folder deletes everything in it.**  Dropbox keeps deleted files for a period that depends on the account, so a deletion can usually be undone from the Dropbox web interface, but not through this API.",
+          "message": "Elimina un file o una cartella.\n\n**L'eliminazione di una cartella elimina tutto ciò che contiene.** Dropbox conserva i file eliminati per un periodo che dipende dall'account, quindi l'eliminazione può in genere essere annullata dall'interfaccia web di Dropbox, ma non tramite questa API."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File or Folder",
+          "message": "Elimina file o cartella"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to delete; deleting a folder deletes everything in it",
+          "message": "Il percorso del file o della cartella da eliminare; l'eliminazione di una cartella elimina tutto il suo contenuto"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to delete",
+          "message": "Il percorso del file o della cartella da eliminare"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or folder",
+          "message": "Elimina un file o una cartella"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a file that was already in the folder being watched is changed.\n\nA file appearing for the first time is reported by `new-file` instead.  A file moved into the watched folder keeps its Dropbox identity, so it arrives here rather than as a new file.",
+          "message": "Si attiva quando viene modificato un file già presente nella cartella monitorata.\n\nUn file che compare per la prima volta viene invece segnalato da `new-file`. Un file spostato nella cartella monitorata mantiene la propria identità Dropbox, quindi viene segnalato qui anziché come nuovo file."
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "File Modified",
+          "message": "File modificato"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Quante identità di voci memorizza il monitoraggio per distinguere un nuovo file da uno modificato (valore predefinito `100000`).\n\nDropbox segnala una creazione e una modifica in modo identico, quindi la differenza può derivare solo dalla memorizzazione di ciò che è già stato visto. Un monitoraggio che raggiunge questo limite registra un avviso; restringilo con `path` e `recursive` invece di aumentare questo valore"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Numero massimo di voci tracciate"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Quante identità di voci memorizza il monitoraggio"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Frequenza di controllo delle modifiche, in secondi (minimo `30`, valore predefinito `60`)"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Frequenza di controllo delle modifiche, in secondi"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "La cartella da monitorare; lascia non impostato per monitorare l'intero account dalla radice"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "La cartella da monitorare"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Monitora il contenuto delle sottocartelle oltre a quello della cartella stessa.\n\nQuesto amplia sia ciò che viene segnalato sia l'indice che il monitoraggio mantiene per distinguere un nuovo file da uno modificato, quindi non selezionarlo se interessa solo una cartella"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Ricorsivo"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Monitora anche le sottocartelle"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "React to a change to an existing file",
+          "message": "Reagisce alla modifica di un file esistente"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.desc": {
+          "source": "Searches for files by name and, for supported file types, by content, and reads the results as a stream of records.\n\nUnlike `search`, which answers one page and leaves the cursor to the caller, this walks every page of matches.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; read the folder instead when the result has to reflect the current state exactly.",
+          "message": "Cerca file per nome e, per i tipi di file supportati, per contenuto, e legge i risultati come un flusso di record.\n\nA differenza di `search`, che restituisce una pagina e lascia il cursore al chiamante, questo esamina ogni pagina di corrispondenze.\n\nDropbox indicizza i contenuti in modo asincrono, quindi un file caricato poco prima potrebbe non essere ancora trovato; leggi invece la cartella quando il risultato deve riflettere esattamente lo stato corrente."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
+          "source": "Find Files by Search",
+          "message": "Trova file tramite ricerca"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, comma-separated and without a leading `.`",
+          "message": "Fai corrispondere solo i file con queste estensioni, separate da virgole e senza `.` iniziale"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Estensioni file"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only these file extensions",
+          "message": "Fai corrispondere solo queste estensioni di file"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Solo file non eliminati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Attivo"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Solo file non eliminati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Solo i file eliminati e ancora recuperabili"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Eliminati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Solo file eliminati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Which files to search",
+          "message": "Quali file cercare"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Stato del file"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Which files to search",
+          "message": "Quali file cercare"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match file names only rather than searching content as well",
+          "message": "Cerca solo i nomi dei file anziché cercare anche nel contenuto"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "Filename Only",
+          "message": "Solo nome file"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match names only, not content",
+          "message": "Trova corrispondenze solo per nome, non per contenuto"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Più recentemente modificati per primi"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Ultima modifica"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Più recentemente modificati per primi"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Migliori corrispondenze per prime"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "Rilevanza"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Migliori corrispondenze per prime"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results",
+          "message": "L'ordinamento dei risultati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordina per"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "L'ordinamento dei risultati"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.desc": {
+          "source": "Search only within this folder; the empty string searches the whole account",
+          "message": "Cerca solo all'interno di questa cartella; una stringa vuota cerca nell'intero account"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Cerca solo all'interno di questa cartella"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.desc": {
+          "source": "How many matches to fetch per request.\n\nThis affects how the walk is split into requests, not how many records are returned",
+          "message": "Quante corrispondenze recuperare per richiesta.\n\nQuesto influisce su come la scansione viene suddivisa in richieste, non sul numero di record restituiti"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many matches to fetch per request",
+          "message": "Quante corrispondenze recuperare per richiesta"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.desc": {
+          "source": "What to search for; matched against file names and, for supported types, content",
+          "message": "Cosa cercare; confrontato con i nomi dei file e, per i tipi supportati, con il contenuto"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Query"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.short_desc": {
+          "source": "What to search for",
+          "message": "Cosa cercare"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
+          "source": "Search for files and read the results as records",
+          "message": "Cerca file e leggi i risultati come record"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.desc": {
+          "source": "Reads the contents of a folder as a stream of records.\n\nUnlike `list-folder`, which answers one page and leaves the cursor to the caller, this walks the whole folder: pages are fetched as they are reached.\n\nSet `recursive` to include subfolders.  Entries that describe a deletion are not returned, since they are not contents of the folder.",
+          "message": "Legge il contenuto di una cartella come un flusso di record.\n\nA differenza di `list-folder`, che restituisce una sola pagina e lascia il cursore al chiamante, questa operazione scorre l'intera cartella: le pagine vengono recuperate man mano che vengono raggiunte.\n\nImposta `recursive` per includere le sottocartelle. Le voci che descrivono un'eliminazione non vengono restituite, poiché non fanno parte del contenuto della cartella."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files in a Folder",
+          "message": "Trova file in una cartella"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.desc": {
+          "source": "The folder to read; the empty string reads the account root",
+          "message": "La cartella da leggere; la stringa vuota legge la radice dell'account"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.short_desc": {
+          "source": "The folder to read",
+          "message": "La cartella da leggere"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many entries to fetch per request; Dropbox treats this as a hint.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "Quante voci recuperare per richiesta; Dropbox lo considera un suggerimento.\n\nCiò influisce su come la scansione viene suddivisa in richieste, non sul numero di record restituiti: l'iteratore recupera le pagine successive man mano che sono necessarie"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many entries to fetch per request",
+          "message": "Quante voci recuperare per richiesta"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Includi il contenuto delle sottocartelle oltre a quello della cartella stessa"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Ricorsivo"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Includi il contenuto delle sottocartelle"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Read the contents of a folder as records",
+          "message": "Leggi il contenuto di una cartella come record"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.desc": {
+          "source": "Lists the people and groups who have access to a file, and at what level.\n\nSomeone who has been invited but has not yet accepted appears under `invitees` rather than `users`.",
+          "message": "Elenca le persone e i gruppi che hanno accesso a un file e a quale livello.\n\nChi è stato invitato ma non ha ancora accettato compare in `invitees` anziché in `users`."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
+          "source": "List File Members",
+          "message": "Elenca membri del file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.desc": {
+          "source": "The file whose members are to be listed, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Il file di cui elencare i membri, come ID file di Dropbox (`id:...`) o come percorso"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.short_desc": {
+          "source": "The file whose members are to be listed",
+          "message": "Il file di cui elencare i membri"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.desc": {
+          "source": "The maximum number of members to return",
+          "message": "Il numero massimo di membri da restituire"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of members to return",
+          "message": "Il numero massimo di membri da restituire"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
+          "source": "List who has access to a file",
+          "message": "Elenca chi ha accesso a un file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.desc": {
+          "source": "Lists the earlier revisions of a file, newest first.\n\nHow long revisions are kept depends on the account.",
+          "message": "Elenca le revisioni precedenti di un file, a partire dalla più recente.\n\nIl tempo di conservazione delle revisioni dipende dall'account."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
+          "source": "List File Revisions",
+          "message": "Elenca revisioni del file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Il numero massimo di revisioni da restituire"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Il numero massimo di revisioni da restituire"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Return revisions of the file identified by the path, following it through renames and moves",
+          "message": "Restituisce le revisioni del file identificato dal percorso, monitorandolo attraverso ridenominazioni e spostamenti"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.display_name": {
+          "source": "By File ID",
+          "message": "Per ID file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.short_desc": {
+          "source": "Return revisions of the file itself, wherever it now lives",
+          "message": "Restituisce le revisioni del file stesso, ovunque si trovi ora"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.desc": {
+          "source": "Return revisions of whatever file is now at the path; if the file was deleted and another was created with the same name, the revisions of the new file are returned",
+          "message": "Restituisce le revisioni del file attualmente presente nel percorso; se il file è stato eliminato e ne è stato creato un altro con lo stesso nome, vengono restituite le revisioni del nuovo file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.display_name": {
+          "source": "By Path",
+          "message": "Per percorso"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.short_desc": {
+          "source": "Return revisions of whatever file is now at the path",
+          "message": "Restituisce le revisioni del file attualmente presente nel percorso"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.desc": {
+          "source": "How the file is identified: by whatever is now at the path, or by the file itself",
+          "message": "Modalità di identificazione del file: in base a ciò che si trova attualmente nel percorso o in base al file stesso"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Modalità"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.short_desc": {
+          "source": "How the file is identified",
+          "message": "Modalità di identificazione del file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.desc": {
+          "source": "The path of the file whose revisions are wanted",
+          "message": "Il percorso del file di cui richiedere le revisioni"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
+          "source": "List the earlier revisions of a file",
+          "message": "Elenca le revisioni precedenti di un file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.desc": {
+          "source": "Lists the files and folders in a folder.\n\nResults are paginated; when `has_more` is returned, pass the returned `cursor` back in `cursor` to retrieve the following page.  A cursor already carries the folder and the recursion flag, so the other options are ignored when one is supplied.",
+          "message": "Elenca i file e le cartelle all'interno di una cartella.\n\nI risultati sono impaginati; quando viene restituito `has_more`, passa il valore `cursor` restituito in `cursor` per recuperare la pagina successiva. Un cursore include già la cartella e il flag di ricorsione, pertanto le altre opzioni vengono ignorate quando ne viene fornito uno."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
+          "source": "List Folder",
+          "message": "Elenca cartella"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous listing, used to retrieve the following page; when set, every other option is ignored, since the cursor already carries them",
+          "message": "Il valore `cursor` restituito da un elenco precedente, utilizzato per recuperare la pagina successiva; se impostato, tutte le altre opzioni vengono ignorate, poiché il cursore le include già"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursore"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated listing",
+          "message": "Il cursore restituito da un elenco precedente troncato"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.desc": {
+          "source": "The maximum number of entries to return per page; Dropbox treats this as a hint and may return fewer",
+          "message": "Il numero massimo di voci da restituire per pagina; Dropbox lo considera un suggerimento e potrebbe restituirne meno"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of entries to return per page",
+          "message": "Il numero massimo di voci da restituire per pagina"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.desc": {
+          "source": "The folder to list; the empty string lists the account root",
+          "message": "La cartella da elencare; la stringa vuota elenca la radice dell'account"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Percorso cartella"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.short_desc": {
+          "source": "The folder to list",
+          "message": "La cartella da elencare"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Includi il contenuto delle sottocartelle oltre a quello della cartella stessa"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Ricorsivo"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Includi il contenuto delle sottocartelle"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
+          "source": "List the contents of a folder",
+          "message": "Elenca il contenuto di una cartella"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.desc": {
+          "source": "Lists the shared links in the account, or the links granting access to one file or folder.\n\nBy default a link to a parent folder is listed as well, since it also grants access; set `direct_only` to list only links created for the path itself.",
+          "message": "Elenca i link condivisi nell'account oppure i link che concedono l'accesso a un file o a una cartella.\n\nPer impostazione predefinita viene elencato anche il link a una cartella principale, poiché concede anch'esso l'accesso; imposta `direct_only` per elencare solo i link creati per il percorso stesso."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
+          "source": "List Shared Links",
+          "message": "Elenca link condivisi"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.desc": {
+          "source": "List only links created for the path itself, excluding links to a parent folder that also grant access to it",
+          "message": "Elenca solo i link creati per il percorso stesso, escludendo i link a una cartella principale che concedono anch'essi l'accesso"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.display_name": {
+          "source": "Direct Links Only",
+          "message": "Solo link diretti"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.short_desc": {
+          "source": "Exclude links inherited from a parent folder",
+          "message": "Escludi i link ereditati da una cartella principale"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.desc": {
+          "source": "List only links to this file or folder; if not set, all of the account's links are listed",
+          "message": "Elenca solo i link a questo file o cartella; se non impostato, vengono elencati tutti i link dell'account"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.short_desc": {
+          "source": "List only links to this file or folder",
+          "message": "Elenca solo i link a questo file o cartella"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
+          "source": "List the shared links in the account",
+          "message": "Elenca i link condivisi nell'account"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.desc": {
+          "source": "Moves several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Sposta più file in un'unica chiamata, anziché effettuare una richiesta per file.\n\nOgni voce specifica un `from_path` e un `to_path`. **Un batch non fallisce nel suo complesso**, pertanto ogni voce riporta il proprio esito; un batch di grandi dimensioni viene eseguito in background e la risposta specifica un job da monitorare con `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
+          "source": "Move Files (Batch)",
+          "message": "Sposta file (batch)"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Le operazioni da eseguire, come elenco di hash ciascuno contenente `from_path` e `to_path`.\n\n**Esempio**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Voci"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Gli spostamenti o le copie da eseguire"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
+          "source": "Move several files in one call",
+          "message": "Sposta più file in un'unica chiamata"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
+          "message": "Sposta un file o una cartella in un nuovo percorso.\n\nUno spostamento verso un nome diverso nella stessa cartella ne esegue la ridenominazione."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
+          "source": "Move or Rename File or Folder",
+          "message": "Sposta o rinomina file o cartella"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Il percorso del file o della cartella da spostare"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Percorso di origine"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Il percorso del file o della cartella da spostare"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to move to, including the new name; a move to a different name in the same folder renames the file",
+          "message": "Il percorso completo di destinazione, compreso il nuovo nome; uno spostamento verso un nome diverso nella stessa cartella rinomina il file"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Percorso di destinazione"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to move to",
+          "message": "Il percorso di destinazione"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move or rename a file or folder",
+          "message": "Sposta o rinomina un file o una cartella"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Dropbox** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni native in questa app."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Dropbox",
+          "message": "Esegui una chiamata API personalizzata a Dropbox"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the folder being watched.\n\nUses Dropbox's delta feed, so the cost of a poll follows what has changed rather than how much the folder holds.\n\nA file that was already there and has since been edited is reported by `file-modified` instead.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Si attiva quando viene creato un file nella cartella monitorata.\n\nUtilizza il delta feed di Dropbox, quindi il costo di un polling dipende da ciò che è cambiato anziché dalla quantità di elementi contenuti nella cartella.\n\nUn file già presente e successivamente modificato viene invece segnalato da `file-modified`. Imposta `path` per monitorare una cartella e deseleziona `recursive` per ignorare le relative sottocartelle."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "Nuovo file"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Quante identità di voci memorizza il monitoraggio per distinguere un nuovo file da uno modificato (valore predefinito `100000`).\n\nDropbox segnala una creazione e una modifica in modo identico, quindi la differenza può derivare solo dalla memorizzazione di ciò che è già stato visto. Un monitoraggio che raggiunge questo limite registra un avviso; restringilo con `path` e `recursive` invece di aumentare questo valore"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Numero massimo di voci tracciate"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Quante identità di voci memorizza il monitoraggio"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Frequenza di controllo delle modifiche, in secondi (minimo `30`, valore predefinito `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Frequenza di controllo delle modifiche, in secondi"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "La cartella da monitorare; lascia non impostato per monitorare l'intero account dalla radice"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "La cartella da monitorare"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Monitora il contenuto delle sottocartelle oltre a quello della cartella stessa.\n\nQuesto amplia sia ciò che viene segnalato sia l'indice che il monitoraggio mantiene per distinguere un nuovo file da uno modificato, quindi non selezionarlo se interessa solo una cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Ricorsivo"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Monitora anche le sottocartelle"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in a folder",
+          "message": "Reagisce alla creazione di un file in una cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the folder being watched.\n\nA folder that was already there and has since been renamed or moved is **not** reported.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Si attiva quando viene creata una cartella nella cartella monitorata.\n\nUna cartella già presente e successivamente rinominata o spostata **non** viene segnalata. Imposta `path` per monitorare una cartella e deseleziona `recursive` per ignorare le relative sottocartelle."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "Nuova cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Quante identità di voci memorizza il monitoraggio per distinguere un nuovo file da uno modificato (valore predefinito `100000`).\n\nDropbox segnala una creazione e una modifica in modo identico, quindi la differenza può derivare solo dalla memorizzazione di ciò che è già stato visto. Un monitoraggio che raggiunge questo limite registra un avviso; restringilo con `path` e `recursive` invece di aumentare questo valore"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Numero massimo di voci tracciate"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Quante identità di voci memorizza il monitoraggio"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Frequenza di controllo delle modifiche, in secondi (minimo `30`, valore predefinito `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Frequenza di controllo delle modifiche, in secondi"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "La cartella da monitorare; lascia non impostato per monitorare l'intero account dalla radice"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "La cartella da monitorare"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Monitora il contenuto delle sottocartelle oltre a quello della cartella stessa.\n\nQuesto amplia sia ciò che viene segnalato sia l'indice che il monitoraggio mantiene per distinguere un nuovo file da uno modificato, quindi non selezionarlo se interessa solo una cartella"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Ricorsivo"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Monitora anche le sottocartelle"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created",
+          "message": "Reagisce alla creazione di una cartella"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.desc": {
+          "source": "Has Dropbox fetch a URL and store the result in the account.\n\n**The content never passes through this system**: Dropbox downloads it from its own servers, so a large file costs nothing here in memory, time, or bandwidth.  The URL must be reachable from the public internet.\n\nA small file is usually fetched before the call returns; a large one is not, and the response then names a job to follow with `check-job-status`.",
+          "message": "Fa sì che Dropbox recuperi un URL e memorizzi il risultato nell'account.\n\n**Il contenuto non passa mai attraverso questo sistema**: Dropbox lo scarica dai propri server, quindi un file di grandi dimensioni non comporta alcun consumo di memoria, tempo o larghezza di banda locale. L'URL deve essere raggiungibile da Internet pubblico.\n\nI file di piccole dimensioni vengono in genere recuperati prima del completamento della chiamata; per i file di grandi dimensioni non è così e la risposta indica quindi un job da monitorare con `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.display_name": {
+          "source": "Save URL to Dropbox",
+          "message": "Salva URL su Dropbox"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.desc": {
+          "source": "The path in the Dropbox account to save the downloaded file to",
+          "message": "Il percorso nell'account Dropbox in cui salvare il file scaricato"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Percorso"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.short_desc": {
+          "source": "The path to save the downloaded file to",
+          "message": "Il percorso in cui salvare il file scaricato"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.desc": {
+          "source": "The URL for Dropbox to fetch.\n\n**Dropbox fetches it from its own servers**, so the URL must be reachable from the public internet and the content never passes through this system",
+          "message": "L'URL che Dropbox deve recuperare.\n\n**Dropbox lo recupera dai propri server**, quindi l'URL deve essere raggiungibile da Internet pubblico e il contenuto non passa mai attraverso questo sistema"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.short_desc": {
+          "source": "The URL for Dropbox to fetch",
+          "message": "L'URL che Dropbox deve recuperare"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.short_desc": {
+          "source": "Have Dropbox fetch a URL directly into the account",
+          "message": "Fai recuperare a Dropbox un URL direttamente nell'account"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.desc": {
+          "source": "Searches for files and folders by name and, for supported file types, by content.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; use `list-folder` when the result has to reflect the current state exactly.",
+          "message": "Cerca file e cartelle per nome e, per i tipi di file supportati, per contenuto.\n\nDropbox indicizza i contenuti in modo asincrono, quindi un file caricato poco prima potrebbe non essere ancora trovato; usa `list-folder` quando il risultato deve riflettere esattamente lo stato attuale."
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Cerca"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous search, used to retrieve the following page.\n\nA cursor already carries the query and every option it was created with, so when it is set the other options are ignored",
+          "message": "Il valore `cursor` restituito da una ricerca precedente, utilizzato per recuperare la pagina successiva.\n\nUn cursore include già la query e tutte le opzioni con cui è stato creato, quindi quando è impostato le altre opzioni vengono ignorate"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursore"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated search",
+          "message": "Il cursore restituito da una precedente ricerca troncata"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, given without a leading dot and separated by commas",
+          "message": "Trova solo i file con queste estensioni, specificate senza punto iniziale e separate da virgole"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Estensioni file"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only files with these extensions",
+          "message": "Trova solo i file con queste estensioni"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Solo file non eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Attivo"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Solo file non eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Solo i file eliminati e ancora recuperabili"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Solo file eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Indica se cercare file attivi o eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Stato del file"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Indica se cercare file attivi o eliminati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match on the file name only, rather than also searching inside file content",
+          "message": "Cerca solo nel nome del file, anziché cercare anche all'interno del contenuto del file"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "File Name Only",
+          "message": "Solo nome file"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match on the file name only, not on content",
+          "message": "Cerca solo nel nome del file, non nel contenuto"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Più recentemente modificati per primi"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Ultima modifica"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Più recentemente modificati per primi"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Migliori corrispondenze per prime"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "Rilevanza"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Migliori corrispondenze per prime"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for matches",
+          "message": "L'ordinamento per i risultati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordina per"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for matches",
+          "message": "L'ordinamento per i risultati"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Il numero massimo di risultati da restituire"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Maximum Results",
+          "message": "Risultati massimi"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Il numero massimo di risultati da restituire"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.desc": {
+          "source": "Search only within this folder and its subfolders; the empty string searches the whole account",
+          "message": "Cerca solo all'interno di questa cartella e delle relative sottocartelle; la stringa vuota cerca nell'intero account"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Percorso cartella"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Cerca solo all'interno di questa cartella"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The text to search for, in file names and, for supported file types, in content",
+          "message": "Il testo da cercare nei nomi dei file e, per i tipi di file supportati, nel contenuto"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Query"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The text to search for",
+          "message": "Il testo da cercare"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.short_desc": {
+          "source": "Search for files and folders",
+          "message": "Cerca file e cartelle"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.desc": {
+          "source": "Removes a file or folder entirely, bypassing the trash.\n\n`delete-file` leaves the file recoverable and still counting against the account's storage; this does not.  **It cannot be undone.**\n\nThe Dropbox app must have been granted permission for this; without it Dropbox refuses the request rather than quietly doing nothing.",
+          "message": "Rimuove completamente un file o una cartella, ignorando il cestino.\n\n`delete-file` lascia il file recuperabile e ancora conteggiato nello spazio di archiviazione dell'account; questa operazione no.  **Non può essere annullata.**\n\nL'app Dropbox deve disporre delle autorizzazioni necessarie; in caso contrario Dropbox rifiuta la richiesta anziché non eseguire alcuna operazione in modo silenzioso."
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "Elimina definitivamente"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to remove permanently",
+          "message": "Il percorso del file o della cartella da rimuovere definitivamente"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
+          "source": "Remove a file outright, bypassing the trash",
+          "message": "Rimuovi definitivamente un file, ignorando il cestino"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.desc": {
+          "source": "Withdraws a shared link, so that it no longer grants access.\n\nThe file itself is not changed, and other links to it keep working.",
+          "message": "Revoca un link condiviso, in modo che non conceda più l'accesso.\n\nIl file stesso non viene modificato e gli altri link ad esso continuano a funzionare."
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Revoke Shared Link",
+          "message": "Revoca link condiviso"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.desc": {
+          "source": "The shared link to revoke, as returned by `create-shared-link` or `list-shared-links`",
+          "message": "Il link condiviso da revocare, come restituito da `create-shared-link` o `list-shared-links`"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.short_desc": {
+          "source": "The shared link to revoke",
+          "message": "Il link condiviso da revocare"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Withdraw a shared link",
+          "message": "Revoca un link condiviso"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.desc": {
+          "source": "Restores a file to an earlier revision, listed by `list-file-revisions`.\n\nThe current content becomes a revision in its turn, so a restore can itself be undone.",
+          "message": "Ripristina un file a una revisione precedente, elencata da `list-file-revisions`.\n\nIl contenuto corrente diventa a sua volta una revisione, quindi un ripristino può essere esso stesso annullato."
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
+          "source": "Restore File Revision",
+          "message": "Ripristina revisione file"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.desc": {
+          "source": "The path of the file to restore a revision of",
+          "message": "Il percorso del file di cui ripristinare una revisione"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Percorso file"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Il percorso del file"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.desc": {
+          "source": "The revision identifier to restore, as returned by `list-file-revisions`",
+          "message": "L'identificatore di revisione da ripristinare, come restituito da `list-file-revisions`"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.display_name": {
+          "source": "Revision",
+          "message": "Revisione"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.short_desc": {
+          "source": "The revision to restore",
+          "message": "La revisione da ripristinare"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
+          "source": "Restore a file to an earlier revision",
+          "message": "Ripristina un file a una revisione precedente"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "Carica un file su Dropbox.\n\nSe `path` non è impostato, viene utilizzato il nome del file stesso e il file viene archiviato nella radice dell'account.  Per impostazione predefinita, un file esistente nel percorso non viene sostituito; imposta `mode` su `overwrite` o `autorename` per modificare questo comportamento.\n\nI file di grandi dimensioni vengono caricati in blocchi tramite una sessione di caricamento di Dropbox, pertanto un trasferimento interrotto non deve ripartire dall'inizio."
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Carica file"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Scegli un nome che non entri in conflitto invece di fallire quando esiste già un file nella destinazione"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Rinomina automaticamente"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Rinomina invece di fallire quando la destinazione è occupata"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name and content",
+          "message": "Il file da caricare, compresi nome e contenuto"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Il file da caricare"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Sostituisce qualsiasi file esistente nel percorso; **il contenuto precedente è recuperabile solo tramite la cronologia delle revisioni del file**"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Sovrascrivi"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Sostituisce qualsiasi file esistente nel percorso"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Non sovrascrivere un file esistente; il caricamento non riesce o viene scelto un nuovo nome quando `autorename` è impostato"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Aggiungi"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Non sovrascrivere un file esistente"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Cosa fare quando esiste già un file nel percorso"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Modalità di scrittura"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Cosa fare quando esiste già un file nel percorso"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change; useful for uploads made in bulk",
+          "message": "Non mostrare all'utente una notifica desktop per questa modifica; utile per i caricamenti in blocco"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Disattiva notifiche"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Non notificare l'utente di questa modifica"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.desc": {
+          "source": "The full path to store the file at, including the file name; if not set, the file's own name is used and the file is stored in the account root",
+          "message": "Il percorso completo in cui archiviare il file, incluso il nome del file; se non impostato, viene utilizzato il nome del file stesso e il file viene archiviato nella radice dell'account"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Percorso di destinazione"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path to store the file at",
+          "message": "Il percorso in cui archiviare il file"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Dropbox",
+          "message": "Carica un file su Dropbox"
+        },
+        "app.RHJvcGJveA.desc": {
+          "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",
+          "message": "Fornisce l'accesso a [Dropbox](https://www.dropbox.com) per l'archiviazione e la condivisione di file nel cloud.\n\nI file sono indirizzati tramite percorso dalla radice dell'account e i percorsi non fanno distinzione tra maiuscole e minuscole; la radice dell'account stessa è la stringa vuota anziché `/`.\n\n**Casi d'uso comuni**:\n- **Scambio di file**: deposita documenti generati per i colleghi o raccogli i file che caricano\n- **Distribuzione di contenuti**: crea link condivisi, con o senza scadenza o password\n- **Backup e ripristino**: elenca le revisioni di un file e ripristina una precedente\n- **Organizzazione**: crea cartelle e copia, sposta e rimuovi file\n\nDropbox è un marchio registrato di Dropbox, Inc."
+        },
+        "app.RHJvcGJveA.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "app.RHJvcGJveA.short_desc": {
+          "source": "Dropbox cloud file storage",
+          "message": "Archiviazione file cloud Dropbox"
+        }
+      }
+    }
+  }
+}

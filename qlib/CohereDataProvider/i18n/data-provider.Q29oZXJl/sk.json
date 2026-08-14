@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Q29oZXJl.action.Y2hhdA.desc": {
+          "source": "Sends a list of chat messages to a Cohere Command model via `/v2/chat` and returns the generated response.",
+          "message": "Odošle zoznam správ chatu do modelu Cohere Command cez `/v2/chat` a vráti vygenerovanú odpoveď."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.",
+          "message": "Obmedziť vzorkovanie na K najpravdepodobnejších nasledujúcich tokenov."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Vzorkovať iba z K najpravdepodobnejších nasledujúcich tokenov"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.desc": {
+          "source": "Cohere chat model identifier, e.g. `command-r-plus`, `command-r`, `command-r7b`.",
+          "message": "Identifikátor chatovacieho modelu Cohere, napr. `command-r-plus`, `command-r`, `command-r7b`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Cohere chat model",
+          "message": "Chatovací model Cohere"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Maximálny počet tokenov na vygenerovanie."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Maximálny počet tokenov na výstup"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "História konverzácie ako zoznam objektov správ."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Zoznam správ chatu tvoriacich konverzáciu"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Celočíselný seed pre deterministické vzorkovanie."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed pre deterministické vzorkovanie"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "List of stop sequences; generation halts when any is emitted.",
+          "message": "Zoznam ukončovacích sekvencií; generovanie sa zastaví po vygenerovaní ktorejkoľvek z nich."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "List of stop sequences",
+          "message": "Zoznam ukončovacích sekvencií"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "Hranica vzorkovania nucleus."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Hranica vzorkovania nucleus (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_object\", schema: {...}}`.",
+          "message": "Hash, ktorý vynucuje štruktúrovaný formát odpovede, napr. `{type: \"json_object\"}` alebo `{type: \"json_object\", schema: {...}}`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON schema)",
+          "message": "Vynútiť štruktúrovaný výstup (napr. schéma JSON)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Žiadne – nikdy nevolať nástroj"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto – rozhoduje model"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Povinné – musí zavolať nástroj"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Režim vyvolania nástroja: `none`, `auto` alebo `required`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Režim vyvolania nástroja"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.  Each entry has `type: function` and a `function` hash with `name`, `description`, and JSON-schema `parameters`.",
+          "message": "Zoznam definícií nástrojov. Každý záznam má `type: function` a hash `function` s `name`, `description` a JSON-schémou `parameters`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.short_desc": {
+          "source": "Tool definitions the model may call",
+          "message": "Definície nástrojov, ktoré model môže volať"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Cohere recommends `0.3` as default.",
+          "message": "Riadi náhodnosť výstupu. Cohere odporúča `0.3` ako predvolenú hodnotu."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1)",
+          "message": "Teplota vzorkovania (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.short_desc": {
+          "source": "Generate a chat completion from a Cohere Command model",
+          "message": "Vygenerovať doplnenie chatu z modelu Cohere Command"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.desc": {
+          "source": "Classifies text inputs into one of a set of labels using few-shot examples or fine-tuned classification models via Cohere's `/v1/classify` endpoint.\n\nNote: classify currently uses the v1 endpoint; the rest of this provider uses v2.  The request body path is absolute (`/v1/classify`) to address the v1 surface.",
+          "message": "Klasifikuje vstupné texty do jedného zo súboru štítkov pomocou few-shot príkladov alebo doladených klasifikačných modelov cez koncový bod `/v1/classify` služby Cohere.\n\nPoznámka: classify momentálne používa koncový bod v1; zvyšok tohto poskytovateľa používa v2. Cesta k telu požiadavky je absolútna (`/v1/classify`) kvôli adresovaniu rozhrania v1."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
+          "source": "Classify Text",
+          "message": "Klasifikovať text"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.desc": {
+          "source": "List of `{text, label}` hashes providing few-shot examples.  Required when no fine-tuned model is supplied; minimum 2 examples per label and at least 2 labels.",
+          "message": "Zoznam hashov `{text, label}` poskytujúcich few-shot príklady. Vyžaduje sa, ak nie je zadaný doladený model; minimum 2 príklady na štítok a aspoň 2 štítky."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.display_name": {
+          "source": "Examples",
+          "message": "Príklady"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.short_desc": {
+          "source": "Few-shot labeled examples (required without fine-tuned model)",
+          "message": "Označené few-shot príklady (vyžadované bez doladeného modelu)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.desc": {
+          "source": "List of input texts to classify into one of the labels supplied via `examples` (few-shot) or the fine-tuned model's vocabulary.",
+          "message": "Zoznam vstupných textov na klasifikáciu do jedného zo štítkov dodaných cez `examples` (few-shot) alebo zo slovníka doladeného modelu."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.display_name": {
+          "source": "Inputs",
+          "message": "Vstupy"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.short_desc": {
+          "source": "List of input texts to classify",
+          "message": "Zoznam vstupných textov na klasifikáciu"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.desc": {
+          "source": "Fine-tuned classification model identifier.  Optional when `examples` is supplied for few-shot classification.",
+          "message": "Identifikátor doladeného klasifikačného modelu. Voliteľné, keď je zadaný `examples` pre few-shot klasifikáciu."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.short_desc": {
+          "source": "Fine-tuned classification model (optional with examples)",
+          "message": "Doladený klasifikačný model (voliteľné s príkladmi)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.desc": {
+          "source": "Cohere classification preset name (alternative to inline `examples`).",
+          "message": "Názov predvoľby klasifikácie Cohere (alternatíva k vloženým `examples`)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "Predvoľba"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.short_desc": {
+          "source": "Preset name (alternative to inline examples)",
+          "message": "Názov predvoľby (alternatíva k vloženým príkladom)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.desc": {
+          "source": "Truncation strategy: `NONE`, `START`, or `END` (default).",
+          "message": "Stratégia skrátenia: `NONE`, `START` alebo `END` (predvolené)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Skrátiť"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Ako skrátiť vstupy, ktoré presahujú kontext"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
+          "source": "Classify text inputs into labeled categories using Cohere Classify",
+          "message": "Klasifikujte textové vstupy do označených kategórií pomocou Cohere Classify"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.desc": {
+          "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
+          "message": "Konvertuje textové vstupy na embedding vektory prostredníctvom koncového bodu `/v2/embed` služby Cohere s výberom `input_type` podľa typu úlohy."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
+          "source": "Create Embeddings",
+          "message": "Vytvoriť embeddingy"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "Klasifikácia"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "Zhlukovanie"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document - text to be indexed",
+          "message": "Search Document – text na indexovanie"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query - user query",
+          "message": "Search Query – používateľský dotaz"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Task hint required by Cohere v3 embedding models.  Choosing the right input type improves retrieval relevance — query and document embeddings are optimized differently.",
+          "message": "Nápoveda k úlohe vyžadovaná embedding modelmi Cohere v3. Výber správneho typu vstupu zlepšuje relevanciu vyhľadávania – embeddingy dotazov a dokumentov sú optimalizované odlišne."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "Typ vstupu"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Task hint (required for v3 models)",
+          "message": "Nápoveda k úlohe (vyžadované pre modely v3)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Cohere embedding model identifier.  Examples:\n\n- `embed-multilingual-v3.0` — 100+ languages (recommended default)\n- `embed-english-v3.0` — English-only, slightly faster\n- `embed-multilingual-light-v3.0` — smaller, lower-cost variant",
+          "message": "Identifikátor embedding modelu Cohere. Príklady:\n\n- `embed-multilingual-v3.0` — 100+ jazykov (odporúčaná predvolená hodnota)\n- `embed-english-v3.0` — iba angličtina, o niečo rýchlejší\n- `embed-multilingual-light-v3.0` — menší, nízkonákladový variant"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Cohere embedding model",
+          "message": "Embedding model Cohere"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "List of input texts to convert to embedding vectors.",
+          "message": "Zoznam vstupných textov na konverziu na embedding vektory."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "Texty"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "List of texts to embed",
+          "message": "Zoznam textov na vytvorenie embeddingov"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None - error on overflow",
+          "message": "None – chyba pri pretečení"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOkVORA.display_name": {
+          "source": "End - truncate end (default)",
+          "message": "End – skrátiť koniec (predvolené)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOlNUQVJU.display_name": {
+          "source": "Start - truncate beginning",
+          "message": "Start – skrátiť začiatok"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.desc": {
+          "source": "How to handle inputs that exceed the embedding model's context window.  Default `END`.",
+          "message": "Ako spracovať vstupy, ktoré presahujú kontextové okno embedding modelu. Predvolená hodnota: `END`."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Skrátiť"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Ako skrátiť vstupy, ktoré presahujú kontext"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
+          "source": "Generate embedding vectors from a Cohere embedding model",
+          "message": "Generovať embedding vektory z embedding modelu Cohere"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cohere** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Cohere** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako samostatné akcie v tejto aplikácii."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cohere",
+          "message": "Vykonať vlastné volanie API do služby Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a query using Cohere's rerank-v3.5 cross-encoder via `/v2/rerank`.  Returns top-N documents sorted by relevance score.",
+          "message": "Preusporiada zoznam kandidátskych dokumentov podľa dotazu pomocou cross-encodera rerank-v3.5 od Cohere cez `/v2/rerank`. Vráti N najlepších dokumentov zoradených podľa skóre relevancie."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Preusporiadať dokumenty"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents to rerank against the query.",
+          "message": "Zoznam kandidátskych dokumentov na preusporiadanie podľa dotazu."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Dokumenty"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "Kandidátske dokumenty na preusporiadanie"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Cohere reranker model.  Examples:\n\n- `rerank-v3.5` — latest cross-encoder (recommended default)\n- `rerank-english-v3.0` — English-only v3\n- `rerank-multilingual-v3.0` — multilingual v3",
+          "message": "Reranker model Cohere. Príklady:\n\n- `rerank-v3.5` — najnovší cross-encoder (odporúčaná predvolená hodnota)\n- `rerank-english-v3.0` — iba angličtina v3\n- `rerank-multilingual-v3.0` — viacjazyčný v3"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Cohere reranker model",
+          "message": "Reranker model Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.desc": {
+          "source": "When documents exceed the rerank context window, Cohere chunks them internally.  This caps the number of chunks per document.",
+          "message": "Keď dokumenty prekročia kontextové okno reranku, Cohere ich interne rozdelí na bloky. Toto obmedzuje počet blokov na dokument."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.display_name": {
+          "source": "Max Chunks Per Doc",
+          "message": "Max. počet blokov na dokument"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
+          "source": "Maximum chunks per document for long-document rerank",
+          "message": "Maximálny počet blokov na dokument pre rerank dlhých dokumentov"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.",
+          "message": "Používateľský dotaz vo voľnom formáte."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dopyt"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "Používateľský dotaz, podľa ktorého sa majú dokumenty preusporiadať"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document.",
+          "message": "Keď je hodnota `True` (predvolené), každý výsledok zahŕňa dokument."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "Vrátiť dokumenty"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "Určuje, či sa má v odpovedi vrátiť text dokumentu"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.",
+          "message": "Počet vrátených najlepšie hodnotených dokumentov."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "Top N"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "Koľko výsledkov s najvyšším skóre sa má vrátiť"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query using Cohere Rerank",
+          "message": "Preusporiadajte kandidátske dokumenty podľa dotazu pomocou Cohere Rerank"
+        },
+        "app.Q29oZXJl.desc": {
+          "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",
+          "message": "Poskytuje prístup k službe [Cohere](https://cohere.com) – podnikový chat s Command R / R+, viacjazyčné embeddingy a špičkový reranking.\n\n**Bežné prípady použitia**:\n- **Chatoví agenti s volaním nástrojov** pomocou Command R+\n- **Viacjazyčné RAG embeddingy** pomocou embed-multilingual-v3.0\n- **Produkčný rerank** pomocou rerank-v3.5 – prirodzene funguje s akýmkoľvek embedderom\n- **Klasifikácia textu** cez vyhradený koncový bod /classify"
+        },
+        "app.Q29oZXJl.display_name": {
+          "source": "Cohere",
+          "message": "Cohere"
+        },
+        "app.Q29oZXJl.short_desc": {
+          "source": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
+          "message": "Cohere chat (Command R/R+), embeddingy, reranking a klasifikácia"
+        }
+      }
+    }
+  }
+}

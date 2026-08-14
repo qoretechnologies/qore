@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RlRQ.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve a file from an FTP server",
+          "message": "Získať súbor z FTP servera"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
+          "source": "Retrieve File With FTP",
+          "message": "Získať súbor cez FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak `text` = `True` (predvolené: `UTF-8`)"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Kódovanie"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak 'text' = 'True' (predvolené: 'UTF-8')"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Ak `True`, súbor sa vráti ako reťazec, `False` (predvolené) ako binárne dáta"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Ak je 'True', súbor sa vráti ako reťazec, ak 'False' (predvolené), ako binárne dáta"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file from an FTP server",
+          "message": "Získať súbor z FTP servera"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Odstráni súbor na FTP serveri"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File With FTP",
+          "message": "Odstrániť súbor cez FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Odstráni súbor na FTP serveri"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Odošle súbor na FTP server"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.display_name": {
+          "source": "Send File With FTP",
+          "message": "Odoslať súbor cez FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak `text` = `True` (predvolené: `UTF-8`)"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Kódovanie"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak 'text' = 'True' (predvolené: 'UTF-8')"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Cesta na FTP serveri"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Ak `True`, súbor sa vráti ako reťazec, `False` (predvolené) ako binárne dáta"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Ak je 'True', súbor sa vráti ako reťazec, ak 'False' (predvolené), ako binárne dáta"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Odošle súbor na FTP server"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Všeobecný FTP server na výmenu súborov pomocou FTP a FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP Server"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Všeobecný FTP server na výmenu súborov pomocou FTP a FTPS"
+        }
+      }
+    }
+  }
+}

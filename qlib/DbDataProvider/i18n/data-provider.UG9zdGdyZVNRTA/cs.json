@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.UG9zdGdyZVNRTA.desc": {
+          "source": "Create and manage connections to a PostgreSQL database server",
+          "message": "Vytvářejte a spravujte připojení k databázovému serveru PostgreSQL"
+        },
+        "app.UG9zdGdyZVNRTA.display_name": {
+          "source": "PostgreSQL",
+          "message": "PostgreSQL"
+        },
+        "app.UG9zdGdyZVNRTA.short_desc": {
+          "source": "PostgreSQL database server",
+          "message": "Databázový server PostgreSQL"
+        }
+      }
+    }
+  }
+}

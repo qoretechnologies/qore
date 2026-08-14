@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.desc": {
+          "source": "Store a complete RFC 822 message in a mailbox.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "將完整的 RFC 822 郵件儲存在信箱中。\n\n可用此動作歸檔透過其他方式傳送的郵件複本，或從其他系統匯入郵件"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
+          "source": "Store a Message",
+          "message": "儲存郵件"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.desc": {
+          "source": "Flags to set on the stored message (ex: `\\Seen`)",
+          "message": "要在已儲存郵件上設定的旗標 (例如：`\\Seen`)"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "旗標"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.short_desc": {
+          "source": "Flags to set on the stored message",
+          "message": "要在已儲存郵件上設定的旗標"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.desc": {
+          "source": "The arrival time to record for the message; defaults to the time the server stores it",
+          "message": "要為該郵件記錄的送達時間；預設為伺服器儲存該郵件的時間"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.display_name": {
+          "source": "Internal Date",
+          "message": "內部日期"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.short_desc": {
+          "source": "The arrival time to record for the message",
+          "message": "要為該郵件記錄的送達時間"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to append the message to; it must already exist",
+          "message": "要附加郵件的信箱；該信箱必須已存在"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to append the message to",
+          "message": "要附加郵件的信箱"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.desc": {
+          "source": "The complete message to store, in RFC 822 form.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "要儲存的完整郵件 (RFC 822 格式)。\n\n可用此動作歸檔透過其他方式傳送的郵件複本，或從其他系統匯入郵件"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.display_name": {
+          "source": "Message",
+          "message": "訊息"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.short_desc": {
+          "source": "The complete RFC 822 message to store",
+          "message": "要儲存的完整 RFC 822 郵件"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
+          "source": "Store a message in a mailbox",
+          "message": "在信箱中儲存郵件"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a complete message by UID, including its headers, decoded body text, and a summary of its attachments.\n\nRetrieval does not change any flags unless `mark_seen` is set, so a message can be inspected without the account showing it as read",
+          "message": "依 UID 擷取完整郵件，包括其標頭、解碼後的內文文字以及附件摘要。\n\n擷取不會變更任何旗標，除非設定了 `mark_seen`，因此可以在不讓帳戶顯示為已讀的情況下檢查郵件"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Retrieve a Message",
+          "message": "擷取郵件"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "存放該郵件的信箱"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "存放該郵件的信箱"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on the message after retrieving it.\n\nRetrieval itself never changes flags, so leave this `False` to inspect a message without the sender's mail client showing it as read",
+          "message": "在擷取郵件後於該郵件上設定 `\\Seen` 旗標。\n\n擷取本身絕不會變更旗標，因此請保留此設定為 `False`，以便在不讓寄件者的郵件用戶端顯示為已讀的情況下檢查郵件"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "標記為已讀？"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag after retrieving?",
+          "message": "擷取後設定 \\Seen 旗標？"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.desc": {
+          "source": "The UID of the message to retrieve, as returned by a search",
+          "message": "要擷取的郵件 UID (由搜尋傳回)"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "郵件 UID"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.short_desc": {
+          "source": "The UID of the message to retrieve",
+          "message": "要擷取的郵件 UID"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Retrieve a message by UID",
+          "message": "依 UID 擷取郵件"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve a single MIME part of a message without transferring the whole message.\n\nThis matters when one attachment is needed from a message carrying several large ones; use the `attachments` list returned by `Retrieve a Message` to find the part specifier",
+          "message": "擷取郵件的單一 MIME 部分，而無需傳輸整封郵件。\n\n當郵件包含多個大型附件且只需要其中一個時，這非常重要；請使用 `Retrieve a Message` 傳回的 `attachments` 清單來尋找部分指定元"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "擷取附件"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "存放該郵件的信箱"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "存放該郵件的信箱"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.desc": {
+          "source": "The MIME part specifier to retrieve (ex: `1`, `2.1`, `HEADER`, `TEXT`).\n\nRetrieving a single part avoids transferring the whole message, which matters when one attachment is needed from a message with several large ones",
+          "message": "要擷取的 MIME 部分指定元 (例如：`1`、`2.1`、`HEADER`、`TEXT`)。\n\n擷取單一部分可避免傳輸整封郵件，當郵件包含多個大型附件且只需要其中一個時，這非常重要"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.display_name": {
+          "source": "MIME Part",
+          "message": "MIME 部分"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.short_desc": {
+          "source": "The MIME part specifier to retrieve",
+          "message": "要擷取的 MIME 部分指定元"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.desc": {
+          "source": "The UID of the message holding the part",
+          "message": "包含該部分的郵件 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "郵件 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.short_desc": {
+          "source": "The UID of the message holding the part",
+          "message": "包含該部分的郵件 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve a single MIME part of a message",
+          "message": "擷取郵件的單個 MIME 部分"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.desc": {
+          "source": "List the mailboxes in the account, optionally restricted to those the account is subscribed to.\n\nA mailbox carrying the `\\Noselect` flag is a hierarchy node that cannot hold messages",
+          "message": "列出帳戶中的信箱，可選擇僅限於該帳戶已訂閱的信箱。\n\n帶有 `\\Noselect` 旗標的信箱為層級節點，無法存放郵件"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
+          "source": "List Mailboxes",
+          "message": "列出信箱"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.desc": {
+          "source": "List only mailboxes the account is subscribed to, using `LSUB` instead of `LIST`",
+          "message": "僅列出帳戶已訂閱的信箱，使用 `LSUB` 而非 `LIST`"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.display_name": {
+          "source": "Subscribed Only?",
+          "message": "僅限已訂閱？"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.short_desc": {
+          "source": "List only subscribed mailboxes?",
+          "message": "僅列出已訂閱的信箱？"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.desc": {
+          "source": "The mailbox name pattern to match; `*` matches at any depth and `%` matches within a single hierarchy level",
+          "message": "要比對的信箱名稱模式；`*` 比對任意深度，而 `%` 則在單一層級內比對"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.display_name": {
+          "source": "Pattern",
+          "message": "模式"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.short_desc": {
+          "source": "The mailbox name pattern to match",
+          "message": "要比對的信箱名稱模式"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.desc": {
+          "source": "The reference name; normally left empty",
+          "message": "參考名稱；通常保留為空"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "參考"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.short_desc": {
+          "source": "The reference name",
+          "message": "參考名稱"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
+          "source": "List the mailboxes in the account",
+          "message": "列出帳戶中的信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.desc": {
+          "source": "Move or copy messages to another mailbox.\n\nMoving processed mail into an archive mailbox keeps the working mailbox small and makes it obvious what has already been handled. Servers without the `MOVE` capability are handled with the equivalent copy-and-delete sequence",
+          "message": "將郵件移動或複製到另一個信箱。\n\n將已處理的郵件移入封存信箱可保持工作信箱精簡，並清楚識別已處理的內容。不支援 `MOVE` 功能的伺服器會使用等效的複製並刪除順序來處理"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
+          "source": "Move Messages",
+          "message": "移動郵件"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.desc": {
+          "source": "Copy the messages instead of moving them, leaving the originals in place",
+          "message": "複製郵件而非移動，並保留原始郵件"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.display_name": {
+          "source": "Copy Only?",
+          "message": "僅複製？"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.short_desc": {
+          "source": "Copy the messages instead of moving them?",
+          "message": "複製郵件而非移動？"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages to move",
+          "message": "存放要移動郵件的信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.display_name": {
+          "source": "Source Mailbox",
+          "message": "來源信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "存放郵件的信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.desc": {
+          "source": "The mailbox to move the messages to; it must already exist",
+          "message": "要將郵件移動至的信箱；該信箱必須已存在"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.display_name": {
+          "source": "Target Mailbox",
+          "message": "目標信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.short_desc": {
+          "source": "The mailbox to move the messages to",
+          "message": "要將郵件移動至的信箱"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "要移動的郵件 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "郵件 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "要移動的郵件 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
+          "source": "Move or copy messages to another mailbox",
+          "message": "將郵件移動或複製到另一個信箱"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.desc": {
+          "source": "Add, remove, or replace the flags on a set of messages.\n\nFlags are how IMAP records state such as read (`\\Seen`), flagged (`\\Flagged`), and pending deletion (`\\Deleted`); setting them is the usual way to record that an integration has handled a message",
+          "message": "新增、移除或取代一組郵件上的旗標。\n\n旗標是 IMAP 記錄狀態的方式，例如已讀 (`\\Seen`)、已加旗標 (`\\Flagged`) 以及待刪除 (`\\Deleted`)；設定旗標是記錄整合已處理郵件的常見方式"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
+          "source": "Change Message Flags",
+          "message": "變更郵件旗標"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.desc": {
+          "source": "The flags to apply (ex: `\\Seen`, `\\Flagged`, `\\Answered`, `\\Deleted`)",
+          "message": "要套用的旗標（例如：`\\Seen`、`\\Flagged`、`\\Answered`、`\\Deleted`）"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "旗標"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.short_desc": {
+          "source": "The flags to apply",
+          "message": "要套用的旗標"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Add the given flags, leaving any others in place",
+          "message": "新增指定的旗標，保留其他旗標不變"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "新增"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.desc": {
+          "source": "Remove the given flags, leaving any others in place",
+          "message": "移除指定的旗標，保留其他旗標不變"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.display_name": {
+          "source": "Remove",
+          "message": "移除"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace all flags on the messages with the given flags",
+          "message": "將郵件上的所有旗標取代為指定的旗標"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "取代"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.desc": {
+          "source": "How the flags should be applied to the messages",
+          "message": "旗標套用至郵件的方式"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "模式"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.short_desc": {
+          "source": "How the flags should be applied",
+          "message": "旗標應如何套用"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages",
+          "message": "存放郵件的信箱"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "存放郵件的信箱"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages whose flags should change",
+          "message": "要變更旗標的郵件 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "郵件 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to change",
+          "message": "要變更的郵件 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
+          "source": "Add, remove, or replace message flags",
+          "message": "新增、移除或取代郵件旗標"
+        },
+        "app.SU1BUA.action.c2VhcmNo.desc": {
+          "source": "Search a mailbox with server-side IMAP criteria and return the UIDs of the matching messages.\n\nSearching on the server means a mailbox with thousands of messages can be narrowed to the handful that matter without transferring the rest",
+          "message": "使用伺服器端 IMAP 條件搜尋信箱，並傳回符合條件的郵件 UID。\n\n在伺服器端搜尋表示可將包含數千封郵件的信箱縮小至少數相關郵件，而無需傳輸其餘郵件"
+        },
+        "app.SU1BUA.action.c2VhcmNo.display_name": {
+          "source": "Search for Messages",
+          "message": "搜尋郵件"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.desc": {
+          "source": "An optional charset for the search criteria; needed only when the criteria contain non-ASCII text",
+          "message": "搜尋條件的選用字元集；僅在條件包含非 ASCII 文字時需要"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.display_name": {
+          "source": "Charset",
+          "message": "字元集"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.short_desc": {
+          "source": "An optional charset for the search criteria",
+          "message": "搜尋條件的選用字元集"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria as defined by [RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4).\n\nSearching happens on the server, so only matching messages are transferred. Criteria can be combined freely, for example `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`",
+          "message": "依據 [RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4) 定義的 IMAP 搜尋條件。\n\n搜尋在伺服器端執行，因此只會傳輸符合的郵件。條件可自由組合，例如 `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria",
+          "message": "IMAP 搜尋條件"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to search; the mailbox is selected before the search runs",
+          "message": "要搜尋的信箱；信箱會在搜尋執行前被選取"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to search",
+          "message": "要搜尋的信箱"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.desc": {
+          "source": "Open the mailbox with `EXAMINE` instead of `SELECT`, so that retrieving messages cannot change any flags",
+          "message": "使用 `EXAMINE` 而非 `SELECT` 開啟信箱，使擷取郵件時無法變更任何旗標"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.display_name": {
+          "source": "Read Only?",
+          "message": "唯讀？"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.short_desc": {
+          "source": "Open the mailbox read-only?",
+          "message": "以唯讀模式開啟信箱？"
+        },
+        "app.SU1BUA.action.c2VhcmNo.short_desc": {
+          "source": "Search a mailbox for messages",
+          "message": "在信箱中搜尋郵件"
+        },
+        "app.SU1BUA.action.d2F0Y2g.desc": {
+          "source": "React to new emails arriving in a mailbox.\n\nWhen a message matching the search criteria arrives, the whole message — headers, body text, and a summary of its attachments — is returned as output data. On servers that support `IDLE` the message is reported as soon as it arrives rather than on the next poll interval",
+          "message": "回應信箱中送達的新電子郵件。\n\n當符合搜尋條件的郵件送達時，整封郵件（標頭、內文文字及附件摘要）將作為輸出資料傳回。在支援 `IDLE` 的伺服器上，郵件會在送達時立即報告，而非等待下一次輪詢間隔"
+        },
+        "app.SU1BUA.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "新電子郵件"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "決定報告哪些新郵件的 IMAP 搜尋條件。\n\n比對在伺服器端執行，因此絕不會傳輸不符合的郵件；例如 `UNSEEN FROM \"orders@example.com\"` 僅回應來自單一寄件者的未讀郵件"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "用於比對郵件的 IMAP 搜尋條件"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "為每封回報的郵件加上 `\\Deleted` 旗標，並在觸發其事件後將其清除。\n\n**這將永久從伺服器中刪除郵件**；除非信箱是用於清空處理的佇列，否則建議使用 `mark_seen` 或移動至另一個信箱。\n\n郵件會在事件被**觸發**後立即清除，這與取用端已**處理**不同。觸發事件時擲出例外狀況會保留郵件以待下次掃描，但如果取用端收到事件後失敗、逾時或在處理途中重新啟動，則唯一的複本已經遺失。對於絕不能遺失來源郵件的工作負載，請不要設定此選項，並在取用端處理成功後再行處理：每個事件都包含其 `uid`，而 `set-flags` 與 `move-messages` 動作均可接收此資訊"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "刪除郵件？"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "在觸發回報郵件的事件後將其刪除？"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "要監視新郵件的信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "要監視的信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "在每封回報的郵件上設定 `\\Seen` 旗標。\n\n搭配 `UNSEEN` 條件使用很有用，使郵件在處理後不會被再次列入考量"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "標記為已讀？"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "在回報的郵件上設定 \\Seen 旗標？"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "檢查新郵件的頻率（以秒為單位）。\n\n在支援 `IDLE` 的伺服器上，這僅限制連線在再次檢查前的等待時間上限；新郵件仍會在伺服器推送時立即報告"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "檢查新郵件的頻率（以秒為單位）"
+        },
+        "app.SU1BUA.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "對新電子郵件做出反應"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to attachments on new emails arriving in a mailbox.\n\nOne event is raised per matching attachment, so a message carrying several files produces several events. Set `attachment_glob` to narrow a mixed mailbox to just the files of interest, and leave `retrieve_attachments` off to receive metadata only when attachments are large",
+          "message": "回應信箱中新送達電子郵件的附件。\n\n每個符合條件的附件都會觸發一個事件，因此包含多個檔案的郵件會產生多個事件。設定 `attachment_glob` 可將混合內容信箱縮小至感興趣的檔案，在附件較大時關閉 `retrieve_attachments` 可僅接收中繼資料"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "新電子郵件附件"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "決定報告哪些新郵件的 IMAP 搜尋條件。\n\n比對在伺服器端執行，因此絕不會傳輸不符合的郵件；例如 `UNSEEN FROM \"orders@example.com\"` 僅回應來自單一寄件者的未讀郵件"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "用於比對郵件的 IMAP 搜尋條件"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments.\n\nWhen unset, every attachment is reported; when set, only attachments whose filename matches are reported, so a mailbox carrying mixed content can be narrowed to just the files of interest (ex: `*.csv`)",
+          "message": "用於比對附件的選用檔案名稱模式 (glob)。\n\n未設定時會報告所有附件；設定時僅報告檔案名稱符合的附件，因此可將包含混合內容的信箱縮小至感興趣的檔案（例如：`*.csv`）"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "附件檔案模式"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern for matching attachments",
+          "message": "用於比對附件的可選檔案名稱模式"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "為每封回報的郵件加上 `\\Deleted` 旗標，並在觸發其事件後將其清除。\n\n**這將永久從伺服器中刪除郵件**；除非信箱是用於清空處理的佇列，否則建議使用 `mark_seen` 或移動至另一個信箱。\n\n郵件會在事件被**觸發**後立即清除，這與取用端已**處理**不同。觸發事件時擲出例外狀況會保留郵件以待下次掃描，但如果取用端收到事件後失敗、逾時或在處理途中重新啟動，則唯一的複本已經遺失。對於絕不能遺失來源郵件的工作負載，請不要設定此選項，並在取用端處理成功後再行處理：每個事件都包含其 `uid`，而 `set-flags` 與 `move-messages` 動作均可接收此資訊"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "刪除郵件？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "在觸發回報郵件的事件後將其刪除？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Match the filename pattern case-insensitively; ignored when `attachment_glob` is not set",
+          "message": "不區分大小寫比對檔案名稱模式；未設定 `attachment_glob` 時忽略"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Pattern Case?",
+          "message": "忽略模式大小寫？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Match the filename pattern case-insensitively?",
+          "message": "是否不區分大小寫比對檔案名稱模式？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "要監視新郵件的信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "要監視的信箱"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "在每封回報的郵件上設定 `\\Seen` 旗標。\n\n搭配 `UNSEEN` 條件使用很有用，使郵件在處理後不會被再次列入考量"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "標記為已讀？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "在回報的郵件上設定 \\Seen 旗標？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "檢查新郵件的頻率（以秒為單位）。\n\n在支援 `IDLE` 的伺服器上，這僅限制連線在再次檢查前的等待時間上限；新郵件仍會在伺服器推送時立即報告"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "檢查新郵件的頻率（以秒為單位）"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Include the decoded attachment content in the event.\n\nLeave this `False` to receive only the attachment metadata, which keeps events small when attachments are large; the content can then be retrieved on demand with the `get-attachment` action",
+          "message": "在事件中包含已解碼的附件內容。\n\n將此保留為 `False` 則僅接收附件中繼資料，可在附件較大時保持事件精簡；之後可透過 `get-attachment` 動作依需求擷取內容"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachment Data?",
+          "message": "擷取附件資料？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Include the attachment content in the event?",
+          "message": "是否在事件中包含附件內容？"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "對新電子郵件附件做出反應"
+        },
+        "app.SU1BUA.desc": {
+          "source": "Read and manage email on any IMAP server.\n\n- search a mailbox with server-side criteria, so only matching messages are transferred\n- retrieve a whole message, or a single MIME part when only one attachment is needed\n- react to new mail as it arrives, using server push where the server supports it\n- change flags, move messages between mailboxes, and file messages with `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) is the standard mailbox protocol, and for many email providers it is the only programmatic access they offer. Because messages stay on the server, an integration can watch a mailbox and act on what arrives without taking over the account's mail.\n\nBoth password and OAuth2 bearer-token authentication are supported; the mechanism is chosen from what the server advertises",
+          "message": "在任何 IMAP 伺服器上讀取與管理電子郵件。\n\n- 使用伺服器端條件搜尋信箱，僅傳輸相符的郵件\n- 擷取完整郵件，或在僅需單一附件時擷取單一 MIME 部分\n- 在新郵件送達時即時回應，並在伺服器支援時使用伺服器推送\n- 變更標記、在信箱間移動郵件，以及使用 `APPEND` 歸檔郵件\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) 是標準信箱通訊協定，對許多電子郵件提供商而言也是唯一提供的程式化存取方式。由於郵件保留在伺服器上，整合可以監控信箱並在有新郵件到達時採取相應操作，而無需接管帳戶的郵件。\n\n支援密碼與 OAuth2 bearer-token 驗證；會根據伺服器通告的機制進行選擇"
+        },
+        "app.SU1BUA.display_name": {
+          "source": "IMAP",
+          "message": "IMAP"
+        },
+        "app.SU1BUA.short_desc": {
+          "source": "IMAP email services",
+          "message": "IMAP 電子郵件服務"
+        }
+      }
+    }
+  }
+}

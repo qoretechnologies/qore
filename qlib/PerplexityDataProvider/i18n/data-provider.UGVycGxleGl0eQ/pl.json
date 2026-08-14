@@ -1,0 +1,2169 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Perplexity AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie API HTTP / REST do **Perplexity AI** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżywaj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako bezpośrednie akcje w tej aplikacji."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Perplexity AI",
+          "message": "Wykonaj niestandardowe wywołanie API do Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Rozmawiaj z modelem Perplexity AI, wysyłając wiele wiadomości jednocześnie i uzyskując odpowiedzi oparte na informacjach z sieci wraz z cytowaniami"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "Czat wielokrotny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "W przypadku ustawienia wartości `True` model nie będzie przeszukiwać sieci i użyje wyłącznie swoich danych treningowych do wygenerowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Wyłączyć wyszukiwanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Ogranicz odpowiedź tylko do danych treningowych"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "W przypadku ustawienia wartości `True` używa klasyfikatora, aby określić, czy wyszukiwanie w sieci jest potrzebne dla zapytania przed jego wykonaniem"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Włączyć klasyfikator wyszukiwania?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Użyj klasyfikatora, aby określić, czy wyszukiwanie jest potrzebne"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Lista domen, do których mają zostać ograniczone wyniki wyszukiwania obrazów. Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filtr domen obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Ogranicz źródła obrazów do określonych domen"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Lista formatów obrazów, które mają zostać uwzględnione w wynikach wyszukiwania obrazów (np. `png`, `jpg`). Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filtr formatów obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtruj wyniki wyszukiwania obrazów według formatu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Preferencja językowa"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kod języka ISO 639-1 dla odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Ostatnio zaktualizowano po"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Ostatnio zaktualizowano przed"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Lekki, ekonomiczny model wyszukiwania oparty na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Lekki, ekonomiczny model wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Badania na poziomie eksperckim z autonomiczną oceną źródeł i generowaniem raportów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonomiczne badania na poziomie eksperckim"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych i podwójnymi cytowaniami"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Model wnioskowania Chain of Thought oparty na DeepSeek-R1 z wyszukiwaniem wielozapytaniowym"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Model wnioskowania Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maksymalna liczba tokenów, które można wygenerować w dopełnieniu czatu. Obsługiwane do 128 000 tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maksymalna liczba tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maksymalna liczba tokenów do wygenerowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Wyszukiwanie artykułów naukowych i badawczych"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Naukowe"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Artykuły naukowe i badawcze"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Wyszukiwanie zgłoszeń regulacyjnych US SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Zgłoszenia SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Ogólne wyszukiwanie w sieci na potrzeby ugruntowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Ogólne wyszukiwanie w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ wyszukiwania wykonywanego w celu ugruntowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Tryb wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ wyszukiwania do wykonania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Szukaj po dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Szukaj przed datą"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Lista domen do uwzględnienia lub wykluczenia z wyników wyszukiwania. Dodaj prefiks `-`, aby wykluczyć. Maksymalnie 20 domen"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filtr domeny wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Lista dozwolonych lub zablokowanych domen do wyszukiwania (maks. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Lista kodów języków ISO 639-1 do filtrowania wyników wyszukiwania. Maksymalnie 10 języków"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filtr języka wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kody języków ISO 639-1 do filtrowania wyników wyszukiwania (maks. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Uwzględniaj tylko źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Ubiegły miesiąc"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Uwzględniaj tylko źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Ostatni dzień"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Uwzględniaj tylko źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Ostatnia godzina"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Uwzględniaj tylko źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Ostatni tydzień"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Uwzględniaj tylko źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Ostatni rok"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtruj wyniki wyszukiwania, aby uwzględniać tylko źródła z określonego przedziału czasu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filtr aktualności wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtruj wyniki wyszukiwania według aktualności"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekwencje, przy których interfejs API zatrzyma generowanie tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "W przypadku ustawienia `True`, przyrosty częściowych komunikatów będą wysyłane jako zdarzenia Server-Sent Events zawierające tylko dane w miarę ich dostępności, a strumień zostanie zakończony komunikatem `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Włącz przesyłanie strumieniowe przez Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Zapewnia oddzielne zdarzenia wnioskowania podczas przesyłania strumieniowego"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Zwięzły"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadane w tekście bez osobnych zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Pełny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadane w tekście, brak zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Steruje formatem strumieniowania. `full` dołącza metadane w tekście bez osobnych zdarzeń rozumowania. `concise` udostępnia osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Tryb strumieniowy"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Steruje formatem strumieniowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "W przypadku ustawienia wartości `True` wyniki graficzne z wyszukiwania w sieci zostaną dołączone do odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Zwracać obrazy?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Dołącz wyniki graficzne z wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "W przypadku ustawienia wartości `True` odpowiedź będzie zawierać sugerowane pytania uzupełniające"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Zwracać powiązane pytania?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generuj sugestie pytań uzupełniających"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Średni nakład pracy na rozumowanie (domyślny)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Średni"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimalny nakład pracy na rozumowanie dla szybkich odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimalny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimalny nakład pracy na rozumowanie"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maksymalny nakład pracy na rozumowanie dla wnikliwej analizy"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Steruje głębokością rozumowania dla modeli `sonar-reasoning` i `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Steruj nakładem pracy na rozumowanie dla modeli wnioskujących"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Obiekt określający format, jaki model musi wygenerować. Ustaw `type` na `json_schema` i podaj obiekt `json_schema`, aby włączyć ustrukturyzowane wyjście JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Określ format wyjściowy (np. schemat JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Zaawansowane opcje konfiguracji wyszukiwania w sieci, takie jak rozmiar kontekstu wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Opcje wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Zaawansowana konfiguracja wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatywa dla próbkowania z temperaturą, zwana próbkowaniem jądrowym (nucleus sampling), gdzie model uwzględnia wyniki tokenów o masie prawdopodobieństwa `top_p`. Zatem `0.1` oznacza, że uwzględniane są tylko tokeny stanowiące górne 10% masy prawdopodobieństwa"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Wartość próbkowania jądrowego (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Wartość temperatury próbkowania do użycia, od `0` do `2`. Wyższe wartości, takie jak `0.8`, sprawią, że wynik będzie bardziej losowy, natomiast niższe wartości, takie jak `0.2`, uczynią go bardziej skupionym i deterministycznym"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Temperatura próbkowania do użycia, od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Rozmawiaj z modelem Perplexity AI, wysyłając wiele wiadomości jednocześnie i uzyskując odpowiedzi oparte na informacjach z sieci wraz z cytowaniami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
+          "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
+          "message": "Przeszukuj sieć za pomocą dedykowanego API wyszukiwania Perplexity, zwracając ustrukturyzowane wyniki z tytułami, adresami URL i fragmentami tekstu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Wyszukiwanie w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "ISO country code to localize search results",
+          "message": "Kod kraju ISO do lokalizacji wyników wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code for search localization",
+          "message": "Kod kraju ISO do lokalizacji wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of search results to return. Range: 1-20, default: 10",
+          "message": "Maksymalna liczba wyników wyszukiwania do zwrócenia. Zakres: 1–20, domyślnie: 10"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of results to return (1-20)",
+          "message": "Maksymalna liczba wyników do zwrócenia (1–20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.desc": {
+          "source": "Maximum tokens extracted from each page in results. Default: 4,096",
+          "message": "Maksymalna liczba tokenów wyodrębnionych z każdej strony w wynikach. Domyślnie: 4096"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.display_name": {
+          "source": "Max Tokens Per Page",
+          "message": "Maks. liczba tokenów na stronę"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.short_desc": {
+          "source": "Maximum tokens extracted per page",
+          "message": "Maksymalna liczba tokenów wyodrębnionych na stronę"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens per search response. Default: 10,000, maximum: 1,000,000",
+          "message": "Maksymalna liczba tokenów na odpowiedź wyszukiwania. Domyślnie: 10 000, maksymalnie: 1 000 000"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maksymalna liczba tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens per search response",
+          "message": "Maksymalna liczba tokenów na odpowiedź wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude",
+          "message": "Lista domen do uwzględnienia lub wykluczenia z wyników wyszukiwania. Dodaj prefiks `-`, aby wykluczyć"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filtr domeny wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search",
+          "message": "Biała lub czarna lista domen dla wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results",
+          "message": "Lista kodów języków ISO 639-1 do filtrowania wyników wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filtr języka wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter results",
+          "message": "Kody języków ISO 639-1 do filtrowania wyników"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Uwzględniaj tylko źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Ubiegły miesiąc"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Uwzględniaj tylko źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Ostatni dzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Uwzględniaj tylko źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Ostatnia godzina"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Uwzględniaj tylko źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Ostatni tydzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Uwzględniaj tylko źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Ostatni rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtruj wyniki wyszukiwania, aby uwzględniać tylko źródła z określonego przedziału czasu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filtr aktualności wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtruj wyniki wyszukiwania według aktualności"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string; automatically wrapped in an array for the API",
+          "message": "Ciąg zapytania wyszukiwania; automatycznie opakowywany w tablicę dla API"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Zapytanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "Zapytanie wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
+          "source": "Search the web using Perplexity's dedicated search API",
+          "message": "Przeszukuj sieć za pomocą dedykowanego API wyszukiwania Perplexity"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Prowadź czat z modelem Perplexity AI, wysyłając pojedynczą wiadomość i otrzymując pojedynczą, opartą na danych z sieci odpowiedź z cytatami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Prosty czat"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The contents of the message",
+          "message": "Treść wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Zawartość"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The contents of the message",
+          "message": "Treść wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "W przypadku ustawienia wartości `True` model nie będzie przeszukiwać sieci i użyje wyłącznie swoich danych treningowych do wygenerowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Wyłączyć wyszukiwanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Ogranicz odpowiedź tylko do danych treningowych"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "W przypadku ustawienia wartości `True` używa klasyfikatora, aby określić, czy wyszukiwanie w sieci jest potrzebne dla zapytania przed jego wykonaniem"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Włączyć klasyfikator wyszukiwania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Użyj klasyfikatora, aby określić, czy wyszukiwanie jest potrzebne"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Lista domen, do których mają zostać ograniczone wyniki wyszukiwania obrazów. Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filtr domen obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Ogranicz źródła obrazów do określonych domen"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Lista formatów obrazów, które mają zostać uwzględnione w wynikach wyszukiwania obrazów (np. `png`, `jpg`). Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filtr formatów obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtruj wyniki wyszukiwania obrazów według formatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Preferencja językowa"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kod języka ISO 639-1 dla odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Ostatnio zaktualizowano po"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Ostatnio zaktualizowano przed"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Lekki, ekonomiczny model wyszukiwania oparty na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Lekki, ekonomiczny model wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Badania na poziomie eksperckim z autonomiczną oceną źródeł i generowaniem raportów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonomiczne badania na poziomie eksperckim"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych i podwójnymi cytowaniami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Model wnioskowania Chain of Thought oparty na DeepSeek-R1 z wyszukiwaniem wielozapytaniowym"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Model wnioskowania Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maksymalna liczba tokenów, które można wygenerować w dopełnieniu czatu. Obsługiwane do 128 000 tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maksymalna liczba tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maksymalna liczba tokenów do wygenerowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Wyszukiwanie artykułów naukowych i badawczych"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Naukowe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Artykuły naukowe i badawcze"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Wyszukiwanie zgłoszeń regulacyjnych US SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Zgłoszenia SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Ogólne wyszukiwanie w sieci na potrzeby ugruntowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Ogólne wyszukiwanie w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ wyszukiwania wykonywanego w celu ugruntowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Tryb wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ wyszukiwania do wykonania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Szukaj po dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Szukaj przed datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Lista domen do uwzględnienia lub wykluczenia z wyników wyszukiwania. Dodaj prefiks `-`, aby wykluczyć. Maksymalnie 20 domen"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filtr domeny wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Lista dozwolonych lub zablokowanych domen do wyszukiwania (maks. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Lista kodów języków ISO 639-1 do filtrowania wyników wyszukiwania. Maksymalnie 10 języków"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filtr języka wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kody języków ISO 639-1 do filtrowania wyników wyszukiwania (maks. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Uwzględniaj tylko źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Ubiegły miesiąc"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Uwzględniaj tylko źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Ostatni dzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Uwzględniaj tylko źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Ostatnia godzina"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Uwzględniaj tylko źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Ostatni tydzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Uwzględniaj tylko źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Ostatni rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtruj wyniki wyszukiwania, aby uwzględniać tylko źródła z określonego przedziału czasu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filtr aktualności wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtruj wyniki wyszukiwania według aktualności"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekwencje, przy których interfejs API zatrzyma generowanie tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "W przypadku ustawienia `True`, przyrosty częściowych komunikatów będą wysyłane jako zdarzenia Server-Sent Events zawierające tylko dane w miarę ich dostępności, a strumień zostanie zakończony komunikatem `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Włącz przesyłanie strumieniowe przez Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Zapewnia oddzielne zdarzenia wnioskowania podczas przesyłania strumieniowego"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Zwięzły"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadane w tekście bez osobnych zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Pełny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadane w tekście, brak zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Steruje formatem strumieniowania. `full` dołącza metadane w tekście bez osobnych zdarzeń rozumowania. `concise` udostępnia osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Tryb strumieniowy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Steruje formatem strumieniowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Autorem wiadomości jest asystent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "Asystent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Autorem wiadomości jest asystent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author of the message is the system",
+          "message": "Autorem wiadomości jest system"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "System"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author of the message is the system",
+          "message": "Autorem wiadomości jest system"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author of the message is the user",
+          "message": "Autorem wiadomości jest użytkownik"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author of the message is the user",
+          "message": "Autorem wiadomości jest użytkownik"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tej wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tej wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "W przypadku ustawienia wartości `True` wyniki graficzne z wyszukiwania w sieci zostaną dołączone do odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Zwracać obrazy?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Dołącz wyniki graficzne z wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "W przypadku ustawienia wartości `True` odpowiedź będzie zawierać sugerowane pytania uzupełniające"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Zwracać powiązane pytania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generuj sugestie pytań uzupełniających"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Średni nakład pracy na rozumowanie (domyślny)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Średni"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimalny nakład pracy na rozumowanie dla szybkich odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimalny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimalny nakład pracy na rozumowanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maksymalny nakład pracy na rozumowanie dla wnikliwej analizy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Steruje głębokością rozumowania dla modeli `sonar-reasoning` i `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Steruj nakładem pracy na rozumowanie dla modeli wnioskujących"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Obiekt określający format, jaki model musi wygenerować. Ustaw `type` na `json_schema` i podaj obiekt `json_schema`, aby włączyć ustrukturyzowane wyjście JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Określ format wyjściowy (np. schemat JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Zaawansowane opcje konfiguracji wyszukiwania w sieci, takie jak rozmiar kontekstu wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Opcje wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Zaawansowana konfiguracja wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatywa dla próbkowania z temperaturą, zwana próbkowaniem jądrowym (nucleus sampling), gdzie model uwzględnia wyniki tokenów o masie prawdopodobieństwa `top_p`. Zatem `0.1` oznacza, że uwzględniane są tylko tokeny stanowiące górne 10% masy prawdopodobieństwa"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Wartość próbkowania jądrowego (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Wartość temperatury próbkowania do użycia, od `0` do `2`. Wyższe wartości, takie jak `0.8`, sprawią, że wynik będzie bardziej losowy, natomiast niższe wartości, takie jak `0.2`, uczynią go bardziej skupionym i deterministycznym"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Temperatura próbkowania do użycia, od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Prowadź czat z modelem Perplexity AI, wysyłając pojedynczą wiadomość i otrzymując pojedynczą, opartą na danych z sieci odpowiedź z cytatami"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",
+          "message": "Strumieniuj odpowiedź czatu z Perplexity AI za pośrednictwem Server-Sent Events z dostarczaniem tokenów w czasie rzeczywistym"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
+          "source": "Stream Chat",
+          "message": "Czat strumieniowy"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "W przypadku ustawienia wartości `True` model nie będzie przeszukiwać sieci i użyje wyłącznie swoich danych treningowych do wygenerowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Wyłączyć wyszukiwanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Ogranicz odpowiedź tylko do danych treningowych"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "W przypadku ustawienia wartości `True` używa klasyfikatora, aby określić, czy wyszukiwanie w sieci jest potrzebne dla zapytania przed jego wykonaniem"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Włączyć klasyfikator wyszukiwania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Użyj klasyfikatora, aby określić, czy wyszukiwanie jest potrzebne"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Lista domen, do których mają zostać ograniczone wyniki wyszukiwania obrazów. Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filtr domen obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Ogranicz źródła obrazów do określonych domen"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Lista formatów obrazów, które mają zostać uwzględnione w wynikach wyszukiwania obrazów (np. `png`, `jpg`). Ma zastosowanie tylko wtedy, gdy `return_images` ma wartość `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filtr formatów obrazów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtruj wyniki wyszukiwania obrazów według formatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kod języka ISO 639-1 określający preferowany język odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Preferencja językowa"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kod języka ISO 639-1 dla odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Ostatnio zaktualizowano po"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła ostatnio zaktualizowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Ostatnio zaktualizowano przed"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Uwzględniaj tylko źródła zaktualizowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Lekki, ekonomiczny model wyszukiwania oparty na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Lekki, ekonomiczny model wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Badania na poziomie eksperckim z autonomiczną oceną źródeł i generowaniem raportów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonomiczne badania na poziomie eksperckim"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych i podwójnymi cytowaniami"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Zaawansowane wyszukiwanie z głębszym pobieraniem danych"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Model wnioskowania Chain of Thought oparty na DeepSeek-R1 z wyszukiwaniem wielozapytaniowym"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Model wnioskowania Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model używany do dopełniania czatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maksymalna liczba tokenów, które można wygenerować w dopełnieniu czatu. Obsługiwane do 128 000 tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maksymalna liczba tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maksymalna liczba tokenów do wygenerowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Wiadomości"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Wyszukiwanie artykułów naukowych i badawczych"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Naukowe"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Artykuły naukowe i badawcze"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Wyszukiwanie zgłoszeń regulacyjnych US SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Zgłoszenia SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Ogólne wyszukiwanie w sieci na potrzeby ugruntowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Ogólne wyszukiwanie w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ wyszukiwania wykonywanego w celu ugruntowania odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Tryb wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ wyszukiwania do wykonania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Szukaj po dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Uwzględniaj tylko źródła opublikowane po tej dacie"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą. Format: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Szukaj przed datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Uwzględniaj tylko źródła opublikowane przed tą datą"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Lista domen do uwzględnienia lub wykluczenia z wyników wyszukiwania. Dodaj prefiks `-`, aby wykluczyć. Maksymalnie 20 domen"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filtr domeny wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Lista dozwolonych lub zablokowanych domen do wyszukiwania (maks. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Lista kodów języków ISO 639-1 do filtrowania wyników wyszukiwania. Maksymalnie 10 języków"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filtr języka wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kody języków ISO 639-1 do filtrowania wyników wyszukiwania (maks. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Uwzględniaj tylko źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Ubiegły miesiąc"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Źródła z ostatniego miesiąca"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Uwzględniaj tylko źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Ostatni dzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Źródła z ostatniego dnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Uwzględniaj tylko źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Ostatnia godzina"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Źródła z ostatniej godziny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Uwzględniaj tylko źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Ostatni tydzień"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Źródła z ostatniego tygodnia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Uwzględniaj tylko źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Ostatni rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Źródła z ostatniego roku"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtruj wyniki wyszukiwania, aby uwzględniać tylko źródła z określonego przedziału czasu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filtr aktualności wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtruj wyniki wyszukiwania według aktualności"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekwencje, przy których interfejs API zatrzyma generowanie tokenów"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Zapewnia oddzielne zdarzenia wnioskowania podczas przesyłania strumieniowego"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Zwięzły"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadane w tekście bez osobnych zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Pełny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadane w tekście, brak zdarzeń rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Steruje formatem strumieniowania. `full` dołącza metadane w tekście bez osobnych zdarzeń rozumowania. `concise` udostępnia osobne zdarzenia rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Tryb strumieniowy"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Steruje formatem strumieniowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "W przypadku ustawienia wartości `True` wyniki graficzne z wyszukiwania w sieci zostaną dołączone do odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Zwracać obrazy?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Dołącz wyniki graficzne z wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "W przypadku ustawienia wartości `True` odpowiedź będzie zawierać sugerowane pytania uzupełniające"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Zwracać powiązane pytania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generuj sugestie pytań uzupełniających"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Średni nakład pracy na rozumowanie (domyślny)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Średni"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimalny nakład pracy na rozumowanie dla szybkich odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimalny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimalny nakład pracy na rozumowanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maksymalny nakład pracy na rozumowanie dla wnikliwej analizy"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Steruje głębokością rozumowania dla modeli `sonar-reasoning` i `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Wysiłek rozumowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Steruj nakładem pracy na rozumowanie dla modeli wnioskujących"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Obiekt określający format, jaki model musi wygenerować. Ustaw `type` na `json_schema` i podaj obiekt `json_schema`, aby włączyć ustrukturyzowane wyjście JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Określ format wyjściowy (np. schemat JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Zaawansowane opcje konfiguracji wyszukiwania w sieci, takie jak rozmiar kontekstu wyszukiwania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Opcje wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Zaawansowana konfiguracja wyszukiwania w sieci"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatywa dla próbkowania z temperaturą, zwana próbkowaniem jądrowym (nucleus sampling), gdzie model uwzględnia wyniki tokenów o masie prawdopodobieństwa `top_p`. Zatem `0.1` oznacza, że uwzględniane są tylko tokeny stanowiące górne 10% masy prawdopodobieństwa"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Wartość próbkowania jądrowego (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Wartość temperatury próbkowania do użycia, od `0` do `2`. Wyższe wartości, takie jak `0.8`, sprawią, że wynik będzie bardziej losowy, natomiast niższe wartości, takie jak `0.2`, uczynią go bardziej skupionym i deterministycznym"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Temperatura próbkowania do użycia, od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events",
+          "message": "Strumieniuj odpowiedź czatu z Perplexity AI za pośrednictwem Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.desc": {
+          "source": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n**Key Features:**\n- Real-time web search grounding for up-to-date responses\n- Automatic citation of sources\n- Multiple search modes: web, academic, and SEC filings\n- Streaming support via Server-Sent Events\n- Structured JSON output with schema validation",
+          "message": "Perplexity AI zapewnia oparte na danych z sieci wyszukiwanie AI i dopełnienia czatu z cytatami.\n\n**Główne funkcje:**\n- Ugruntowanie odpowiedzi w wyszukiwaniu sieciowym w czasie rzeczywistym dla aktualnych informacji\n- Automatyczne cytowanie źródeł\n- Wiele trybów wyszukiwania: sieć, źródła akademickie i zgłoszenia SEC\n- Obsługa strumieniowania przez Server-Sent Events\n- Ustrukturyzowane wyjście JSON z walidacją schematu"
+        },
+        "app.UGVycGxleGl0eQ.display_name": {
+          "source": "Perplexity AI",
+          "message": "Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.short_desc": {
+          "source": "Perplexity AI services",
+          "message": "Usługi Perplexity AI"
+        }
+      }
+    }
+  }
+}

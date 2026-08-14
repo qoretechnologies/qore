@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.TUNQ.action.Y29tcGxldGU.desc": {
+          "source": "Get autocompletion suggestions for prompts or resources",
+          "message": "Vorschläge zur automatischen Vervollständigung für Prompts oder Ressourcen abrufen"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.display_name": {
+          "source": "Get Completion",
+          "message": "Vervollständigung abrufen"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.short_desc": {
+          "source": "Get autocompletion suggestions",
+          "message": "Vorschläge zur automatischen Vervollständigung abrufen"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.desc": {
+          "source": "Execute an MCP tool with the provided arguments and return the result",
+          "message": "Ein MCP-Tool mit den angegebenen Argumenten ausführen und das Ergebnis zurückgeben"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.display_name": {
+          "source": "Call Tool",
+          "message": "Tool aufrufen"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
+          "source": "Execute an MCP tool",
+          "message": "Ein MCP-Tool ausführen"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.desc": {
+          "source": "Get a prompt template from the MCP server with arguments",
+          "message": "Eine Prompt-Vorlage vom MCP-Server mit Argumenten abrufen"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
+          "source": "Get Prompt",
+          "message": "Prompt abrufen"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
+          "source": "Get an MCP prompt",
+          "message": "Einen MCP-Prompt abrufen"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.desc": {
+          "source": "List all tools available on the MCP server",
+          "message": "Alle auf dem MCP-Server verfügbaren Tools auflisten"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.display_name": {
+          "source": "List Tools",
+          "message": "Tools auflisten"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
+          "source": "List available MCP tools",
+          "message": "Verfügbare MCP-Tools auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.desc": {
+          "source": "List all prompts available on the MCP server",
+          "message": "Alle auf dem MCP-Server verfügbaren Prompts auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
+          "source": "List Prompts",
+          "message": "Prompts auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
+          "source": "List available MCP prompts",
+          "message": "Verfügbare MCP-Prompts auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.desc": {
+          "source": "List all resources available on the MCP server",
+          "message": "Alle auf dem MCP-Server verfügbaren Ressourcen auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
+          "source": "List Resources",
+          "message": "Ressourcen auflisten"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
+          "source": "List available MCP resources",
+          "message": "Verfügbare MCP-Ressourcen auflisten"
+        },
+        "app.TUNQ.action.cGluZw.desc": {
+          "source": "Ping the MCP server to verify connectivity",
+          "message": "Den MCP-Server pingen, um die Konnektivität zu überprüfen"
+        },
+        "app.TUNQ.action.cGluZw.display_name": {
+          "source": "Ping Server",
+          "message": "Server pingen"
+        },
+        "app.TUNQ.action.cGluZw.short_desc": {
+          "source": "Check server connectivity",
+          "message": "Serverkonnektivität prüfen"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read content from an MCP resource by URI",
+          "message": "Inhalt einer MCP-Ressource nach URI lesen"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "Ressource lesen"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read an MCP resource",
+          "message": "Eine MCP-Ressource lesen"
+        },
+        "app.TUNQ.desc": {
+          "source": "Connect to MCP servers for AI tool, resource, and prompt integration",
+          "message": "Verbindung zu MCP-Servern für KI-Tool-, Ressourcen- und Prompt-Integration herstellen"
+        },
+        "app.TUNQ.display_name": {
+          "source": "MCP Server",
+          "message": "MCP-Server"
+        },
+        "app.TUNQ.short_desc": {
+          "source": "Model Context Protocol server",
+          "message": "Model Context Protocol-Server"
+        }
+      }
+    }
+  }
+}

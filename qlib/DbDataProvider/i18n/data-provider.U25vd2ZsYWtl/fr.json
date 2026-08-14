@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Créer et gérer des connexions à un entrepôt de données cloud Snowflake"
+        },
+        "app.U25vd2ZsYWtl.display_name": {
+          "source": "Snowflake",
+          "message": "Snowflake"
+        },
+        "app.U25vd2ZsYWtl.short_desc": {
+          "source": "Snowflake cloud data warehouse",
+          "message": "Entrepôt de données cloud Snowflake"
+        }
+      }
+    }
+  }
+}

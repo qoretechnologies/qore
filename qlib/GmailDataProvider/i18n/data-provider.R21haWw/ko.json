@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.R21haWw.action.Z2V0.desc": {
+          "source": "Retrieve a message",
+          "message": "메시지 가져오기"
+        },
+        "app.R21haWw.action.Z2V0.display_name": {
+          "source": "Retrieve a Message",
+          "message": "메시지 가져오기"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "가져올 메시지의 ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.short_desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "가져올 메시지의 ID"
+        },
+        "app.R21haWw.action.Z2V0.short_desc": {
+          "source": "Retrieve a message",
+          "message": "메시지 가져오기"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve an attachment",
+          "message": "첨부 파일 가져오기"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "첨부 파일 가져오기"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "가져올 첨부 파일의 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.display_name": {
+          "source": "Attachment ID",
+          "message": "첨부 파일 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.short_desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "가져올 첨부 파일의 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "가져올 첨부 파일이 포함된 메시지의 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.short_desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "가져올 첨부 파일이 포함된 메시지의 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve an attachment",
+          "message": "첨부 파일 가져오기"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
+          "message": "메시지를 영구적으로 삭제합니다. **이 작업은 취소할 수 없습니다**: 메시지가 휴지통으로 이동하지 않으며 복사본도 남지 않으므로, 즉시 파기해야 하는 경우가 아니라면 `trash-message`을(를) 사용하세요.\n\n처리가 성공한 후 이벤트가 전달하는 `message_id`을(를) 사용하여 `watch` 또는 `watch-attachment` 이벤트의 컨슈머에서 이 작업을 사용하세요. `delete_messages`을(를) 사용하여 감시(watch) 자체에서 삭제하면 컨슈머의 성공 여부와 관계없이 이벤트가 발생하는 즉시 메시지가 삭제됩니다.\n\nGmail API는 이 호출에 대해 응답 본문을 반환하지 않습니다."
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "메시지 삭제"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.desc": {
+          "source": "The ID of the message to delete permanently; watch events carry this value as `message_id`",
+          "message": "영구 삭제할 메시지의 ID입니다. 감시(watch) 이벤트는 이 값을 `message_id`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.short_desc": {
+          "source": "The ID of the message to delete permanently",
+          "message": "영구 삭제할 메시지의 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Permanently delete a message; this cannot be undone",
+          "message": "메시지를 영구적으로 삭제합니다(취소할 수 없음)."
+        },
+        "app.R21haWw.action.bGlzdA.desc": {
+          "source": "Search for messages in the account",
+          "message": "계정에서 메시지 검색"
+        },
+        "app.R21haWw.action.bGlzdA.display_name": {
+          "source": "Search for Messages",
+          "message": "메시지 검색"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "스팸 및 휴지통 포함 여부"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "지정된 모든 레이블 ID와 일치하는 레이블이 있는 메시지만 반환합니다. 스레드의 특정 메시지에는 동일한 스레드의 다른 메시지에는 없는 레이블이 포함되어 있을 수 있습니다."
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "라벨"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "지정된 모든 레이블 ID와 일치하는 레이블이 있는 메시지만 반환"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "반환할 최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "반환할 최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "메시지를 가져오기 위한 Gmail 검색 기준(예: `in:inbox to:me@gmail.com subject:hello is:unread`)"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "메시지를 가져오기 위한 Gmail 검색 기준"
+        },
+        "app.R21haWw.action.bGlzdA.short_desc": {
+          "source": "Search for messages",
+          "message": "메시지 검색"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Gmail**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 기본 작업으로 아직 제공되지 않는 엔드포인트에 이 작업을 사용하세요."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gmail",
+          "message": "Gmail에 커스텀 API 호출 수행"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message",
+          "message": "메시지 보내기"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "메시지 보내기"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Cc:` 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "참조"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "참조(CC) 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "메시지의 모든 첨부 파일"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "첨부 파일"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "메시지 첨부 파일"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "콘텐츠 인코딩 없음(권장하지 않음)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "콘텐츠 인코딩 없음(권장하지 않음)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "바이너리 데이터에 적합"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "바이너리 데이터에 적합"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "문자열 데이터의 경우 `quoted-printable`, 바이너리 데이터의 경우 `base64`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "문자열 데이터의 경우 'quoted-printable', 바이너리 데이터의 경우 'base64'"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "문자열 데이터에 적합"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "문자열 데이터에 적합"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "첨부 파일에 사용할 인코딩:\n- `default`: 문자열 데이터의 경우 `quoted-printable`, 바이너리 데이터의 경우 `base64`\n- `none`: 콘텐츠 인코딩 없음(권장되지 않음)\n- `quoted-printable`: quoted printable 인코딩\n- `base64`: base64 인코딩"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "본문 인코딩"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "첨부 파일에 사용할 인코딩"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML 텍스트"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML 텍스트"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "일반 텍스트"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "일반 텍스트"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "본문 MIME 유형"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Bcc:` 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "숨은 참조"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "숨은 참조 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "발신자"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "이메일의 하나 이상의 `To:` 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.display_name": {
+          "source": "To",
+          "message": "받는 사람"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "메시지 수신자 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message",
+          "message": "메시지 보내기"
+        },
+        "app.R21haWw.action.d2F0Y2g.desc": {
+          "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
+          "message": "새 이메일에 반응합니다. 새 이메일이 도착하면 메시지 본문을 포함한 모든 메시지 정보가 출력 데이터로 반환됩니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "새 이메일"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its event?\n\n**The message is deleted as soon as its event has been raised, whatever the event consumer then does with it.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the message, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` the event carries",
+          "message": "이벤트를 발생시킨 후 일치하는 각 메시지를 영구적으로 삭제하시겠습니까?\n\n**이벤트 소비자가 이후에 메시지를 어떻게 처리하든 상관없이 이벤트가 발생하자마자 메시지가 삭제됩니다.** 처리 중간에 실패하거나 시간 초과가 발생하거나 재시작된 소비자는 이미 메시지의 유일한 사본을 잃어버리게 되며, Gmail 삭제는 취소할 수 없습니다.\n\n원본 메시지를 손실해서는 안 되는 워크로드의 경우, 이 옵션을 설정하지 않고 처리가 성공한 후 이벤트에 포함된 `message_id`와 함께 소비자의 `delete-message` 또는 `trash-message` 작업을 사용하십시오."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "메시지를 삭제하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its event?",
+          "message": "이벤트를 발생시킨 후 일치하는 각 메시지를 영구적으로 삭제하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "한 폴링 주기에서 전달되는 최대 메시지 수입니다. 설정하지 않거나 `0`이면 제한이 없음을 의미합니다.\n\n이 제한은 백로그의 **가장 오래된** 항목부터 적용되므로 감시 커서가 연속적으로 전진하며 나머지 메시지는 건너뛰지 않고 다음 주기에서 전달됩니다. 백로그가 많이 쌓일 수 있는 경우 단일 주기가 수행할 수 있는 작업량을 제한하는 데 사용합니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "주기당 최대 메시지 수"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "한 폴링 주기에서 전달되는 최대 메시지 수"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "일치하는 가장 최신 메시지 하나만 유지"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "전체 최신 항목"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "각 Gmail 스레드에서 가장 최신 메시지 유지"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "스레드별 최신 항목"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "각 그룹에서 최신 메시지가 선택되기 전에 일치하는 메시지를 그룹화하는 방법입니다. `snapshot_mode`이(가) 설정되어 있지 않으면 무시됩니다.\n\n- `all`: 하나의 글로벌 그룹으로, 각 주기는 가장 최신의 일치하는 메시지를 담은 단일 이벤트를 발생시킵니다.\n- `thread`: Gmail 스레드별로 그룹화하여, 각 주기는 해당 스레드의 최신 메시지를 담은 스레드당 하나의 이벤트를 발생시킵니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "스냅샷 그룹화"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "최신 메시지가 선택되기 전에 메시지를 그룹화하는 방법"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "백로그를 다시 재생하는 대신 최신 메시지로 축소합니다.\n\n일부 피드는 로그가 아닌 스냅샷입니다. 즉, 각 메시지가 현재 상태를 다시 나타내므로 서비스 중단 후에는 마지막 메시지만 처리할 가치가 있습니다. 이 옵션을 설정하면 각 폴링 주기는 가장 최신의 일치하는 메시지를 담은 그룹당 하나의 이벤트(`snapshot_key` 참조)를 발생시키고, 축소되어 생략된 메시지를 이벤트의 `superseded_count` 및 `superseded_ids` 필드에 보고합니다. 축소된 메시지는 전체 내용을 가져오지 않으므로 백로그가 많더라도 메시지별로 한 번씩이 아닌 단 한 번의 메시지 조회 비용만 발생합니다.\n\n모든 메시지를 처리해야 하는 피드의 경우 이 옵션을 설정하지 마십시오."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "최신 메시지만 처리하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "백로그를 다시 재생하는 대신 최신 메시지로 축소하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "일치하는 메시지의 시작 날짜 및 시간을 설정합니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "시작일"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "일치하는 메시지의 시작 날짜 및 시간을 설정합니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "대체된 메시지를 영구적으로 삭제"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "영구 삭제"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "대체된 메시지를 사서함에 보관"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "유지"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "대체된 메시지를 Gmail 휴지통으로 이동"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "휴지통으로 이동"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "`snapshot_mode`에 의해 축소되어 생략된 메시지를 처리하는 방법입니다. `snapshot_mode`이(가) 설정되어 있지 않으면 무시됩니다.\n\n- `ignore`: 감사용으로 보관되도록 사서함에 그대로 둡니다. 감시 커서가 이미 해당 메시지를 지나갔으므로 다시 이벤트로 발생하지 않습니다.\n- `trash`: 나중에 복구할 수 있도록 Gmail 휴지통으로 이동합니다.\n- `delete`: 영구적으로 삭제합니다. **이 작업은 취소할 수 없습니다.**\n\n삭제에 실패하면 로그에 기록되고 메시지는 그대로 유지됩니다. 이벤트가 이미 발생했고 감시 커서가 이미 지나갔으므로 재시도되지 않습니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "대체된 메시지 작업"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "축소되어 생략된 메시지를 처리하는 방법"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "일치하는 이메일을 확인하는 주기(초 단위)입니다. 최솟값은 30이며, 더 작은 숫자를 입력하면 최소 폴링 주기로 설정됩니다."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "일치하는 이메일을 확인하는 주기(초 단위)"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "일치하는 메시지를 찾기 위한 Gmail 검색 기준입니다(예: `in:inbox to:me@gmail.com subject:hello is:unread`)."
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "일치하는 메시지를 찾기 위한 Gmail 검색 기준"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "첨부 파일 데이터를 자동으로 가져오시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachments?",
+          "message": "첨부 파일을 가져오시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "첨부 파일 데이터를 자동으로 가져오시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "새 이메일에 반응"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to new email attachments",
+          "message": "새 이메일 첨부 파일에 반응"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "새 이메일 첨부 파일"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments; if not set, then all attachments are reported; if set, then only attachments matching the pattern are reported; by default, the glob pattern is case-insensitive; to make it case-sensitive, set the `ignore_case` option to `false`",
+          "message": "첨부 파일과 일치시킬 선택적 파일 이름 패턴(glob)입니다. 설정하지 않으면 모든 첨부 파일이 보고됩니다. 설정하면 패턴과 일치하는 첨부 파일만 보고됩니다. 기본적으로 glob 패턴은 대소문자를 구분하지 않으며, 대소문자를 구분하도록 하려면 `ignore_case` 옵션을 `false`(으)로 설정하십시오."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "첨부 파일 패턴"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern (glob) for matching attachments",
+          "message": "첨부 파일과 일치시킬 선택적 파일 이름 패턴(glob)"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
+          "message": "이벤트를 발생시킨 후 일치하는 각 메시지를 영구적으로 삭제하시겠습니까? 모든 첨부 파일이 첨부 기준을 충족하지 못해 이벤트를 전혀 발생시키지 않은 메시지를 포함하여 일치하는 모든 메시지가 삭제됩니다.\n\n**이벤트 소비자가 이후에 메시지를 어떻게 처리하든 상관없이 이벤트가 발생하자마자 메시지가 삭제됩니다.** 처리 중간에 실패하거나 시간 초과가 발생하거나 재시작된 소비자는 이미 첨부 파일의 유일한 사본을 잃어버리게 되며, Gmail 삭제는 취소할 수 없습니다.\n\n원본 메시지를 손실해서는 안 되는 워크로드의 경우, 이 옵션을 설정하지 않고 처리가 성공한 후 각 첨부 파일 이벤트에 포함된 `message_id`와 함께 소비자의 `delete-message` 또는 `trash-message` 작업을 사용하십시오."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "메시지를 삭제하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its events?",
+          "message": "이벤트를 발생시킨 후 일치하는 각 메시지를 영구적으로 삭제하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
+          "message": "glob에서 대소문자 무시. `attachment_glob`이(가) 설정되지 않은 경우 무시됩니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Glob Case?",
+          "message": "Glob 대소문자를 무시하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Ignore case in globs",
+          "message": "glob에서 대소문자 무시"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "한 폴링 주기에서 전달되는 최대 메시지 수입니다. 설정하지 않거나 `0`이면 제한이 없음을 의미합니다.\n\n이 제한은 백로그의 **가장 오래된** 항목부터 적용되므로 감시 커서가 연속적으로 전진하며 나머지 메시지는 건너뛰지 않고 다음 주기에서 전달됩니다. 백로그가 많이 쌓일 수 있는 경우 단일 주기가 수행할 수 있는 작업량을 제한하는 데 사용합니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "주기당 최대 메시지 수"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "한 폴링 주기에서 전달되는 최대 메시지 수"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "일치하는 가장 최신 메시지 하나만 유지"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "전체 최신 항목"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "각 Gmail 스레드에서 가장 최신 메시지 유지"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "스레드별 최신 항목"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "각 그룹에서 최신 메시지가 선택되기 전에 일치하는 메시지를 그룹화하는 방법입니다. `snapshot_mode`이(가) 설정되어 있지 않으면 무시됩니다.\n\n- `all`: 하나의 글로벌 그룹으로, 각 주기는 가장 최신의 일치하는 메시지를 담은 단일 이벤트를 발생시킵니다.\n- `thread`: Gmail 스레드별로 그룹화하여, 각 주기는 해당 스레드의 최신 메시지를 담은 스레드당 하나의 이벤트를 발생시킵니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "스냅샷 그룹화"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "최신 메시지가 선택되기 전에 메시지를 그룹화하는 방법"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "백로그를 다시 재생하는 대신 최신 메시지로 축소합니다.\n\n일부 피드는 로그가 아닌 스냅샷입니다. 즉, 각 메시지가 현재 상태를 다시 나타내므로 서비스 중단 후에는 마지막 메시지만 처리할 가치가 있습니다. 이 옵션을 설정하면 각 폴링 주기는 가장 최신의 일치하는 메시지를 담은 그룹당 하나의 이벤트(`snapshot_key` 참조)를 발생시키고, 축소되어 생략된 메시지를 이벤트의 `superseded_count` 및 `superseded_ids` 필드에 보고합니다. 축소된 메시지는 전체 내용을 가져오지 않으므로 백로그가 많더라도 메시지별로 한 번씩이 아닌 단 한 번의 메시지 조회 비용만 발생합니다.\n\n모든 메시지를 처리해야 하는 피드의 경우 이 옵션을 설정하지 마십시오."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "최신 메시지만 처리하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "백로그를 다시 재생하는 대신 최신 메시지로 축소하시겠습니까?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "일치하는 메시지의 시작 날짜 및 시간을 설정합니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "시작일"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "일치하는 메시지의 시작 날짜 및 시간을 설정합니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "대체된 메시지를 영구적으로 삭제"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "영구 삭제"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "대체된 메시지를 사서함에 보관"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "유지"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "대체된 메시지를 Gmail 휴지통으로 이동"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "휴지통으로 이동"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "`snapshot_mode`에 의해 축소되어 생략된 메시지를 처리하는 방법입니다. `snapshot_mode`이(가) 설정되어 있지 않으면 무시됩니다.\n\n- `ignore`: 감사용으로 보관되도록 사서함에 그대로 둡니다. 감시 커서가 이미 해당 메시지를 지나갔으므로 다시 이벤트로 발생하지 않습니다.\n- `trash`: 나중에 복구할 수 있도록 Gmail 휴지통으로 이동합니다.\n- `delete`: 영구적으로 삭제합니다. **이 작업은 취소할 수 없습니다.**\n\n삭제에 실패하면 로그에 기록되고 메시지는 그대로 유지됩니다. 이벤트가 이미 발생했고 감시 커서가 이미 지나갔으므로 재시도되지 않습니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "대체된 메시지 작업"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "축소되어 생략된 메시지를 처리하는 방법"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "일치하는 이메일을 확인하는 주기(초 단위)입니다. 최솟값은 30이며, 더 작은 숫자를 입력하면 최소 폴링 주기로 설정됩니다."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "일치하는 이메일을 확인하는 주기(초 단위)"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "일치하는 메시지를 찾기 위한 Gmail 검색 기준입니다(예: `in:inbox to:me@gmail.com subject:hello is:unread`)."
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "일치하는 메시지를 찾기 위한 Gmail 검색 기준"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "새 이메일 첨부 파일에 반응"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "메시지를 휴지통으로 이동합니다. 메시지가 사서함에서 사라지지만 Gmail에서 휴지통을 비우기 전까지는 복구할 수 있으므로, 워크플로 처리가 완료된 메시지를 안전하게 정리할 수 있는 방법입니다.\n\n처리가 성공적으로 완료된 후, 이벤트에 포함된 `message_id`와(과) 함께 `watch` 또는 `watch-attachment` 이벤트의 컨슈머에서 이 작업을 사용하세요. `delete_messages`(으)로 감시 자체에서 삭제하면 컨슈머의 성공 여부와 관계없이 이벤트가 발생하는 즉시 메시지가 영구 삭제됩니다."
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "메시지를 휴지통으로 이동"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.desc": {
+          "source": "The ID of the message to move to the trash; watch events carry this value as `message_id`",
+          "message": "휴지통으로 이동할 메시지의 ID입니다. 감시 이벤트는 이 값을 `message_id`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.short_desc": {
+          "source": "The ID of the message to move to the trash",
+          "message": "휴지통으로 이동할 메시지의 ID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Move a message to the trash, where it can still be recovered",
+          "message": "메시지를 복구 가능한 휴지통으로 이동"
+        },
+        "app.R21haWw.desc": {
+          "source": "Gmail services",
+          "message": "Gmail 서비스"
+        },
+        "app.R21haWw.display_name": {
+          "source": "Gmail",
+          "message": "Gmail"
+        },
+        "app.R21haWw.short_desc": {
+          "source": "Gmail services",
+          "message": "Gmail 서비스"
+        }
+      }
+    }
+  }
+}

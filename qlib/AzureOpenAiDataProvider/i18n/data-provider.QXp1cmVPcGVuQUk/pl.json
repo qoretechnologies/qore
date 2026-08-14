@@ -1,0 +1,549 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Generate a chat completion via an Azure OpenAI Service deployment. The deployment name in the request body is resolved into the URL (`/openai/deployments/{deployment}/chat/completions?api-version=...`); the body is otherwise identical to the public OpenAI chat-completions API.",
+          "message": "Wygeneruj dopełnienie czatu za pośrednictwem wdrożenia usługi Azure OpenAI. Nazwa wdrożenia w treści żądania jest tłumaczona na adres URL (`/openai/deployments/{deployment}/chat/completions?api-version=...`); treść jest poza tym identyczna z publicznym API chat-completions w OpenAI."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Uzupełnianie czatu"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.desc": {
+          "source": "The Azure OpenAI deployment name to call. Each Azure resource defines one or more deployments, each bound to a specific underlying OpenAI model (e.g. `gpt-4o`, `gpt-4o-mini`, `o3`)",
+          "message": "Nazwa wdrożenia Azure OpenAI do wywołania. Każdy zasób platformy Azure definiuje co najmniej jedno wdrożenie, z których każde jest powiązane z określonym modelem bazowym OpenAI (np. `gpt-4o`, `gpt-4o-mini`, `o3`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.display_name": {
+          "source": "Deployment",
+          "message": "Wdrożenie"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI deployment name",
+          "message": "Nazwa wdrożenia Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens to generate in the response",
+          "message": "Maksymalna liczba tokenów do wygenerowania w odpowiedzi"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maksymalna liczba tokenów"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to generate",
+          "message": "Maksymalna liczba tokenów do wygenerowania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "Conversation history in OpenAI chat-completion shape; each entry is a hash with `role` (`system` / `user` / `assistant` / `tool`) and `content` (string or list of content parts for multimodal)",
+          "message": "Historia konwersacji w formacie OpenAI chat-completion; każdy wpis jest hashem z parametrami `role` (`system` / `user` / `assistant` / `tool`) oraz `content` (ciąg znaków lub lista części zawartości w przypadku treści multimodalnych)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Wiadomości"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "OpenAI chat-completion messages",
+          "message": "Wiadomości OpenAI chat-completion"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Seed for deterministic sampling (best-effort)",
+          "message": "Ziarno dla próbkowania deterministycznego (best-effort)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Ziarno"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic-sampling seed",
+          "message": "Ziarno próbkowania deterministycznego"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "Up to four stop sequences that terminate generation",
+          "message": "Maksymalnie cztery sekwencje zatrzymujące, które kończą generowanie"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "Stop sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Structured-output shape; `{\"type\": \"json_object\"}` for JSON mode or `{\"type\": \"json_schema\", \"json_schema\": {...}}` for strict-schema responses",
+          "message": "Format danych wyjściowych o określonej strukturze; `{\"type\": \"json_object\"}` dla trybu JSON lub `{\"type\": \"json_schema\", \"json_schema\": {...}}` dla odpowiedzi ze ścisłym schematem"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Structured-output shape",
+          "message": "Format danych wyjściowych o określonej strukturze"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool-selection policy: `\"auto\"`, `\"none\"`, `\"required\"`, or `{type:\"function\",function:{name}}`",
+          "message": "Zasada wyboru narzędzia: `\"auto\"`, `\"none\"`, `\"required\"` lub `{type:\"function\",function:{name}}`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool-selection policy",
+          "message": "Zasada wyboru narzędzia"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "Function-calling tool definitions; each tool is `{\"type\": \"function\", \"function\": {name, description, parameters: <JSON schema>}}`",
+          "message": "Definicje narzędzi do wywoływania funkcji; każde narzędzie to `{\"type\": \"function\", \"function\": {name, description, parameters: <JSON schema>}}`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "Function-calling tool definitions",
+          "message": "Definicje narzędzi do wywoływania funkcji"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling probability mass (0..1)",
+          "message": "Masa prawdopodobieństwa próbkowania jądrowego (0..1)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass",
+          "message": "Masa prawdopodobieństwa próbkowania jądrowego"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature (0..2); 0 is deterministic",
+          "message": "Temperatura próbkowania (0..2); 0 oznacza determinizm"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
+          "source": "Stable identifier for the end-user making the request (passed to Azure abuse monitoring)",
+          "message": "Stabilny identyfikator użytkownika końcowego wykonującego żądanie (przekazywany do monitorowania nadużyć Azure)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.short_desc": {
+          "source": "End-user identifier for abuse tracking",
+          "message": "Identyfikator użytkownika końcowego do śledzenia nadużyć"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion via an Azure OpenAI deployment",
+          "message": "Generuj dopełnienie czatu za pośrednictwem wdrożenia Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.desc": {
+          "source": "Generate dense vector embeddings via an Azure OpenAI Service deployment bound to a `text-embedding-*` model. Accepts either a single string or a list of strings as `input` for batch embedding; supports the `dimensions` knob on `text-embedding-3-*` models for shorter (cheaper) vectors.",
+          "message": "Generuj gęste osadzenia wektorowe za pośrednictwem wdrożenia usługi Azure OpenAI powiązanego z modelem `text-embedding-*`. Przyjmuje pojedynczy ciąg znaków lub listę ciągów znaków jako `input` do przetwarzania wsadowego; obsługuje parametr `dimensions` w modelach `text-embedding-3-*` dla krótszych (tańszych) wektorów."
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.display_name": {
+          "source": "Embedding",
+          "message": "Osadzenie"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.desc": {
+          "source": "The Azure OpenAI deployment name bound to an embedding model (e.g. `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`)",
+          "message": "Nazwa wdrożenia Azure OpenAI powiązana z modelem osadzania (np. `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.display_name": {
+          "source": "Deployment",
+          "message": "Wdrożenie"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI embedding-model deployment name",
+          "message": "Nazwa wdrożenia modelu osadzania Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Number of dimensions in the output embedding (supported by `text-embedding-3-*` models)",
+          "message": "Liczba wymiarów w wyjściowym osadzeniu (obsługiwana przez modele `text-embedding-3-*`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Wymiary"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Output embedding dimension",
+          "message": "Wymiar wyjściowego osadzenia"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.desc": {
+          "source": "Text to embed; either a single string or a list of strings for batch embedding",
+          "message": "Tekst do osadzenia; pojedynczy ciąg znaków lub lista ciągów znaków do osadzania wsadowego"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Dane wejściowe"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Tekst(y) do osadzenia"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.desc": {
+          "source": "Stable end-user identifier passed to abuse monitoring",
+          "message": "Stabilny identyfikator użytkownika końcowego przekazywany do monitorowania nadużyć"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identyfikator użytkownika końcowego"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.short_desc": {
+          "source": "Generate text embeddings via an Azure OpenAI deployment",
+          "message": "Generuj osadzenia tekstu za pośrednictwem wdrożenia Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Azure OpenAI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie API HTTP / REST do **Azure OpenAI** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną do bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako bezpośrednie akcje w tej aplikacji."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Azure OpenAI",
+          "message": "Wykonaj niestandardowe wywołanie API do Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.desc": {
+          "source": "**Azure OpenAI Service** is Microsoft's enterprise-hosted offering of the OpenAI models (GPT-4o, GPT-4o-mini, o3, text-embedding-3) with Azure-grade compliance, networking, and identity:\n\n- **Chat completions** — same wire shape as the public OpenAI API, accessed through deployment-routed URLs\n- **Embeddings** — `text-embedding-3-small` / `-large` / `ada-002` deployments\n- **Three authentication modes** — api-key header, Entra ID (Azure AD) client credentials, or managed-identity (system or user-assigned)\n- **Azure Content Safety** annotations on the prompt and completion side returned alongside the OpenAI-shape response\n- **Per-deployment routing** — one connection can target any deployment defined in the resource without re-authentication\n\nTokens for Entra modes are cached and refreshed transparently by `AzureAuth` so callers pay the token-exchange cost once per refresh window.\n\nProject: <https://azure.microsoft.com/en-us/products/ai-services/openai-service/>",
+          "message": "**Azure OpenAI Service** to oferowana przez firmę Microsoft dla przedsiębiorstw usługa modeli OpenAI (GPT-4o, GPT-4o-mini, o3, text-embedding-3) z zapewnieniem zgodności, sieci i tożsamości na poziomie platformy Azure:\n\n- **Dopełnienia czatu** — taka sama struktura przesyłu jak w publicznym API OpenAI, dostępna za pośrednictwem adresów URL routowanych do wdrożeń\n- **Osadzenia (embeddings)** — wdrożenia `text-embedding-3-small` / `-large` / `ada-002`\n- **Trzy tryby uwierzytelniania** — nagłówek api-key, poświadczenia klienta Entra ID (Azure AD) lub tożsamość zarządzana (przypisana przez system lub użytkownika)\n- **Adnotacje Azure Content Safety** po stronie promptu i dopełnienia zwracane wraz z odpowiedzią w formacie OpenAI\n- **Routing dla poszczególnych wdrożeń** — jedno połączenie może obsługiwać dowolne wdrożenie zdefiniowane w zasobie bez ponownego uwierzytelniania\n\nTokeny dla trybów Entra są buforowane i transparentnie odświeżane przez `AzureAuth`, dzięki czemu wywołujący ponoszą koszt wymiany tokena tylko raz na okno odświeżania.\n\nProjekt: <https://azure.microsoft.com/en-us/products/ai-services/openai-service/>"
+        },
+        "app.QXp1cmVPcGVuQUk.display_name": {
+          "source": "Azure OpenAI",
+          "message": "Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.short_desc": {
+          "source": "Microsoft Azure OpenAI Service",
+          "message": "Usługa Microsoft Azure OpenAI"
+        }
+      }
+    }
+  }
+}

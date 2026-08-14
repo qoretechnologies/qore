@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "서버 파일 시스템의 파일 복사"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
+          "source": "Copy File",
+          "message": "파일 복사"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "심볼릭 링크를 따를지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
+          "source": "Follow Symlinks",
+          "message": "심볼릭 링크 추적"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "심볼릭 링크를 따를지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "기존 대상 파일을 덮어쓸지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "덮어쓰기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "기존 대상 파일을 덮어쓸지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "원본 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "소스"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "원본 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "대상 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "대상"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "대상 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "서버 파일 시스템의 파일 복사"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "서버 파일 시스템에 파일 생성"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
+          "source": "Create File",
+          "message": "파일 생성"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.desc": {
+          "source": "The string or binary data for the file",
+          "message": "파일의 문자열 또는 바이너리 데이터"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "데이터"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.short_desc": {
+          "source": "The string or binary data for the file",
+          "message": "파일의 문자열 또는 바이너리 데이터"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0664`)",
+          "message": "새 파일의 모드(기본값 `0664`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "모드"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0664')",
+          "message": "새 파일의 모드(기본값 '0664')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "서버 파일 시스템에 파일 생성"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "서버 파일 시스템에서 파일 가져오기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
+          "source": "Get File",
+          "message": "파일 가져오기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "`text` = `True`인 경우 사용할 문자열 인코딩입니다(기본값: `UTF-8`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "인코딩"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "'text' = 'True'인 경우 사용할 문자열 인코딩(기본값: 'UTF-8')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "반환되는 데이터의 최대 길이(바이트 단위)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
+          "source": "Max Len",
+          "message": "최대 길이"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "반환되는 데이터의 최대 길이(바이트 단위)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.desc": {
+          "source": "The path to the file",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.short_desc": {
+          "source": "The path to the file",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "`True`인 경우 파일이 문자열로 반환되고, `False`(기본값)인 경우 바이너리 데이터로 반환됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "'True'인 경우 파일이 문자열로 반환되고, 'False'(기본값)인 경우 바이너리 데이터로 반환됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "서버 파일 시스템에서 파일 가져오기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "서버 파일 시스템의 파일 삭제"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
+          "source": "Delete File",
+          "message": "파일 삭제"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "서버 파일 시스템의 파일 삭제"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "서버 파일 시스템의 폴더에 있는 파일 및 하위 디렉터리 나열"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
+          "source": "List Files",
+          "message": "파일 목록 보기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "서버 파일 시스템의 폴더에 있는 파일 및 하위 디렉터리 나열"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "서버 파일 시스템의 파일 또는 디렉터리 이동"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
+          "source": "Move File",
+          "message": "파일 이동"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "기존 대상 파일을 덮어쓸지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "덮어쓰기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "기존 대상 파일을 덮어쓸지 여부"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "원본 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "소스"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "원본 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "대상 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "대상"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "대상 파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "서버 파일 시스템의 파일 또는 디렉터리 이동"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "서버 파일 시스템에 디렉터리를 생성합니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
+          "source": "Create Directory",
+          "message": "디렉터리 생성"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0775`)",
+          "message": "새 파일의 모드(기본값: `0775`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "모드"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0775')",
+          "message": "새 파일의 모드(기본값: '0775')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "서버 파일 시스템에 디렉터리를 생성합니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "서버 파일 시스템의 파일 또는 디렉터리에 대한 세부 정보를 가져옵니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
+          "source": "Get Info",
+          "message": "정보 가져오기"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
+          "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "`True`인 경우, 대상 경로가 심볼릭 링크이면 대상 대신 링크 자체에 대한 정보가 반환됩니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
+          "source": "Symlink",
+          "message": "심볼릭 링크"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "'True'인 경우, 대상 경로가 심볼릭 링크이면 대상 대신 링크 자체에 대한 정보가 반환됩니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "파일 경로"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "서버 파일 시스템의 파일 또는 디렉터리에 대한 세부 정보를 가져옵니다"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "서버 파일 시스템에 대한 액세스"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "서버 파일 시스템"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "서버 파일 시스템에 대한 액세스"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.UG9zdGdyZVNRTA.desc": {
+          "source": "Create and manage connections to a PostgreSQL database server",
+          "message": "PostgreSQL 데이터베이스 서버에 대한 연결 생성 및 관리"
+        },
+        "app.UG9zdGdyZVNRTA.display_name": {
+          "source": "PostgreSQL",
+          "message": "PostgreSQL"
+        },
+        "app.UG9zdGdyZVNRTA.short_desc": {
+          "source": "PostgreSQL database server",
+          "message": "PostgreSQL 데이터베이스 서버"
+        }
+      }
+    }
+  }
+}

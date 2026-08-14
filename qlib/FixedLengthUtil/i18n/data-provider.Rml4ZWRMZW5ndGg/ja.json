@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "特定のファイルロケーションから固定長ファイルデータを読み取る"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
+          "source": "Read Fixed-Length Data",
+          "message": "固定長データの読み取り"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "`date` フィールドを解析するためのデフォルトの日付形式。このオプションの詳細については、[Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) を参照してください（例: `DD/MM/YYYY HH:mm:SS`）"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "日付形式"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "日付値の入力解析用デフォルトマスク"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data)",
+          "message": "入力ファイル（および出力データ）の文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "入力文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "入力ファイルの文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "改行文字。指定されていない場合、改行文字は自動検出されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "改行文字"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "行末/レコード末尾文字"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "`true` の場合、空行は無視されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "空行を無視"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "true の場合、空行は無視されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "`int`、`float`、および `number` フィールドのデフォルト形式。桁区切り文字の後に小数点区切り文字を指定する文字列（例: ヨーロッパ大陸スタイルの数値の場合は `.,`）"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "数値形式"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "int、float、および number フィールドを解析するためのデフォルトの数値形式"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "固定長レコード仕様ハッシュ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "レコード記述"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "固定長レコード仕様ハッシュ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.desc": {
+          "source": "The input stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "固定長データの入力ストリーム。「path」と排他です"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "入力ストリーム"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for fixed-length data",
+          "message": "固定長データの入力ストリームオブジェクト"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "固定長データへのパス。「stream」と排他です。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Location",
+          "message": "入力ロケーション"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "入力ファイルの場所"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "日付を解析するときに使用するタイムゾーン地域（例: `Europe/Prague`）。有効な値については [TZ identifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) を参照してください"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "タイムゾーン地域"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "日付の解析時に使用するタイムゾーン地域"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "特定のファイルロケーションから固定長ファイルデータを読み取る"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "固定長ファイルデータを特定のファイルロケーションに書き込みます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
+          "source": "Write Fixed-Length Data",
+          "message": "固定長データの書き込み"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for `date` value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "`date` 値の出力フォーマット用のデフォルトマスク。詳細は [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) を参照してください"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "日付形式"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "日付値出力フォーマット用のデフォルトマスク"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "データの出力文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "出力文字エンコーディング"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "行末 / レコード末尾文字。指定されていない場合は、現在のプラットフォームの標準が使用されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "改行文字"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "行末/レコード末尾文字"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.desc": {
+          "source": "Additional writer file open flags; `O_WRONLY | O_CREAT` is used by default; use `O_EXCL` to ensure not to overwrite the target or `O_TRUNC` to replace any existing file or `O_APPEND` to append to an existing file",
+          "message": "追加のライターファイルオープンフラグ。デフォルトでは `O_WRONLY | O_CREAT` が使用されます。ターゲットを上書きしないようにするには `O_EXCL` を、既存のファイルを置換するには `O_TRUNC` を、既存のファイルに追加するには `O_APPEND` を使用します"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.display_name": {
+          "source": "File Flags",
+          "message": "ファイルフラグ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.short_desc": {
+          "source": "Additional writer file open flags",
+          "message": "追加のライターファイルオープンフラグ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "`int`、`float`、および `number` フィールドのデフォルト出力フォーマット。次のような1〜3フィールドの数値書式文字列です: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; 例: `\".,3\"` (桁区切り記号に `.`、小数点記号に `,`、小数点以下3桁)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "出力数値フォーマット"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "'int'、'float'、および 'number' フィールドのデフォルト出力フォーマット"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "固定長レコード仕様ハッシュ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "レコード記述"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "固定長レコード仕様ハッシュ"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "an output stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "固定長データの出力ストリーム。「path」と排他です"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "出力ストリーム"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the fixed-length data",
+          "message": "固定長データの出力ストリームオブジェクト"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9",
+          "message": "固定長データへのパス。「stream」と排他です。出力ロケーションは [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9 の呼び出しによって処理されます"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output Path",
+          "message": "出力パス"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the output file",
+          "message": "出力ファイルの書き込み先"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.desc": {
+          "source": "Controls whether to replace tabs with spaces, and its value determines how many spaces to output in place of one tab character",
+          "message": "タブをスペースに置換するかどうかを制御し、その値によってタブ1文字の代わりに出力するスペースの数を決定します"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.display_name": {
+          "source": "Convert Tabs to Spaces",
+          "message": "タブをスペースに変換"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.short_desc": {
+          "source": "Convert tabs to spaces automatically",
+          "message": "タブを自動的にスペースに変換"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.desc": {
+          "source": "Controls whether to truncate an output field value if it's bigger than its specified `length`; the default is `false`",
+          "message": "出力フィールド値が指定された `length` より大きい場合に切り捨てるかどうかを制御します。デフォルトは `false` です"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate Long Fields",
+          "message": "長いフィールドを切り捨てる"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.short_desc": {
+          "source": "Truncate field values automatically",
+          "message": "フィールド値を自動的に切り捨てる"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "固定長ファイルデータを特定のファイルロケーションに書き込みます"
+        },
+        "app.Rml4ZWRMZW5ndGg.desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "固定長ファイルデータの読み取りと書き込み"
+        },
+        "app.Rml4ZWRMZW5ndGg.display_name": {
+          "source": "Fixed-Length Files",
+          "message": "固定長ファイル"
+        },
+        "app.Rml4ZWRMZW5ndGg.short_desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "固定長ファイルデータの読み取りと書き込み"
+        }
+      }
+    }
+  }
+}

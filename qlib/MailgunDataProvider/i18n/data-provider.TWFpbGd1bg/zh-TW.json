@@ -1,0 +1,1053 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.desc": {
+          "source": "Fires when a recipient marks an email as spam. Consider removing the recipient from future mailings to maintain sender reputation.",
+          "message": "當收件者將電子郵件標記為垃圾郵件時觸發。建議將該收件者從日後的郵件清單中移除，以維持寄件者信譽。"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
+          "source": "Spam Complaint",
+          "message": "垃圾郵件投訴"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for spam complaint events",
+          "message": "選取要監控垃圾郵件投訴事件的網域"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {
+          "source": "Trigger when an email is marked as spam",
+          "message": "當電子郵件被標記為垃圾郵件時觸發"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.desc": {
+          "source": "Fires when a recipient clicks a link in an email. Provides information about the clicked URL, recipient, and client information.",
+          "message": "當收件者點擊電子郵件中的連結時觸發。提供有關被點擊之 URL、收件者及用戶端資訊。"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "已點擊電子郵件連結"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for click events",
+          "message": "選取要監控點擊事件的網域"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
+          "source": "Trigger when a link in an email is clicked",
+          "message": "當點擊電子郵件中的連結時觸發"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.desc": {
+          "source": "Create a new inbound email route for processing incoming emails. Routes use expressions to match incoming messages and execute actions like forwarding or storing.",
+          "message": "建立新的輸入電子郵件路由以處理傳入的電子郵件。路由使用運算式來比對傳入郵件，並執行如轉發或儲存等動作。"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
+          "source": "Create Route",
+          "message": "建立路由"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.desc": {
+          "source": "Actions to execute when the expression matches. Examples:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()",
+          "message": "運算式符合時要執行的動作。範例：\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.display_name": {
+          "source": "Actions",
+          "message": "動作"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.short_desc": {
+          "source": "Route actions",
+          "message": "路由動作"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what this route does",
+          "message": "此路由功能的說明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Route description",
+          "message": "路由說明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.desc": {
+          "source": "The expression used to match incoming messages. Examples:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()",
+          "message": "用於比對傳入郵件的運算式。範例：\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.display_name": {
+          "source": "Expression",
+          "message": "運算式"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.short_desc": {
+          "source": "Matching expression",
+          "message": "比對運算式"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.desc": {
+          "source": "Priority of the route (lower number = higher priority, default: 0)",
+          "message": "路由的優先順序（數字越小 = 優先順序越高，預設值：0）"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先順序"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.short_desc": {
+          "source": "Route priority",
+          "message": "路由優先順序"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
+          "source": "Create an inbound email route",
+          "message": "建立輸入電子郵件路由"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
+          "message": "將新成員新增至 Mailgun 郵寄清單。支援自訂變數與 upsert 模式。"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Add Mailing List Member",
+          "message": "新增郵寄清單成員"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.desc": {
+          "source": "The email address of the member to add",
+          "message": "要新增的成員電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.display_name": {
+          "source": "Member Email",
+          "message": "成員電子郵件"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to add",
+          "message": "要新增的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to add the member to",
+          "message": "選擇要新增成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to add the member to",
+          "message": "要新增成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.desc": {
+          "source": "The name of the member",
+          "message": "成員姓名"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.short_desc": {
+          "source": "Member's name",
+          "message": "成員姓名"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Whether the member is subscribed (default: `True`)",
+          "message": "成員是否已訂閱（預設：`True`）"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "已訂閱"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Subscription status",
+          "message": "訂閱狀態"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.desc": {
+          "source": "If `True`, update the member if they already exist (default: `False`)",
+          "message": "若為 `True`，則在成員已存在時進行更新（預設：`False`）"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.display_name": {
+          "source": "Upsert",
+          "message": "Upsert"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.short_desc": {
+          "source": "Update if exists",
+          "message": "若存在則更新"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.desc": {
+          "source": "Custom JSON variables to associate with the member",
+          "message": "與成員建立關聯的自訂 JSON 變數"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.display_name": {
+          "source": "Variables",
+          "message": "變數"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.short_desc": {
+          "source": "Custom variables",
+          "message": "自訂變數"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Add a member to a mailing list",
+          "message": "將成員新增至郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Retrieve a specific member from a Mailgun mailing list by their email address.",
+          "message": "透過電子郵件地址從 Mailgun 郵寄清單中擷取特定成員。"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Get Mailing List Member",
+          "message": "取得郵寄清單成員"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to get the member from",
+          "message": "選擇要從中取得成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to get the member from",
+          "message": "要從中取得成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to retrieve",
+          "message": "要擷取的成員電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "成員電子郵件"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to retrieve",
+          "message": "要擷取的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Get a member from a mailing list",
+          "message": "從郵寄清單取得成員"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Remove a member from a Mailgun mailing list by their email address.",
+          "message": "透過電子郵件地址從 Mailgun 郵寄清單中移除成員。"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Delete Mailing List Member",
+          "message": "刪除郵寄清單成員"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to remove the member from",
+          "message": "選擇要從中移除成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to remove the member from",
+          "message": "要從中移除成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to remove",
+          "message": "要移除的成員電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "成員電子郵件"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to remove",
+          "message": "要移除的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Remove a member from a mailing list",
+          "message": "從郵寄清單中移除成員"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.desc": {
+          "source": "Fires when an email is successfully delivered to the recipient's mail server.",
+          "message": "當電子郵件成功傳遞至收件者的郵件伺服器時觸發。"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
+          "source": "Email Delivered",
+          "message": "電子郵件已傳遞"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for delivery events",
+          "message": "選擇要監控傳遞事件的網域"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
+          "source": "Trigger when an email is delivered",
+          "message": "在電子郵件傳遞時觸發"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.desc": {
+          "source": "Fires when a recipient opens an email. Provides information about the recipient and client information.",
+          "message": "當收件者開啟電子郵件時觸發。提供有關收件者與用戶端的資訊。"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "電子郵件已開啟"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for open events",
+          "message": "選擇要監控開啟事件的網域"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
+          "source": "Trigger when an email is opened",
+          "message": "在電子郵件開啟時觸發"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains configured in your Mailgun account with optional filtering by state.",
+          "message": "列出 Mailgun 帳戶中設定的所有網域，並可選擇依狀態進行篩選。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "列出網域"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of domains to return",
+          "message": "要傳回的網域數量上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active domains",
+          "message": "使用中的網域"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled domains",
+          "message": "已停用的網域"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOnVudmVyaWZpZWQ.desc": {
+          "source": "Unverified domains",
+          "message": "未驗證的網域"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.desc": {
+          "source": "Filter domains by state (`active`, `unverified`, `disabled`)",
+          "message": "依狀態篩選網域（`active`、`unverified`、`disabled`）"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "州/省"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.short_desc": {
+          "source": "Filter by domain state",
+          "message": "依網域狀態篩選"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List all sending domains",
+          "message": "列出所有寄件網域"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.desc": {
+          "source": "List all members of a Mailgun mailing list with optional filtering by subscription status.",
+          "message": "列出 Mailgun 郵寄清單的所有成員，並可選擇依訂閱狀態進行篩選。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "List Mailing List Members",
+          "message": "列出郵寄清單成員"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of members to return",
+          "message": "傳回的最大成員數"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to list members from",
+          "message": "選擇要列出成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to list members from",
+          "message": "要列出成員的郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Filter members by subscription status",
+          "message": "依訂閱狀態篩選成員"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "已訂閱"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "依訂閱狀態篩選"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "List members of a mailing list",
+          "message": "列出郵寄清單的成員"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.desc": {
+          "source": "List all mailing lists configured in your Mailgun account.",
+          "message": "列出 Mailgun 帳戶中設定的所有郵寄清單。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
+          "source": "List Mailing Lists",
+          "message": "列出郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of mailing lists to return",
+          "message": "要傳回的郵寄清單數量上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
+          "source": "List all mailing lists",
+          "message": "列出所有郵寄清單"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.desc": {
+          "source": "List all configured inbound email routes for processing incoming emails.",
+          "message": "列出所有設定用於處理傳入電子郵件的輸入電子郵件路由。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
+          "source": "List Routes",
+          "message": "列出路由"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of routes to return",
+          "message": "要傳回的路由數量上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
+          "source": "List all inbound email routes",
+          "message": "列出所有輸入電子郵件路由"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mailgun** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Mailgun** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊返回。\n\n對於此應用程式上尚未公開為一級動作的端點，請使用此動作。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mailgun",
+          "message": "向 Mailgun 發出自訂 API 呼叫"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send a transactional email through Mailgun. Supports HTML content, text content, tracking options, and custom headers.",
+          "message": "透過 Mailgun 傳送交易式電子郵件。支援 HTML 內容、文字內容、追蹤選項及自訂標頭。"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send Email",
+          "message": "傳送電子郵件"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "Carbon copy recipients",
+          "message": "副本收件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "副本"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "副本收件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "Blind carbon copy recipients",
+          "message": "密件副本收件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "密件副本"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "密件副本收件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.desc": {
+          "source": "The sender email address. Can include a name: 'Name <email@domain.com>'",
+          "message": "寄件者電子郵件地址。可包含姓名：'Name <email@domain.com>'"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.short_desc": {
+          "source": "Sender email address",
+          "message": "寄件者電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.desc": {
+          "source": "Email address for replies",
+          "message": "用於回覆的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.display_name": {
+          "source": "Reply-To",
+          "message": "Reply-To"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.short_desc": {
+          "source": "Reply-to address",
+          "message": "回覆地址"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.desc": {
+          "source": "HTML version of the email body",
+          "message": "電子郵件主體的 HTML 版本"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.display_name": {
+          "source": "HTML Body",
+          "message": "HTML 內文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.short_desc": {
+          "source": "HTML body",
+          "message": "HTML 內文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.desc": {
+          "source": "Tags for message categorization and tracking",
+          "message": "用於郵件分類與追蹤的標籤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.short_desc": {
+          "source": "Message tags",
+          "message": "郵件標籤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.desc": {
+          "source": "Enable tracking for this message",
+          "message": "為此郵件啟用追蹤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.display_name": {
+          "source": "Enable Tracking",
+          "message": "啟用追蹤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.short_desc": {
+          "source": "Enable click/open tracking",
+          "message": "啟用點擊/開啟追蹤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.desc": {
+          "source": "Enable click tracking for this message",
+          "message": "為此郵件啟用點擊追蹤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.display_name": {
+          "source": "Track Clicks",
+          "message": "追蹤點擊"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.short_desc": {
+          "source": "Track link clicks",
+          "message": "追蹤連結點擊"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.desc": {
+          "source": "Enable open tracking for this message",
+          "message": "為此郵件啟用開啟追蹤"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.display_name": {
+          "source": "Track Opens",
+          "message": "追蹤開啟"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.short_desc": {
+          "source": "Track email opens",
+          "message": "追蹤電子郵件開啟"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The email subject line",
+          "message": "電子郵件主旨"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "主題"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "電子郵件主旨"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more recipient email addresses. Can include names.",
+          "message": "一個或多個收件者電子郵件地址。可包含姓名。"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "收件者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Recipient email address(es)",
+          "message": "收件者電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.desc": {
+          "source": "Plain text version of the email body",
+          "message": "電子郵件主體的純文字版本"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.display_name": {
+          "source": "Text Body",
+          "message": "文字內文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.short_desc": {
+          "source": "Plain text body",
+          "message": "純文字內文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email via Mailgun",
+          "message": "透過 Mailgun 傳送電子郵件"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.desc": {
+          "source": "Fires when an email permanently fails to deliver (hard bounce). This typically indicates an invalid email address or blocked domain.",
+          "message": "當電子郵件永久傳送失敗（硬退信）時觸發。這通常表示電子郵件地址無效或網域遭到封鎖。"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
+          "source": "Permanent Failure",
+          "message": "永久失敗"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for permanent failure events",
+          "message": "選取要監控永久失敗事件的網域"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
+          "source": "Trigger on permanent delivery failure (hard bounce)",
+          "message": "在永久傳送失敗（硬退信）時觸發"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.desc": {
+          "source": "Fires when an email temporarily fails to deliver (soft bounce). Mailgun will retry delivery automatically.",
+          "message": "當電子郵件暫時傳送失敗（軟退信）時觸發。Mailgun 將自動重試傳送。"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
+          "source": "Temporary Failure",
+          "message": "暫時失敗"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for temporary failure events",
+          "message": "選取要監控暫時失敗事件的網域"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
+          "source": "Trigger on temporary delivery failure (soft bounce)",
+          "message": "在暫時傳送失敗（軟退信）時觸發"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.desc": {
+          "source": "Fires when a recipient clicks an unsubscribe link in an email. Remove the recipient from your mailing list to comply with their preference.",
+          "message": "當收件者點擊電子郵件中的取消訂閱連結時觸發。請從您的郵寄清單中移除該收件者，以符合其偏好。"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.display_name": {
+          "source": "Unsubscribed",
+          "message": "已取消訂閱"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for unsubscribe events",
+          "message": "選取要監控取消訂閱事件的網域"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "要監控事件的網域"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Trigger when a recipient unsubscribes",
+          "message": "當收件者取消訂閱時觸發"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.desc": {
+          "source": "Validate an email address using Mailgun's email validation API. Returns information about deliverability, risk assessment, and suggested corrections.",
+          "message": "使用 Mailgun 的電子郵件驗證 API 驗證電子郵件地址。返回有關可送達性、風險評估和建議修正的資訊。"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
+          "source": "Validate Email",
+          "message": "驗證電子郵件"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.desc": {
+          "source": "The email address to validate",
+          "message": "要驗證的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to validate",
+          "message": "要驗證的電子郵件地址"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
+          "source": "Validate an email address",
+          "message": "驗證電子郵件地址"
+        },
+        "app.TWFpbGd1bg.desc": {
+          "source": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. This integration enables sending transactional emails, managing mailing lists, validating email addresses, and receiving webhooks for email events.\n\n**Features:**\n- Send transactional and marketing emails\n- Email validation to verify addresses\n- Mailing list management\n- Inbound email routing\n- Event tracking via webhooks",
+          "message": "Mailgun 是一項功能強大的電子郵件 API 服務，用於傳送、接收和追蹤電子郵件。此整合支援傳送交易式電子郵件、管理郵寄清單、驗證電子郵件地址以及接收電子郵件事件的 Webhook。\n\n**功能：**\n- 傳送交易式和行銷電子郵件\n- 驗證地址的電子郵件驗證\n- 郵寄清單管理\n- 傳入電子郵件路由\n- 透過 Webhook 進行事件追蹤"
+        },
+        "app.TWFpbGd1bg.display_name": {
+          "source": "Mailgun",
+          "message": "Mailgun"
+        },
+        "app.TWFpbGd1bg.short_desc": {
+          "source": "Mailgun email delivery and management service",
+          "message": "Mailgun 電子郵件傳送與管理服務"
+        }
+      }
+    }
+  }
+}

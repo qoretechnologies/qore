@@ -1,0 +1,2177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Constant Contact",
+          "message": "Constant Contact で新しいカスタムフィールドを作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "カスタムフィールドを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The label for the custom field",
+          "message": "カスタムフィールドのラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "ラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "カスタムフィールドのラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Date field",
+          "message": "日付フィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.desc": {
+          "source": "String field",
+          "message": "文字列フィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.desc": {
+          "source": "The type of the custom field",
+          "message": "カスタムフィールドのタイプ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.short_desc": {
+          "source": "Custom field type",
+          "message": "カスタムフィールドのタイプ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "新しいカスタムフィールドを作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Constant Contact",
+          "message": "Constant Contact で新しい連絡先を作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "連絡先を作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the contact",
+          "message": "連絡先の会社名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "連絡先の会社名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Created by the account owner",
+          "message": "アカウント所有者によって作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Created by the contact themselves",
+          "message": "連絡先本人によって作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact creation",
+          "message": "連絡先作成のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "作成ソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact creation",
+          "message": "連絡先作成のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "連絡先のカスタムフィールド値オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 形式の連絡先の記念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "記念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "記念日 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "連絡先の誕生日の日 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "誕生日の日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "誕生日の日 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "連絡先の誕生月 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "誕生月"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "誕生月 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "`address` およびオプションの `permission_to_send` を含むメールアドレスオブジェクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "メールアドレスオブジェクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "連絡先の名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "Job title of the contact",
+          "message": "連絡先の役職"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "連絡先の役職"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the contact",
+          "message": "連絡先の姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs to add the contact to",
+          "message": "連絡先を追加する連絡先リスト ID のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "リストメンバーシップ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs to add the contact to",
+          "message": "連絡先を追加する連絡先リスト ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "連絡先の住所オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "住所"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "連絡先の住所"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "連絡先の電話番号オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "連絡先電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs to apply to the contact",
+          "message": "連絡先に適用するタグ ID のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "タグ付け"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs to apply to the contact",
+          "message": "連絡先に適用するタグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Create a new contact list in Constant Contact",
+          "message": "Constant Contact で新しい連絡先リストを作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Create a Contact List",
+          "message": "連絡先リストを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "連絡先リストの説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "連絡先リストの説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "このリストをお気に入りに設定するかどうか"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "お気に入り"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "お気に入りに設定"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "連絡先リストの名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "連絡先リスト名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Create a new contact list",
+          "message": "新しい連絡先リストを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Create a new email campaign in Constant Contact",
+          "message": "Constant Contact で新しいメールキャンペーンを作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Create an Email Campaign",
+          "message": "メールキャンペーンを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.desc": {
+          "source": "List of campaign activity configurations including sender, subject, HTML content, and target lists",
+          "message": "送信者、件名、HTML コンテンツ、ターゲットリストを含むキャンペーンアクティビティ設定のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.display_name": {
+          "source": "Campaign Activities",
+          "message": "キャンペーンアクティビティ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.short_desc": {
+          "source": "List of campaign activity configurations",
+          "message": "キャンペーンアクティビティ設定のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the email campaign",
+          "message": "メールキャンペーンの名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "キャンペーン名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new email campaign",
+          "message": "新しいメールキャンペーンを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.desc": {
+          "source": "Create a new segment in Constant Contact",
+          "message": "Constant Contact で新しいセグメントを作成します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Create a Segment",
+          "message": "セグメントを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The name of the segment",
+          "message": "セグメントの名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "セグメント名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The criteria expression for the segment",
+          "message": "セグメントの条件式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "セグメント条件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "セグメント条件式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Create a new segment",
+          "message": "新しいセグメントを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Constant Contact",
+          "message": "Constant Contact で新しいタグを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "タグを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag",
+          "message": "タグの名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Tag created by the account owner",
+          "message": "アカウント所有者によって作成されたタグ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Tag created by the contact",
+          "message": "連絡先によって作成されたタグ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.desc": {
+          "source": "The source of the tag",
+          "message": "タグのソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.display_name": {
+          "source": "Tag Source",
+          "message": "タグソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.short_desc": {
+          "source": "Source of the tag",
+          "message": "タグのソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "新しいタグを作成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Add contacts to one or more contact lists in bulk",
+          "message": "連絡先を1つ以上の連絡先リストに一括追加"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Add List Members",
+          "message": "リストメンバーを追加"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the contacts to",
+          "message": "連絡先を追加する連絡先リスト ID のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "連絡先リスト ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to add to the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber`, or `engagement_level`",
+          "message": "リストに追加する連絡先のソース。相互排他的なフィールド（`contact_ids`、`list_ids`、`tag_ids`、`segment_id`、`all_active_contacts`、`new_subscriber`、または `engagement_level`）のいずれかを使用してください"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "ソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "連絡先のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Add contacts to lists in bulk",
+          "message": "連絡先をリストに一括追加"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Get the Constant Contact account information",
+          "message": "Constant Contact アカウント情報を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "アカウントの取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get account information",
+          "message": "アカウント情報を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.desc": {
+          "source": "Retrieve a single custom field by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一のカスタムフィールドを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Get a Custom Field",
+          "message": "カスタムフィールドを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Get a single custom field by ID",
+          "message": "ID で単一のカスタムフィールドを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一の連絡先を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "連絡先を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Retrieve a single contact list by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一の連絡先リストを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Get a Contact List",
+          "message": "連絡先リストを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list ID",
+          "message": "連絡先リスト ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Get a single contact list by ID",
+          "message": "ID で単一の連絡先リストを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single email campaign by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一のメールキャンペーンを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Get an Email Campaign",
+          "message": "メールキャンペーンを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign ID",
+          "message": "メールキャンペーン ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Get a single email campaign by ID",
+          "message": "ID で単一のメールキャンペーンを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.desc": {
+          "source": "Get a summary report for email campaigns in Constant Contact",
+          "message": "Constant Contact のメールキャンペーンの概要レポートを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
+          "source": "Get Email Summary",
+          "message": "メールの概要を取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.desc": {
+          "source": "A list of email campaign IDs to get summaries for",
+          "message": "概要を取得するメールキャンペーン ID のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.display_name": {
+          "source": "Campaign IDs",
+          "message": "キャンペーン ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.short_desc": {
+          "source": "List of campaign IDs",
+          "message": "キャンペーン ID のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
+          "source": "Get email campaign summary report",
+          "message": "メールキャンペーンの概要レポートを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a single segment by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一のセグメントを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get a Segment",
+          "message": "セグメントを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a single segment by ID",
+          "message": "ID で単一のセグメントを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Constant Contact",
+          "message": "Constant Contact から ID で単一のタグを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "タグを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID で単一のタグを取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Constant Contact",
+          "message": "Constant Contact からカスタムフィールドを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "カスタムフィールドを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to delete",
+          "message": "削除するカスタムフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "カスタムフィールドを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Constant Contact",
+          "message": "Constant Contact から連絡先を削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "連絡先を削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "削除する連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Delete a contact list from Constant Contact",
+          "message": "Constant Contact から連絡先リストを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Delete a Contact List",
+          "message": "連絡先リストを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to delete",
+          "message": "削除する連絡先リスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Delete a contact list",
+          "message": "連絡先リストを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Delete an email campaign from Constant Contact",
+          "message": "Constant Contact からメールキャンペーンを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Delete an Email Campaign",
+          "message": "メールキャンペーンを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to delete",
+          "message": "削除するメールキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Delete an email campaign",
+          "message": "メールキャンペーンを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.desc": {
+          "source": "Delete a segment from Constant Contact",
+          "message": "Constant Contact からセグメントを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
+          "source": "Delete a Segment",
+          "message": "セグメントを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to delete",
+          "message": "削除するセグメント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Delete a segment",
+          "message": "セグメントを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Constant Contact",
+          "message": "Constant Contactからタグを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "タグの削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "削除するタグ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "タグを削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Export contacts in bulk from Constant Contact",
+          "message": "Constant Contactから連絡先を一括エクスポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Export Contacts",
+          "message": "連絡先のエクスポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.desc": {
+          "source": "List of field names to include in the export",
+          "message": "エクスポートに含めるフィールド名のリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "フィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.short_desc": {
+          "source": "Fields to include in export",
+          "message": "エクスポートに含めるフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to export contacts from",
+          "message": "連絡先のエクスポート元となる連絡先リストIDのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to export from",
+          "message": "エクスポート元の連絡先リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.desc": {
+          "source": "The segment ID to export contacts from",
+          "message": "連絡先のエクスポート元となるセグメントID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Segment to export",
+          "message": "エクスポート対象のセグメント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Export contacts in bulk",
+          "message": "連絡先を一括エクスポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Import contacts in bulk into Constant Contact",
+          "message": "Constant Contactに連絡先を一括インポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Import Contacts",
+          "message": "連絡先のインポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.desc": {
+          "source": "List of contact data hashes to import",
+          "message": "インポートする連絡先データハッシュのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.display_name": {
+          "source": "Import Data",
+          "message": "インポートデータ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.short_desc": {
+          "source": "List of contact data to import",
+          "message": "インポートする連絡先データのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the imported contacts to",
+          "message": "インポートした連絡先を追加する連絡先リストIDのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to add imported contacts to",
+          "message": "インポートした連絡先の追加先となる連絡先リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Import contacts in bulk",
+          "message": "連絡先を一括インポート"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Constant Contact",
+          "message": "Constant Contactのタグを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "タグIDで絞り込み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "すべてのタグを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.desc": {
+          "source": "List contact lists in Constant Contact",
+          "message": "Constant Contactの連絡先リストを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
+          "source": "List Contact Lists",
+          "message": "連絡先リストの一覧"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by list ID",
+          "message": "リストIDでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
+          "source": "List all contact lists",
+          "message": "すべての連絡先リストを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Constant Contact with optional filtering",
+          "message": "Constant Contactの連絡先をオプションのフィルター付きで一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "連絡先IDで絞り込み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "Filter contacts by email address",
+          "message": "メールアドレスで連絡先を絞り込み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.desc": {
+          "source": "Filter contacts by contact list membership",
+          "message": "連絡先リストのメンバーシップで連絡先をフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by contact list ID",
+          "message": "連絡先リストIDでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.desc": {
+          "source": "Contacts with no status set",
+          "message": "ステータスが未設定の連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.display_name": {
+          "source": "Not Set",
+          "message": "未設定"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "アクティブな連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "アクティブ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "All contacts",
+          "message": "すべての連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "すべて"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted contacts",
+          "message": "削除済みの連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "削除済み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.desc": {
+          "source": "Contacts pending confirmation",
+          "message": "確認待ちの連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.display_name": {
+          "source": "Pending Confirmation",
+          "message": "確認待ち"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.desc": {
+          "source": "Contacts on temporary hold",
+          "message": "一時保留中の連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.display_name": {
+          "source": "Temporary Hold",
+          "message": "一時保留"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.desc": {
+          "source": "Unsubscribed contacts",
+          "message": "配信登録解除された連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.display_name": {
+          "source": "Unsubscribed",
+          "message": "配信解除済み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contacts by status",
+          "message": "ステータスで連絡先をフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "連絡先ステータスでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Filter contacts updated after this date (ISO-8601)",
+          "message": "この日付以降に更新された連絡先をフィルター (ISO-8601)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "指定日時以降に更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "更新日でフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "すべてのコンタクトを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List custom fields in Constant Contact",
+          "message": "Constant Contactのカスタムフィールドを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "カスタムフィールド一覧"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "Filter by custom field ID",
+          "message": "カスタムフィールドIDでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "すべてのカスタムフィールドを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.desc": {
+          "source": "List email campaigns in Constant Contact with optional filtering",
+          "message": "Constant Contactのメールキャンペーンをオプションのフィルター付きで一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
+          "source": "List Email Campaigns",
+          "message": "メールキャンペーンの一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Filter by campaign ID",
+          "message": "キャンペーンIDでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.desc": {
+          "source": "Completed campaigns",
+          "message": "完了したキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.display_name": {
+          "source": "Done",
+          "message": "完了"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "下書きのキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.desc": {
+          "source": "Currently sending campaigns",
+          "message": "現在送信中のキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.display_name": {
+          "source": "Executing",
+          "message": "実行中"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.desc": {
+          "source": "Campaigns that encountered an error",
+          "message": "エラーが発生したキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.display_name": {
+          "source": "Error",
+          "message": "エラー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.desc": {
+          "source": "Removed campaigns",
+          "message": "削除されたキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.display_name": {
+          "source": "Removed",
+          "message": "削除済み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.desc": {
+          "source": "Scheduled campaigns",
+          "message": "スケジュール設定されたキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "スケジュール済み"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by status",
+          "message": "ステータスでキャンペーンをフィルタリング"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "キャンペーンのステータスでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all email campaigns",
+          "message": "すべてのメールキャンペーンを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "List segments in Constant Contact",
+          "message": "Constant Contactのセグメントを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "セグメントを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.desc": {
+          "source": "Sort by modified date",
+          "message": "更新日で並べ替え"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.display_name": {
+          "source": "Modified Date",
+          "message": "更新日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by name",
+          "message": "名前で並べ替え"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.desc": {
+          "source": "Sort by created date",
+          "message": "作成日で並べ替え"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.display_name": {
+          "source": "Created Date",
+          "message": "作成日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Sort by date",
+          "message": "日付で並べ替え"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.desc": {
+          "source": "The field to sort results by",
+          "message": "結果を並べ替える基準となるフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.display_name": {
+          "source": "Sort By",
+          "message": "並べ替え順"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.short_desc": {
+          "source": "Field to sort by",
+          "message": "並べ替えに使用するフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Filter by segment ID",
+          "message": "セグメントIDでフィルター"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List all segments",
+          "message": "すべてのセグメントを一覧表示"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Constant Contact** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定されたコネクションの認証を使用して、**Constant Contact** に対するカスタムHTTP / REST API呼び出しを行います。\n\nHTTPメソッド、URIパス（コネクションのAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。応答は、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対して、このアクションを使用します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Constant Contact",
+          "message": "Constant ContactへのカスタムAPI呼び出しを実行"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contactで新しい連絡先が作成されたときにトリガーされます。新しいレコードの検出にはポーリングを使用します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新規連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "新しい連絡先が作成されたときにトリガー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Fires when a new contact list is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contactで新しい連絡先リストが作成されたときにトリガーされます。新しいレコードの検出にはポーリングを使用します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "New Contact List",
+          "message": "新規連絡先リスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Trigger when a new contact list is created",
+          "message": "新しい連絡先リストが作成されたときにトリガー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Fires when a new email campaign is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contactで新しいメールキャンペーンが作成されたときにトリガーされます。新しいレコードの検出にはポーリングを使用します。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "New Email Campaign",
+          "message": "新規メールキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Trigger when a new email campaign is created",
+          "message": "新しいメールキャンペーンが作成されたときにトリガー"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.desc": {
+          "source": "Schedule an email campaign activity for sending in Constant Contact",
+          "message": "Constant Contactで送信するメールキャンペーンアクティビティをスケジュールします"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
+          "source": "Schedule an Email Campaign",
+          "message": "メールキャンペーンのスケジュール"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.display_name": {
+          "source": "Campaign Activity ID",
+          "message": "キャンペーンアクティビティID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.short_desc": {
+          "source": "The campaign activity to schedule",
+          "message": "スケジュールするキャンペーンアクティビティ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.desc": {
+          "source": "The scheduled send date in ISO-8601 format",
+          "message": "ISO-8601形式の送信予定日時"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.display_name": {
+          "source": "Scheduled Date",
+          "message": "スケジュール日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.short_desc": {
+          "source": "ISO-8601 date",
+          "message": "ISO-8601日付"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
+          "source": "Schedule an email campaign for sending",
+          "message": "メールキャンペーンの送信をスケジュール"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Remove contacts from one or more contact lists in bulk",
+          "message": "1つ以上の連絡先リストから連絡先を一括削除します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Remove List Members",
+          "message": "リストメンバーの削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to remove the contacts from",
+          "message": "連絡先を削除する連絡先リストIDのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "連絡先リスト ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to remove from the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts`, or `engagement_level`",
+          "message": "リストから削除する連絡先のソース。排他的なフィールドのいずれか1つを使用してください: `contact_ids`、`list_ids`、`tag_ids`、`all_active_contacts`、または `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "ソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "連絡先のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Remove contacts from lists in bulk",
+          "message": "リストから連絡先を一括削除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update the Constant Contact account information.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Constant Contactのアカウント情報を更新します。\n\n**重要**: これはPUTセマンティクス（完全置換）を使用します。リクエストに含まれていないフィールドはすべてデフォルト値にクリアされます。保持したいすべてのフィールドを含めてください"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "アカウントを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The two-letter ISO country code",
+          "message": "2文字のISO国コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "国コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Two-letter country code",
+          "message": "2文字の国コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Account owner first name",
+          "message": "アカウント所有者の名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.desc": {
+          "source": "The name of the organization",
+          "message": "組織名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "組織名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Organization name",
+          "message": "組織名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Account owner last name",
+          "message": "アカウント所有者の姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.desc": {
+          "source": "The state or province code",
+          "message": "州または都道府県コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.display_name": {
+          "source": "State Code",
+          "message": "州/都道府県コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.short_desc": {
+          "source": "State or province code",
+          "message": "州または都道府県コード"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "ウェブサイトの URL"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.desc": {
+          "source": "The time zone ID (e.g., `US/Eastern`)",
+          "message": "タイムゾーンID（例: `US/Eastern`）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.short_desc": {
+          "source": "Account time zone ID",
+          "message": "アカウントのタイムゾーンID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update account information",
+          "message": "アカウント情報の更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update an existing custom field in Constant Contact",
+          "message": "Constant Contactの既存のカスタムフィールドを更新します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "カスタムフィールドの更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to update",
+          "message": "更新するカスタムフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new label for the custom field",
+          "message": "カスタムフィールドの新しいラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "ラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "カスタムフィールドのラベル"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update an existing custom field",
+          "message": "既存のカスタムフィールドを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Constant Contact.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Constant Contactの既存の連絡先を更新します。\n\n**重要**: これはPUTセマンティクス（完全置換）を使用します。リクエストに含まれていないフィールドはすべてデフォルト値にクリアされます。保持したいすべてのフィールドを含めてください"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "連絡先を更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "連絡先の会社名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "更新する連絡先"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "連絡先のカスタムフィールド値オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 形式の連絡先の記念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "記念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "記念日 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "連絡先の誕生日の日 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "誕生日の日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "誕生日の日 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "連絡先の誕生月 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "誕生月"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "誕生月 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "`address` およびオプションの `permission_to_send` を含むメールアドレスオブジェクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "メールアドレスオブジェクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "連絡先の役職"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs",
+          "message": "連絡先リストIDのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "リストメンバーシップ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs",
+          "message": "連絡先リスト ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "連絡先の住所オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "住所"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "連絡先の住所"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "連絡先の電話番号オブジェクトのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "連絡先電話番号"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs",
+          "message": "タグIDのリスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "タグ付け"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs",
+          "message": "タグID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Updated by the account owner",
+          "message": "アカウント所有者によって更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Updated by the contact themselves",
+          "message": "連絡先本人によって更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact update",
+          "message": "連絡先更新のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "更新元"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact update",
+          "message": "連絡先更新のソース"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Update an existing contact list in Constant Contact",
+          "message": "Constant Contactの既存の連絡先リストを更新します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Update a Contact List",
+          "message": "連絡先リストの更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "連絡先リストの説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "連絡先リストの説明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "このリストをお気に入りに設定するかどうか"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "お気に入り"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "お気に入りに設定"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "リストID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to update",
+          "message": "更新する連絡先リスト"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "連絡先リストの名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "連絡先リスト名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Update an existing contact list",
+          "message": "既存の連絡先リストを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Update an existing email campaign in Constant Contact",
+          "message": "Constant Contactの既存のメールキャンペーンを更新します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Update an Email Campaign",
+          "message": "メールキャンペーンの更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to update",
+          "message": "更新するメールキャンペーン"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name of the email campaign",
+          "message": "メールキャンペーンの新しい名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "キャンペーン名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing email campaign",
+          "message": "既存のメールキャンペーンを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.desc": {
+          "source": "Update an existing segment in Constant Contact",
+          "message": "Constant Contactの既存のセグメントを更新します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Update a Segment",
+          "message": "セグメントの更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The new name of the segment",
+          "message": "セグメントの新しい名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "セグメント名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The new criteria expression for the segment",
+          "message": "セグメントの新しい条件式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "セグメント条件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "セグメント条件式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "セグメント ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to update",
+          "message": "更新するセグメント"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Update an existing segment",
+          "message": "既存のセグメントを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Constant Contact",
+          "message": "Constant Contactの既存のタグを更新します"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "タグを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag",
+          "message": "タグの新しい名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "更新するタグ"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "既存のタグを更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.desc": {
+          "source": "Constant Contact is an email marketing platform for creating campaigns, managing contacts, and tracking engagement.\n\nThis integration supports contacts, contact lists, tags, custom fields, segments, email campaigns, bulk activities, reports, and events.",
+          "message": "Constant Contact は、キャンペーンの作成、連絡先の管理、エンゲージメントの追跡を行うためのメールマーケティングプラットフォームです。\n\nこの統合では、連絡先、連絡先リスト、タグ、カスタムフィールド、セグメント、メールキャンペーン、一括アクティビティ、レポート、イベントがサポートされています。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.display_name": {
+          "source": "Constant Contact",
+          "message": "Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.short_desc": {
+          "source": "Constant Contact email marketing platform",
+          "message": "Constant Contact メールマーケティングプラットフォーム"
+        }
+      }
+    }
+  }
+}

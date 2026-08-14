@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors via Jina's `/v1/embeddings` endpoint.  Supports the task-aware `task` parameter for query / passage / classification / clustering / separation tasks.",
+          "message": "Convertit les entrées de texte en vecteurs d'embedding via le point de terminaison `/v1/embeddings` de Jina. Prend en charge le paramètre `task` adapté aux tâches pour les tâches de requête / passage / classification / clustering / séparation."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Créer des plongements"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Optional truncated output dimensionality.  `jina-embeddings-v3` supports Matryoshka representation learning and can be truncated to smaller dimensions with minimal quality loss.",
+          "message": "Dimensionnalité de sortie tronquée facultative. `jina-embeddings-v3` prend en charge l'apprentissage de représentations Matryoshka et peut être tronqué à des dimensions plus petites avec une perte de qualité minimale."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimensions"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Output dimensionality (for models that support truncation)",
+          "message": "Dimensionnalité de sortie (pour les modèles prenant en charge la troncature)"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded float32 buffer",
+          "message": "Base64 - mémoire tampon float32 encodée"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - JSON list of floats",
+          "message": "Float - liste JSON de flottants"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float` (par défaut) ou `base64`."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Format d'encodage"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for the returned vectors",
+          "message": "Format réseau pour les vecteurs renvoyés"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.  Single string or list of strings.",
+          "message": "Entrée(s) de texte à convertir en vecteurs d'embedding. Chaîne unique ou liste de chaînes."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Entrée"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Texte(s) à intégrer"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.desc": {
+          "source": "When `True`, applies Jina's late-chunking algorithm — embeds the full passage first, then chunks afterward.  Improves cross-chunk context retention for RAG.",
+          "message": "Lorsque `True`, applique l'algorithme de « late chunking » de Jina — vectorise d'abord l'intégralité du passage, puis découpe ensuite en segments. Améliore la rétention de contexte entre segments pour le RAG."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.display_name": {
+          "source": "Late Chunking",
+          "message": "Late Chunking"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.short_desc": {
+          "source": "Enable Jina's late-chunking algorithm",
+          "message": "Activer l'algorithme de « late chunking » de Jina"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Jina embedding model identifier.  Examples:\n\n- `jina-embeddings-v3` — multilingual, task-aware\n- `jina-embeddings-v2-base-en` — English-only v2\n- `jina-embeddings-v2-base-code` — code-specialized",
+          "message": "Identifiant du modèle d'embedding Jina. Exemples :\n\n- `jina-embeddings-v3` — multilingue, adapté aux tâches\n- `jina-embeddings-v2-base-en` — v2 en anglais uniquement\n- `jina-embeddings-v2-base-code` — spécialisé pour le code"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modèle"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Jina embedding model",
+          "message": "Modèle d'embedding Jina"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "Classification"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.allowed-value.c3RyaW5nOnJldHJpZXZhbC5wYXNzYWdl.display_name": {
+          "source": "Retrieval Passage",
+          "message": "Passage de recherche"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.allowed-value.c3RyaW5nOnJldHJpZXZhbC5xdWVyeQ.display_name": {
+          "source": "Retrieval Query",
+          "message": "Requête de recherche"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.allowed-value.c3RyaW5nOnNlcGFyYXRpb24.display_name": {
+          "source": "Separation",
+          "message": "Séparation"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.allowed-value.c3RyaW5nOnRleHQtbWF0Y2hpbmc.display_name": {
+          "source": "Text Matching",
+          "message": "Correspondance de texte"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.desc": {
+          "source": "Task-aware embedding hint for `jina-embeddings-v3`.  Choosing the right task improves retrieval relevance — queries and passages get different optimal embeddings.",
+          "message": "Indicateur de tâche pour le plongement `jina-embeddings-v3`. Choisir la bonne tâche améliore la pertinence de la recherche — les requêtes et les passages obtiennent des plongements optimaux différents."
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.display_name": {
+          "source": "Task Hint",
+          "message": "Indicateur de tâche"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dGFzaw.short_desc": {
+          "source": "Task hint for jina-embeddings-v3",
+          "message": "Indicateur de tâche pour jina-embeddings-v3"
+        },
+        "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Jina AI embedding model",
+          "message": "Générer des vecteurs de plongement à partir d'un modèle de plongement Jina AI"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Jina AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Passe un appel API HTTP / REST personnalisé à **Jina AI** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hash contenant le code de statut, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions natives sur cette application."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Jina AI",
+          "message": "Passer un appel API personnalisé à Jina AI"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a user query using a Jina cross-encoder or late-interaction reranker.  Returns documents sorted by relevance score with the top `top_n` results.",
+          "message": "Réévalue le classement d'une liste de documents candidats par rapport à une requête utilisateur à l'aide d'un réévaluateur Jina cross-encoder ou à interaction tardive. Renvoie les documents triés par score de pertinence avec les `top_n` meilleurs résultats."
+        },
+        "app.SmluYUFp.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Réordonner les documents"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents (strings) to rerank against the query.",
+          "message": "Liste des documents candidats (chaînes) à réévaluer par rapport à la requête."
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Documents"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "Documents candidats à réordonner"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Jina reranker model identifier.  Examples:\n\n- `jina-reranker-v2-base-multilingual` — multilingual cross-encoder\n- `jina-colbert-v2` — late-interaction reranker (multi-vector)",
+          "message": "Identifiant du modèle de réévaluation Jina. Exemples :\n\n- `jina-reranker-v2-base-multilingual` — cross-encoder multilingue\n- `jina-colbert-v2` — réévaluateur à interaction tardive (multi-vecteurs)"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modèle"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Jina reranker model",
+          "message": "Modèle de réévaluation Jina"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.  The model scores each document by how relevant it is to this query.",
+          "message": "Requête utilisateur en texte libre. Le modèle évalue chaque document en fonction de sa pertinence par rapport à cette requête."
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Requête"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "La requête utilisateur par rapport à laquelle réordonner les documents"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document text.",
+          "message": "Lorsque `True` (valeur par défaut), chaque résultat inclut le texte du document."
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "Renvoyer les documents"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "Indique s'il faut renvoyer le texte du document dans la réponse"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.  Defaults to all if omitted.",
+          "message": "Nombre de documents les mieux classés à renvoyer. Tous par défaut si omis."
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "Top N"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "Nombre de résultats les mieux notés à renvoyer"
+        },
+        "app.SmluYUFp.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query for RAG retrieval",
+          "message": "Réévaluer le classement des documents candidats par rapport à une requête pour la récupération RAG"
+        },
+        "app.SmluYUFp.desc": {
+          "source": "Provides access to [Jina AI](https://jina.ai) embedding and reranking services for production semantic search and RAG.\n\n**Common use cases**:\n- **Multilingual embeddings** with `jina-embeddings-v3` (89+ languages)\n- **Cross-encoder reranking** with `jina-reranker-v2-base-multilingual` or late-interaction `jina-colbert-v2`\n- **Closes the cloud-reranker gap** alongside Voyage in `QoreRagUtils`",
+          "message": "Fournit l'accès aux services de plongement et de réévaluation de [Jina AI](https://jina.ai) pour la recherche sémantique en production et le RAG.\n\n**Cas d'usage courants** :\n- **Plongements multilingues** avec `jina-embeddings-v3` (plus de 89 langues)\n- **Réévaluation par cross-encoder** avec `jina-reranker-v2-base-multilingual` ou à interaction tardive `jina-colbert-v2`\n- **Comble le manque de réévaluateur cloud** aux côtés de Voyage dans `QoreRagUtils`"
+        },
+        "app.SmluYUFp.display_name": {
+          "source": "Jina AI",
+          "message": "Jina AI"
+        },
+        "app.SmluYUFp.short_desc": {
+          "source": "Jina AI embeddings and reranking for multilingual semantic search",
+          "message": "Plongements et réévaluation Jina AI pour la recherche sémantique multilingue"
+        }
+      }
+    }
+  }
+}

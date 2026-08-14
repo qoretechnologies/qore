@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts one or more text inputs into numerical vectors (embeddings) that capture the meaning of the text. Texts with similar meanings will have similar vectors, enabling semantic search and comparison.\n\n**Example use cases**:\n- Convert product descriptions into embeddings to power a \"find similar products\" feature\n- Embed support tickets to automatically route them to the right team\n- Build a knowledge base index for AI-powered question answering (RAG)\n\nSupports batch processing (up to 1,000 texts per request) and configurable output dimensions for balancing accuracy vs. storage cost",
+          "message": "Перетворює один або кілька вхідних текстів на числові вектори (ембединги), що відображають зміст тексту. Тексти зі схожим значенням матимуть схожі вектори, що уможливлює семантичний пошук і порівняння.\n\n**Приклади використання**:\n- Перетворення описів товарів на ембединги для роботи функції «знайти схожі товари»\n- Створення ембедингів для тікетів підтримки для їхнього автоматичного перенаправлення до відповідної команди\n- Створення індексу бази знань для відповідей на запитання за допомогою ШІ (RAG)\n\nПідтримує пакетну обробку (до 1000 текстів на запит) і настроювану розмірність результатів для балансування точності та витрат на зберігання"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Створити ембединги"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - Encoded Binary (efficient for compact types)",
+          "message": "Base64 — кодовані бінарні дані (ефективно для компактних типів)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are formatted in the API response.\n\nBy default, embeddings are returned as plain number arrays. Set to `base64` to receive base64-encoded binary data, which can be more efficient for network transfer when using compact output types like `int8` or `binary`",
+          "message": "Визначає формат векторів ембедингів у відповіді API.\n\nЗа замовчуванням ембединги повертаються як масиви простих чисел. Установіть значення `base64`, щоб отримувати двійкові дані у кодуванні base64, що може бути ефективнішим для передавання мережею в разі використання компактних типів виводу, таких як `int8` або `binary`"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Формат кодування"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "Спосіб кодування значень ембеддингів у відповіді"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to convert into embeddings. Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nMaximum **1,000** items per request. Total token limits vary by model",
+          "message": "Текстовий вміст для перетворення на ембединги. Може бути одним рядком або списком рядків для пакетної обробки.\n\n**Приклади**:\n- Один текст: `\"How do I reset my password?\"`\n- Пакет: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nМаксимум **1000** елементів на запит. Загальні ліміти токенів залежать від моделі"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "Вхідний текст"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "Текст або список текстів для перетворення на ембеддинги"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50.display_name": {
+          "source": "Document - Content to be searched (e.g., articles, products)",
+          "message": "Документ — вміст для пошуку (наприклад, статті, товари)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnF1ZXJ5.display_name": {
+          "source": "Query - Search question (e.g., user's search input)",
+          "message": "Запит — пошуковий запит (наприклад, введений користувачем пошуковий текст)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Tells the model whether the input text is a search query or a document to be searched. This optimizes the embeddings for better search accuracy.\n\n- Use **Query** when embedding a user's search question (e.g., `\"How do I reset my password?\"`)\n- Use **Document** when embedding content that will be searched through (e.g., knowledge base articles, product descriptions)\n\nLeave empty if you're not using the embeddings for search/retrieval",
+          "message": "Повідомляє моделі, чи є вхідний текст пошуковим запитом, чи документом для пошуку. Це оптимізує ембединги для підвищення точності пошуку.\n\n- Використовуйте **Query**, коли створюєте ембединг пошукового запитання користувача (наприклад, `\"How do I reset my password?\"`)\n- Використовуйте **Document**, коли створюєте ембединг вмісту, в якому здійснюватиметься пошук (наприклад, статті бази знань, описи товарів)\n\nЗалиште порожнім, якщо ви не використовуєте ембединги для пошуку/вилучення"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "Тип введення"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Whether the text is a search query or a document to be searched",
+          "message": "Чи є текст пошуковим запитом або документом для пошуку"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Binary - Minimal Storage (32x less, for large-scale search)",
+          "message": "Бінарний — мінімальний обсяг сховища (у 32 рази менше, для великомасштабного пошуку)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - Full Precision (default, best accuracy)",
+          "message": "Float — повна точність (за замовчуванням, найкраща точність)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmludDg.display_name": {
+          "source": "Int8 - Compact (4x less storage, minimal accuracy loss)",
+          "message": "Int8 — компактний (у 4 рази менше сховища, мінімальна втрата точності)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnViaW5hcnk.display_name": {
+          "source": "Unsigned Binary - Minimal Storage (32x less)",
+          "message": "Беззнаковий бінарний — мінімальний обсяг сховища (у 32 рази менше)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnVpbnQ4.display_name": {
+          "source": "Uint8 - Compact Unsigned (4x less storage)",
+          "message": "Uint8 — компактний беззнаковий (у 4 рази менше сховища)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.desc": {
+          "source": "Controls the numeric precision of embedding values. Lower precision uses less storage with a small accuracy trade-off.\n\n- **Float** — full precision (default), best accuracy\n- **Int8/Uint8** — 4x less storage, minimal accuracy loss\n- **Binary/Unsigned Binary** — 32x less storage, suitable for large-scale approximate search\n\nUse the default (`float`) unless you need to optimize storage for millions of embeddings",
+          "message": "Визначає числову точність значень ембедингів. Нижча точність потребує менше сховища за незначного компромісу з точністю.\n\n- **Float** — повна точність (за замовчуванням), найкраща точність\n- **Int8/Uint8** — у 4 рази менше сховища, мінімальна втрата точності\n- **Binary/Unsigned Binary** — у 32 рази менше сховища, підходить для великомасштабного приблизного пошуку\n\nВикористовуйте значення за замовчуванням (`float`), якщо вам не потрібно оптимізувати сховище для мільйонів ембедингів"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.display_name": {
+          "source": "Output Precision",
+          "message": "Точність виводу"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.short_desc": {
+          "source": "Numeric precision of embedding values (affects storage size)",
+          "message": "Числова точність значень ембедингів (впливає на обсяг сховища)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjEwMjQ.display_name": {
+          "source": "1024 - Default (recommended)",
+          "message": "1024 - За замовчуванням (рекомендовано)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjI1Ng.display_name": {
+          "source": "256 - Smallest (least storage)",
+          "message": "256 - Найменший (найменше пам'яті)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjIwNDg.display_name": {
+          "source": "2048 - Largest (highest accuracy)",
+          "message": "2048 - Найбільший (найвища точність)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjUxMg.display_name": {
+          "source": "512 - Compact (good balance)",
+          "message": "512 - Компактний (гарний баланс)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.desc": {
+          "source": "Controls the size of the output embedding vectors. Higher dimensions give more accurate results but use more storage and memory.\n\n- **256** — smallest, ~4x less storage, good for large-scale approximate search\n- **512** — compact, good balance for most applications\n- **1024** — default, recommended for high-accuracy search\n- **2048** — highest accuracy, best when storage is not a concern\n\nNot all models support all dimensions. Default is `1024`",
+          "message": "Керує розміром вихідних векторів ембедингів. Більша розмірність забезпечує точніші результати, але використовує більше пам'яті для зберігання та обробки.\n\n- **256** — найменший, приблизно у 4 рази менше сховища, добре підходить для великомасштабного приблизного пошуку\n- **512** — компактний, гарний баланс для більшості застосунків\n- **1024** — за замовчуванням, рекомендовано для високоточного пошуку\n- **2048** — найвища точність, найкраще, коли розмір сховища не є проблемою\n\nНе всі моделі підтримують усі розмірності. Значення за замовчуванням: `1024`"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
+          "source": "Output Dimensions",
+          "message": "Розмірність вихідних даних"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
+          "source": "Size of the embedding vector (affects accuracy vs. storage)",
+          "message": "Розмір вектора ембедингу (впливає на баланс точності та сховища)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00.display_name": {
+          "source": "Voyage 4 - Balanced (good quality and speed)",
+          "message": "Voyage 4 - Збалансована (гарна якість і швидкість)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxhcmdl.display_name": {
+          "source": "Voyage 4 Large - Best Quality (general-purpose, multilingual)",
+          "message": "Voyage 4 Large - Найкраща якість (універсальна, багатомовна)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxpdGU.display_name": {
+          "source": "Voyage 4 Lite - Fastest (high-volume workloads)",
+          "message": "Voyage 4 Lite - Найшвидша (високонавантажені завдання)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0z.display_name": {
+          "source": "Voyage 3 - Previous Gen (balanced)",
+          "message": "Voyage 3 - Попереднє покоління (збалансована)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0zLWxhcmdl.display_name": {
+          "source": "Voyage 3 Large - Previous Gen (general-purpose)",
+          "message": "Voyage 3 Large - Попереднє покоління (універсальна)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1jb2RlLTM.display_name": {
+          "source": "Voyage Code 3 - Code Search (source code retrieval)",
+          "message": "Voyage Code 3 - Пошук коду (пошук у вихідному коді)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1maW5hbmNlLTI.display_name": {
+          "source": "Voyage Finance 2 - Finance (SEC filings, earnings)",
+          "message": "Voyage Finance 2 - Фінанси (звітність SEC, фінансові результати)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1sYXctMg.display_name": {
+          "source": "Voyage Law 2 - Legal (contracts, case law)",
+          "message": "Voyage Law 2 - Юриспруденція (договори, судова практика)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1tdWx0aWxpbmd1YWwtMg.display_name": {
+          "source": "Voyage Multilingual 2 - Previous Gen (multilingual)",
+          "message": "Voyage Multilingual 2 - Попереднє покоління (багатомовна)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for converting your text into embeddings.\n\n**Recommended models**:\n- `voyage-4-large` — highest quality, best for multilingual content and complex documents\n- `voyage-4` — good balance of quality and speed for most use cases\n- `voyage-4-lite` — fastest and cheapest, good for high-volume or latency-sensitive workloads\n- `voyage-code-3` — specialized for source code search and retrieval\n\n**Domain-specific models** (trained on specialized data):\n- `voyage-finance-2` — financial documents, SEC filings, earnings reports\n- `voyage-law-2` — legal contracts, case law, regulations",
+          "message": "Виберіть модель Voyage AI для перетворення тексту на ембединги.\n\n**Рекомендовані моделі**:\n- `voyage-4-large` — найвища якість, найкраще для багатомовного контенту та складних документів\n- `voyage-4` — гарний баланс якості та швидкості для більшості випадків використання\n- `voyage-4-lite` — найшвидша та найдешевша, підходить для великих обсягів даних або завдань, чутливих до затримок\n- `voyage-code-3` — спеціалізована для пошуку у вихідному коді\n\n**Спеціалізовані моделі** (навчені на галузевих даних):\n- `voyage-finance-2` — фінансові документи, звіти SEC, фінансові результати\n- `voyage-law-2` — юридичні договори, судова практика, нормативні акти"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for generating embeddings",
+          "message": "ШІ-модель для створення ембедингів"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "Якщо увімкнено (за замовчуванням), занадто довгий для моделі текст автоматично скорочується. Якщо вимкнено, замість цього повертається помилка, що корисно, якщо потрібно гарантувати обробку повного тексту"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "Автоматично обтинати довгий текст"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "Автоматично скорочувати текст, що перевищує ліміт моделі"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Convert text into numerical vectors for search and comparison",
+          "message": "Перетворити текст на числові вектори для пошуку та порівняння"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Voyage AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати користувацький виклик HTTP / REST API до **Voyage AI** за допомогою автентифікації налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код статусу, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не реалізовані як окремі дії в цьому додатку."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Voyage AI",
+          "message": "Зробити користувацький виклик API до Voyage AI"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.desc": {
+          "source": "Takes a search query and a list of documents, then re-sorts the documents by how relevant they are to the query. This improves search quality by using AI to understand meaning rather than just keyword matching.\n\n**Example use cases**:\n- Improve search results from a basic keyword search by reranking with semantic understanding\n- Filter a large set of candidate documents down to the most relevant ones for AI processing\n- Re-sort customer support articles by relevance to a user's question\n\nReturns results sorted by relevance score (highest first). Use `top_k` to limit the number of results returned, and `return_documents` to include the document text in each result",
+          "message": "Приймає пошуковий запит і список документів, а потім повторно сортує документи за їхньою релевантністю запиту. Це покращує якість пошуку завдяки використанню ШІ для розуміння змісту, а не лише зіставлення за ключовими словами.\n\n**Приклади використання**:\n- Покращення результатів базового пошуку за ключовими словами шляхом реранкінгу з семантичним розумінням\n- Фільтрація великого набору документів-кандидатів до найбільш релевантних для обробки ШІ\n- Повторне сортування статей служби підтримки за релевантністю до запитання користувача\n\nПовертає результати, відсортовані за оцінкою релевантності (найвищі спочатку). Використовуйте `top_k`, щоб обмежити кількість повернених результатів, і `return_documents`, щоб включити текст документа в кожен результат"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Переранжувати документи"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "A list of text documents to rank by relevance to the search query. These can be full documents, paragraphs, or short text snippets.\n\n**Example**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nMaximum **1,000** documents per request",
+          "message": "Список текстових документів для ранжування за релевантністю пошуковому запиту. Це можуть бути повні документи, абзаци або короткі фрагменти тексту.\n\n**Приклад**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nМаксимум **1 000** документів на запит"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Документи"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "The list of documents or text snippets to rank",
+          "message": "Список документів або фрагментів тексту для ранжування"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0y.display_name": {
+          "source": "Rerank 2 - Previous Generation",
+          "message": "Rerank 2 - Попереднє покоління"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjU.display_name": {
+          "source": "Rerank 2.5 - Best Quality (most accurate relevance scoring)",
+          "message": "Rerank 2.5 - Найкраща якість (найточніша оцінка релевантності)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjUtbGl0ZQ.display_name": {
+          "source": "Rerank 2.5 Lite - Fastest (high-volume workloads)",
+          "message": "Rerank 2.5 Lite - Найшвидша (високонавантажені завдання)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for reranking your documents.\n\n- `rerank-2.5` — best quality, most accurate relevance scoring\n- `rerank-2.5-lite` — faster and cheaper, good for high-volume workloads\n- `rerank-2` — previous generation model",
+          "message": "Виберіть модель Voyage AI для реранкінгу ваших документів.\n\n- `rerank-2.5` — найкраща якість, найточніша оцінка релевантності\n- `rerank-2.5-lite` — швидша й дешевша, підходить для високонавантажених завдань\n- `rerank-2` — модель попереднього покоління"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for reranking documents",
+          "message": "ШІ-модель для реранкінгу документів"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "The search query or question that documents will be ranked against. Documents most relevant to this query will be ranked highest.\n\n**Example**: `\"How do I cancel my subscription?\"`",
+          "message": "Пошуковий запит або запитання, відносно якого будуть ранжуватися документи. Найбільш релевантні цьому запиту документи матимуть найвищий ранг.\n\n**Приклад**: `\"How do I cancel my subscription?\"`"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "Пошуковий запит"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The search question to rank documents against",
+          "message": "Пошуковий запит для ранжування документів"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When enabled, each result includes the full text of the document alongside its relevance score. This is convenient when you want to display results directly without looking up documents by their index.\n\nDisabled by default to reduce response size",
+          "message": "Якщо увімкнено, кожен результат містить повний текст документа разом із його оцінкою релевантності. Це зручно, якщо ви хочете відображати результати безпосередньо без пошуку документів за їхнім індексом.\n\nВимкнено за замовчуванням для зменшення розміру відповіді"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Include Document Text",
+          "message": "Включати текст документа"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Include the original document text in each result",
+          "message": "Включати вихідний текст документа в кожен результат"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.desc": {
+          "source": "Limits the results to only the top most-relevant documents.\n\nFor example, set to `5` to get only the 5 most relevant documents. If not specified, all documents are returned sorted by relevance score",
+          "message": "Обмежує результати лише найрелевантнішими документами.\n\nНаприклад, установіть `5`, щоб отримати лише 5 найбільш релевантних документів. Якщо не вказано, повертаються всі документи, відсортовані за оцінкою релевантності"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.display_name": {
+          "source": "Number of Results",
+          "message": "Кількість результатів"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.short_desc": {
+          "source": "How many top results to return",
+          "message": "Скільки найкращих результатів повертати"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "Якщо увімкнено (за замовчуванням), занадто довгий для моделі текст автоматично скорочується. Якщо вимкнено, замість цього повертається помилка, що корисно, якщо потрібно гарантувати обробку повного тексту"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "Автоматично обтинати довгий текст"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "Автоматично скорочувати текст, що перевищує ліміт моделі"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.short_desc": {
+          "source": "Re-sort search results by relevance to a query",
+          "message": "Повторно відсортувати результати пошуку за релевантністю до запиту"
+        },
+        "app.Vm95YWdlQUk.desc": {
+          "source": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into numerical representations (embeddings) and reranking search results by relevance.\n\n**Common use cases**:\n- **Semantic search**: convert product descriptions, support tickets, or documents into embeddings, then find the most similar items by comparing vectors\n- **RAG (Retrieval-Augmented Generation)**: embed your knowledge base so an AI assistant can find relevant context before answering questions\n- **Search result reranking**: take initial search results and re-sort them by true relevance to the user's query for higher-quality results",
+          "message": "Надає доступ до [Voyage AI](https://voyageai.com/) для перетворення тексту на числові представлення (ембединги) та реранкінгу результатів пошуку за релевантністю.\n\n**Типові випадки використання**:\n- **Семантичний пошук**: перетворюйте описи продуктів, тікети підтримки або документи на ембединги, а потім знаходьте найбільш схожі елементи шляхом порівняння векторів\n- **RAG (генерація з доповненим пошуком)**: створюйте ембединги для бази знань, щоб ШІ-асистент міг знайти відповідний контекст перед відповіддю на запитання\n- **Реранкінг результатів пошуку**: беріть початкові результати пошуку та сортуйте їх за справжньою релевантністю до запиту користувача для отримання якісніших результатів"
+        },
+        "app.Vm95YWdlQUk.display_name": {
+          "source": "Voyage AI",
+          "message": "Voyage AI"
+        },
+        "app.Vm95YWdlQUk.short_desc": {
+          "source": "Voyage AI text embedding and search reranking services",
+          "message": "Служби текстових ембедингів та реранкінгу пошуку Voyage AI"
+        }
+      }
+    }
+  }
+}

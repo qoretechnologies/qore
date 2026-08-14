@@ -1,0 +1,1757 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Squarespace",
+          "message": "Créer une nouvelle commande dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Créer une commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "Nom du canal tiers (30 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.display_name": {
+          "source": "Channel Name",
+          "message": "Nom du canal"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.short_desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "Nom du canal tiers (30 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.desc": {
+          "source": "When the order was placed",
+          "message": "Date et heure auxquelles la commande a été passée"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.display_name": {
+          "source": "Created On",
+          "message": "Créé le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.short_desc": {
+          "source": "When the order was placed",
+          "message": "Date et heure auxquelles la commande a été passée"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.desc": {
+          "source": "Customer email address",
+          "message": "Adresse e-mail du client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.display_name": {
+          "source": "Customer Email",
+          "message": "E-mail du client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.short_desc": {
+          "source": "Customer email",
+          "message": "E-mail du client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "Billing address for the order",
+          "message": "Adresse de facturation pour la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Adresse de facturation"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Adresse de facturation"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.desc": {
+          "source": "Order grand total with `currency` and `value`",
+          "message": "Total général de la commande avec `currency` et `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.display_name": {
+          "source": "Grand Total",
+          "message": "Total général"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.short_desc": {
+          "source": "Order grand total",
+          "message": "Total général de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.desc": {
+          "source": "Discount total with `currency` and `value`",
+          "message": "Total des remises avec `currency` et `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.display_name": {
+          "source": "Discount Total",
+          "message": "Total des remises"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.short_desc": {
+          "source": "Discount total",
+          "message": "Total des remises"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "Référence de commande tierce (200 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.display_name": {
+          "source": "External Order Reference",
+          "message": "Référence de commande externe"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.short_desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "Référence de commande tierce (200 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Order has been fulfilled",
+          "message": "La commande a été traitée"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Order is pending fulfillment",
+          "message": "La commande est en attente de traitement"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.desc": {
+          "source": "`PENDING` or `FULFILLED`",
+          "message": "`PENDING` ou `FULFILLED`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.display_name": {
+          "source": "Fulfillment Status",
+          "message": "Statut de traitement"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.short_desc": {
+          "source": "PENDING or FULFILLED",
+          "message": "PENDING ou FULFILLED"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOkRFRFVDVA.desc": {
+          "source": "Deduct from inventory",
+          "message": "Déduire de l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOlNLSVA.desc": {
+          "source": "Do not adjust inventory",
+          "message": "Ne pas ajuster l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.desc": {
+          "source": "`DEDUCT` or `SKIP` (default: `SKIP`)",
+          "message": "`DEDUCT` ou `SKIP` (par défaut : `SKIP`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.display_name": {
+          "source": "Inventory Behavior",
+          "message": "Comportement de l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.short_desc": {
+          "source": "DEDUCT or SKIP (default: SKIP)",
+          "message": "DEDUCT ou SKIP (par défaut : SKIP)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.desc": {
+          "source": "The list of line items for the order",
+          "message": "La liste des lignes d'articles de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.short_desc": {
+          "source": "Order line items",
+          "message": "Lignes d'articles de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "Shipping address for the order",
+          "message": "Adresse de livraison pour la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Adresse de livraison"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Adresse de livraison"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.desc": {
+          "source": "Shipping total with `currency` and `value`",
+          "message": "Total de livraison avec `currency` et `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.display_name": {
+          "source": "Shipping Total",
+          "message": "Total de livraison"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.short_desc": {
+          "source": "Shipping total",
+          "message": "Total de livraison"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.desc": {
+          "source": "Order subtotal with `currency` and `value`",
+          "message": "Sous-total de la commande avec `currency` et `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "Sous-total"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.short_desc": {
+          "source": "Order subtotal",
+          "message": "Sous-total de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOkVYQ0xVU0lWRQ.desc": {
+          "source": "Prices exclude tax",
+          "message": "Les prix excluent les taxes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOklOQ0xVU0lWRQ.desc": {
+          "source": "Prices include tax",
+          "message": "Les prix incluent les taxes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.desc": {
+          "source": "`EXCLUSIVE` or `INCLUSIVE`",
+          "message": "`EXCLUSIVE` ou `INCLUSIVE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.display_name": {
+          "source": "Price Tax Interpretation",
+          "message": "Interprétation fiscale du prix"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.short_desc": {
+          "source": "EXCLUSIVE or INCLUSIVE",
+          "message": "EXCLUSIVE ou INCLUSIVE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.desc": {
+          "source": "Tax total with `currency` and `value`",
+          "message": "Total des taxes avec `currency` et `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.display_name": {
+          "source": "Tax Total",
+          "message": "Total des taxes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.short_desc": {
+          "source": "Tax total",
+          "message": "Total des taxes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Créer une nouvelle commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in Squarespace",
+          "message": "Créer un nouveau produit dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "Créer un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description in HTML format (max 102,400 characters)",
+          "message": "La description du produit au format HTML (102 400 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "La description du produit (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store; defaults to hidden if omitted",
+          "message": "Indique si le produit est visible dans la boutique ; masqué par défaut si omis"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "Est visible"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Indique si le produit est visible dans la boutique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name (max 200 characters)",
+          "message": "Le nom du produit (200 caractères max.)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Le nom du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.desc": {
+          "source": "The store page ID to add the product to",
+          "message": "L'ID de la page de boutique à laquelle ajouter le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.display_name": {
+          "source": "Store Page ID",
+          "message": "ID de la page de boutique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.short_desc": {
+          "source": "The store page to add the product to",
+          "message": "La page de boutique à laquelle ajouter le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product (max 100 tags, each max 100 characters)",
+          "message": "Liste des balises pour le produit (100 balises max., 100 caractères max. chacune)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Étiquettes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "Liste des balises pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "Carte cadeau"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product with shipping",
+          "message": "Produit physique avec livraison"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "Produit de type service"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "The product type: `PHYSICAL`, `SERVICE`, or `GIFT_CARD`. Note: `DIGITAL` products cannot be created via the API.",
+          "message": "Le type de produit : `PHYSICAL`, `SERVICE` ou `GIFT_CARD`. Remarque : les produits `DIGITAL` ne peuvent pas être créés via l'API."
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Type"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "The product type",
+          "message": "Le type de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product (alphanumeric + hyphens, must be unique)",
+          "message": "Le slug d'URL pour le produit (alphanumérique + tirets, doit être unique)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "Slug d'URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "Le slug d'URL pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color); PHYSICAL and SERVICE products only",
+          "message": "Liste des noms d'attributs de variante (par ex., Size, Color) ; produits PHYSICAL et SERVICE uniquement"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "Attributs de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "Liste des noms d'attributs de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.desc": {
+          "source": "List of product variants (1-100 items); fields depend on product type",
+          "message": "Liste des variantes de produit (1 à 100 éléments) ; les champs dépendent du type de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.display_name": {
+          "source": "Variants",
+          "message": "Variantes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.short_desc": {
+          "source": "List of product variants",
+          "message": "Liste des variantes de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Créer un nouveau produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Create a new product variant in Squarespace",
+          "message": "Créer une nouvelle variante de produit dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Create a Product Variant",
+          "message": "Créer une variante de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "Les attributs de variante (paires clé-valeur libres)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Attributs"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "Les attributs de variante (paires clé-valeur)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "Les dimensions d'expédition incluant `weight` et `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "Dimensions d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "Les dimensions d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "L'identifiant d'unité de gestion des stocks (SKU) pour la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "Le SKU de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "Les informations de stock incluant `quantity` et `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "Les informations de stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "La tarification de la variante incluant `basePrice`, `salePrice` et `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "Tarification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "La tarification de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to add the variant to",
+          "message": "L'ID du produit auquel ajouter la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to add the variant to",
+          "message": "L'ID du produit auquel ajouter la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Create a new product variant",
+          "message": "Créer une nouvelle variante de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Assign a product image to a variant in Squarespace",
+          "message": "Attribuer une image de produit à une variante dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Assign a Product Image",
+          "message": "Attribuer une image de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to assign",
+          "message": "L'ID de l'image à attribuer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID d'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "L'ID de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to assign the image to",
+          "message": "L'ID du produit auquel attribuer l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "L'ID du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the variant to assign the image to",
+          "message": "L'ID de la variante à laquelle attribuer l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "L'identifiant de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Assign an image to a variant",
+          "message": "Attribuer une image à une variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Squarespace",
+          "message": "Récupérer une commande par son ID depuis Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Obtenir une commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "L'ID de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Obtenir une seule commande par ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.desc": {
+          "source": "Retrieve inventory for a specific variant from Squarespace",
+          "message": "Récupérer l'inventaire pour une variante spécifique depuis Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
+          "source": "Get Inventory",
+          "message": "Obtenir l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "L'identifiant de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
+          "source": "Get inventory for a variant",
+          "message": "Obtenir l'inventaire pour une variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Squarespace",
+          "message": "Récupérer un produit par son ID depuis Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Obtenir un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "L'ID du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Obtenir un produit par son ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve a single transaction by ID from Squarespace",
+          "message": "Récupérer une transaction par son ID depuis Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get a Transaction",
+          "message": "Obtenir une transaction"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID de transaction"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction ID",
+          "message": "L'ID de transaction"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a single transaction by ID",
+          "message": "Obtenir une transaction par son ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.desc": {
+          "source": "Delete a product from Squarespace",
+          "message": "Supprimer un produit de Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
+          "source": "Delete a Product",
+          "message": "Supprimer un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to delete",
+          "message": "L'ID du produit à supprimer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to delete",
+          "message": "L'ID du produit à supprimer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Delete a product",
+          "message": "Supprimer un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Delete a product image from Squarespace",
+          "message": "Supprimer une image de produit de Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Delete a Product Image",
+          "message": "Supprimer une image de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to delete",
+          "message": "L'ID de l'image à supprimer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID d'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "L'ID de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "L'identifiant du produit auquel appartient l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "L'ID du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Delete a product image",
+          "message": "Supprimer une image de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Delete a product variant from Squarespace",
+          "message": "Supprimer une variante de produit de Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Delete a Product Variant",
+          "message": "Supprimer une variante de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "L'identifiant du produit contenant la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "L'identifiant du produit contenant la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to delete",
+          "message": "L'identifiant de la variante à supprimer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to delete",
+          "message": "L'identifiant de la variante à supprimer"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Delete a product variant",
+          "message": "Supprimer une variante de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.desc": {
+          "source": "Fulfill an order in Squarespace with shipment details",
+          "message": "Traiter une commande dans Squarespace avec les détails d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
+          "source": "Fulfill an Order",
+          "message": "Traiter une commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.desc": {
+          "source": "The order ID to fulfill",
+          "message": "L'identifiant de la commande à traiter"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to fulfill",
+          "message": "L'identifiant de la commande à traiter"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.desc": {
+          "source": "The list of shipment tracking details for the fulfillment",
+          "message": "La liste des informations de suivi d'expédition pour le traitement de la commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Expéditions"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipment tracking details",
+          "message": "Informations de suivi d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.desc": {
+          "source": "Send customer notification email",
+          "message": "Envoyer l'e-mail de notification au client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.display_name": {
+          "source": "Send Notification",
+          "message": "Envoyer une notification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.short_desc": {
+          "source": "Send customer notification email",
+          "message": "Envoyer l'e-mail de notification au client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
+          "source": "Fulfill an existing order",
+          "message": "Traiter une commande existante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Se déclenche lorsqu'une commande est créée ou mise à jour dans Squarespace. Utilise l'interrogation pour détecter les modifications."
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Commande créée/mise à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Se déclenche lorsqu'une commande est créée ou mise à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.desc": {
+          "source": "List transactions in Squarespace with optional filtering",
+          "message": "Lister les transactions dans Squarespace avec filtrage facultatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "Lister les transactions"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Modifié après le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrer par date de modification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Modifié avant le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrer par date de modification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID de transaction"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Filter by transaction ID",
+          "message": "Filtrer par identifiant de transaction"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List all transactions",
+          "message": "Lister toutes les transactions"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.desc": {
+          "source": "List inventory items in Squarespace with optional filtering",
+          "message": "Lister les articles de l'inventaire dans Squarespace avec filtrage facultatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
+          "source": "List Inventory",
+          "message": "Lister l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Modifié après le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrer par date de modification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Modifié avant le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrer par date de modification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "Filtrer par identifiant de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
+          "source": "List inventory items",
+          "message": "Lister les articles de l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Squarespace with optional filtering",
+          "message": "Lister les commandes dans Squarespace avec filtrage facultatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Lister les commandes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtrer par identifiant client"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled",
+          "message": "Annulé"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Fulfilled",
+          "message": "Traité"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending fulfillment",
+          "message": "Traitement en attente"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.desc": {
+          "source": "Filter by fulfillment status (`PENDING`, `FULFILLED`, `CANCELED`)",
+          "message": "Filtrer par statut de traitement (`PENDING`, `FULFILLED`, `CANCELED`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.display_name": {
+          "source": "Fulfillment Status",
+          "message": "Statut de traitement"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrer par statut"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrer par identifiant de commande"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.desc": {
+          "source": "Orders modified after this datetime",
+          "message": "Commandes modifiées après cette date et heure"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Modifié après le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Orders modified after this date",
+          "message": "Commandes modifiées après cette date"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.desc": {
+          "source": "Orders modified before this datetime",
+          "message": "Commandes modifiées avant cette date et heure"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Modifié avant le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Orders modified before this date",
+          "message": "Commandes modifiées avant cette date"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "Lister toutes les commandes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.desc": {
+          "source": "List product variants in Squarespace (requires product_id)",
+          "message": "Lister les variantes de produit dans Squarespace (requiert product_id)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
+          "source": "List Product Variants",
+          "message": "Lister les variantes de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product to list variants for",
+          "message": "Produit dont lister les variantes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "Filtrer par identifiant de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
+          "source": "List variants for a product",
+          "message": "Lister les variantes d'un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Squarespace with optional filtering",
+          "message": "Lister les produits dans Squarespace avec filtrage facultatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Lister les produits"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Modifié après le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Products modified after this date",
+          "message": "Produits modifiés après cette date"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Modifié avant le"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Products modified before this date",
+          "message": "Produits modifiés avant cette date"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Filtrer par ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkRJR0lUQUw.desc": {
+          "source": "Digital product",
+          "message": "Produit numérique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "Carte cadeau"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product",
+          "message": "Produit physique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "Produit de type service"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Filter by product type (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)",
+          "message": "Filtrer par type de produit (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Product Type",
+          "message": "Type de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Filter by type",
+          "message": "Filtrer par type"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "Lister tous les produits"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Squarespace** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuez un appel d'API HTTP / REST personnalisé vers **Squarespace** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête facultatifs, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hash contenant le code de statut, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre dans cette application."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Squarespace",
+          "message": "Effectuer un appel d'API personnalisé vers Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Se déclenche lorsqu'un produit est créé ou mis à jour dans Squarespace. Utilise l'interrogation pour détecter les modifications."
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Created/Updated",
+          "message": "Produit créé/mis à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a product is created or updated",
+          "message": "Déclencher lorsqu'un produit est créé ou mis à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.desc": {
+          "source": "Fires when a transaction is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Se déclenche lorsqu'une transaction est créée ou mise à jour dans Squarespace. Utilise l'interrogation pour détecter les modifications."
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
+          "source": "Transaction Created/Updated",
+          "message": "Transaction créée/mise à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a transaction is created or updated",
+          "message": "Déclencher lorsqu'une transaction est créée ou mise à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in Squarespace",
+          "message": "Mettre à jour un produit existant dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "Mettre à jour un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description (HTML)",
+          "message": "La description du produit (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "La description du produit (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Indique si le produit est visible dans la boutique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "Est visible"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Indique si le produit est visible dans la boutique"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name",
+          "message": "Le nom du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Le nom du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.desc": {
+          "source": "SEO configuration (`title`, `description`)",
+          "message": "Configuration SEO (`title`, `description`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.display_name": {
+          "source": "SEO Options",
+          "message": "Options SEO"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.short_desc": {
+          "source": "SEO configuration",
+          "message": "Configuration SEO"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to update",
+          "message": "L'ID du produit à mettre à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to update",
+          "message": "L'ID du produit à mettre à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product",
+          "message": "Liste des balises pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Étiquettes"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "Liste des balises pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product",
+          "message": "Le slug d'URL pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "Slug d'URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "Le slug d'URL pour le produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color)",
+          "message": "Liste des noms d'attributs de variante (ex. : Taille, Couleur)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "Attributs de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "Liste des noms d'attributs de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Mettre à jour un produit existant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Update a product image alt text in Squarespace",
+          "message": "Mettre à jour le texte alternatif d'une image de produit dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Update a Product Image",
+          "message": "Mettre à jour une image de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "The alt text to set for the product image",
+          "message": "Le texte alternatif à définir pour l'image du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "Texte alternatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "The alt text for the image",
+          "message": "Le texte alternatif de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to update",
+          "message": "L'identifiant de l'image à mettre à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID d'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "L'ID de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "L'identifiant du produit auquel appartient l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "L'ID du produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Update image alt text",
+          "message": "Mettre à jour le texte alternatif de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Update an existing product variant in Squarespace",
+          "message": "Mettre à jour une variante de produit existante dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Update a Product Variant",
+          "message": "Mettre à jour une variante de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "Les attributs de variante (paires clé-valeur libres)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Attributs"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "Les attributs de variante (paires clé-valeur)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "Les dimensions d'expédition incluant `weight` et `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "Dimensions d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "Les dimensions d'expédition"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "L'identifiant d'unité de gestion des stocks (SKU) pour la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "Le SKU de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "Les informations de stock incluant `quantity` et `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "Les informations de stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "La tarification de la variante incluant `basePrice`, `salePrice` et `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "Tarification"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "La tarification de la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "L'identifiant du produit contenant la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "L'identifiant du produit contenant la variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to update",
+          "message": "L'identifiant de la variante à mettre à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to update",
+          "message": "L'identifiant de la variante à mettre à jour"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Update an existing product variant",
+          "message": "Mettre à jour une variante de produit existante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.desc": {
+          "source": "Adjust inventory stock for a product variant in Squarespace",
+          "message": "Ajuster le stock d'inventaire pour une variante de produit dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
+          "source": "Update Stock Quantities",
+          "message": "Mettre à jour les quantités de stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOkRFQ1JFTUVOVA.desc": {
+          "source": "Remove stock",
+          "message": "Retirer du stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOklOQ1JFTUVOVA.desc": {
+          "source": "Add stock",
+          "message": "Ajouter du stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.desc": {
+          "source": "The operation to perform: INCREMENT to add stock, DECREMENT to remove stock (default: INCREMENT)",
+          "message": "L'opération à effectuer : INCREMENT pour ajouter du stock, DECREMENT pour retirer du stock (par défaut : INCREMENT)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.display_name": {
+          "source": "Operation",
+          "message": "Opération"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.short_desc": {
+          "source": "INCREMENT or DECREMENT (default: INCREMENT)",
+          "message": "INCREMENT ou DECREMENT (par défaut : INCREMENT)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity to increment or decrement (always positive; operation controls direction)",
+          "message": "La quantité à incrémenter ou décrémenter (toujours positive ; l'opération contrôle le sens)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Quantité"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity to adjust",
+          "message": "La quantité à ajuster"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the product variant to adjust inventory for",
+          "message": "L'ID de la variante de produit pour laquelle ajuster l'inventaire"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID de variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to adjust stock for",
+          "message": "L'ID de variante pour lequel ajuster le stock"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
+          "source": "Adjust inventory stock for a variant",
+          "message": "Ajuster le stock d'inventaire pour une variante"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Upload a product image in Squarespace",
+          "message": "Téléverser une image de produit dans Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Upload a Product Image",
+          "message": "Téléverser une image de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "Alternative text for the image",
+          "message": "Texte alternatif pour l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "Texte alternatif"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "Alternative text for the image",
+          "message": "Texte alternatif pour l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.desc": {
+          "source": "The image file name or URL",
+          "message": "Le nom de fichier ou l'URL de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Nom du fichier"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The image file name or URL",
+          "message": "Le nom de fichier ou l'URL de l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to upload the image for",
+          "message": "L'ID de produit pour lequel téléverser l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to upload the image for",
+          "message": "L'ID de produit pour lequel téléverser l'image"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Upload an image for a product",
+          "message": "Téléverser une image pour un produit"
+        },
+        "app.U3F1YXJlc3BhY2U.desc": {
+          "source": "Squarespace is an e-commerce platform for managing online stores.\n\nThis integration supports orders, products, product variants, product images, inventory, and transactions.",
+          "message": "Squarespace est une plateforme d'e-commerce pour la gestion de boutiques en ligne.\n\nCette intégration prend en charge les commandes, les produits, les variantes de produit, les images de produit, l'inventaire et les transactions."
+        },
+        "app.U3F1YXJlc3BhY2U.display_name": {
+          "source": "Squarespace",
+          "message": "Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.short_desc": {
+          "source": "Squarespace Commerce platform",
+          "message": "Plateforme Squarespace Commerce"
+        }
+      }
+    }
+  }
+}

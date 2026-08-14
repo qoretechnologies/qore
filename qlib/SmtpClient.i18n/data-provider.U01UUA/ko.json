@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.U01UUA.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "일반 SMTP 서버를 통해 이메일을 보냅니다"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send an Email With SMTP",
+          "message": "SMTP로 이메일 보내기"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Cc:` 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "참조"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "참조(CC) 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "메시지의 모든 첨부 파일"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "첨부 파일"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "메시지 첨부 파일"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "콘텐츠 인코딩 없음(권장하지 않음)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Base64 encoding",
+          "message": "Base64 인코딩"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "문자열 데이터의 경우 `quoted-printable`, 바이너리 데이터의 경우 `base64`"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Quoted printable encoding",
+          "message": "Quoted-printable 인코딩"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the message body",
+          "message": "메시지 본문에 사용할 인코딩입니다"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "본문 인코딩"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the body",
+          "message": "본문에 사용할 인코딩입니다"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "본문 MIME 유형"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Bcc:` 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "숨은 참조"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "숨은 참조 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "발신자"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "이메일의 하나 이상의 `To:` 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "받는 사람"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "메시지 수신자 주소"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "일반 SMTP 서버를 통해 이메일을 보냅니다"
+        },
+        "app.U01UUA.desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "이메일 전송을 위한 일반 SMTP 서버"
+        },
+        "app.U01UUA.display_name": {
+          "source": "SMTP Server",
+          "message": "SMTP 서버"
+        },
+        "app.U01UUA.short_desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "이메일 전송을 위한 일반 SMTP 서버"
+        }
+      }
+    }
+  }
+}

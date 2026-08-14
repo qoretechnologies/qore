@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.SEw3djI.action.c2NoZW1h.desc": {
+          "source": "Load generated HL7 v2 schema metadata from a Qore value artifact. Use `path` for a specific artifact, or `version` with `schema_dir` when schemas are stored by version.",
+          "message": "Завантажити метадані згенерованої схеми HL7 v2 з артефакту значення Qore. Використовуйте `path` для конкретного артефакту або `version` разом із `schema_dir`, коли схеми зберігаються за версіями."
+        },
+        "app.SEw3djI.action.c2NoZW1h.display_name": {
+          "source": "Load HL7 v2 Schema",
+          "message": "Завантажити схему HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "Кореневий каталог, що містить згенеровані схеми HL7 v2, впорядковані за версіями."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "Каталог схем"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "Кореневий каталог, що містить згенеровані схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return schema metadata and counts without the full schema hash.",
+          "message": "Якщо `True`, повертає метадані схеми та підрахунки без повного хешу схеми."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Лише зведення"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Повертати лише зведення"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Шлях або сумісне з FileLocationHandler розташування для артефакту згенерованої схеми HL7 v2 у форматі значення Qore."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "Розташування схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "Розташування артефакту згенерованої схеми HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "Якщо `True`, ігнорувати кеш схем у пам'яті та перезавантажити артефакт схеми."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Перезавантажити"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "Ігнорувати кеш схем у пам'яті"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "Версія HL7 v2 для завантаження з `schema_dir`. Використовуйте це з `schema_dir`, коли схеми зберігаються як `<schema_dir>/<version>/schema.qv`."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "Версія схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "Версія HL7 v2 для завантаження"
+        },
+        "app.SEw3djI.action.c2NoZW1h.short_desc": {
+          "source": "Load generated HL7 v2 schema metadata",
+          "message": "Завантажити метадані згенерованої схеми HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load only generated HL7 v2 schema metadata, counts, and segment tags.",
+          "message": "Завантажити лише метадані згенерованої схеми HL7 v2, підрахунки та теги сегментів."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "HL7 v2 Schema Summary",
+          "message": "Короткі відомості про схему HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "Кореневий каталог, що містить згенеровані схеми HL7 v2, впорядковані за версіями."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "Каталог схем"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "Кореневий каталог, що містить згенеровані схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Шлях або сумісне з FileLocationHandler розташування для артефакту згенерованої схеми HL7 v2 у форматі значення Qore."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "Розташування схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "Розташування артефакту згенерованої схеми HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "Якщо `True`, ігнорувати кеш схем у пам'яті та перезавантажити артефакт схеми."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Перезавантажити"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "Ігнорувати кеш схем у пам'яті"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "Версія HL7 v2 для завантаження з `schema_dir`. Використовуйте це з `schema_dir`, коли схеми зберігаються як `<schema_dir>/<version>/schema.qv`."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "Версія схеми"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "Версія HL7 v2 для завантаження"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load a generated HL7 v2 schema summary",
+          "message": "Завантажити короткі відомості про згенеровану схему HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZA.desc": {
+          "source": "Read HL7 v2 message data from a file and return one typed record per segment.",
+          "message": "Зчитати дані повідомлення HL7 v2 із файлу та повернути один типізований запис для кожного сегмента."
+        },
+        "app.SEw3djI.action.cmVhZA.display_name": {
+          "source": "Read HL7 v2 Message",
+          "message": "Читати повідомлення HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "Path to a file containing one HL7 v2 message.",
+          "message": "Шлях до файлу, що містить одне повідомлення HL7 v2."
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 message file",
+          "message": "Шлях до файлу повідомлення HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZA.short_desc": {
+          "source": "Read HL7 v2 message data from a file",
+          "message": "Читати дані повідомлення HL7 v2 з файлу"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.desc": {
+          "source": "Read HL7 v2 message data from an inline string and return one typed record per segment.",
+          "message": "Читати дані повідомлення HL7 v2 із вбудованого рядка та повертати один типізований запис на сегмент."
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read HL7 v2 Inline Data",
+          "message": "Читати вбудовані дані HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Inline HL7 v2 message data. Use this option when the message is already in memory.",
+          "message": "Вбудовані дані повідомлення HL7 v2. Використовуйте цей параметр, коли повідомлення вже знаходиться в пам'яті."
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "HL7 v2 Data",
+          "message": "Дані HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "HL7 v2 message data as a string",
+          "message": "Дані повідомлення HL7 v2 у вигляді рядка"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read HL7 v2 message data from an inline string",
+          "message": "Читати дані повідомлення HL7 v2 із вбудованого рядка"
+        },
+        "app.SEw3djI.action.d3JpdGU.desc": {
+          "source": "Write HL7 v2 message data to a file from parsed segments or simple segment records. The response includes the output `path`, serialized character count, and segment count.",
+          "message": "Записати дані повідомлення HL7 v2 у файл із розібраних сегментів або простих записів сегментів. Відповідь містить вихідний `path`, кількість серіалізованих символів і кількість сегментів."
+        },
+        "app.SEw3djI.action.d3JpdGU.display_name": {
+          "source": "Write HL7 v2 Message",
+          "message": "Записати повідомлення HL7 v2"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "Path to write the serialized HL7 v2 message.",
+          "message": "Шлях для запису серіалізованого повідомлення HL7 v2."
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 output file",
+          "message": "Шлях до вихідного файлу HL7 v2"
+        },
+        "app.SEw3djI.action.d3JpdGU.short_desc": {
+          "source": "Write HL7 v2 message data to a file",
+          "message": "Записати дані повідомлення HL7 v2 у файл"
+        },
+        "app.SEw3djI.desc": {
+          "source": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) delimited healthcare messages for integration and transformation workflows.\n\n**Capabilities**:\n- Preserve message structure and custom `Z` segments without requiring a fixed schema\n- Read custom delimiters from `MSH` and handle HL7 escape sequences\n- Expose one parsed segment per record through the DataProvider API\n- Serialize parsed messages or simple segment records back to HL7 v2 text",
+          "message": "Читання та запис повідомлень охорони здоров'я з розділювачами [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) для робочих процесів інтеграції та трансформації.\n\n**Можливості**:\n- Збереження структури повідомлень і власних сегментів `Z` без необхідності фіксованої схеми\n- Читання власних розділювачів із `MSH` та обробка керівних послідовностей HL7\n- Надання одного розібраного сегмента на запис через DataProvider API\n- Серіалізація розібраних повідомлень або простих записів сегментів назад у текст HL7 v2"
+        },
+        "app.SEw3djI.display_name": {
+          "source": "HL7 v2 Messages",
+          "message": "Повідомлення HL7 v2"
+        },
+        "app.SEw3djI.short_desc": {
+          "source": "Read and write HL7 v2 delimited messages",
+          "message": "Читання та запис повідомлень із розділювачами HL7 v2"
+        }
+      }
+    }
+  }
+}

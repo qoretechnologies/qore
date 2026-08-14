@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UmVkaXM.action.Z2V0LWhhc2g.desc": {
+          "source": "Get the values of hash fields from Redis",
+          "message": "Redisからハッシュフィールドの値を取得します"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
+          "source": "Get Hash Fields",
+          "message": "ハッシュフィールドの取得"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
+          "source": "Get hash field values",
+          "message": "ハッシュフィールド値を取得"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.desc": {
+          "source": "Get the string value of a key from Redis",
+          "message": "Redisからキーの文字列値を取得します"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
+          "source": "Get String",
+          "message": "文字列の取得"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
+          "source": "Get the string value of a key",
+          "message": "キーの文字列値を取得"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.desc": {
+          "source": "Set the value of a hash field in Redis",
+          "message": "Redisでハッシュフィールドの値を設定します"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
+          "source": "Set Hash Field",
+          "message": "ハッシュフィールドの設定"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
+          "source": "Set a hash field value",
+          "message": "ハッシュフィールド値を設定"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.desc": {
+          "source": "Set the string value of a key in Redis",
+          "message": "Redisでキーの文字列値を設定します"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
+          "source": "Set String",
+          "message": "文字列の設定"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
+          "source": "Set the string value of a key",
+          "message": "キーの文字列値を設定"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.desc": {
+          "source": "Pop elements from a list in Redis",
+          "message": "Redisのリストから要素をポップします"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
+          "source": "Pop from List",
+          "message": "リストからポップ"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
+          "source": "Pop elements from a list",
+          "message": "リストから要素をポップ"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.desc": {
+          "source": "Publish a message to a Redis pub/sub channel",
+          "message": "Redisのpub/subチャネルにメッセージを発行します"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
+          "source": "Publish Message",
+          "message": "メッセージの発行"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {
+          "source": "Publish a message to a channel",
+          "message": "チャネルにメッセージを発行"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.desc": {
+          "source": "Push elements to a list in Redis",
+          "message": "Redisのリストに要素をプッシュします"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
+          "source": "Push to List",
+          "message": "リストへプッシュ"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
+          "source": "Push elements to a list",
+          "message": "リストに要素をプッシュ"
+        },
+        "app.UmVkaXM.desc": {
+          "source": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",
+          "message": "データベース、キャッシュ、メッセージブローカー、キューとして使用されるRedisインメモリーデータ構造ストア"
+        },
+        "app.UmVkaXM.display_name": {
+          "source": "Redis Server",
+          "message": "Redisサーバー"
+        },
+        "app.UmVkaXM.short_desc": {
+          "source": "Redis in-memory data store",
+          "message": "Redisインメモリーデータストア"
+        }
+      }
+    }
+  }
+}

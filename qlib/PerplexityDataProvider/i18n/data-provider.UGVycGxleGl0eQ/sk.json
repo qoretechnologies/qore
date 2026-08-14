@@ -1,0 +1,2169 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Perplexity AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Perplexity AI** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL adrese API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Perplexity AI",
+          "message": "Vykonať vlastné volanie API do Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Chatujte s modelom Perplexity AI odoslaním viacerých správ naraz a získajte odpovede podložené webom s citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "Viacnásobný chat"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Ak je nastavené na `True`, model nebude vyhľadávať na webe a na vygenerovanie odpovede použije iba svoje trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Zakázať vyhľadávanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Obmedziť odpoveď len na trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Ak je nastavené na `True`, použije klasifikátor na určenie, či je pre dopyt potrebné vyhľadávanie na webe pred jeho vykonaním"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Povoliť klasifikátor vyhľadávania?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Použiť klasifikátor na určenie, či je vyhľadávanie potrebné"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Zoznam domén, na ktoré sa majú obmedziť výsledky vyhľadávania obrázkov. Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filter domén obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Obmedziť zdroje obrázkov na konkrétne domény"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Zoznam formátov obrázkov, ktoré sa majú zahrnúť do výsledkov obrázkov (napr. `png`, `jpg`). Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filter formátov obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtrovať výsledky obrázkov podľa formátu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kód jazyka ISO 639-1 určujúci preferovaný jazyk odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Jazyková preferencia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kód jazyka ISO 639-1 pre odpoveď"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Naposledy aktualizované po"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Zahrnúť iba zdroje aktualizované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Naposledy aktualizované pred"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Zahrnúť iba zdroje aktualizované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model založený na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Výskum na expertnej úrovni s autonómnym hodnotením zdrojov a generovaním správ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonómny výskum na expertnej úrovni"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií a dvojitými citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Uvažovací model Chain of Thought založený na DeepSeek-R1 s vyhľadávaním cez viacero dopytov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Uvažovací model Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maximálny počet tokenov, ktoré je možné vygenerovať pri doplnení chatu. Podporovaných je až 128 000 tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maximálny počet tokenov na vygenerovanie"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Prehľadávať akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Akademické"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Prehľadávať regulačné podania americkej SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Podania SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Všeobecné vyhľadávanie na webe na ukotvenie odpovedí"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Všeobecné vyhľadávanie na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať na ukotvenie odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Režim vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Vyhľadať po dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Vyhľadať pred dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Zoznam domén, ktoré sa majú zahrnúť alebo vylúčiť z výsledkov vyhľadávania. Pre vylúčenie použite predponu `-`. Maximálne 20 domén"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filter vyhľadávania podľa domény"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Zoznam povolených alebo zakázaných domén pre vyhľadávanie (max. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Zoznam kódov jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania. Maximálne 10 jazykov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filter vyhľadávania podľa jazyka"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kódy jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania (max. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Zahrnúť iba zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Minulý mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Zahrnúť iba zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Zahrnúť iba zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Posledná hodina"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Zahrnúť iba zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Zahrnúť iba zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtrovať výsledky vyhľadávania tak, aby zahŕňali iba zdroje z určitého časového obdobia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filter vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtrovať výsledky vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekvencie, pri ktorých API zastaví generovanie tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Ak je nastavené na `True`, čiastkové prírastky správ sa budú odosielať ako udalosti odosielané serverom (Server-Sent Events) iba s údajmi hneď, ako budú k dispozícii, pričom stream sa ukončí správou `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Povoliť streamovanie cez Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Poskytuje samostatné udalosti uvažovania počas streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Stručné"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadáta vložené priamo v texte bez samostatných udalostí uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Úplný"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadáta inline, žiadne udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Riadi formát streamovania. `full` zahŕňa metadáta inline bez samostatných udalostí uvažovania. `concise` poskytuje samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Režim streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Riadi formát streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Ak je nastavené na `True`, do odpovede budú zahrnuté výsledky obrázkov z vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Vrátiť obrázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Zahrnúť výsledky obrázkov z vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Ak je nastavené na `True`, odpoveď bude obsahovať navrhované doplňujúce otázky"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Vrátiť súvisiace otázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generovať návrhy doplňujúcich otázok"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Stredné úsilie uvažovania (predvolené)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Stredná"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimálne úsilie uvažovania pre rýchle odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimálne"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimálne úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maximálne úsilie uvažovania pre dôkladnú analýzu"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Riadi hĺbku uvažovania pre modely `sonar-reasoning` a `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Riadi úsilie uvažovania pre modely s uvažovaním"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Objekt špecifikujúci formát, ktorý musí model vrátiť. Nastavte `type` na `json_schema` a zadajte objekt `json_schema` na povolenie štruktúrovaného výstupu JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Zadajte výstupný formát (napr. schéma JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Pokročilé možnosti konfigurácie vyhľadávania na webe, ako napríklad veľkosť kontextu vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Možnosti vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Pokročilá konfigurácia vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatíva k vzorkovaniu s teplotou, nazývaná jadrové vzorkovanie (nucleus sampling), kde model zvažuje výsledky tokenov s pravdepodobnostnou hmotou `top_p`. Teda `0.1` znamená, že sa berú do úvahy iba tokeny tvoriace horných 10 % pravdepodobnostnej hmoty"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Hodnota jadrového vzorkovania (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Akú vzorkovaciu teplotu použiť, medzi `0` a `2`. Vyššie hodnoty ako `0.8` spôsobia, že výstup bude náhodnejší, zatiaľ čo nižšie hodnoty ako `0.2` spôsobia, že bude sústredenejší a deterministickejší"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Teplota vzorkovania, ktorá sa má použiť, v rozsahu od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Chatujte s modelom Perplexity AI odoslaním viacerých správ naraz a získajte odpovede podložené webom s citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
+          "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
+          "message": "Vyhľadávajte na webe pomocou vyhradeného rozhrania API pre vyhľadávanie Perplexity, ktoré vracia štruktúrované výsledky s názvami, adresami URL a úryvkami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Vyhľadávanie na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "ISO country code to localize search results",
+          "message": "Kód krajiny ISO na lokalizáciu výsledkov vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code for search localization",
+          "message": "Kód krajiny ISO pre lokalizáciu vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of search results to return. Range: 1-20, default: 10",
+          "message": "Maximálny počet vrátených výsledkov vyhľadávania. Rozsah: 1 – 20, predvolené: 10"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of results to return (1-20)",
+          "message": "Maximálny počet vrátených výsledkov (1 – 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.desc": {
+          "source": "Maximum tokens extracted from each page in results. Default: 4,096",
+          "message": "Maximálny počet tokenov extrahovaných z každej stránky vo výsledkoch. Predvolené: 4 096"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.display_name": {
+          "source": "Max Tokens Per Page",
+          "message": "Maximálny počet tokenov na stránku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.short_desc": {
+          "source": "Maximum tokens extracted per page",
+          "message": "Maximálny počet tokenov extrahovaných na stránku"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens per search response. Default: 10,000, maximum: 1,000,000",
+          "message": "Maximálny počet tokenov na odpoveď vyhľadávania. Predvolené: 10 000, maximum: 1 000 000"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens per search response",
+          "message": "Maximálny počet tokenov na odpoveď vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude",
+          "message": "Zoznam domén, ktoré sa majú zahrnúť alebo vylúčiť z výsledkov vyhľadávania. Pre vylúčenie pridajte predponu `-`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filter vyhľadávania podľa domény"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search",
+          "message": "Zoznam povolených alebo zakázaných domén pre vyhľadávanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results",
+          "message": "Zoznam kódov jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filter vyhľadávania podľa jazyka"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter results",
+          "message": "Kódy jazykov ISO 639-1 na filtrovanie výsledkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Zahrnúť iba zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Minulý mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Zahrnúť iba zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Zahrnúť iba zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Posledná hodina"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Zahrnúť iba zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Zahrnúť iba zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtrovať výsledky vyhľadávania tak, aby zahŕňali iba zdroje z určitého časového obdobia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filter vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtrovať výsledky vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string; automatically wrapped in an array for the API",
+          "message": "Reťazec vyhľadávacieho dopytu; pre API sa automaticky zabalí do poľa"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dopyt"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "Vyhľadávací dopyt"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
+          "source": "Search the web using Perplexity's dedicated search API",
+          "message": "Vyhľadávajte na webe pomocou vyhradeného rozhrania API pre vyhľadávanie Perplexity"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Chatujte s modelom Perplexity AI odoslaním jednej správy a prijatím jednej odpovede podloženej webom s citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Jednoduchý chat"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The contents of the message",
+          "message": "Obsah správy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The contents of the message",
+          "message": "Obsah správy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Ak je nastavené na `True`, model nebude vyhľadávať na webe a na vygenerovanie odpovede použije iba svoje trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Zakázať vyhľadávanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Obmedziť odpoveď len na trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Ak je nastavené na `True`, použije klasifikátor na určenie, či je pre dopyt potrebné vyhľadávanie na webe pred jeho vykonaním"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Povoliť klasifikátor vyhľadávania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Použiť klasifikátor na určenie, či je vyhľadávanie potrebné"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Zoznam domén, na ktoré sa majú obmedziť výsledky vyhľadávania obrázkov. Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filter domén obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Obmedziť zdroje obrázkov na konkrétne domény"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Zoznam formátov obrázkov, ktoré sa majú zahrnúť do výsledkov obrázkov (napr. `png`, `jpg`). Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filter formátov obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtrovať výsledky obrázkov podľa formátu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kód jazyka ISO 639-1 určujúci preferovaný jazyk odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Jazyková preferencia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kód jazyka ISO 639-1 pre odpoveď"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Naposledy aktualizované po"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Zahrnúť iba zdroje aktualizované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Naposledy aktualizované pred"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Zahrnúť iba zdroje aktualizované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model založený na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Výskum na expertnej úrovni s autonómnym hodnotením zdrojov a generovaním správ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonómny výskum na expertnej úrovni"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií a dvojitými citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Uvažovací model Chain of Thought založený na DeepSeek-R1 s vyhľadávaním cez viacero dopytov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Uvažovací model Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maximálny počet tokenov, ktoré je možné vygenerovať pri doplnení chatu. Podporovaných je až 128 000 tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maximálny počet tokenov na vygenerovanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Prehľadávať akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Akademické"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Prehľadávať regulačné podania americkej SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Podania SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Všeobecné vyhľadávanie na webe na ukotvenie odpovedí"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Všeobecné vyhľadávanie na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať na ukotvenie odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Režim vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Vyhľadať po dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Vyhľadať pred dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Zoznam domén, ktoré sa majú zahrnúť alebo vylúčiť z výsledkov vyhľadávania. Pre vylúčenie použite predponu `-`. Maximálne 20 domén"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filter vyhľadávania podľa domény"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Zoznam povolených alebo zakázaných domén pre vyhľadávanie (max. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Zoznam kódov jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania. Maximálne 10 jazykov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filter vyhľadávania podľa jazyka"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kódy jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania (max. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Zahrnúť iba zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Minulý mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Zahrnúť iba zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Zahrnúť iba zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Posledná hodina"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Zahrnúť iba zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Zahrnúť iba zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtrovať výsledky vyhľadávania tak, aby zahŕňali iba zdroje z určitého časového obdobia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filter vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtrovať výsledky vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekvencie, pri ktorých API zastaví generovanie tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Ak je nastavené na `True`, čiastkové prírastky správ sa budú odosielať ako udalosti odosielané serverom (Server-Sent Events) iba s údajmi hneď, ako budú k dispozícii, pričom stream sa ukončí správou `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Povoliť streamovanie cez Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Poskytuje samostatné udalosti uvažovania počas streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Stručné"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadáta vložené priamo v texte bez samostatných udalostí uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Úplný"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadáta inline, žiadne udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Riadi formát streamovania. `full` zahŕňa metadáta inline bez samostatných udalostí uvažovania. `concise` poskytuje samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Režim streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Riadi formát streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Autorom správy je asistent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "Asistent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Autorom správy je asistent"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author of the message is the system",
+          "message": "Autorom správy je systém"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "Systém"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author of the message is the system",
+          "message": "Autorom správy je systém"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author of the message is the user",
+          "message": "Autorom správy je používateľ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author of the message is the user",
+          "message": "Autorom správy je používateľ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tejto správy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tejto správy"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Ak je nastavené na `True`, do odpovede budú zahrnuté výsledky obrázkov z vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Vrátiť obrázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Zahrnúť výsledky obrázkov z vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Ak je nastavené na `True`, odpoveď bude obsahovať navrhované doplňujúce otázky"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Vrátiť súvisiace otázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generovať návrhy doplňujúcich otázok"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Stredné úsilie uvažovania (predvolené)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Stredná"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimálne úsilie uvažovania pre rýchle odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimálne"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimálne úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maximálne úsilie uvažovania pre dôkladnú analýzu"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Riadi hĺbku uvažovania pre modely `sonar-reasoning` a `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Riadi úsilie uvažovania pre modely s uvažovaním"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Objekt špecifikujúci formát, ktorý musí model vrátiť. Nastavte `type` na `json_schema` a zadajte objekt `json_schema` na povolenie štruktúrovaného výstupu JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Zadajte výstupný formát (napr. schéma JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Pokročilé možnosti konfigurácie vyhľadávania na webe, ako napríklad veľkosť kontextu vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Možnosti vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Pokročilá konfigurácia vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatíva k vzorkovaniu s teplotou, nazývaná jadrové vzorkovanie (nucleus sampling), kde model zvažuje výsledky tokenov s pravdepodobnostnou hmotou `top_p`. Teda `0.1` znamená, že sa berú do úvahy iba tokeny tvoriace horných 10 % pravdepodobnostnej hmoty"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Hodnota jadrového vzorkovania (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Akú vzorkovaciu teplotu použiť, medzi `0` a `2`. Vyššie hodnoty ako `0.8` spôsobia, že výstup bude náhodnejší, zatiaľ čo nižšie hodnoty ako `0.2` spôsobia, že bude sústredenejší a deterministickejší"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Teplota vzorkovania, ktorá sa má použiť, v rozsahu od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Chatujte s modelom Perplexity AI odoslaním jednej správy a prijatím jednej odpovede podloženej webom s citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",
+          "message": "Streamujte chatovú odpoveď z Perplexity AI cez Server-Sent Events s doručovaním tokenov v reálnom čase"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
+          "source": "Stream Chat",
+          "message": "Streamovať chat"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Ak je nastavené na `True`, model nebude vyhľadávať na webe a na vygenerovanie odpovede použije iba svoje trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Zakázať vyhľadávanie?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Obmedziť odpoveď len na trénovacie údaje"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Ak je nastavené na `True`, použije klasifikátor na určenie, či je pre dopyt potrebné vyhľadávanie na webe pred jeho vykonaním"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Povoliť klasifikátor vyhľadávania?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Použiť klasifikátor na určenie, či je vyhľadávanie potrebné"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Zoznam domén, na ktoré sa majú obmedziť výsledky vyhľadávania obrázkov. Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Filter domén obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Obmedziť zdroje obrázkov na konkrétne domény"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Zoznam formátov obrázkov, ktoré sa majú zahrnúť do výsledkov obrázkov (napr. `png`, `jpg`). Platí len vtedy, keď je `return_images` nastavené na `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Filter formátov obrázkov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Filtrovať výsledky obrázkov podľa formátu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Kód jazyka ISO 639-1 určujúci preferovaný jazyk odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Jazyková preferencia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Kód jazyka ISO 639-1 pre odpoveď"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Naposledy aktualizované po"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Zahrnúť iba zdroje aktualizované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje, ktoré boli naposledy aktualizované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Naposledy aktualizované pred"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Zahrnúť iba zdroje aktualizované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model založený na Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Ľahký a cenovo výhodný vyhľadávací model"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Výskum na expertnej úrovni s autonómnym hodnotením zdrojov a generovaním správ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Autonómny výskum na expertnej úrovni"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií a dvojitými citáciami"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Pokročilé vyhľadávanie s hlbším vyhľadávaním informácií"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Uvažovací model Chain of Thought založený na DeepSeek-R1 s vyhľadávaním cez viacero dopytov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Uvažovací model Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Model, ktorý sa má použiť na doplnenie chatu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Maximálny počet tokenov, ktoré je možné vygenerovať pri doplnení chatu. Podporovaných je až 128 000 tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Maximálny počet tokenov na vygenerovanie"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Prehľadávať akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Akademické"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Akademické a výskumné práce"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Prehľadávať regulačné podania americkej SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Podania SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Všeobecné vyhľadávanie na webe na ukotvenie odpovedí"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Všeobecné vyhľadávanie na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať na ukotvenie odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Režim vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Typ vyhľadávania, ktorý sa má vykonať"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Vyhľadať po dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Zahrnúť iba zdroje publikované po tomto dátume"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom. Formát: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Vyhľadať pred dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Zahrnúť iba zdroje publikované pred týmto dátumom"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Zoznam domén, ktoré sa majú zahrnúť alebo vylúčiť z výsledkov vyhľadávania. Pre vylúčenie použite predponu `-`. Maximálne 20 domén"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Filter vyhľadávania podľa domény"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Zoznam povolených alebo zakázaných domén pre vyhľadávanie (max. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Zoznam kódov jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania. Maximálne 10 jazykov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Filter vyhľadávania podľa jazyka"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Kódy jazykov ISO 639-1 na filtrovanie výsledkov vyhľadávania (max. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Zahrnúť iba zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Minulý mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Zdroje za posledný mesiac"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Zahrnúť iba zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Zdroje za posledný deň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Zahrnúť iba zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Posledná hodina"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Zdroje za poslednú hodinu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Zahrnúť iba zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Zdroje za posledný týždeň"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Zahrnúť iba zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Zdroje za posledný rok"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Filtrovať výsledky vyhľadávania tak, aby zahŕňali iba zdroje z určitého časového obdobia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Filter vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Filtrovať výsledky vyhľadávania podľa aktuálnosti"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Sekvencie, pri ktorých API zastaví generovanie tokenov"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Poskytuje samostatné udalosti uvažovania počas streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Stručné"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Metadáta vložené priamo v texte bez samostatných udalostí uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Úplný"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Metadáta inline, žiadne udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Riadi formát streamovania. `full` zahŕňa metadáta inline bez samostatných udalostí uvažovania. `concise` poskytuje samostatné udalosti uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Režim streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Riadi formát streamovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Ak je nastavené na `True`, do odpovede budú zahrnuté výsledky obrázkov z vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Vrátiť obrázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Zahrnúť výsledky obrázkov z vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Ak je nastavené na `True`, odpoveď bude obsahovať navrhované doplňujúce otázky"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Vrátiť súvisiace otázky?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Generovať návrhy doplňujúcich otázok"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Stredné úsilie uvažovania (predvolené)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Stredná"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Minimálne úsilie uvažovania pre rýchle odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimálne"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Minimálne úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Maximálne úsilie uvažovania pre dôkladnú analýzu"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Riadi hĺbku uvažovania pre modely `sonar-reasoning` a `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Úsilie uvažovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Riadi úsilie uvažovania pre modely s uvažovaním"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Objekt špecifikujúci formát, ktorý musí model vrátiť. Nastavte `type` na `json_schema` a zadajte objekt `json_schema` na povolenie štruktúrovaného výstupu JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Zadajte výstupný formát (napr. schéma JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Pokročilé možnosti konfigurácie vyhľadávania na webe, ako napríklad veľkosť kontextu vyhľadávania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Možnosti vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Pokročilá konfigurácia vyhľadávania na webe"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Alternatíva k vzorkovaniu s teplotou, nazývaná jadrové vzorkovanie (nucleus sampling), kde model zvažuje výsledky tokenov s pravdepodobnostnou hmotou `top_p`. Teda `0.1` znamená, že sa berú do úvahy iba tokeny tvoriace horných 10 % pravdepodobnostnej hmoty"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Hodnota jadrového vzorkovania (nucleus sampling)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Akú vzorkovaciu teplotu použiť, medzi `0` a `2`. Vyššie hodnoty ako `0.8` spôsobia, že výstup bude náhodnejší, zatiaľ čo nižšie hodnoty ako `0.2` spôsobia, že bude sústredenejší a deterministickejší"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Teplota vzorkovania, ktorá sa má použiť, v rozsahu od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events",
+          "message": "Streamujte chatovú odpoveď z Perplexity AI cez Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.desc": {
+          "source": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n**Key Features:**\n- Real-time web search grounding for up-to-date responses\n- Automatic citation of sources\n- Multiple search modes: web, academic, and SEC filings\n- Streaming support via Server-Sent Events\n- Structured JSON output with schema validation",
+          "message": "Perplexity AI poskytuje vyhľadávanie pomocou umelej inteligencie podložené webom a dopĺňanie chatu s citáciami.\n\n**Kľúčové funkcie:**\n- Podloženie vyhľadávaním na webe v reálnom čase pre aktuálne odpovede\n- Automatická citácia zdrojov\n- Viacero režimov vyhľadávania: web, akademický a podania SEC\n- Podpora streamovania cez Server-Sent Events\n- Štruktúrovaný výstup JSON s validáciou schémy"
+        },
+        "app.UGVycGxleGl0eQ.display_name": {
+          "source": "Perplexity AI",
+          "message": "Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.short_desc": {
+          "source": "Perplexity AI services",
+          "message": "Služby Perplexity AI"
+        }
+      }
+    }
+  }
+}

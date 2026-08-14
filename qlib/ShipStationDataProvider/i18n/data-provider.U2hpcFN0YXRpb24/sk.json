@@ -1,0 +1,2365 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in ShipStation. The order can be associated with a store and include line items, shipping address, and custom fields.",
+          "message": "Vytvoriť novú objednávku v ShipStation. Objednávka môže byť priradená k obchodu a obsahovať položky objednávky, dodaciu adresu a vlastné polia."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "Vytvoriť objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No confirmation",
+          "message": "Bez potvrdenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.allowed-value.c3RyaW5nOmFkdWx0X3NpZ25hdHVyZQ.desc": {
+          "source": "Adult signature required",
+          "message": "Vyžaduje sa podpis dospelej osoby"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery confirmation",
+          "message": "Potvrdenie doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.allowed-value.c3RyaW5nOmRpcmVjdF9zaWduYXR1cmU.desc": {
+          "source": "Direct signature required",
+          "message": "Vyžaduje sa priamy podpis"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.allowed-value.c3RyaW5nOnNpZ25hdHVyZQ.desc": {
+          "source": "Signature required",
+          "message": "Vyžaduje sa podpis"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.desc": {
+          "source": "The delivery confirmation type",
+          "message": "Typ potvrdenia doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.display_name": {
+          "source": "Confirmation",
+          "message": "Potvrdenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.short_desc": {
+          "source": "Delivery confirmation type",
+          "message": "Typ potvrdenia doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y2FycmllckNvZGU.desc": {
+          "source": "The preferred carrier code",
+          "message": "Kód preferovaného dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier Code",
+          "message": "Kód dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "Preferred carrier",
+          "message": "Preferovaný dopravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.desc": {
+          "source": "The customer's email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.display_name": {
+          "source": "Customer Email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.short_desc": {
+          "source": "Customer's email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJOb3Rlcw.desc": {
+          "source": "Notes from the customer",
+          "message": "Poznámky od zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJOb3Rlcw.display_name": {
+          "source": "Customer Notes",
+          "message": "Poznámky zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJOb3Rlcw.short_desc": {
+          "source": "Customer notes",
+          "message": "Poznámky zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.desc": {
+          "source": "The customer's username on the selling channel",
+          "message": "Používateľské meno zákazníka na predajnom kanáli"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.display_name": {
+          "source": "Customer Username",
+          "message": "Používateľské meno zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.short_desc": {
+          "source": "Customer's marketplace username",
+          "message": "Používateľské meno zákazníka na trhovisku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YW1vdW50UGFpZA.desc": {
+          "source": "The total amount paid by the customer",
+          "message": "Celková suma zaplatená zákazníkom"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YW1vdW50UGFpZA.display_name": {
+          "source": "Amount Paid",
+          "message": "Zaplatená suma"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YW1vdW50UGFpZA.short_desc": {
+          "source": "Total amount paid",
+          "message": "Celková zaplatená suma"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.desc": {
+          "source": "Advanced options including storeId, warehouseId, customField1-3, etc.",
+          "message": "Rozšírené možnosti vrátane storeId, warehouseId, customField1-3 atď."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.display_name": {
+          "source": "Advanced Options",
+          "message": "Rozšírené možnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.short_desc": {
+          "source": "Advanced order options",
+          "message": "Rozšírené možnosti objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YmlsbFRv.desc": {
+          "source": "The billing address for the order",
+          "message": "Fakturačná adresa pre objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YmlsbFRv.display_name": {
+          "source": "Bill To",
+          "message": "Fakturačná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.YmlsbFRv.short_desc": {
+          "source": "Billing address",
+          "message": "Fakturačná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdA.desc": {
+          "source": "Whether this is a gift order",
+          "message": "Či ide o darčekovú objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdA.display_name": {
+          "source": "Gift",
+          "message": "Darček"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdA.short_desc": {
+          "source": "Is gift order",
+          "message": "Je darčeková objednávka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.desc": {
+          "source": "A gift message to include with the order",
+          "message": "Darčekový odkaz, ktorý sa má priložiť k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.display_name": {
+          "source": "Gift Message",
+          "message": "Darčekový odkaz"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.short_desc": {
+          "source": "Gift message",
+          "message": "Darčekový odkaz"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.desc": {
+          "source": "The dimensions of the package",
+          "message": "Rozmery zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimenzie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Package dimensions",
+          "message": "Rozmery zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes (not visible to customer)",
+          "message": "Interné poznámky (neviditeľné pre zákazníka)"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aXRlbXM.desc": {
+          "source": "Array of order items with sku, name, quantity, unitPrice, etc.",
+          "message": "Pole položiek objednávky so sku, name, quantity, unitPrice atď."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Položky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.aXRlbXM.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJEYXRl.desc": {
+          "source": "The date the order was placed",
+          "message": "Dátum vytvorenia objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJEYXRl.display_name": {
+          "source": "Order Date",
+          "message": "Dátum objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJEYXRl.short_desc": {
+          "source": "Date the order was placed",
+          "message": "Dátum vytvorenia objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJLZXk.desc": {
+          "source": "A unique identifier for the order. Used to match orders for updates via the createorder endpoint.",
+          "message": "Jedinečný identifikátor objednávky. Používa sa na párovanie objednávok pri aktualizáciách cez koncový bod createorder."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJLZXk.display_name": {
+          "source": "Order Key",
+          "message": "Kľúč objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJLZXk.short_desc": {
+          "source": "Unique order key for updates",
+          "message": "Jedinečný kľúč objednávky pre aktualizácie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.desc": {
+          "source": "A unique identifier for the order in your system",
+          "message": "Jedinečný identifikátor objednávky vo vašom systéme"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.short_desc": {
+          "source": "Your internal order number",
+          "message": "Vaše interné číslo objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOm9uX2hvbGQ.desc": {
+          "source": "On hold",
+          "message": "Pozastavené"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3BheW1lbnQ.desc": {
+          "source": "Awaiting payment",
+          "message": "Čaká na platbu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3NoaXBtZW50.desc": {
+          "source": "Awaiting shipment",
+          "message": "Čaká na odoslanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "Zrušené"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.desc": {
+          "source": "The initial status of the order",
+          "message": "Počiatočný stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.short_desc": {
+          "source": "Initial order status",
+          "message": "Počiatočný stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZUNvZGU.desc": {
+          "source": "The preferred service code",
+          "message": "Kód preferovanej služby"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZUNvZGU.display_name": {
+          "source": "Service Code",
+          "message": "Kód služby"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZUNvZGU.short_desc": {
+          "source": "Preferred service",
+          "message": "Preferovaná služba"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcFRv.desc": {
+          "source": "The shipping destination address",
+          "message": "Cieľová adresa doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcFRv.display_name": {
+          "source": "Ship To",
+          "message": "Odoslať komu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcFRv.short_desc": {
+          "source": "Shipping address",
+          "message": "Dodacia adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.desc": {
+          "source": "The shipping cost charged to the customer",
+          "message": "Náklady na dopravu účtované zákazníkovi"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.display_name": {
+          "source": "Shipping Amount",
+          "message": "Suma za dopravu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.short_desc": {
+          "source": "Shipping cost",
+          "message": "Náklady na dopravu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.desc": {
+          "source": "The preferred package code",
+          "message": "Preferovaný kód balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.display_name": {
+          "source": "Package Code",
+          "message": "Kód balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.short_desc": {
+          "source": "Preferred package type",
+          "message": "Preferovaný typ balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cmVxdWVzdGVkU2hpcHBpbmdTZXJ2aWNl.desc": {
+          "source": "The shipping service requested by the customer",
+          "message": "Prepravná služba požadovaná zákazníkom"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cmVxdWVzdGVkU2hpcHBpbmdTZXJ2aWNl.display_name": {
+          "source": "Requested Shipping Service",
+          "message": "Požadovaná prepravná služba"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.cmVxdWVzdGVkU2hpcHBpbmdTZXJ2aWNl.short_desc": {
+          "source": "Requested shipping method",
+          "message": "Požadovaný spôsob dopravy"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.desc": {
+          "source": "The weight of the shipment",
+          "message": "Hmotnosť zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Hmotnosť"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.short_desc": {
+          "source": "Package weight",
+          "message": "Hmotnosť balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGF4QW1vdW50.desc": {
+          "source": "The tax amount for the order",
+          "message": "Suma dane pre objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGF4QW1vdW50.display_name": {
+          "source": "Tax Amount",
+          "message": "Suma dane"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGF4QW1vdW50.short_desc": {
+          "source": "Tax amount",
+          "message": "Suma dane"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGFnSWRz.desc": {
+          "source": "Array of tag IDs to apply to the order",
+          "message": "Pole identifikátorov tagov (ID), ktoré sa majú použiť na objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGFnSWRz.display_name": {
+          "source": "Tag IDs",
+          "message": "ID značiek"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.option.dGFnSWRz.short_desc": {
+          "source": "Tags to apply",
+          "message": "Značky na použitie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Vytvoriť novú objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Create a new warehouse (ship-from location) in ShipStation.",
+          "message": "Vytvoriť nový sklad (miesto odoslania) v ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Create Warehouse",
+          "message": "Vytvoriť dátový sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.desc": {
+          "source": "Whether this warehouse should be the default for new orders",
+          "message": "Či má byť tento sklad predvolený pre nové objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.display_name": {
+          "source": "Is Default",
+          "message": "Je predvolený"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.short_desc": {
+          "source": "Set as default warehouse",
+          "message": "Nastaviť ako predvolený sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.desc": {
+          "source": "The ship-from address for this warehouse",
+          "message": "Adresa odoslania pre tento sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.display_name": {
+          "source": "Origin Address",
+          "message": "Adresa odoslania"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.short_desc": {
+          "source": "Warehouse address",
+          "message": "Adresa skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.desc": {
+          "source": "The return address for shipments from this warehouse. If not provided, the origin address is used.",
+          "message": "Adresa pre vrátenie tovaru pre zásielky z tohto skladu. Ak nie je zadaná, použije sa adresa pôvodu."
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.display_name": {
+          "source": "Return Address",
+          "message": "Spiatočná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.short_desc": {
+          "source": "Return address",
+          "message": "Spiatočná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.desc": {
+          "source": "A descriptive name for the warehouse",
+          "message": "Popisný názov skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.display_name": {
+          "source": "Warehouse Name",
+          "message": "Názov skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.short_desc": {
+          "source": "Name for the warehouse",
+          "message": "Názov pre sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Create a new warehouse",
+          "message": "Vytvoriť nový sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.desc": {
+          "source": "Add funds to a carrier account for postage. Requires a payment method on file.",
+          "message": "Pridať finančné prostriedky na účet dopravcu pre poštovné. Vyžaduje evidovaný spôsob platby."
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.display_name": {
+          "source": "Add Funds",
+          "message": "Pridať prostriedky"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.Y2FycmllckNvZGU.desc": {
+          "source": "Select the carrier to add funds to",
+          "message": "Vyberte dopravcu, ktorému chcete pridať finančné prostriedky"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "The carrier to add funds to",
+          "message": "Dopravca, ktorému sa majú pridať prostriedky"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.YW1vdW50.desc": {
+          "source": "The amount to add to the carrier account (in USD)",
+          "message": "Suma, ktorá sa má pridať na účet dopravcu (v USD)"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.option.YW1vdW50.short_desc": {
+          "source": "Amount to add",
+          "message": "Suma na pridanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLWZ1bmRz.short_desc": {
+          "source": "Add funds to carrier account",
+          "message": "Pridať prostriedky na účet dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.desc": {
+          "source": "Add a tag to an order for organization and filtering purposes.",
+          "message": "Pridať tag k objednávke na účely organizácie a filtrovania."
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.display_name": {
+          "source": "Add Tag to Order",
+          "message": "Pridať tag k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.b3JkZXJJZA.desc": {
+          "source": "The ShipStation order ID to add the tag to",
+          "message": "ID objednávky ShipStation, ku ktorej sa má pridať tag"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.dGFnSWQ.desc": {
+          "source": "Select the tag to add to the order",
+          "message": "Vyberte tag, ktorý chcete pridať k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.dGFnSWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.option.dGFnSWQ.short_desc": {
+          "source": "The tag to add",
+          "message": "Tag na pridanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.YWRkLXRhZy10by1vcmRlcg.short_desc": {
+          "source": "Add a tag to an order",
+          "message": "Pridať tag k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.desc": {
+          "source": "Assign a ShipStation user to an order for task management.",
+          "message": "Priradiť používateľa ShipStation k objednávke na účely správy úloh."
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.display_name": {
+          "source": "Assign User to Order",
+          "message": "Priradiť používateľa k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.b3JkZXJJZHM.desc": {
+          "source": "Array of order IDs to assign the user to",
+          "message": "Pole ID objednávok, ku ktorým sa má používateľ priradiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.b3JkZXJJZHM.display_name": {
+          "source": "Order IDs",
+          "message": "ID objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.b3JkZXJJZHM.short_desc": {
+          "source": "The order IDs to assign",
+          "message": "ID objednávok na priradenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.dXNlcklk.desc": {
+          "source": "Select the user to assign to the order",
+          "message": "Vyberte používateľa, ktorého chcete priradiť k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.dXNlcklk.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.option.dXNlcklk.short_desc": {
+          "source": "The user to assign",
+          "message": "Používateľ na priradenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.YXNzaWduLXVzZXItdG8tb3JkZXI.short_desc": {
+          "source": "Assign a user to an order",
+          "message": "Priradiť používateľa k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific ShipStation order.",
+          "message": "Získať podrobné informácie o konkrétnej objednávke ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Získať objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.option.b3JkZXJJZA.desc": {
+          "source": "The unique ShipStation order ID",
+          "message": "Jedinečné ID objednávky ShipStation"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID to retrieve",
+          "message": "ID objednávky na získanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Získať jednu objednávku podľa ID"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer.",
+          "message": "Získať podrobné informácie o konkrétnom zákazníkovi."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Získať zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJJZA.desc": {
+          "source": "The unique ShipStation customer ID",
+          "message": "Jedinečné ID zákazníka ShipStation"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJJZA.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer ID to retrieve",
+          "message": "ID zákazníka na získanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by ID",
+          "message": "Získať zákazníka podľa ID"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.desc": {
+          "source": "Retrieve detailed information about a specific carrier by its code.",
+          "message": "Získať podrobné informácie o konkrétnom dopravcovi podľa jeho kódu."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.display_name": {
+          "source": "Get Carrier",
+          "message": "Získať dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.option.Y2FycmllckNvZGU.desc": {
+          "source": "Select the carrier to retrieve details for",
+          "message": "Vyberte dopravcu, pre ktorého chcete získať podrobnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "The carrier to get",
+          "message": "Dopravca na získanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LWNhcnJpZXI.short_desc": {
+          "source": "Get carrier details",
+          "message": "Získať podrobnosti o dopravcovi"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "Získať podrobné informácie o konkrétnom produkte."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Získať produkt"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdElk.desc": {
+          "source": "The unique ShipStation product ID",
+          "message": "Jedinečné ID produktu ShipStation"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdElk.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdElk.short_desc": {
+          "source": "The product ID to retrieve",
+          "message": "ID produktu na získanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by ID",
+          "message": "Získať produkt podľa ID"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.desc": {
+          "source": "Retrieve detailed information about a specific store.",
+          "message": "Získať podrobné informácie o konkrétnom obchode."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.display_name": {
+          "source": "Get Store",
+          "message": "Získať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.option.c3RvcmVJZA.desc": {
+          "source": "Select the store to retrieve details for",
+          "message": "Vyberte obchod, pre ktorý chcete získať podrobnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.option.c3RvcmVJZA.short_desc": {
+          "source": "The store to get",
+          "message": "Obchod na získanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXN0b3Jl.short_desc": {
+          "source": "Get store details",
+          "message": "Získať podrobnosti o obchode"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.desc": {
+          "source": "Retrieve detailed information about a specific warehouse.",
+          "message": "Získať podrobné informácie o konkrétnom sklade."
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.display_name": {
+          "source": "Get Warehouse",
+          "message": "Získať sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "Select the warehouse to retrieve details for",
+          "message": "Vyberte sklad, pre ktorý chcete získať podrobnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse",
+          "message": "Sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse to get",
+          "message": "Sklad na načítanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
+          "source": "Get warehouse details",
+          "message": "Získať podrobnosti o sklade"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.desc": {
+          "source": "Deactivate a store to stop importing orders from it.",
+          "message": "Deaktivujte obchod, aby ste z neho zastavili importovanie objednávok."
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.display_name": {
+          "source": "Deactivate Store",
+          "message": "Deaktivovať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.desc": {
+          "source": "Select the store to deactivate",
+          "message": "Vyberte obchod, ktorý chcete deaktivovať"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.short_desc": {
+          "source": "The store to deactivate",
+          "message": "Obchod na deaktiváciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
+          "source": "Deactivate a store",
+          "message": "Deaktivovať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.desc": {
+          "source": "Delete an order from ShipStation. This action cannot be undone.",
+          "message": "Odstrániť objednávku zo služby ShipStation. Túto akciu nemožno vrátiť späť."
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.display_name": {
+          "source": "Delete Order",
+          "message": "Odstrániť objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJJZA.desc": {
+          "source": "The ShipStation order ID to delete",
+          "message": "ID objednávky ShipStation na odstránenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID to delete",
+          "message": "ID objednávky na odstránenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.ZGVsZXRlLW9yZGVy.short_desc": {
+          "source": "Delete an order",
+          "message": "Odstrániť objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.desc": {
+          "source": "Fires when a new order is created or an existing order is updated in ShipStation. Provides full order details including all line items.",
+          "message": "Spustí sa pri vytvorení novej objednávky alebo aktualizácii existujúcej objednávky v službe ShipStation. Poskytuje úplné podrobnosti o objednávke vrátane všetkých položiek."
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.display_name": {
+          "source": "Order Created/Updated (with Items)",
+          "message": "Objednávka vytvorená/aktualizovaná (s položkami)"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.option.c3RvcmVfaWQ.desc": {
+          "source": "Optionally filter events to a specific store",
+          "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.option.c3RvcmVfaWQ.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.option.c3RvcmVfaWQ.short_desc": {
+          "source": "Filter by store",
+          "message": "Filtrovať podľa obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1vcmRlci1ub3RpZnk.short_desc": {
+          "source": "Trigger when an order is created or updated (includes items)",
+          "message": "Spustiť pri vytvorení alebo aktualizácii objednávky (zahŕňa položky)"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.desc": {
+          "source": "Fires when a shipping label is generated for an order. Provides full shipment details including tracking number, carrier, shipping address, and all items in the shipment.",
+          "message": "Spustí sa pri vygenerovaní prepravného štítka pre objednávku. Poskytuje úplné podrobnosti o zásielke vrátane sledovacieho čísla, prepravcu, doručovacej adresy a všetkých položiek v zásielke."
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.display_name": {
+          "source": "Label Created (with Items)",
+          "message": "Štítok vytvorený (s položkami)"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.option.c3RvcmVfaWQ.desc": {
+          "source": "Optionally filter events to a specific store",
+          "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.option.c3RvcmVfaWQ.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.option.c3RvcmVfaWQ.short_desc": {
+          "source": "Filter by store",
+          "message": "Filtrovať podľa obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.aXRlbS1zaGlwLW5vdGlmeQ.short_desc": {
+          "source": "Trigger when a shipping label is created (includes items)",
+          "message": "Spustiť pri vytvorení prepravného štítka (zahŕňa položky)"
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.desc": {
+          "source": "Fires when a new order is created or an existing order is updated in ShipStation. Provides order details without line item information.",
+          "message": "Spustí sa pri vytvorení novej objednávky alebo aktualizácii existujúcej objednávky v službe ShipStation. Poskytuje podrobnosti o objednávke bez informácií o jednotlivých položkách."
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Objednávka vytvorená/aktualizovaná"
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.option.c3RvcmVfaWQ.desc": {
+          "source": "Optionally filter events to a specific store",
+          "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.option.c3RvcmVfaWQ.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.option.c3RvcmVfaWQ.short_desc": {
+          "source": "Filter by store",
+          "message": "Filtrovať podľa obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.b3JkZXItbm90aWZ5.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.desc": {
+          "source": "Retrieve a list of all tags available for orders.",
+          "message": "Získať zoznam všetkých štítkov dostupných pre objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Zoznam značiek"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC10YWdz.short_desc": {
+          "source": "List available tags",
+          "message": "Zoznam dostupných štítkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.desc": {
+          "source": "Retrieve a list of all users in your ShipStation account.",
+          "message": "Získať zoznam všetkých používateľov vo vašom účte ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Zoznam používateľov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List account users",
+          "message": "Zoznam používateľov účtu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.desc": {
+          "source": "Retrieve a list of all warehouses (ship-from locations) in your ShipStation account.",
+          "message": "Získať zoznam všetkých skladov (miest odoslania) vo vašom účte ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.display_name": {
+          "source": "List Warehouses",
+          "message": "Zoznam skladov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
+          "source": "List warehouses",
+          "message": "Zoznam skladov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.desc": {
+          "source": "Retrieve a list of all carriers connected to your ShipStation account.",
+          "message": "Získať zoznam všetkých prepravcov pripojených k vášmu účtu ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.display_name": {
+          "source": "List Carriers",
+          "message": "Zoznam prepravcov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jYXJyaWVycw.short_desc": {
+          "source": "List connected carriers",
+          "message": "Zoznam pripojených prepravcov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "Retrieve a list of customers from ShipStation with optional filtering.",
+          "message": "Získať zoznam zákazníkov zo služby ShipStation s voliteľným filtrovaním."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Zoznam zákazníkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List and search customers",
+          "message": "Zobraziť a vyhľadať zákazníkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.desc": {
+          "source": "Retrieve a list of fulfillments (completed shipments) from ShipStation.",
+          "message": "Získať zoznam vybavení (dokončených zásielok) zo služby ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
+          "source": "List Fulfillments",
+          "message": "Zoznam vybavení"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
+          "source": "List fulfillments",
+          "message": "Zoznam vybavení"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.desc": {
+          "source": "Retrieve a list of all marketplaces that can be connected to ShipStation.",
+          "message": "Získať zoznam všetkých trhovísk, ktoré je možné pripojiť k službe ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.display_name": {
+          "source": "List Marketplaces",
+          "message": "Zoznam trhovísk"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1tYXJrZXRwbGFjZXM.short_desc": {
+          "source": "List available marketplaces",
+          "message": "Zoznam dostupných trhovísk"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of orders from ShipStation with optional filtering by status, dates, customer name, and more.",
+          "message": "Získať zoznam objednávok zo služby ShipStation s voliteľným filtrovaním podľa stavu, dátumov, mena zákazníka a ďalších parametrov."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Zoznam objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOm9uX2hvbGQ.desc": {
+          "source": "On hold",
+          "message": "Pozastavené"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3BheW1lbnQ.desc": {
+          "source": "Awaiting payment",
+          "message": "Čaká na platbu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3NoaXBtZW50.desc": {
+          "source": "Awaiting shipment",
+          "message": "Čaká na odoslanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "Zrušené"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOnNoaXBwZWQ.desc": {
+          "source": "Shipped",
+          "message": "Odoslané"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.desc": {
+          "source": "Filter orders by their status",
+          "message": "Filtrovať objednávky podľa ich stavu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.b3JkZXJTdGF0dXM.short_desc": {
+          "source": "Filter by order status",
+          "message": "Filtrovať podľa stavu objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.c3RvcmVJZA.desc": {
+          "source": "Filter orders by the store they originated from",
+          "message": "Filtrovať objednávky podľa obchodu, z ktorého pochádzajú"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.option.c3RvcmVJZA.short_desc": {
+          "source": "Filter by store",
+          "message": "Filtrovať podľa obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List and search orders",
+          "message": "Zoznam a vyhľadávanie objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.desc": {
+          "source": "Retrieve a list of package types offered by a specific carrier.",
+          "message": "Získať zoznam typov balíkov ponúkaných konkrétnym prepravcom."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.display_name": {
+          "source": "List Packages",
+          "message": "Zoznam balíkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.option.Y2FycmllckNvZGU.desc": {
+          "source": "Select the carrier to list available package types",
+          "message": "Vyberte prepravcu, pre ktorého chcete zobraziť zoznam dostupných typov balíkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "The carrier to list packages for",
+          "message": "Prepravca na zobrazenie zoznamu balíkov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wYWNrYWdlcw.short_desc": {
+          "source": "List carrier package types",
+          "message": "Zoznam typov balíkov prepravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "Retrieve a list of products from ShipStation with optional filtering by SKU, name, or category.",
+          "message": "Získať zoznam produktov zo služby ShipStation s voliteľným filtrovaním podľa SKU, názvu alebo kategórie."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Zoznam produktov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List and search products",
+          "message": "Zobraziť a vyhľadať produkty"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.desc": {
+          "source": "Retrieve a list of services offered by a specific carrier (e.g., Ground, 2-Day, Overnight).",
+          "message": "Získať zoznam služieb ponúkaných konkrétnym prepravcom (napr. Ground, 2-Day, Overnight)."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.display_name": {
+          "source": "List Services",
+          "message": "Zoznam služieb"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.option.Y2FycmllckNvZGU.desc": {
+          "source": "Select the carrier to list available services",
+          "message": "Vyberte prepravcu, pre ktorého chcete zobraziť zoznam dostupných služieb"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "The carrier to list services for",
+          "message": "Prepravca na zobrazenie zoznamu služieb"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zZXJ2aWNlcw.short_desc": {
+          "source": "List carrier services",
+          "message": "Zoznam služieb prepravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.desc": {
+          "source": "Retrieve a list of shipments from ShipStation with optional filtering by date, carrier, tracking number, and more.",
+          "message": "Získať zoznam zásielok zo služby ShipStation s voliteľným filtrovaním podľa dátumu, prepravcu, sledovacieho čísla a ďalších parametrov."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.display_name": {
+          "source": "List Shipments",
+          "message": "Zoznam zásielok"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.option.Y2FycmllckNvZGU.desc": {
+          "source": "Filter shipments by carrier",
+          "message": "Filtrovať zásielky podľa prepravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "Filter by carrier",
+          "message": "Filtrovať podľa prepravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zaGlwbWVudHM.short_desc": {
+          "source": "List and search shipments",
+          "message": "Zoznam a vyhľadávanie zásielok"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.desc": {
+          "source": "Retrieve a list of all stores (selling channels) connected to your ShipStation account.",
+          "message": "Získať zoznam všetkých obchodov (predajných kanálov) pripojených k vášmu účtu ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.display_name": {
+          "source": "List Stores",
+          "message": "Zoznam obchodov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bGlzdC1zdG9yZXM.short_desc": {
+          "source": "List connected stores",
+          "message": "Zoznam pripojených obchodov"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ShipStation** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **ShipStation** s využitím overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ShipStation",
+          "message": "Vykonať vlastné volanie API do služby ShipStation"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.desc": {
+          "source": "Mark an order as shipped in ShipStation with tracking information. This will update the order status and optionally send notification emails.",
+          "message": "Označiť objednávku v službe ShipStation ako odoslanú s informáciami o sledovaní. Týmto sa aktualizuje stav objednávky a voliteľne sa odošlú e-maily s oznámením."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.display_name": {
+          "source": "Mark Order as Shipped",
+          "message": "Označiť objednávku ako odoslanú"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.Y2FycmllckNvZGU.desc": {
+          "source": "Select the carrier used for shipment",
+          "message": "Vyberte dopravcu použitého na zásielku"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "The shipping carrier",
+          "message": "Prepravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.b3JkZXJJZA.desc": {
+          "source": "The ShipStation order ID to mark as shipped",
+          "message": "ID objednávky ShipStation, ktorú chcete označiť ako odoslanú"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID to mark as shipped",
+          "message": "ID objednávky, ktorú chcete označiť ako odoslanú"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5Q3VzdG9tZXI.desc": {
+          "source": "Whether to send a shipment notification email to the customer",
+          "message": "Či sa má zákazníkovi odoslať e-mail s oznámením o odoslaní zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5Q3VzdG9tZXI.display_name": {
+          "source": "Notify Customer",
+          "message": "Upozorniť zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5Q3VzdG9tZXI.short_desc": {
+          "source": "Send shipment notification email",
+          "message": "Odoslať e-mail s oznámením o odoslaní"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5U2FsZXNDaGFubmVs.desc": {
+          "source": "Whether to notify the sales channel (marketplace) of the shipment",
+          "message": "Či sa má o odoslaní zásielky informovať predajný kanál (trhovisko)"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5U2FsZXNDaGFubmVs.display_name": {
+          "source": "Notify Sales Channel",
+          "message": "Informovať predajný kanál"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.bm90aWZ5U2FsZXNDaGFubmVs.short_desc": {
+          "source": "Notify the selling channel",
+          "message": "Informovať predajný kanál"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.c2hpcERhdGU.desc": {
+          "source": "The ship date. Defaults to current date if not specified.",
+          "message": "Dátum odoslania. Ak nie je zadaný, predvolene sa použije aktuálny dátum."
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.c2hpcERhdGU.display_name": {
+          "source": "Ship Date",
+          "message": "Dátum odoslania"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.c2hpcERhdGU.short_desc": {
+          "source": "The date the order was shipped",
+          "message": "Dátum odoslania objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.dHJhY2tpbmdOdW1iZXI.desc": {
+          "source": "The tracking number for the shipment",
+          "message": "Sledovacie číslo zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.dHJhY2tpbmdOdW1iZXI.display_name": {
+          "source": "Tracking Number",
+          "message": "Číslo sledovania"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.option.dHJhY2tpbmdOdW1iZXI.short_desc": {
+          "source": "The shipment tracking number",
+          "message": "Sledovacie číslo zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.bWFyay1vcmRlci1hcy1zaGlwcGVk.short_desc": {
+          "source": "Mark an order as shipped",
+          "message": "Označiť objednávku ako odoslanú"
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.desc": {
+          "source": "Fires when a shipping label is generated for an order. Provides shipment details including tracking number, carrier, and shipping address.",
+          "message": "Spustí sa pri vygenerovaní prepravného štítku pre objednávku. Poskytuje podrobnosti o zásielke vrátane sledovacieho čísla, dopravcu a doručovacej adresy."
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.display_name": {
+          "source": "Label Created",
+          "message": "Štítok vytvorený"
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.option.c3RvcmVfaWQ.desc": {
+          "source": "Optionally filter events to a specific store",
+          "message": "Voliteľne filtrovať udalosti podľa konkrétneho obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.option.c3RvcmVfaWQ.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.option.c3RvcmVfaWQ.short_desc": {
+          "source": "Filter by store",
+          "message": "Filtrovať podľa obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.c2hpcC1ub3RpZnk.short_desc": {
+          "source": "Trigger when a shipping label is created",
+          "message": "Spustiť pri vytvorení prepravného štítku"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.desc": {
+          "source": "Reactivate a previously deactivated store to resume importing orders.",
+          "message": "Znovu aktivovať predtým deaktivovaný obchod na obnovenie importu objednávok."
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.display_name": {
+          "source": "Reactivate Store",
+          "message": "Znovu aktivovať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.desc": {
+          "source": "Select the store to reactivate",
+          "message": "Vyberte obchod, ktorý chcete znovu aktivovať"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.option.c3RvcmVJZA.short_desc": {
+          "source": "The store to reactivate",
+          "message": "Obchod na opätovnú aktiváciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVhY3RpdmF0ZS1zdG9yZQ.short_desc": {
+          "source": "Reactivate a store",
+          "message": "Znovu aktivovať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.desc": {
+          "source": "Trigger an order refresh for a store to import new orders immediately.",
+          "message": "Spustiť obnovenie objednávok pre obchod a okamžite importovať nové objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.display_name": {
+          "source": "Refresh Store",
+          "message": "Obnoviť obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.c3RvcmVJZA.desc": {
+          "source": "Select the store to refresh orders for",
+          "message": "Vyberte obchod, pre ktorý chcete obnoviť objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.c3RvcmVJZA.short_desc": {
+          "source": "The store to refresh",
+          "message": "Obchod, ktorý sa má obnoviť"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.cmVmcmVzaERhdGU.desc": {
+          "source": "The date from which to start the refresh. If not provided, refreshes recent orders.",
+          "message": "Dátum, od ktorého sa má začať obnovenie. Ak nie je zadaný, obnovia sa nedávne objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.cmVmcmVzaERhdGU.display_name": {
+          "source": "Refresh Date",
+          "message": "Dátum obnovenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.option.cmVmcmVzaERhdGU.short_desc": {
+          "source": "Start date for order refresh",
+          "message": "Dátum začiatku obnovenia objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVmcmVzaC1zdG9yZQ.short_desc": {
+          "source": "Refresh store orders",
+          "message": "Obnoviť objednávky obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.desc": {
+          "source": "Remove a tag from an order.",
+          "message": "Odstrániť štítok z objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.display_name": {
+          "source": "Remove Tag from Order",
+          "message": "Odstrániť štítok z objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.b3JkZXJJZA.desc": {
+          "source": "The ShipStation order ID to remove the tag from",
+          "message": "ID objednávky ShipStation, z ktorej sa má odstrániť štítok"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.dGFnSWQ.desc": {
+          "source": "Select the tag to remove from the order",
+          "message": "Vyberte štítok, ktorý chcete odstrániť z objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.dGFnSWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.option.dGFnSWQ.short_desc": {
+          "source": "The tag to remove",
+          "message": "Štítok na odstránenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.cmVtb3ZlLXRhZy1mcm9tLW9yZGVy.short_desc": {
+          "source": "Remove a tag from an order",
+          "message": "Odstrániť štítok z objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.desc": {
+          "source": "Remove the assigned user from an order.",
+          "message": "Zrušiť priradenie používateľa k objednávke."
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.display_name": {
+          "source": "Unassign User from Order",
+          "message": "Zrušiť priradenie používateľa k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.option.b3JkZXJJZHM.desc": {
+          "source": "Array of order IDs to unassign the user from",
+          "message": "Pole ID objednávok, z ktorých sa má zrušiť priradenie používateľa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.option.b3JkZXJJZHM.display_name": {
+          "source": "Order IDs",
+          "message": "ID objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.option.b3JkZXJJZHM.short_desc": {
+          "source": "The order IDs to unassign",
+          "message": "ID objednávok, z ktorých sa má zrušiť priradenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dW5hc3NpZ24tdXNlci1mcm9tLW9yZGVy.short_desc": {
+          "source": "Unassign the user from an order",
+          "message": "Zrušiť priradenie používateľa k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in ShipStation. You can modify shipping address, line items, status, and other order details.",
+          "message": "Aktualizovať existujúcu objednávku v službe ShipStation. Môžete upraviť doručovaciu adresu, položky, stav a ďalšie podrobnosti objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update Order",
+          "message": "Aktualizovať objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.desc": {
+          "source": "The delivery confirmation type",
+          "message": "Typ potvrdenia doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.display_name": {
+          "source": "Confirmation",
+          "message": "Potvrdenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y29uZmlybWF0aW9u.short_desc": {
+          "source": "Delivery confirmation type",
+          "message": "Typ potvrdenia doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y2FycmllckNvZGU.desc": {
+          "source": "The preferred carrier code",
+          "message": "Kód preferovaného dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y2FycmllckNvZGU.display_name": {
+          "source": "Carrier Code",
+          "message": "Kód dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y2FycmllckNvZGU.short_desc": {
+          "source": "Preferred carrier",
+          "message": "Preferovaný dopravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.desc": {
+          "source": "The customer's email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.display_name": {
+          "source": "Customer Email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.short_desc": {
+          "source": "Customer's email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.desc": {
+          "source": "The customer's username on the selling channel",
+          "message": "Používateľské meno zákazníka na predajnom kanáli"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.display_name": {
+          "source": "Customer Username",
+          "message": "Používateľské meno zákazníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJVc2VybmFtZQ.short_desc": {
+          "source": "Customer's marketplace username",
+          "message": "Používateľské meno zákazníka na trhovisku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YW1vdW50UGFpZA.desc": {
+          "source": "The total amount paid by the customer",
+          "message": "Celková suma zaplatená zákazníkom"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YW1vdW50UGFpZA.display_name": {
+          "source": "Amount Paid",
+          "message": "Zaplatená suma"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YW1vdW50UGFpZA.short_desc": {
+          "source": "Total amount paid",
+          "message": "Celková zaplatená suma"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.desc": {
+          "source": "Advanced options including storeId, warehouseId, customField1-3, etc.",
+          "message": "Rozšírené možnosti vrátane storeId, warehouseId, customField1-3 atď."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.display_name": {
+          "source": "Advanced Options",
+          "message": "Rozšírené možnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YWR2YW5jZWRPcHRpb25z.short_desc": {
+          "source": "Advanced order options",
+          "message": "Rozšírené možnosti objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YmlsbFRv.desc": {
+          "source": "The billing address for the order",
+          "message": "Fakturačná adresa pre objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YmlsbFRv.display_name": {
+          "source": "Bill To",
+          "message": "Fakturačná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.YmlsbFRv.short_desc": {
+          "source": "Billing address",
+          "message": "Fakturačná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdA.desc": {
+          "source": "Whether this is a gift order",
+          "message": "Či ide o darčekovú objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdA.display_name": {
+          "source": "Gift",
+          "message": "Darček"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdA.short_desc": {
+          "source": "Is gift order",
+          "message": "Je darčeková objednávka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.desc": {
+          "source": "A gift message to include with the order",
+          "message": "Darčekový odkaz, ktorý sa má priložiť k objednávke"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.display_name": {
+          "source": "Gift Message",
+          "message": "Darčekový odkaz"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.Z2lmdE1lc3NhZ2U.short_desc": {
+          "source": "Gift message",
+          "message": "Darčekový odkaz"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.desc": {
+          "source": "The dimensions of the package",
+          "message": "Rozmery zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimenzie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Package dimensions",
+          "message": "Rozmery zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes (not visible to customer)",
+          "message": "Interné poznámky (neviditeľné pre zákazníka)"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aXRlbXM.desc": {
+          "source": "Array of order items",
+          "message": "Pole položiek objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Položky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.aXRlbXM.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJEYXRl.desc": {
+          "source": "The date the order was placed",
+          "message": "Dátum vytvorenia objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJEYXRl.display_name": {
+          "source": "Order Date",
+          "message": "Dátum objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJEYXRl.short_desc": {
+          "source": "Date the order was placed",
+          "message": "Dátum vytvorenia objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJJZA.desc": {
+          "source": "The ShipStation order ID to update",
+          "message": "ID objednávky ShipStation na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJJZA.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJJZA.short_desc": {
+          "source": "The order ID to update",
+          "message": "ID objednávky na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJLZXk.desc": {
+          "source": "A unique identifier for the order. Required when updating an existing order.",
+          "message": "Jedinečný identifikátor objednávky. Vyžaduje sa pri aktualizácii existujúcej objednávky."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJLZXk.display_name": {
+          "source": "Order Key",
+          "message": "Kľúč objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJLZXk.short_desc": {
+          "source": "Unique order key",
+          "message": "Jedinečný kľúč objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.desc": {
+          "source": "A unique identifier for the order in your system",
+          "message": "Jedinečný identifikátor objednávky vo vašom systéme"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJOdW1iZXI.short_desc": {
+          "source": "Your internal order number",
+          "message": "Vaše interné číslo objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOm9uX2hvbGQ.desc": {
+          "source": "On hold",
+          "message": "Pozastavené"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3BheW1lbnQ.desc": {
+          "source": "Awaiting payment",
+          "message": "Čaká na platbu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmF3YWl0aW5nX3NoaXBtZW50.desc": {
+          "source": "Awaiting shipment",
+          "message": "Čaká na odoslanie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "Zrušené"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOnNoaXBwZWQ.desc": {
+          "source": "Shipped",
+          "message": "Odoslané"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.desc": {
+          "source": "The status of the order",
+          "message": "Stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.b3JkZXJTdGF0dXM.short_desc": {
+          "source": "Order status",
+          "message": "Stav objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2VydmljZUNvZGU.desc": {
+          "source": "The preferred service code",
+          "message": "Kód preferovanej služby"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2VydmljZUNvZGU.display_name": {
+          "source": "Service Code",
+          "message": "Kód služby"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2VydmljZUNvZGU.short_desc": {
+          "source": "Preferred service",
+          "message": "Preferovaná služba"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcFRv.desc": {
+          "source": "The shipping destination address",
+          "message": "Cieľová adresa doručenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcFRv.display_name": {
+          "source": "Ship To",
+          "message": "Odoslať komu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcFRv.short_desc": {
+          "source": "Shipping address",
+          "message": "Dodacia adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.desc": {
+          "source": "The shipping cost charged to the customer",
+          "message": "Náklady na dopravu účtované zákazníkovi"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.display_name": {
+          "source": "Shipping Amount",
+          "message": "Suma za dopravu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.c2hpcHBpbmdBbW91bnQ.short_desc": {
+          "source": "Shipping cost",
+          "message": "Náklady na dopravu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.desc": {
+          "source": "The preferred package code",
+          "message": "Preferovaný kód balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.display_name": {
+          "source": "Package Code",
+          "message": "Kód balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.cGFja2FnZUNvZGU.short_desc": {
+          "source": "Preferred package type",
+          "message": "Preferovaný typ balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.d2VpZ2h0.desc": {
+          "source": "The weight of the shipment",
+          "message": "Hmotnosť zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Hmotnosť"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.d2VpZ2h0.short_desc": {
+          "source": "Package weight",
+          "message": "Hmotnosť balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGF4QW1vdW50.desc": {
+          "source": "The tax amount for the order",
+          "message": "Suma dane pre objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGF4QW1vdW50.display_name": {
+          "source": "Tax Amount",
+          "message": "Suma dane"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGF4QW1vdW50.short_desc": {
+          "source": "Tax amount",
+          "message": "Suma dane"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGFnSWRz.desc": {
+          "source": "Array of tag IDs to apply to the order",
+          "message": "Pole identifikátorov tagov (ID), ktoré sa majú použiť na objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGFnSWRz.display_name": {
+          "source": "Tag IDs",
+          "message": "ID značiek"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.option.dGFnSWRz.short_desc": {
+          "source": "Tags to apply",
+          "message": "Značky na použitie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "Aktualizovať existujúcu objednávku"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in ShipStation. You can modify name, SKU, price, weight, dimensions, and other product details.",
+          "message": "Aktualizovať existujúci produkt v službe ShipStation. Môžete upraviť názov, kód SKU, cenu, hmotnosť, rozmery a ďalšie podrobnosti produktu."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "Aktualizovať produkt"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0NvdW50cnlDb2Rl.desc": {
+          "source": "The country of origin code for customs",
+          "message": "Kód krajiny pôvodu pre colné účely"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0NvdW50cnlDb2Rl.display_name": {
+          "source": "Customs Country Code",
+          "message": "Colný kód krajiny"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0NvdW50cnlDb2Rl.short_desc": {
+          "source": "Country of origin",
+          "message": "Krajina pôvodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0Rlc2NyaXB0aW9u.desc": {
+          "source": "The customs description for international shipments",
+          "message": "Colný opis pre medzinárodné zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0Rlc2NyaXB0aW9u.display_name": {
+          "source": "Customs Description",
+          "message": "Colný opis"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc0Rlc2NyaXB0aW9u.short_desc": {
+          "source": "Customs description",
+          "message": "Colný opis"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1RhcmlmZk5v.desc": {
+          "source": "The harmonized system tariff number for customs",
+          "message": "Číslo colného sadzobníka harmonizovaného systému"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1RhcmlmZk5v.display_name": {
+          "source": "Customs Tariff Number",
+          "message": "Číslo colného sadzobníka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1RhcmlmZk5v.short_desc": {
+          "source": "HS tariff number",
+          "message": "Colné číslo HS"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1ZhbHVl.desc": {
+          "source": "The customs value for international shipments",
+          "message": "Colná hodnota pre medzinárodné zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1ZhbHVl.display_name": {
+          "source": "Customs Value",
+          "message": "Colná hodnota"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VzdG9tc1ZhbHVl.short_desc": {
+          "source": "Customs value",
+          "message": "Colná hodnota"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.YWN0aXZl.desc": {
+          "source": "Whether the product is active",
+          "message": "Či je produkt aktívny"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Aktívne"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.YWN0aXZl.short_desc": {
+          "source": "Is product active",
+          "message": "Je produkt aktívny"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENhcnJpZXJDb2Rl.desc": {
+          "source": "The default carrier code for shipping this product",
+          "message": "Predvolený kód dopravcu na prepravu tohto produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENhcnJpZXJDb2Rl.display_name": {
+          "source": "Default Carrier Code",
+          "message": "Predvolený kód dopravcu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENhcnJpZXJDb2Rl.short_desc": {
+          "source": "Default carrier",
+          "message": "Predvolený dopravca"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvbmZpcm1hdGlvbg.desc": {
+          "source": "The default confirmation type for shipments",
+          "message": "Predvolený typ potvrdenia pre zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvbmZpcm1hdGlvbg.display_name": {
+          "source": "Default Confirmation",
+          "message": "Predvolené potvrdenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvbmZpcm1hdGlvbg.short_desc": {
+          "source": "Default confirmation type",
+          "message": "Predvolený typ potvrdenia"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvc3Q.desc": {
+          "source": "The default cost of the product",
+          "message": "Predvolené náklady na produkt"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvc3Q.display_name": {
+          "source": "Default Cost",
+          "message": "Predvolené náklady"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdENvc3Q.short_desc": {
+          "source": "Default cost",
+          "message": "Predvolené náklady"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFBhY2thZ2VDb2Rl.desc": {
+          "source": "The default package code for shipping this product",
+          "message": "Predvolený kód balíka na odoslanie tohto produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFBhY2thZ2VDb2Rl.display_name": {
+          "source": "Default Package Code",
+          "message": "Predvolený kód balíka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFBhY2thZ2VDb2Rl.short_desc": {
+          "source": "Default package",
+          "message": "Predvolený balík"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFNlcnZpY2VDb2Rl.desc": {
+          "source": "The default service code for shipping this product",
+          "message": "Predvolený kód služby na odoslanie tohto produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFNlcnZpY2VDb2Rl.display_name": {
+          "source": "Default Service Code",
+          "message": "Predvolený kód služby"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdFNlcnZpY2VDb2Rl.short_desc": {
+          "source": "Default service",
+          "message": "Predvolená služba"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZnVsZmlsbG1lbnRTa3U.desc": {
+          "source": "The SKU used by the fulfillment center",
+          "message": "SKU používaný fulfillment centrom"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZnVsZmlsbG1lbnRTa3U.display_name": {
+          "source": "Fulfillment SKU",
+          "message": "Fulfillment SKU"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.ZnVsZmlsbG1lbnRTa3U.short_desc": {
+          "source": "Fulfillment center SKU",
+          "message": "SKU fulfillment centra"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aGVpZ2h0.desc": {
+          "source": "The product height in inches",
+          "message": "Výška produktu v palcoch"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Výška"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aGVpZ2h0.short_desc": {
+          "source": "Product height",
+          "message": "Výška produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes about the product",
+          "message": "Interné poznámky o produkte"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes",
+          "message": "Interné poznámky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bGVuZ3Ro.desc": {
+          "source": "The product length in inches",
+          "message": "Dĺžka produktu v palcoch"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "Dĺžka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bGVuZ3Ro.short_desc": {
+          "source": "Product length",
+          "message": "Dĺžka produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name",
+          "message": "Názov produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Product name",
+          "message": "Názov produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "The product's stock keeping unit (SKU)",
+          "message": "Skladová jednotka (SKU) produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Skladová jednotka (SKU)"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.desc": {
+          "source": "The product price",
+          "message": "Cena produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.display_name": {
+          "source": "Price",
+          "message": "Cena"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.short_desc": {
+          "source": "Product price",
+          "message": "Cena produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdElk.desc": {
+          "source": "The unique ShipStation product ID to update",
+          "message": "Unikátne ID produktu v ShipStation na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdElk.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdElk.short_desc": {
+          "source": "The product ID to update",
+          "message": "ID produktu na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2FyZWhvdXNlTG9jYXRpb24.desc": {
+          "source": "The location of the product in the warehouse",
+          "message": "Umiestnenie produktu v sklade"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2FyZWhvdXNlTG9jYXRpb24.display_name": {
+          "source": "Warehouse Location",
+          "message": "Umiestnenie v sklade"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2FyZWhvdXNlTG9jYXRpb24.short_desc": {
+          "source": "Location in warehouse",
+          "message": "Umiestnenie v sklade"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0T3o.desc": {
+          "source": "The product weight in ounces",
+          "message": "Hmotnosť produktu v unciach"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0T3o.display_name": {
+          "source": "Weight (oz)",
+          "message": "Hmotnosť (oz)"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0T3o.short_desc": {
+          "source": "Product weight in ounces",
+          "message": "Hmotnosť produktu v unciach"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2lkdGg.desc": {
+          "source": "The product width in inches",
+          "message": "Šírka produktu v palcoch"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Šírka"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.option.d2lkdGg.short_desc": {
+          "source": "Product width",
+          "message": "Šírka produktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update a product",
+          "message": "Aktualizovať produkt"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.desc": {
+          "source": "Update settings for a connected store.",
+          "message": "Aktualizovať nastavenia pre pripojený obchod."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.display_name": {
+          "source": "Update Store",
+          "message": "Aktualizovať obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The company name for the store",
+          "message": "Názov spoločnosti pre obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Názov spoločnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Company name",
+          "message": "Názov spoločnosti"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.ZW1haWw.desc": {
+          "source": "The contact email address for the store",
+          "message": "Kontaktná e-mailová adresa pre obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.ZW1haWw.short_desc": {
+          "source": "Contact email",
+          "message": "E-mail kontaktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.aW50ZWdyYXRpb25Vcmw.desc": {
+          "source": "The integration URL for manual stores",
+          "message": "Integračná URL adresa pre manuálne obchody"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.aW50ZWdyYXRpb25Vcmw.display_name": {
+          "source": "Integration URL",
+          "message": "Integračná URL"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.aW50ZWdyYXRpb25Vcmw.short_desc": {
+          "source": "Integration URL",
+          "message": "Integračná URL"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RhdHVzTWFwcGluZ3M.desc": {
+          "source": "Array of status mappings for syncing order statuses",
+          "message": "Pole mapovaní stavov na synchronizáciu stavov objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RhdHVzTWFwcGluZ3M.display_name": {
+          "source": "Status Mappings",
+          "message": "Mapovania stavov"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RhdHVzTWFwcGluZ3M.short_desc": {
+          "source": "Order status mappings",
+          "message": "Mapovania stavov objednávok"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVJZA.desc": {
+          "source": "Select the store to update",
+          "message": "Vyberte obchod na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVJZA.display_name": {
+          "source": "Store",
+          "message": "Uložiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVJZA.short_desc": {
+          "source": "The store to update",
+          "message": "Obchod na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVOYW1l.desc": {
+          "source": "The display name for the store",
+          "message": "Zobrazovaný názov pre obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVOYW1l.display_name": {
+          "source": "Store Name",
+          "message": "Názov obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.c3RvcmVOYW1l.short_desc": {
+          "source": "Display name for the store",
+          "message": "Zobrazovaný názov pre úložisko"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.cGhvbmU.desc": {
+          "source": "The contact phone number for the store",
+          "message": "Kontaktné telefónne číslo pre obchod"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Telefónne číslo kontaktu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXN0b3Jl.short_desc": {
+          "source": "Update store settings",
+          "message": "Aktualizovať nastavenia obchodu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Update an existing warehouse in ShipStation.",
+          "message": "Aktualizovať existujúci sklad v ShipStation."
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Update Warehouse",
+          "message": "Aktualizovať sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.desc": {
+          "source": "Whether this warehouse should be the default for new orders",
+          "message": "Či má byť tento sklad predvolený pre nové objednávky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.display_name": {
+          "source": "Is Default",
+          "message": "Je predvolený"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.aXNEZWZhdWx0.short_desc": {
+          "source": "Set as default warehouse",
+          "message": "Nastaviť ako predvolený sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.desc": {
+          "source": "The ship-from address for this warehouse",
+          "message": "Adresa odoslania pre tento sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.display_name": {
+          "source": "Origin Address",
+          "message": "Adresa odoslania"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.b3JpZ2luQWRkcmVzcw.short_desc": {
+          "source": "Warehouse address",
+          "message": "Adresa skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.desc": {
+          "source": "The return address for shipments from this warehouse",
+          "message": "Adresa na vrátenie tovaru pre zásielky z tohto skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.display_name": {
+          "source": "Return Address",
+          "message": "Spiatočná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.cmV0dXJuQWRkcmVzcw.short_desc": {
+          "source": "Return address",
+          "message": "Spiatočná adresa"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "Select the warehouse to update",
+          "message": "Vyberte sklad na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse",
+          "message": "Sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse to update",
+          "message": "Sklad na aktualizáciu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.desc": {
+          "source": "A descriptive name for the warehouse",
+          "message": "Popisný názov skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.display_name": {
+          "source": "Warehouse Name",
+          "message": "Názov skladu"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlTmFtZQ.short_desc": {
+          "source": "Name for the warehouse",
+          "message": "Názov pre sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Update a warehouse",
+          "message": "Aktualizovať sklad"
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.desc": {
+          "source": "Void (cancel) a shipping label. This refunds the shipping cost back to your carrier account.",
+          "message": "Zrušiť prepravný štítok. Týmto sa náklady na dopravu vrátia na váš účet dopravcu."
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.display_name": {
+          "source": "Void Label",
+          "message": "Zrušiť štítok"
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.option.c2hpcG1lbnRJZA.desc": {
+          "source": "The unique ShipStation shipment ID for the label to void",
+          "message": "Unikátne ShipStation ID zásielky pre štítok, ktorý sa má zrušiť"
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.option.c2hpcG1lbnRJZA.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.option.c2hpcG1lbnRJZA.short_desc": {
+          "source": "The shipment ID to void",
+          "message": "ID zásielky na zrušenie"
+        },
+        "app.U2hpcFN0YXRpb24.action.dm9pZC1sYWJlbA.short_desc": {
+          "source": "Void a shipping label",
+          "message": "Zrušiť prepravný štítok"
+        },
+        "app.U2hpcFN0YXRpb24.desc": {
+          "source": "ShipStation is a leading shipping software that helps eCommerce retailers import, organize, process, and ship orders quickly and easily from any web browser. This integration enables managing orders, shipments, carriers, warehouses, and receiving real-time notifications via webhooks.\n\n**Features:**\n- Order management (create, update, delete, tag, assign)\n- Shipment tracking and label management\n- Carrier integration (UPS, FedEx, USPS, DHL, and more)\n- Warehouse management\n- Store and marketplace connections\n- Real-time webhooks for orders and shipments",
+          "message": "ShipStation je popredný prepravný softvér, ktorý pomáha predajcom v elektronickom obchode rýchlo a jednoducho importovať, organizovať, spracovávať a odosielať objednávky z akéhokoľvek webového prehliadača. Táto integrácia umožňuje správu objednávok, zásielok, dopravcov, skladov a prijímanie oznámení v reálnom čase prostredníctvom webhookov.\n\n**Funkcie:**\n- Správa objednávok (vytvorenie, aktualizácia, odstránenie, označenie štítkom, priradenie)\n- Sledovanie zásielok a správa štítkov\n- Integrácia dopravcov (UPS, FedEx, USPS, DHL a ďalší)\n- Správa skladov\n- Prepojenia na obchody a trhoviská\n- Webhooky v reálnom čase pre objednávky a zásielky"
+        },
+        "app.U2hpcFN0YXRpb24.display_name": {
+          "source": "ShipStation",
+          "message": "ShipStation"
+        },
+        "app.U2hpcFN0YXRpb24.short_desc": {
+          "source": "ShipStation shipping and logistics platform",
+          "message": "Prepravná a logistická platforma ShipStation"
+        }
+      }
+    }
+  }
+}

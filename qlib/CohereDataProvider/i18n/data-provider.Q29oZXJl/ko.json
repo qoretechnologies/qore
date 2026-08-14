@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q29oZXJl.action.Y2hhdA.desc": {
+          "source": "Sends a list of chat messages to a Cohere Command model via `/v2/chat` and returns the generated response.",
+          "message": "`/v2/chat`을(를) 통해 Cohere Command 모델로 채팅 메시지 목록을 전송하고 생성된 응답을 반환합니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.",
+          "message": "다음으로 가능성이 가장 높은 K개의 토큰으로 샘플링을 제한합니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "가능성이 가장 높은 K개의 토큰에서만 샘플링"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.desc": {
+          "source": "Cohere chat model identifier, e.g. `command-r-plus`, `command-r`, `command-r7b`.",
+          "message": "Cohere 채팅 모델 식별자(예: `command-r-plus`, `command-r`, `command-r7b`)."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Cohere chat model",
+          "message": "Cohere 채팅 모델"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "생성할 최대 토큰 수입니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "최대 토큰 수"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "출력할 최대 토큰 수"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "메시지 객체 목록 형식의 대화 기록입니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "대화를 구성하는 채팅 메시지 목록"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "결정론적 샘플링을 위한 정수 시드입니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "시드"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "결정론적 샘플링 시드"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "List of stop sequences; generation halts when any is emitted.",
+          "message": "정지 시퀀스 목록입니다. 하나라도 출력되면 생성이 중단됩니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "List of stop sequences",
+          "message": "정지 시퀀스 목록"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "핵 샘플링(Nucleus sampling) 컷오프입니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "핵 샘플링(Nucleus sampling) 컷오프(0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_object\", schema: {...}}`.",
+          "message": "구조화된 응답 형태를 강제하는 해시입니다(예: `{type: \"json_object\"}` 또는 `{type: \"json_object\", schema: {...}}`)."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON schema)",
+          "message": "구조화된 출력 강제(예: JSON 스키마)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - never call a tool"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - model decides"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required - must call a tool"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "도구 호출 모드: `none`, `auto` 또는 `required`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "도구 호출 모드"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.  Each entry has `type: function` and a `function` hash with `name`, `description`, and JSON-schema `parameters`.",
+          "message": "도구 정의 목록입니다. 각 항목에는 `type: function` 및 `name`, `description`, JSON-schema `parameters`이(가) 포함된 `function` 해시가 있습니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.short_desc": {
+          "source": "Tool definitions the model may call",
+          "message": "모델이 호출할 수 있는 도구 정의"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Cohere recommends `0.3` as default.",
+          "message": "출력의 무작위성을 제어합니다. Cohere는 기본값으로 `0.3`을(를) 권장합니다."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "온도"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1)",
+          "message": "샘플링 온도(0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.short_desc": {
+          "source": "Generate a chat completion from a Cohere Command model",
+          "message": "Cohere Command 모델에서 채팅 완성 생성"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.desc": {
+          "source": "Classifies text inputs into one of a set of labels using few-shot examples or fine-tuned classification models via Cohere's `/v1/classify` endpoint.\n\nNote: classify currently uses the v1 endpoint; the rest of this provider uses v2.  The request body path is absolute (`/v1/classify`) to address the v1 surface.",
+          "message": "Cohere의 `/v1/classify` 엔드포인트를 통해 퓨샷(few-shot) 예시 또는 미세 조정된 분류 모델을 사용하여 텍스트 입력을 레이블 세트 중 하나로 분류합니다.\n\n참고: classify는 현재 v1 엔드포인트를 사용하며, 이 공급자의 나머지 기능은 v2를 사용합니다. 요청 본문 경로는 v1 인터페이스를 지정하기 위해 절대 경로(`/v1/classify`)로 설정됩니다."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
+          "source": "Classify Text",
+          "message": "텍스트 분류"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.desc": {
+          "source": "List of `{text, label}` hashes providing few-shot examples.  Required when no fine-tuned model is supplied; minimum 2 examples per label and at least 2 labels.",
+          "message": "퓨샷 예시를 제공하는 `{text, label}` 해시 목록입니다. 미세 조정된 모델이 제공되지 않은 경우 필수입니다. 레이블당 최소 2개의 예시와 최소 2개의 레이블이 필요합니다."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.display_name": {
+          "source": "Examples",
+          "message": "예시"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.short_desc": {
+          "source": "Few-shot labeled examples (required without fine-tuned model)",
+          "message": "퓨샷 레이블 예시(미세 조정 모델이 없는 경우 필수)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.desc": {
+          "source": "List of input texts to classify into one of the labels supplied via `examples` (few-shot) or the fine-tuned model's vocabulary.",
+          "message": "`examples`(퓨샷) 또는 미세 조정된 모델의 어휘를 통해 제공된 레이블 중 하나로 분류할 입력 텍스트 목록입니다."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.display_name": {
+          "source": "Inputs",
+          "message": "입력"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.short_desc": {
+          "source": "List of input texts to classify",
+          "message": "분류할 입력 텍스트 목록"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.desc": {
+          "source": "Fine-tuned classification model identifier.  Optional when `examples` is supplied for few-shot classification.",
+          "message": "미세 조정된 분류 모델 식별자입니다. 퓨샷 분류를 위해 `examples`이(가) 제공된 경우 선택 사항입니다."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.short_desc": {
+          "source": "Fine-tuned classification model (optional with examples)",
+          "message": "미세 조정된 분류 모델(예시 제공 시 선택 사항)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.desc": {
+          "source": "Cohere classification preset name (alternative to inline `examples`).",
+          "message": "Cohere 분류 프리셋 이름(인라인 `examples`의 대체)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "프리셋"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.short_desc": {
+          "source": "Preset name (alternative to inline examples)",
+          "message": "프리셋 이름(인라인 예시의 대체)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.desc": {
+          "source": "Truncation strategy: `NONE`, `START`, or `END` (default).",
+          "message": "자르기(Truncation) 전략: `NONE`, `START` 또는 `END`(기본값)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "자르기"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "컨텍스트를 초과하는 입력을 자르는 방법"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
+          "source": "Classify text inputs into labeled categories using Cohere Classify",
+          "message": "Cohere Classify를 사용하여 텍스트 입력을 레이블이 지정된 카테고리로 분류"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.desc": {
+          "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
+          "message": "작업을 인식하는 `input_type` 선택과 함께 Cohere의 `/v2/embed` 엔드포인트를 통해 텍스트 입력을 임베딩 벡터로 변환합니다."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
+          "source": "Create Embeddings",
+          "message": "임베딩 생성"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "분류"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "클러스터링"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document - text to be indexed",
+          "message": "문서 검색 - 인덱싱할 텍스트"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query - user query",
+          "message": "검색 쿼리 - 사용자 쿼리"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Task hint required by Cohere v3 embedding models.  Choosing the right input type improves retrieval relevance — query and document embeddings are optimized differently.",
+          "message": "Cohere v3 임베딩 모델에 필요한 작업 힌트입니다. 올바른 입력 유형을 선택하면 검색 관련성이 향상됩니다 — 쿼리와 문서 임베딩은 서로 다르게 최적화됩니다."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "입력 유형"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Task hint (required for v3 models)",
+          "message": "작업 힌트 (v3 모델에 필수)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Cohere embedding model identifier.  Examples:\n\n- `embed-multilingual-v3.0` — 100+ languages (recommended default)\n- `embed-english-v3.0` — English-only, slightly faster\n- `embed-multilingual-light-v3.0` — smaller, lower-cost variant",
+          "message": "Cohere 임베딩 모델 식별자입니다. 예:\n\n- `embed-multilingual-v3.0` — 100개 이상의 언어 (권장 기본값)\n- `embed-english-v3.0` — 영어 전용, 약간 더 빠름\n- `embed-multilingual-light-v3.0` — 더 작고 비용이 저렴한 변형"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Cohere embedding model",
+          "message": "Cohere 임베딩 모델"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "List of input texts to convert to embedding vectors.",
+          "message": "임베딩 벡터로 변환할 입력 텍스트 목록입니다."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "텍스트"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "List of texts to embed",
+          "message": "임베딩할 텍스트 목록"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None - error on overflow",
+          "message": "없음 - 오버플로 시 오류"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOkVORA.display_name": {
+          "source": "End - truncate end (default)",
+          "message": "끝 - 끝부분 자르기 (기본값)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOlNUQVJU.display_name": {
+          "source": "Start - truncate beginning",
+          "message": "시작 - 앞부분 자르기"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.desc": {
+          "source": "How to handle inputs that exceed the embedding model's context window.  Default `END`.",
+          "message": "임베딩 모델의 컨텍스트 창을 초과하는 입력을 처리하는 방법입니다. 기본값은 `END`입니다."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "자르기"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "컨텍스트를 초과하는 입력을 자르는 방법"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
+          "source": "Generate embedding vectors from a Cohere embedding model",
+          "message": "Cohere 임베딩 모델에서 임베딩 벡터 생성"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cohere** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Cohere**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL에 대한 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에 아직 최고 수준 작업으로 노출되지 않은 엔드포인트에 이 작업을 사용합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cohere",
+          "message": "Cohere에 사용자 지정 API 호출 수행"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a query using Cohere's rerank-v3.5 cross-encoder via `/v2/rerank`.  Returns top-N documents sorted by relevance score.",
+          "message": "`/v2/rerank`을 통해 Cohere의 rerank-v3.5 크로스 인코더를 사용하여 쿼리에 대해 후보 문서 목록의 순위를 다시 매깁니다. 관련성 점수순으로 정렬된 상위 N개 문서를 반환합니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "문서 재순위화"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents to rerank against the query.",
+          "message": "쿼리에 대해 재순위화할 후보 문서 목록입니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "문서"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "재순위화할 후보 문서"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Cohere reranker model.  Examples:\n\n- `rerank-v3.5` — latest cross-encoder (recommended default)\n- `rerank-english-v3.0` — English-only v3\n- `rerank-multilingual-v3.0` — multilingual v3",
+          "message": "Cohere 재순위화 모델입니다. 예:\n\n- `rerank-v3.5` — 최신 크로스 인코더 (권장 기본값)\n- `rerank-english-v3.0` — 영어 전용 v3\n- `rerank-multilingual-v3.0` — 다국어 v3"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Cohere reranker model",
+          "message": "Cohere 재순위화 모델"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.desc": {
+          "source": "When documents exceed the rerank context window, Cohere chunks them internally.  This caps the number of chunks per document.",
+          "message": "문서가 재순위화 컨텍스트 창을 초과하면 Cohere가 내부적으로 청크로 분할합니다. 문서당 청크 수를 제한합니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.display_name": {
+          "source": "Max Chunks Per Doc",
+          "message": "문서당 최대 청크 수"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
+          "source": "Maximum chunks per document for long-document rerank",
+          "message": "긴 문서 재순위화를 위한 문서당 최대 청크 수"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.",
+          "message": "자유 형식 사용자 쿼리입니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "쿼리"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "문서 재순위화의 기준이 되는 사용자 쿼리"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document.",
+          "message": "`True`(기본값)인 경우 각 결과에 문서가 포함됩니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "문서 반환"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "응답에 문서 텍스트를 에코할지 여부"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.",
+          "message": "반환할 상위 순위 문서 수입니다."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "상위 N개"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "반환할 점수 상위 결과 수"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query using Cohere Rerank",
+          "message": "Cohere Rerank를 사용하여 쿼리에 대해 후보 문서의 순위를 다시 매김"
+        },
+        "app.Q29oZXJl.desc": {
+          "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",
+          "message": "[Cohere](https://cohere.com)에 대한 액세스를 제공합니다 — Command R / R+를 사용한 엔터프라이즈급 채팅, 다국어 임베딩 및 동급 최고의 재순위화.\n\n**일반적인 사용 사례**:\n- Command R+를 사용한 **도구 호출 채팅 에이전트**\n- embed-multilingual-v3.0을 사용한 **다국어 RAG 임베딩**\n- rerank-v3.5를 사용한 **프로덕션 재순위화** — 모든 임베더와 자연스럽게 결합\n- 전용 /classify 엔드포인트를 통한 **텍스트 분류**"
+        },
+        "app.Q29oZXJl.display_name": {
+          "source": "Cohere",
+          "message": "Cohere"
+        },
+        "app.Q29oZXJl.short_desc": {
+          "source": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
+          "message": "Cohere 채팅 (Command R/R+), 임베딩, 재순위화 및 분류"
+        }
+      }
+    }
+  }
+}

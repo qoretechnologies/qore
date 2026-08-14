@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QW1hem9uLVJlZHNoaWZ0.desc": {
+          "source": "Create and manage connections to a Amazon Redshift data warehouse",
+          "message": "建立並管理至 Amazon Redshift 資料倉儲的連線"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.display_name": {
+          "source": "Amazon-Redshift",
+          "message": "Amazon-Redshift"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.short_desc": {
+          "source": "Amazon Redshift data warehouse",
+          "message": "Amazon Redshift 資料倉儲"
+        }
+      }
+    }
+  }
+}

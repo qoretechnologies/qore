@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.Q29oZXJl.action.Y2hhdA.desc": {
+          "source": "Sends a list of chat messages to a Cohere Command model via `/v2/chat` and returns the generated response.",
+          "message": "透過 `/v2/chat` 將聊天訊息清單傳送至 Cohere Command 模型，並傳回產生的回應。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.display_name": {
+          "source": "Chat",
+          "message": "即時通訊"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.",
+          "message": "將取樣限制在機率最高的 K 個下一個權杖。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "僅從 K 個最可能的下一個權杖中取樣"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.desc": {
+          "source": "Cohere chat model identifier, e.g. `command-r-plus`, `command-r`, `command-r7b`.",
+          "message": "Cohere 聊天模型識別碼，例如 `command-r-plus`、`command-r`、`command-r7b`。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Cohere chat model",
+          "message": "Cohere 聊天模型"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "要產生的權杖數量上限。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大權杖數"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "要輸出的權杖數量上限"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "作為訊息物件清單的對話歷程記錄。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "訊息"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "構成對話的聊天訊息清單"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "用於確定性取樣的整數種子。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "種子"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "確定性取樣種子"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "List of stop sequences; generation halts when any is emitted.",
+          "message": "停止序列清單；輸出任何一個序列時即停止產生。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止序列"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "List of stop sequences",
+          "message": "停止序列清單"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "核取樣截斷值。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "核取樣截斷值 (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_object\", schema: {...}}`.",
+          "message": "強制結構化回應形式的 Hash，例如 `{type: \"json_object\"}` 或 `{type: \"json_object\", schema: {...}}`。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "回應格式"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON schema)",
+          "message": "強制結構化輸出（例如 JSON 結構描述）"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - 從不呼叫工具"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - 由模型決定"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required - 必須呼叫工具"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "工具調用模式：`none`、`auto` 或 `required`。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "工具選擇"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "工具調用模式"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.  Each entry has `type: function` and a `function` hash with `name`, `description`, and JSON-schema `parameters`.",
+          "message": "工具定義清單。每個項目都包含 `type: function` 以及包含 `name`、`description` 和 JSON 結構描述 `parameters` 的 `function` Hash。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "工具"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.short_desc": {
+          "source": "Tool definitions the model may call",
+          "message": "模型可呼叫的工具定義"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Cohere recommends `0.3` as default.",
+          "message": "控制輸出的隨機性。Cohere 建議預設使用 `0.3`。"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "溫度"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1)",
+          "message": "取樣溫度 (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.short_desc": {
+          "source": "Generate a chat completion from a Cohere Command model",
+          "message": "從 Cohere Command 模型產生聊天完成"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.desc": {
+          "source": "Classifies text inputs into one of a set of labels using few-shot examples or fine-tuned classification models via Cohere's `/v1/classify` endpoint.\n\nNote: classify currently uses the v1 endpoint; the rest of this provider uses v2.  The request body path is absolute (`/v1/classify`) to address the v1 surface.",
+          "message": "透過 Cohere 的 `/v1/classify` 端點，使用少樣本範例或微調後的分類模型將輸入文字分類為一組標籤之一。\n\n注意：classify 目前使用 v1 端點；此提供者的其餘部分使用 v2。請求主體路徑為絕對路徑 (`/v1/classify`)，以處理 v1 介面。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
+          "source": "Classify Text",
+          "message": "文字分類"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.desc": {
+          "source": "List of `{text, label}` hashes providing few-shot examples.  Required when no fine-tuned model is supplied; minimum 2 examples per label and at least 2 labels.",
+          "message": "提供少樣本範例的 `{text, label}` Hash 清單。未提供微調模型時為必填；每個標籤至少 2 個範例，且至少需要 2 個標籤。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.display_name": {
+          "source": "Examples",
+          "message": "範例"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.short_desc": {
+          "source": "Few-shot labeled examples (required without fine-tuned model)",
+          "message": "少樣本標記範例（未提供微調模型時為必填）"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.desc": {
+          "source": "List of input texts to classify into one of the labels supplied via `examples` (few-shot) or the fine-tuned model's vocabulary.",
+          "message": "要分類為透過 `examples`（少樣本）或微調模型的詞彙庫所提供標籤之一的輸入文字清單。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.display_name": {
+          "source": "Inputs",
+          "message": "輸入"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.short_desc": {
+          "source": "List of input texts to classify",
+          "message": "要分類的輸入文字清單"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.desc": {
+          "source": "Fine-tuned classification model identifier.  Optional when `examples` is supplied for few-shot classification.",
+          "message": "微調分類模型識別碼。當為少樣本分類提供 `examples` 時為選填。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.short_desc": {
+          "source": "Fine-tuned classification model (optional with examples)",
+          "message": "微調分類模型（附帶範例時為選填）"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.desc": {
+          "source": "Cohere classification preset name (alternative to inline `examples`).",
+          "message": "Cohere 分類預設名稱（可替代內嵌 `examples`）。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "預設設定"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.short_desc": {
+          "source": "Preset name (alternative to inline examples)",
+          "message": "預設名稱（可替代內嵌範例）"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.desc": {
+          "source": "Truncation strategy: `NONE`, `START`, or `END` (default).",
+          "message": "截斷策略：`NONE`、`START` 或 `END`（預設）。"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "截斷"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "如何截斷超出上下文的輸入內容"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
+          "source": "Classify text inputs into labeled categories using Cohere Classify",
+          "message": "使用 Cohere Classify 將文字輸入分類至標記類別"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.desc": {
+          "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
+          "message": "透過 Cohere 的 `/v2/embed` 端點將文字輸入轉換為嵌入向量，並支援任務感知的 `input_type` 選擇。"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
+          "source": "Create Embeddings",
+          "message": "建立嵌入"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "分類"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "分群"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document - text to be indexed",
+          "message": "搜尋文件 - 待編製索引的文字"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query - user query",
+          "message": "搜尋查詢 - 使用者查詢"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Task hint required by Cohere v3 embedding models.  Choosing the right input type improves retrieval relevance — query and document embeddings are optimized differently.",
+          "message": "Cohere v3 嵌入模型所需的任務提示。選擇正確的輸入類型可提高檢索關聯性 — 查詢與文件的嵌入向量採用不同的最佳化方式。"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "輸入類型"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Task hint (required for v3 models)",
+          "message": "任務提示（v3 模型必填）"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Cohere embedding model identifier.  Examples:\n\n- `embed-multilingual-v3.0` — 100+ languages (recommended default)\n- `embed-english-v3.0` — English-only, slightly faster\n- `embed-multilingual-light-v3.0` — smaller, lower-cost variant",
+          "message": "Cohere 嵌入模型識別碼。範例：\n\n- `embed-multilingual-v3.0` — 100 種以上語言（建議預設值）\n- `embed-english-v3.0` — 僅英文，速度稍快\n- `embed-multilingual-light-v3.0` — 較小、低成本的變體"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Cohere embedding model",
+          "message": "Cohere 嵌入模型"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "List of input texts to convert to embedding vectors.",
+          "message": "要轉換為嵌入向量的輸入文字清單。"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "文字列表"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "List of texts to embed",
+          "message": "要嵌入的文字清單"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None - error on overflow",
+          "message": "無 - 溢出時報錯"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOkVORA.display_name": {
+          "source": "End - truncate end (default)",
+          "message": "結尾 - 截斷結尾（預設）"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOlNUQVJU.display_name": {
+          "source": "Start - truncate beginning",
+          "message": "開頭 - 截斷開頭"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.desc": {
+          "source": "How to handle inputs that exceed the embedding model's context window.  Default `END`.",
+          "message": "如何處理超出嵌入模型上下文視窗的輸入內容。預設值 `END`。"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "截斷"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "如何截斷超出上下文的輸入內容"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
+          "source": "Generate embedding vectors from a Cohere embedding model",
+          "message": "從 Cohere 嵌入模型產生嵌入向量"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cohere** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Cohere** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭與請求內文。回應將作為包含狀態碼、回應標頭與回應內文的雜湊傳回。\n\n對於此應用程式中尚未公開為一級動作的端點，請使用此動作。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cohere",
+          "message": "對 Cohere 進行自訂 API 呼叫"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a query using Cohere's rerank-v3.5 cross-encoder via `/v2/rerank`.  Returns top-N documents sorted by relevance score.",
+          "message": "透過 `/v2/rerank` 使用 Cohere 的 rerank-v3.5 交叉編碼器根據查詢對候選文件清單進行重新排序。傳回依關聯性分數排序的前 N 個文件。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "重新排序文件"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents to rerank against the query.",
+          "message": "要根據查詢重新排序的候選文件清單。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "文件"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "要重新排序的候選文件"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Cohere reranker model.  Examples:\n\n- `rerank-v3.5` — latest cross-encoder (recommended default)\n- `rerank-english-v3.0` — English-only v3\n- `rerank-multilingual-v3.0` — multilingual v3",
+          "message": "Cohere 重新排序模型。範例：\n\n- `rerank-v3.5` — 最新交叉編碼器（建議預設值）\n- `rerank-english-v3.0` — 僅英文 v3\n- `rerank-multilingual-v3.0` — 多語言 v3"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Cohere reranker model",
+          "message": "Cohere 重新排序模型"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.desc": {
+          "source": "When documents exceed the rerank context window, Cohere chunks them internally.  This caps the number of chunks per document.",
+          "message": "當文件超出重新排序上下文視窗時，Cohere 會在內部進行分塊。此設定會限制每份文件的最大分塊數。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.display_name": {
+          "source": "Max Chunks Per Doc",
+          "message": "每份文件最大分塊數"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
+          "source": "Maximum chunks per document for long-document rerank",
+          "message": "長文件重新排序時每份文件的最大分塊數"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.",
+          "message": "自由格式使用者查詢。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "用於重新排序文件的使用者查詢"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document.",
+          "message": "為 `True`（預設）時，每個結果均包含文件。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "傳回文件"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "是否在回應中包含文件文字"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.",
+          "message": "要傳回之排名最高的文件數量。"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "前 N 筆"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "要傳回之最高評分結果的數量"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query using Cohere Rerank",
+          "message": "使用 Cohere Rerank 根據查詢重新排序候選文件"
+        },
+        "app.Q29oZXJl.desc": {
+          "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",
+          "message": "提供對 [Cohere](https://cohere.com) 的存取 — 具備 Command R / R+ 的企業級對話、多語言嵌入及頂尖的重新排序功能。\n\n**常見使用案例**：\n- 搭配 Command R+ 的**工具呼叫對話代理**\n- 搭配 embed-multilingual-v3.0 的**多語言 RAG 嵌入**\n- 搭配 rerank-v3.5 的**生產環境重新排序** — 可自然搭配任何嵌入器\n- 透過專屬 /classify 端點進行**文字分類**"
+        },
+        "app.Q29oZXJl.display_name": {
+          "source": "Cohere",
+          "message": "Cohere"
+        },
+        "app.Q29oZXJl.short_desc": {
+          "source": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
+          "message": "Cohere 對話（Command R/R+）、嵌入、重新排序與分類"
+        }
+      }
+    }
+  }
+}

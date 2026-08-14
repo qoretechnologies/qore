@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.desc": {
+          "source": "Generate a chat completion via the unified Bedrock Converse API. One request body shape works across every supported model family (Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, Amazon Titan / Nova, DeepSeek). Supports text, image, and document content blocks, tool use, and Bedrock Guardrails.",
+          "message": "통합 Bedrock Converse API를 통해 챗 완성(chat completion)을 생성합니다. 단일 요청 본문 형태가 지원되는 모든 모델 제품군(Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, Amazon Titan / Nova, DeepSeek)에서 작동합니다. 텍스트, 이미지 및 문서 콘텐츠 블록, 도구 사용, Bedrock Guardrails를 지원합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.display_name": {
+          "source": "Converse",
+          "message": "Converse"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.desc": {
+          "source": "Model-family-specific request fields not covered by the unified Converse schema (e.g. Anthropic's `anthropic_beta`)",
+          "message": "통합 Converse 스키마에서 다루지 않는 모델 제품군별 고유 요청 필드(예: Anthropic의 `anthropic_beta`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.display_name": {
+          "source": "Additional Model Request Fields",
+          "message": "추가 모델 요청 필드"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.short_desc": {
+          "source": "Model-family-specific request fields",
+          "message": "모델 제품군별 요청 필드"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.desc": {
+          "source": "Apply Bedrock Guardrails: `guardrailIdentifier` (`string`), `guardrailVersion` (`string`), `trace` (`enabled` / `disabled`)",
+          "message": "Bedrock Guardrails 적용: `guardrailIdentifier` (`string`), `guardrailVersion` (`string`), `trace` (`enabled` / `disabled`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.display_name": {
+          "source": "Guardrail Config",
+          "message": "가드레일 구성"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.short_desc": {
+          "source": "Bedrock Guardrails to apply",
+          "message": "적용할 Bedrock Guardrails"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.desc": {
+          "source": "Generation parameters: `maxTokens` (`int`), `temperature` (`float`, 0..1), `topP` (`float`), `stopSequences` (`list<string>`)",
+          "message": "생성 매개변수: `maxTokens` (`int`), `temperature` (`float`, 0..1), `topP` (`float`), `stopSequences` (`list<string>`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.display_name": {
+          "source": "Inference Config",
+          "message": "추론 구성"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.short_desc": {
+          "source": "Generation knobs",
+          "message": "생성 설정"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock foundation model ID. Examples: `anthropic.claude-3-5-sonnet-20240620-v1:0`, `amazon.nova-pro-v1:0`, `meta.llama3-1-70b-instruct-v1:0`, `mistral.mistral-large-2402-v1:0`",
+          "message": "Bedrock 파운데이션 모델 ID입니다. 예: `anthropic.claude-3-5-sonnet-20240620-v1:0`, `amazon.nova-pro-v1:0`, `meta.llama3-1-70b-instruct-v1:0`, `mistral.mistral-large-2402-v1:0`"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock model identifier",
+          "message": "Bedrock 모델 식별자"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.desc": {
+          "source": "Conversation history; each message is a hash with `role` (`user` or `assistant`) and `content` (list of content blocks, each a hash like `{text: \"...\"}`, `{image: {...}}`, or `{toolUse: {...}}`)",
+          "message": "대화 기록; 각 메시지는 `role`(`user` 또는 `assistant`) 및 `content`(콘텐츠 블록 목록, 각각 `{text: \"...\"}`, `{image: {...}}` 또는 `{toolUse: {...}}` 형태의 해시)를 갖는 해시입니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Conversation messages in Bedrock Converse shape",
+          "message": "Bedrock Converse 형식의 대화 메시지"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.desc": {
+          "source": "Optional system instruction blocks; each is a hash like `{text: \"...\"}`",
+          "message": "선택적 시스템 지침 블록입니다. 각각 `{text: \"...\"}` 형태의 해시입니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "시스템 프롬프트"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.short_desc": {
+          "source": "Optional system prompt blocks",
+          "message": "선택적 시스템 프롬프트 블록"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool configuration: `tools` is a list of `{toolSpec: {name, description, inputSchema: {json: <schema>}}}`; optional `toolChoice` (`{auto: {}}`, `{any: {}}`, or `{tool: {name: \"...\"}}`)",
+          "message": "도구 구성: `tools`은(는) `{toolSpec: {name, description, inputSchema: {json: <schema>}}}` 목록입니다. 선택적 `toolChoice`(`{auto: {}}`, `{any: {}}` 또는 `{tool: {name: \"...\"}}`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "도구 구성"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool definitions for function calling",
+          "message": "함수 호출을 위한 도구 정의"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.short_desc": {
+          "source": "Generate a chat completion via the unified Converse API",
+          "message": "통합 Converse API를 통해 챗 완성 생성"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings for text using a Bedrock embedding model (Amazon Titan Text Embeddings v2, or Cohere `embed-english-v3` / `embed-multilingual-v3`). The action auto-routes to the correct request body shape based on the model ID prefix.",
+          "message": "Bedrock 임베딩 모델(Amazon Titan Text Embeddings v2 또는 Cohere `embed-english-v3` / `embed-multilingual-v3`)을 사용하여 텍스트에 대한 밀집 벡터 임베딩을 생성합니다. 이 액션은 모델 ID 접두사를 기반으로 올바른 요청 본문 형태로 자동 라우팅합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "텍스트 임베딩"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Override the output embedding dimension; supported by Titan Text Embeddings v2 (e.g. 256, 512, 1024)",
+          "message": "출력 임베딩 차원을 재정의합니다. Titan Text Embeddings v2에서 지원됩니다(예: 256, 512, 1024)."
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "측정기준"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Override embedding dimension (Titan v2 only)",
+          "message": "임베딩 차원 재정의(Titan v2 전용)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.desc": {
+          "source": "Text to embed when using a Titan model (single-string body)",
+          "message": "Titan 모델 사용 시 임베딩할 텍스트(단일 문자열 본문)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.display_name": {
+          "source": "Input Text",
+          "message": "입력 텍스트"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.short_desc": {
+          "source": "Text to embed (Titan; single-string)",
+          "message": "임베딩할 텍스트(Titan, 단일 문자열)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "분류"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "클러스터링"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document",
+          "message": "검색 문서"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Cohere 임베딩 입력 유형 힌트"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Cohere Input Type",
+          "message": "Cohere 입력 유형"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Cohere 임베딩 입력 유형 힌트"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock embedding model ID. Examples: `amazon.titan-embed-text-v2:0` (Titan), `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`",
+          "message": "Bedrock 임베딩 모델 ID입니다. 예: `amazon.titan-embed-text-v2:0`(Titan), `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock embedding model identifier",
+          "message": "Bedrock 임베딩 모델 식별자"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.desc": {
+          "source": "L2-normalize the resulting embedding (Titan v2 only)",
+          "message": "결과 임베딩에 L2 정규화 적용(Titan v2 전용)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.display_name": {
+          "source": "Normalize",
+          "message": "정규화"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.short_desc": {
+          "source": "L2-normalize the embedding (Titan v2 only)",
+          "message": "임베딩에 L2 정규화 적용(Titan v2 전용)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "Texts to embed when using a Cohere `embed-*` model (batch); the action automatically picks the right body shape per model family",
+          "message": "Cohere `embed-*` 모델 사용 시 임베딩할 텍스트입니다(배치). 액션이 모델 제품군에 따라 올바른 본문 형식을 자동으로 선택합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "텍스트"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "Texts to embed (Cohere; batch)",
+          "message": "임베딩할 텍스트(Cohere, 배치)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via a Bedrock embedding model",
+          "message": "Bedrock 임베딩 모델을 통해 텍스트 임베딩 생성"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Bedrock** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "**AWS Bedrock**에 구성된 연결의 인증을 사용하여 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Bedrock",
+          "message": "AWS Bedrock에 사용자 지정 API 호출 수행"
+        },
+        "app.QVdTQmVkcm9jaw.desc": {
+          "source": "**AWS Bedrock** provides serverless access to a curated catalog of foundation models through a single SigV4-signed REST API:\n\n- **Unified Converse API** — one body shape across the Anthropic (Claude), Meta (Llama), Mistral, Cohere, AI21 (Jamba), Amazon (Titan, Nova), and DeepSeek-on-Bedrock model families\n- **Embeddings** — Titan Text Embeddings v2 and Cohere embed-english / embed-multilingual models\n- **Multimodal input** — `image` and `document` content blocks natively in the Converse body\n- **Tool use** — function-calling via `toolConfig.tools` with the same shape across all supported model families\n- **Bedrock Guardrails** — apply PII redaction, denied topics, and content filters declaratively\n\nAuthentication uses the standard AWS credential chain: explicit keys → environment variables → ECS task role → IMDSv2 → STS AssumeRole — handled by the underlying `AwsRestClient`.\n\nProject: <https://aws.amazon.com/bedrock/>",
+          "message": "**AWS Bedrock**은 단일 SigV4 서명 REST API를 통해 엄선된 파운데이션 모델 카탈로그에 대한 서버리스 액세스를 제공합니다:\n\n- **통합 Converse API** — Anthropic(Claude), Meta(Llama), Mistral, Cohere, AI21(Jamba), Amazon(Titan, Nova) 및 DeepSeek-on-Bedrock 모델 제품군 전반에서 단일 본문 형식 지원\n- **임베딩** — Titan Text Embeddings v2 및 Cohere embed-english / embed-multilingual 모델\n- **멀티모달 입력** — Converse 본문 내에서 기본적으로 `image` 및 `document` 콘텐츠 블록 지원\n- **도구 사용** — 지원되는 모든 모델 제품군에서 동일한 형식으로 `toolConfig.tools`를 통한 함수 호출 지원\n- **Bedrock Guardrails** — 개인 식별 정보(PII) 마스킹, 차단된 주제 및 콘텐츠 필터를 선언적으로 적용\n\n인증은 표준 AWS 자격 증명 체인(명시적 키 → 환경 변수 → ECS 태스크 역할 → IMDSv2 → STS AssumeRole)을 사용하며, 기본 `AwsRestClient`에 의해 처리됩니다.\n\n프로젝트: <https://aws.amazon.com/bedrock/>"
+        },
+        "app.QVdTQmVkcm9jaw.display_name": {
+          "source": "AWS Bedrock",
+          "message": "AWS Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.short_desc": {
+          "source": "Generative AI on AWS Bedrock",
+          "message": "AWS Bedrock 기반 생성형 AI"
+        }
+      }
+    }
+  }
+}

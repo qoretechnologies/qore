@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+          "message": "Спрацьовує, коли до будь-якої задачі в Linear додається новий коментар. Використовує вебхуки для сповіщень у реальному часі."
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
+          "source": "Comment Created",
+          "message": "Коментар створено"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new comment is created",
+          "message": "Запускати, коли створюється новий коментар"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.desc": {
+          "source": "Create a new cycle for time-boxed work",
+          "message": "Створити новий цикл для обмеженої за часом роботи"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
+          "source": "Create Cycle",
+          "message": "Створити цикл"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.desc": {
+          "source": "The end date of the cycle",
+          "message": "Дата завершення циклу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.display_name": {
+          "source": "Ends At",
+          "message": "Завершується"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.short_desc": {
+          "source": "When the cycle ends",
+          "message": "Коли цикл завершується"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.desc": {
+          "source": "The name of the cycle",
+          "message": "Назва циклу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.short_desc": {
+          "source": "The cycle name",
+          "message": "Назва циклу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.desc": {
+          "source": "The start date of the cycle",
+          "message": "Дата початку циклу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.display_name": {
+          "source": "Starts At",
+          "message": "Починається"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.short_desc": {
+          "source": "When the cycle starts",
+          "message": "Коли цикл починається"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.desc": {
+          "source": "The team to create the cycle in",
+          "message": "Команда, в якій створюється цикл"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the cycle in",
+          "message": "Команда, в якій створюється цикл"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
+          "source": "Create a new cycle (sprint) in Linear",
+          "message": "Створити новий цикл (спринт) у Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Create a new comment on an existing Linear issue",
+          "message": "Створити новий коментар до наявної задачі Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create Comment",
+          "message": "Створити коментар"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body/content of the comment in markdown format",
+          "message": "Тіло/вміст коментаря у форматі markdown"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "The comment body",
+          "message": "Тіло коментаря"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.desc": {
+          "source": "The issue to add the comment to",
+          "message": "Завдання, до якого слід додати коментар"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.display_name": {
+          "source": "Issue",
+          "message": "Проблема"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.short_desc": {
+          "source": "The issue to add the comment to",
+          "message": "Завдання, до якого слід додати коментар"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Add a comment to a Linear issue",
+          "message": "Додати коментар до завдання Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.desc": {
+          "source": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+          "message": "Створити нове завдання в команді Linear із назвою, описом, пріоритетом та іншими атрибутами"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
+          "source": "Create Issue",
+          "message": "Створити задачу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to add the issue to",
+          "message": "Цикл (спринт), до якого слід додати завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Цикл"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle/sprint",
+          "message": "Цикл/спринт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The user to assign the issue to",
+          "message": "Користувач, якого слід призначити виконавцем завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Виконавець"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The user to assign the issue to",
+          "message": "Користувач, якого слід призначити виконавцем завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the issue in markdown format",
+          "message": "Опис завдання у форматі markdown"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The issue description",
+          "message": "Опис завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The estimated complexity/effort",
+          "message": "Оцінка складності/трудомісткості"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Оцінка"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The issue estimate",
+          "message": "Оцінка завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to attach to the issue",
+          "message": "Мітки для прикріплення до завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels",
+          "message": "Мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The workflow state to set on the issue",
+          "message": "Стан робочого процесу для встановлення у завданні"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Штат/область"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The workflow state",
+          "message": "Стан робочого процесу"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue for creating a sub-issue",
+          "message": "Батьківське завдання для створення підзавдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Батьківське завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "Батьківське завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "Без пріоритету"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Без пріоритету"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Терміновий пріоритет"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Терміново"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "Високий пріоритет"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Звичайний пріоритет"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Звичайний"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Низький пріоритет"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The priority of the issue",
+          "message": "Пріоритет завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The issue priority",
+          "message": "Пріоритет завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to add the issue to",
+          "message": "Проєкт, до якого слід додати завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project",
+          "message": "Проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.desc": {
+          "source": "The team to create the issue in",
+          "message": "Команда, у якій слід створити завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the issue in",
+          "message": "Команда, у якій слід створити завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The title of the issue",
+          "message": "Заголовок завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The issue title",
+          "message": "Назва завдання"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
+          "source": "Create a new issue in Linear",
+          "message": "Створити нове завдання в Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label for categorizing issues",
+          "message": "Створити нову мітку для категоризації завдань"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "Створити мітку"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.desc": {
+          "source": "The color of the label in hex format",
+          "message": "Колір мітки у форматі hex"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Колір"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.short_desc": {
+          "source": "The label color",
+          "message": "Колір мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the label",
+          "message": "Опис мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The label description",
+          "message": "Опис мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The name of the label",
+          "message": "Назва мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The label name",
+          "message": "Назва мітки"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.desc": {
+          "source": "The team to create the label in (leave empty for workspace labels)",
+          "message": "Команда, у якій слід створити мітку (залиште порожнім для міток робочої області)"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the label in",
+          "message": "Команда, у якій слід створити мітку"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label in Linear",
+          "message": "Створити нову мітку в Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project for organizing related issues",
+          "message": "Створити новий проєкт для організації пов'язаних завдань"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create Project",
+          "message": "Створити проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the project",
+          "message": "Опис проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "Опис проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.desc": {
+          "source": "The user leading the project",
+          "message": "Користувач, який очолює проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.display_name": {
+          "source": "Lead",
+          "message": "Лід"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.short_desc": {
+          "source": "The project lead",
+          "message": "Керівник проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project",
+          "message": "Назва проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The project name",
+          "message": "Назва проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.desc": {
+          "source": "The planned start date of the project",
+          "message": "Запланована дата початку проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.short_desc": {
+          "source": "The project start date",
+          "message": "Дата початку проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled project",
+          "message": "Скасований проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Скасовано"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed project",
+          "message": "Завершений проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Завершено"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused project",
+          "message": "Призупинений проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Призупинено"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned project",
+          "message": "Запланований проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Заплановано"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started project",
+          "message": "Розпочатий проєкт"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Розпочато"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.desc": {
+          "source": "The initial state of the project",
+          "message": "Початковий стан проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Штат/область"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.short_desc": {
+          "source": "The project state",
+          "message": "Стан проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.desc": {
+          "source": "The target completion date of the project",
+          "message": "Цільова дата завершення проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.display_name": {
+          "source": "Target Date",
+          "message": "Цільова дата"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.short_desc": {
+          "source": "The project target date",
+          "message": "Цільова дата проєкту"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.desc": {
+          "source": "The teams to associate with the project",
+          "message": "Команди, які слід пов'язати з проєктом"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.display_name": {
+          "source": "Teams",
+          "message": "Команди"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.short_desc": {
+          "source": "The teams to associate with the project",
+          "message": "Команди, які слід пов'язати з проєктом"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project in Linear",
+          "message": "Створити новий проєкт у Linear"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.desc": {
+          "source": "Archive (soft delete) a Linear issue",
+          "message": "Архівувати (м'яке видалення) завдання Linear"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
+          "source": "Archive Issue",
+          "message": "Архівувати завдання"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.desc": {
+          "source": "The issue to archive",
+          "message": "Завдання для архівування"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Проблема"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.short_desc": {
+          "source": "The issue to archive",
+          "message": "Завдання для архівування"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
+          "source": "Archive a Linear issue",
+          "message": "Архівувати завдання Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.desc": {
+          "source": "Retrieve a specific issue by its ID",
+          "message": "Отримати конкретне завдання за його ID"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
+          "source": "Get Issue",
+          "message": "Отримати завдання"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to retrieve",
+          "message": "Завдання для отримання"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Проблема"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to retrieve",
+          "message": "Завдання для отримання"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
+          "source": "Get a specific issue from Linear",
+          "message": "Отримати конкретне завдання з Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.desc": {
+          "source": "Retrieve a specific team by its ID",
+          "message": "Отримати конкретну команду за її ID"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
+          "source": "Get Team",
+          "message": "Отримати команду"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.desc": {
+          "source": "The team to retrieve",
+          "message": "Команда для отримання"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.short_desc": {
+          "source": "The team to retrieve",
+          "message": "Команда для отримання"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
+          "source": "Get a specific team from Linear",
+          "message": "Отримати конкретну команду з Linear"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+          "message": "Спрацьовує, коли в Linear створюється нове завдання. Використовує вебхуки для сповіщень у реальному часі."
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
+          "source": "Issue Created",
+          "message": "Завдання створено"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues created in this team (optional)",
+          "message": "Спрацьовувати лише для завдань, створених у цій команді (необов'язково)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Фільтрувати за завданнями конкретної команди"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new issue is created",
+          "message": "Спрацьовувати, коли створюється нове завдання"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.desc": {
+          "source": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+          "message": "Спрацьовує, коли в Linear оновлюється наявне завдання. Використовує вебхуки для сповіщень у реальному часі."
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
+          "source": "Issue Updated",
+          "message": "Завдання оновлено"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues updated in this team (optional)",
+          "message": "Спрацьовувати лише для завдань, оновлених у цій команді (необов'язково)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Фільтрувати за завданнями конкретної команди"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an issue is updated",
+          "message": "Спрацьовувати, коли завдання оновлюється"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний HTTP / REST API-виклик до **Linear**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код статусу, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Linear",
+          "message": "Виконати довільний API-виклик до Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.desc": {
+          "source": "Search for cycles with optional team filter",
+          "message": "Пошук циклів із необов'язковим фільтром за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
+          "source": "Search Cycles",
+          "message": "Пошук циклів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.desc": {
+          "source": "Filter cycles by team",
+          "message": "Фільтрувати цикли за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Фільтрувати за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
+          "source": "Search for cycles in Linear",
+          "message": "Пошук циклів у Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.desc": {
+          "source": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+          "message": "Пошук завдань із необов'язковими фільтрами за командою, проєктом, циклом, виконавцем і станом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
+          "source": "Search Issues",
+          "message": "Пошук завдань"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.desc": {
+          "source": "Filter issues by cycle (sprint)",
+          "message": "Фільтрувати завдання за циклом (спринтом)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Цикл"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.short_desc": {
+          "source": "Filter by cycle",
+          "message": "Фільтрувати за циклом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.desc": {
+          "source": "Filter issues by assignee",
+          "message": "Фільтрувати завдання за виконавцем"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Виконавець"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "Filter by assignee",
+          "message": "Фільтр за виконавцем"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.desc": {
+          "source": "Filter issues by workflow state",
+          "message": "Фільтрувати завдання за станом робочого процесу"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Штат/область"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.short_desc": {
+          "source": "Filter by workflow state",
+          "message": "Фільтрувати за станом робочого процесу"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Без пріоритету"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Терміново"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Звичайний"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.desc": {
+          "source": "Filter issues by priority level",
+          "message": "Фільтрувати завдання за рівнем пріоритету"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.short_desc": {
+          "source": "Filter by priority",
+          "message": "Фільтр за пріоритетом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.desc": {
+          "source": "Filter issues by project",
+          "message": "Фільтрувати завдання за проєктом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Проєкт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.short_desc": {
+          "source": "Filter by project",
+          "message": "Фільтрувати за проєктом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.desc": {
+          "source": "Filter issues by team",
+          "message": "Фільтрувати завдання за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Фільтрувати за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
+          "source": "Search for issues in Linear",
+          "message": "Пошук завдань у Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.desc": {
+          "source": "Search for labels with optional team filter",
+          "message": "Пошук міток із необов'язковим фільтром за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
+          "source": "Search Labels",
+          "message": "Пошук міток"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.desc": {
+          "source": "Filter labels by team (`NOTHING` for workspace labels)",
+          "message": "Фільтрувати мітки за командою (`NOTHING` для міток робочого простору)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Команда"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Фільтрувати за командою"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
+          "source": "Search for labels in Linear",
+          "message": "Пошук міток у Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects with optional state filter",
+          "message": "Пошук проєктів із необов'язковим фільтром за станом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "Пошук проєктів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled projects",
+          "message": "Скасовані проєкти"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Скасовано"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed projects",
+          "message": "Завершені проєкти"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Завершено"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused projects",
+          "message": "Призупинені проєкти"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Призупинено"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned projects",
+          "message": "Заплановані проєкти"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Заплановано"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started projects",
+          "message": "Розпочаті проєкти"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Розпочато"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.desc": {
+          "source": "Filter projects by state",
+          "message": "Фільтрувати проєкти за станом"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Штат/область"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.short_desc": {
+          "source": "Filter by project state",
+          "message": "Фільтрувати за станом проєкту"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects in Linear",
+          "message": "Пошук проєктів у Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.desc": {
+          "source": "List all teams accessible to the authenticated user",
+          "message": "Список усіх команд, доступних автентифікованому користувачу"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
+          "source": "Search Teams",
+          "message": "Пошук команд"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
+          "source": "List teams in Linear",
+          "message": "Список команд у Linear"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.desc": {
+          "source": "Update the properties of an existing Linear issue",
+          "message": "Оновити властивості наявного завдання Linear"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
+          "source": "Update Issue",
+          "message": "Оновити проблему"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to move the issue to",
+          "message": "Цикл (спринт), до якого слід перемістити завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Цикл"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle to move the issue to",
+          "message": "Цикл, до якого слід перемістити завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The new user to assign the issue to",
+          "message": "Новий користувач, якому слід призначити завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Виконавець"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The new assignee",
+          "message": "Новий виконавець"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the issue (supports markdown)",
+          "message": "Новий опис завдання (підтримує markdown)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new issue description",
+          "message": "Новий опис завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The new estimated complexity/effort",
+          "message": "Нова оцінка складності/трудомісткості"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Оцінка"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The new issue estimate",
+          "message": "Нова оцінка завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to update",
+          "message": "Завдання для оновлення"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Проблема"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to update",
+          "message": "Завдання для оновлення"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to set on the issue (replaces existing labels)",
+          "message": "Мітки для встановлення на завдання (замінює наявні мітки)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Мітки"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels to set",
+          "message": "Мітки для встановлення"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The new workflow state for the issue",
+          "message": "Новий стан робочого процесу для завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Штат/область"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The new workflow state",
+          "message": "Новий стан робочого процесу"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue ID (to make this a sub-issue)",
+          "message": "Ідентифікатор батьківської проблеми (щоб зробити її підпроблемою)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Батьківське завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "Батьківське завдання"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "Без пріоритету"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Без пріоритету"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Терміновий пріоритет"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Терміново"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "Високий пріоритет"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Звичайний пріоритет"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Звичайний"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Низький пріоритет"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority of the issue",
+          "message": "Новий пріоритет проблеми"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The new issue priority",
+          "message": "Новий пріоритет проблеми"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to move the issue to",
+          "message": "Проєкт, до якого слід перемістити проблему"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Проєкт"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project to move the issue to",
+          "message": "Проєкт, до якого слід перемістити проблему"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The new title of the issue",
+          "message": "Нова назва проблеми"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The new issue title",
+          "message": "Нова назва проблеми"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
+          "source": "Update an existing Linear issue",
+          "message": "Оновити наявну проблему Linear"
+        },
+        "app.TGluZWFy.desc": {
+          "source": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API.",
+          "message": "Linear — це сучасний інструмент відстеження проблем та управління проєктами для команд розробників. Ця інтеграція дозволяє створювати, читати, оновлювати й архівувати проблеми, проєкти, цикли, мітки та коментарі за допомогою GraphQL API Linear."
+        },
+        "app.TGluZWFy.display_name": {
+          "source": "Linear",
+          "message": "Linear"
+        },
+        "app.TGluZWFy.short_desc": {
+          "source": "Linear issue tracking and project management",
+          "message": "Відстеження проблем та управління проєктами в Linear"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.U1FMLVNlcnZlcg.desc": {
+          "source": "Create and manage connections to a Microsoft SQL Server database",
+          "message": "Створення та керування підключеннями до бази даних Microsoft SQL Server"
+        },
+        "app.U1FMLVNlcnZlcg.display_name": {
+          "source": "SQL-Server",
+          "message": "SQL-Server"
+        },
+        "app.U1FMLVNlcnZlcg.short_desc": {
+          "source": "Microsoft SQL Server database",
+          "message": "База даних Microsoft SQL Server"
+        }
+      }
+    }
+  }
+}

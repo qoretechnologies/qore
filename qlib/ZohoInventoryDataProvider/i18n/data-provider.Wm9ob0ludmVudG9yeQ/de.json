@@ -1,0 +1,3277 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Zoho Inventory",
+          "message": "Einen neuen Kontakt in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Kontakt erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Unternehmensname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Firmenname für den Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kundenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Lieferantenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Die Art des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Kontakttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Kontakttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Kontaktname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Name des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the contact",
+          "message": "Währung für den Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Notizen zum Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Zahlungsziel in Tagen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Website"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "Website-URL des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Neuen Kontakt erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Create a new contact person for a contact in Zoho Inventory",
+          "message": "Eine neue Kontaktperson für einen Kontakt in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Create Contact Person",
+          "message": "Kontaktperson erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Der übergeordnete Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Position"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Berufsbezeichnung oder Position"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Vorname der Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Nachname der Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Create a new contact person",
+          "message": "Eine neue Kontaktperson erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new item in Zoho Inventory",
+          "message": "Einen neuen Artikel in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Artikel erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Sales Account",
+          "message": "Erlöskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Sales account",
+          "message": "Erlöskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Artikelbeschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.display_name": {
+          "source": "Inventory Account",
+          "message": "Bestandskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.short_desc": {
+          "source": "Inventory account",
+          "message": "Bestandskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory item",
+          "message": "Lagerartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase item",
+          "message": "Einkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales item",
+          "message": "Verkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase item",
+          "message": "Verkaufs- und Einkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.desc": {
+          "source": "The type of the item",
+          "message": "Der Typ des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Artikeltyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.short_desc": {
+          "source": "Type of item",
+          "message": "Typ des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Artikelname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Artikelnummer (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.display_name": {
+          "source": "Purchase Account",
+          "message": "Einkaufskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.short_desc": {
+          "source": "Purchase account",
+          "message": "Einkaufskonto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Einkaufspreis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Einkaufspreis des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tarif"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Verkaufspreis des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Einheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Maßeinheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Neuen Artikel erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Create a new inventory adjustment in Zoho Inventory",
+          "message": "Neue Bestandsanpassung in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Create Item Adjustment",
+          "message": "Bestandsanpassung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnF1YW50aXR5.desc": {
+          "source": "Quantity adjustment",
+          "message": "Mengenanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnZhbHVl.desc": {
+          "source": "Value adjustment",
+          "message": "Wertanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.desc": {
+          "source": "The type of inventory adjustment",
+          "message": "Die Art der Bestandsanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.display_name": {
+          "source": "Adjustment Type",
+          "message": "Anpassungstyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.short_desc": {
+          "source": "Type of adjustment",
+          "message": "Art der Anpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.short_desc": {
+          "source": "Adjustment date",
+          "message": "Anpassungsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Adjustment description",
+          "message": "Beschreibung der Anpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, quantity_adjusted, etc.",
+          "message": "Liste der Positionen mit item_id, quantity_adjusted usw."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Adjustment line items",
+          "message": "Anpassungspositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Grund"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.short_desc": {
+          "source": "Reason for the adjustment",
+          "message": "Grund für die Anpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number for the adjustment",
+          "message": "Referenznummer für die Anpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new inventory adjustment",
+          "message": "Eine neue Bestandsanpassung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Create a new item group in Zoho Inventory",
+          "message": "Neue Artikelgruppe in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Create Item Group",
+          "message": "Artikelgruppe erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Marke"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Markenname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Gruppenname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Name der Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Gruppenbeschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.desc": {
+          "source": "List of items in the group with attributes",
+          "message": "Liste der Artikel in der Gruppe mit Attributen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Elemente"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Artikel in der Gruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Hersteller"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Herstellername"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Einheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Maßeinheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Create a new item group",
+          "message": "Eine neue Artikelgruppe erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Inventory",
+          "message": "Neue Rechnung in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Rechnung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Der Kunde für diese Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Rechnungsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Rabattbetrag oder -prozentsatz"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Fälligkeitsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Fälligkeitsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Rechnungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Benutzerdefinierte Rechnungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, rate, quantity, etc.",
+          "message": "Liste der Positionen mit item_id, rate, quantity usw."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Rechnungspositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Rechnungsnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Associated sales order",
+          "message": "Zugehöriger Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Zahlungsziel in Tagen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Geschäftsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Eine neue Rechnung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Create a new purchase order in Zoho Inventory",
+          "message": "Neue Bestellung in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Create Purchase Order",
+          "message": "Bestellung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Bestelldatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Lieferdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Voraussichtliches Lieferdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Bestellpositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Bestellnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.display_name": {
+          "source": "Purchase Order Number",
+          "message": "Einkaufsbestellnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom purchase order number",
+          "message": "Benutzerdefinierte Bestellnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Anbieter"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Der Lieferant für diese Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Create a new purchase order",
+          "message": "Neue Bestellung erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.desc": {
+          "source": "Create a new package for a sales order in Zoho Inventory",
+          "message": "Neues Paket für einen Kundenauftrag in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
+          "source": "Create Package",
+          "message": "Paket erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Paketdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of items with so_line_item_id and quantity",
+          "message": "Liste der Artikel mit so_line_item_id und quantity"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Paketpositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Paketnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this package",
+          "message": "Der Kundenauftrag für dieses Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Paketnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Custom package number",
+          "message": "Benutzerdefinierte Paketnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Create a new package",
+          "message": "Ein neues Paket erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Zoho Inventory",
+          "message": "Neuen Kundenauftrag in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "Kundenauftrag erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Der Kunde für diesen Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum des Kundenauftrags"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Positionen des Kundenauftrags"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Notizen zum Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.display_name": {
+          "source": "Sales Order Number",
+          "message": "Kundenauftragsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom sales order number",
+          "message": "Benutzerdefinierte Kundenauftragsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Voraussichtliches Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Geschäftsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Neuen Verkaufsauftrag erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Create a new shipment order in Zoho Inventory",
+          "message": "Neuen Versandauftrag in Zoho Inventory erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Create Shipment Order",
+          "message": "Versandauftrag erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Auslieferungsmethode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Liefermethode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Versandnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this shipment",
+          "message": "Der Kundenauftrag für diese Sendung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Sendungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Versandauftragsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Versandkosten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Versandkostenbetrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.desc": {
+          "source": "List of package IDs to include",
+          "message": "Liste der einzuschließenden Paket-IDs"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.display_name": {
+          "source": "Package IDs",
+          "message": "Paket-IDs"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.short_desc": {
+          "source": "Packages to include in shipment",
+          "message": "In die Sendung einzuschließende Pakete"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Create a new shipment order",
+          "message": "Einen neuen Versandauftrag erstellen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact from Zoho Inventory",
+          "message": "Details eines bestimmten Kontakts aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Kontakt abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Der abzurufende Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get contact details",
+          "message": "Kontaktdetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Retrieve details of a specific contact person from Zoho Inventory",
+          "message": "Details einer bestimmten Kontaktperson aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Get Contact Person",
+          "message": "Kontaktperson abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to retrieve",
+          "message": "Die abzurufende Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Get contact person details",
+          "message": "Kontaktpersonendetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item from Zoho Inventory",
+          "message": "Details eines bestimmten Artikels aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Element abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "Das abzurufende Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get item details",
+          "message": "Artikeldetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
+          "message": "Details einer bestimmten Bestandsanpassung aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Get Item Adjustment",
+          "message": "Bestandsanpassung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Bestandsanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to retrieve",
+          "message": "Die abzurufende Bestandsanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Get inventory adjustment details",
+          "message": "Details zur Bestandsanpassung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Retrieve details of a specific item group from Zoho Inventory",
+          "message": "Details einer bestimmten Artikelgruppe aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Get Item Group",
+          "message": "Artikelgruppe abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to retrieve",
+          "message": "Die abzurufende Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Get item group details",
+          "message": "Artikelgruppendetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice from Zoho Inventory",
+          "message": "Details einer bestimmten Rechnung aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Rechnung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Die abzurufende Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Rechnungsdetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific purchase order from Zoho Inventory",
+          "message": "Details einer bestimmten Bestellung aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Bestellung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Die abzurufende Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Get purchase order details",
+          "message": "Bestelldetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.desc": {
+          "source": "Retrieve details of a specific package from Zoho Inventory",
+          "message": "Details eines bestimmten Pakets aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
+          "source": "Get Package",
+          "message": "Paket abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to retrieve",
+          "message": "Das abzurufende Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
+          "source": "Get package details",
+          "message": "Paketdetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific sales order from Zoho Inventory",
+          "message": "Details eines bestimmten Kundenauftrags aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "Kundenauftrag abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Der abzurufende Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get sales order details",
+          "message": "Kundenauftragsdetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Retrieve details of a specific shipment order from Zoho Inventory",
+          "message": "Details eines bestimmten Versandauftrags aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Get Shipment Order",
+          "message": "Versandauftrag abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to retrieve",
+          "message": "Der abzurufende Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Get shipment order details",
+          "message": "Versandauftragsdetails abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Zoho Inventory",
+          "message": "Einen Kontakt aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Kontakt löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Der zu löschende Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Einen Kontakt löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Delete a contact person from Zoho Inventory",
+          "message": "Eine Kontaktperson aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Delete Contact Person",
+          "message": "Kontaktperson löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to delete",
+          "message": "Die zu löschende Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Delete a contact person",
+          "message": "Eine Kontaktperson löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete an item from Zoho Inventory",
+          "message": "Einen Artikel aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "Element löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to delete",
+          "message": "Das zu löschende Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "Einen Artikel löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Delete an inventory adjustment from Zoho Inventory",
+          "message": "Eine Bestandsanpassung aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Delete Item Adjustment",
+          "message": "Bestandsanpassung löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Bestandsanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to delete",
+          "message": "Die zu löschende Bestandsanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an inventory adjustment",
+          "message": "Eine Bestandsanpassung löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Delete an item group from Zoho Inventory",
+          "message": "Eine Artikelgruppe aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Delete Item Group",
+          "message": "Artikelgruppe löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to delete",
+          "message": "Die zu löschende Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Delete an item group",
+          "message": "Eine Artikelgruppe löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Inventory",
+          "message": "Eine Rechnung aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Delete Invoice"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Die zu löschende Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Eine Rechnung löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Delete a purchase order from Zoho Inventory",
+          "message": "Eine Bestellung aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Delete Purchase Order",
+          "message": "Bestellung löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to delete",
+          "message": "Die zu löschende Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Delete a purchase order",
+          "message": "Eine Bestellung löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.desc": {
+          "source": "Delete a package from Zoho Inventory",
+          "message": "Ein Paket aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
+          "source": "Delete Package",
+          "message": "Paket löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to delete",
+          "message": "Das zu löschende Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
+          "source": "Delete a package",
+          "message": "Ein Paket löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Zoho Inventory",
+          "message": "Einen Kundenauftrag aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Kundenauftrag löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Der zu löschende Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Einen Verkaufsauftrag löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Delete a shipment order from Zoho Inventory",
+          "message": "Einen Versandauftrag aus Zoho Inventory löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Delete Shipment Order",
+          "message": "Versandauftrag löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to delete",
+          "message": "Der zu löschende Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Delete a shipment order",
+          "message": "Einen Versandauftrag löschen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.desc": {
+          "source": "Retrieve a list of contact persons for a specific contact in Zoho Inventory",
+          "message": "Eine Liste von Kontaktpersonen für einen bestimmten Kontakt in Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
+          "source": "List Contact Persons",
+          "message": "Kontaktpersonen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Der übergeordnete Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
+          "source": "List contact persons for a contact",
+          "message": "Kontaktpersonen für einen Kontakt auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Search and retrieve a list of contacts from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Kontakten aus Zoho Inventory suchen und mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "Search Contacts",
+          "message": "Kontakte suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kundenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Lieferantenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Kontakttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Nach Kontakttyp filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Kontaktname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Filter by contact name",
+          "message": "Nach Kontaktname filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Nach E-Mail-Adresse filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "Aktive Kontakte"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive contacts",
+          "message": "Inaktive Kontakte"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "Nach Kontaktstatus filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.short_desc": {
+          "source": "Filter by phone number",
+          "message": "Nach Telefonnummer filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "Search and list contacts",
+          "message": "Kontakte suchen und auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Rechnungen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Rechnungen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Nach Kunde filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Nach Rechnungs-ID filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Überfällige Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Rechnungsentwürfe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Bezahlte Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Teilweise bezahlte Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Gesendete Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Unbezahlte Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void invoices",
+          "message": "Ungültige Rechnungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Nach Rechnungsstatus filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List and search invoices",
+          "message": "Rechnungen auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of inventory adjustments from Zoho Inventory",
+          "message": "Eine Liste von Bestandsanpassungen aus Zoho Inventory abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
+          "source": "List Item Adjustments",
+          "message": "Artikelanpassungen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List inventory adjustments",
+          "message": "Bestandsanpassungen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.desc": {
+          "source": "Retrieve a list of item groups from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Artikelgruppen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
+          "source": "List Item Groups",
+          "message": "Artikelgruppen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Gruppenname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Filter by group name",
+          "message": "Nach Gruppenname filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
+          "source": "List and search item groups",
+          "message": "Artikelgruppen auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Artikeln aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Artikel auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory items",
+          "message": "Lagerartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase items",
+          "message": "Einkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales items",
+          "message": "Verkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase items",
+          "message": "Verkaufs- und Einkaufsartikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Artikeltyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.short_desc": {
+          "source": "Filter by item type",
+          "message": "Nach Artikeltyp filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by item name",
+          "message": "Nach Elementname filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "Nach SKU filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List and search items",
+          "message": "Artikel auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.desc": {
+          "source": "Retrieve a list of packages from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Paketen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
+          "source": "List Packages",
+          "message": "Pakete auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Nach Kundenauftrag filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Paketnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Filter by package number",
+          "message": "Nach Paketnummer filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
+          "source": "List packages",
+          "message": "Pakete auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.desc": {
+          "source": "Retrieve a list of purchase orders from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Bestellungen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Bestellungen auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open purchase orders",
+          "message": "Offene Bestellungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.desc": {
+          "source": "Billed purchase orders",
+          "message": "Abgerechnete Bestellungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled purchase orders",
+          "message": "Stornierte Bestellungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.desc": {
+          "source": "Closed purchase orders",
+          "message": "Geschlossene Bestellungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmlzc3VlZA.desc": {
+          "source": "Issued purchase orders",
+          "message": "Ausgestellte Bestellungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "Nach Bestellungsstatus filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Anbieter"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Nach Lieferant filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
+          "source": "List and search purchase orders",
+          "message": "Bestellungen auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.desc": {
+          "source": "Retrieve a list of sales orders from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Kundenaufträgen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
+          "source": "List Sales Orders",
+          "message": "Kundenaufträge auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Nach Kunde filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open sales orders",
+          "message": "Offene Kundenaufträge"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbmZpcm1lZA.desc": {
+          "source": "Confirmed sales orders",
+          "message": "Bestätigte Kundenaufträge"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1bGZpbGxlZA.desc": {
+          "source": "Fulfilled sales orders",
+          "message": "Erfüllte Kundenaufträge"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void sales orders",
+          "message": "Ungültige Kundenaufträge"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by sales order status",
+          "message": "Nach Kundenauftragsstatus filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Kundenaufträge auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of shipment orders from Zoho Inventory with optional filtering",
+          "message": "Eine Liste von Versandaufträgen aus Zoho Inventory mit optionaler Filterung abrufen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
+          "source": "List Shipment Orders",
+          "message": "Versandaufträge auflisten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Nach Kundenauftrag filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by shipment status",
+          "message": "Nach Versandstatus filtern"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
+          "source": "List and search shipment orders",
+          "message": "Versandaufträge auflisten und suchen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Inventory** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Zoho Inventory** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Request-Body an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antwort-Body enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Inventory",
+          "message": "Einen benutzerdefinierten API-Aufruf an Zoho Inventory durchführen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.desc": {
+          "source": "Mark a contact as active or inactive in Zoho Inventory",
+          "message": "Einen Kontakt in Zoho Inventory als aktiv oder inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
+          "source": "Mark Contact Active/Inactive",
+          "message": "Kontakt als aktiv/inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to mark",
+          "message": "Der zu markierende Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.desc": {
+          "source": "`True` to mark active, `False` to mark inactive",
+          "message": "`True`, um als aktiv zu markieren, `False`, um als inaktiv zu markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Aktiv"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Aktiv-Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
+          "source": "Mark a contact as active or inactive",
+          "message": "Einen Kontakt als aktiv oder inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.desc": {
+          "source": "Mark a contact person as the primary contact person in Zoho Inventory",
+          "message": "Eine Kontaktperson in Zoho Inventory als primäre Kontaktperson markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
+          "source": "Mark Contact Person Primary",
+          "message": "Kontaktperson als primär markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to mark as primary",
+          "message": "Die als primär zu markierende Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
+          "source": "Mark a contact person as primary",
+          "message": "Eine Kontaktperson als primär markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.desc": {
+          "source": "Mark an item as active or inactive in Zoho Inventory",
+          "message": "Einen Artikel in Zoho Inventory als aktiv oder inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
+          "source": "Mark Item Active/Inactive",
+          "message": "Artikel als aktiv/inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Aktiv"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Aktiv-Status"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to mark",
+          "message": "Der zu markierende Artikel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
+          "source": "Mark an item as active or inactive",
+          "message": "Einen Artikel als aktiv oder inaktiv markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.desc": {
+          "source": "Mark a shipment order as delivered in Zoho Inventory",
+          "message": "Einen Versandauftrag in Zoho Inventory als zugestellt markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
+          "source": "Mark Shipment Delivered",
+          "message": "Sendung als zugestellt markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to mark as delivered",
+          "message": "Der als zugestellt zu markierende Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Mark a shipment as delivered",
+          "message": "Eine Sendung als zugestellt markieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Kontakt in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Neuer Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new contacts (seconds)",
+          "message": "Wie oft nach neuen Kontakten gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Auslösen, wenn ein neuer Kontakt erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new item is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Artikel in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Neues Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Wie oft nach neuen Artikeln gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Auslösen, wenn ein neuer Artikel erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Fires when a new item adjustment is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Artikelanpassung in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "New Item Adjustment",
+          "message": "Neue Artikelanpassung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item adjustments (seconds)",
+          "message": "Wie oft nach neuen Artikelanpassungen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Trigger when a new item adjustment is created",
+          "message": "Wird ausgelöst, wenn eine neue Artikelanpassung erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Fires when a new item group is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Artikelgruppe in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "New Item Group",
+          "message": "Neue Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item groups (seconds)",
+          "message": "Wie oft nach neuen Artikelgruppen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Trigger when a new item group is created",
+          "message": "Wird ausgelöst, wenn eine neue Artikelgruppe erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Rechnung in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Neue Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Wie oft nach neuen Rechnungen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Auslösen, wenn eine neue Rechnung erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Bestellung in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "Neue Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Wie oft nach neuen Bestellungen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Auslösen, wenn eine neue Bestellung erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.desc": {
+          "source": "Fires when a new package is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neues Paket in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
+          "source": "New Package",
+          "message": "Neues Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new packages (seconds)",
+          "message": "Wie oft nach neuen Paketen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
+          "source": "Trigger when a new package is created",
+          "message": "Wird ausgelöst, wenn ein neues Paket erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Kundenauftrag in Zoho Inventory erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "Neuer Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Wie oft nach neuen Kundenaufträgen gesucht werden soll (Sekunden)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Auslösen, wenn ein neuer Kundenauftrag erstellt wird"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Zoho Inventory",
+          "message": "Einen vorhandenen Kontakt in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Kontakt aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Unternehmensname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Firmenname für den Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kundenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Lieferantenkontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Die Art des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Kontakttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Kontakttyp"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Der zu aktualisierende Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Kontaktname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Name des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Notizen zum Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Zahlungsziel in Tagen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Website"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "Website-URL des Kontakts"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Einen bestehenden Kontakt aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Update an existing contact person in Zoho Inventory",
+          "message": "Eine vorhandene Kontaktperson in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Update Contact Person",
+          "message": "Kontaktperson aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to update",
+          "message": "Die zu aktualisierende Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Position"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Berufsbezeichnung oder Position"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Vorname der Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Nachname der Kontaktperson"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Update an existing contact person",
+          "message": "Eine vorhandene Kontaktperson aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in Zoho Inventory",
+          "message": "Einen vorhandenen Artikel in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "Element aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Artikelbeschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to update",
+          "message": "Das zu aktualisierende Element"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Artikelname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Artikelnummer (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Einkaufspreis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Einkaufspreis des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tarif"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Verkaufspreis des Artikels"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Einheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Maßeinheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "Einen bestehenden Artikel aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Update an existing item group in Zoho Inventory",
+          "message": "Eine vorhandene Artikelgruppe in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Update Item Group",
+          "message": "Artikelgruppe aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Marke"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Markenname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to update",
+          "message": "Die zu aktualisierende Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Gruppenname"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Name der Artikelgruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Gruppenbeschreibung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Elemente"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Artikel in der Gruppe"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Hersteller"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Herstellername"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Einheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Maßeinheit"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Update an existing item group",
+          "message": "Eine vorhandene Artikelgruppe aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Inventory",
+          "message": "Eine vorhandene Rechnung in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Rechnung aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Der Kunde für diese Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Rechnungsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Rabattbetrag oder -prozentsatz"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Fälligkeitsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Fälligkeitsdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to update",
+          "message": "Die zu aktualisierende Rechnung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Rechnungspositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Rechnungsnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Zahlungsziel in Tagen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Geschäftsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Eine bestehende Rechnung aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Update an existing purchase order in Zoho Inventory",
+          "message": "Eine vorhandene Bestellung in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Update Purchase Order",
+          "message": "Bestellung aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Bestelldatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Lieferdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Voraussichtliches Lieferdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Bestellpositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Bestellnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to update",
+          "message": "Die zu aktualisierende Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Anbieter"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Der Lieferant für diese Bestellung"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Update an existing purchase order",
+          "message": "Eine bestehende Bestellung aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.desc": {
+          "source": "Update an existing package in Zoho Inventory",
+          "message": "Ein vorhandenes Paket in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
+          "source": "Update Package",
+          "message": "Paket aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Paketdatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Paketpositionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Paketnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to update",
+          "message": "Das zu aktualisierende Paket"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Update an existing package",
+          "message": "Ein vorhandenes Paket aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Zoho Inventory",
+          "message": "Einen vorhandenen Kundenauftrag in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "Kundenauftrag aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Der Kunde für diesen Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum des Kundenauftrags"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Positionen des Kundenauftrags"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Notizen zum Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Der zu aktualisierende Kundenauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Voraussichtliches Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenznummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Geschäftsbedingungen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Einen bestehenden Kundenauftrag aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Update an existing shipment order in Zoho Inventory",
+          "message": "Einen vorhandenen Versandauftrag in Zoho Inventory aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Update Shipment Order",
+          "message": "Versandauftrag aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Versanddatum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Auslieferungsmethode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Liefermethode"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory-Organisation"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Versandnotizen"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to update",
+          "message": "Der zu aktualisierende Versandauftrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Sendungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Versandauftragsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Versandkosten"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Versandkostenbetrag"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Update an existing shipment order",
+          "message": "Einen vorhandenen Versandauftrag aktualisieren"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.desc": {
+          "source": "Zoho Inventory is an online inventory management software that helps businesses manage orders, warehousing, and shipping.\n\nThis integration supports contacts, items, item groups, item adjustments, packages, purchase orders, sales orders, and shipment orders.",
+          "message": "Zoho Inventory ist eine Online-Bestandsverwaltungssoftware, mit der Unternehmen Bestellungen, Lagerhaltung und Versand verwalten können.\n\nDiese Integration unterstützt Kontakte, Artikel, Artikelgruppen, Artikelanpassungen, Pakete, Bestellungen, Kundenaufträge und Versandaufträge."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.display_name": {
+          "source": "Zoho Inventory",
+          "message": "Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.short_desc": {
+          "source": "Zoho Inventory management software",
+          "message": "Zoho Inventory-Verwaltungssoftware"
+        }
+      }
+    }
+  }
+}

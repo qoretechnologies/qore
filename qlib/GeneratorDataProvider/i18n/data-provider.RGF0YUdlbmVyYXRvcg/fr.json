@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.desc": {
+          "source": "Generate a stream of records by repeating and varying a template record with optional randomization for testing data pipelines",
+          "message": "Générer un flux d'enregistrements en répétant et en faisant varier un enregistrement modèle avec une randomisation optionnelle pour tester les pipelines de données"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
+          "source": "Generate From Template",
+          "message": "Générer à partir d'un modèle"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate from the template; must be a non-negative integer; defaults to 10",
+          "message": "Le nombre total d'enregistrements à générer à partir du modèle ; doit être un entier non négatif ; valeur par défaut : 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Nombre d'enregistrements"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "Nombre d'enregistrements à générer"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "Une valeur date/heure fixe utilisée comme point de référence pour générer des champs de date ; lorsqu'elle est fournie avec un seed, cela garantit une reproductibilité complète des champs de date d'une exécution à l'autre ; si elle n'est pas fournie, la date/heure actuelle au début de la génération est utilisée"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Date de base"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "Date de base fixe pour la génération de champs de date"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "Lorsque `True` et que la stratégie est `random`, environ 10%% des valeurs de champ seront définies sur `NOTHING` (null) ; utile pour tester la gestion des valeurs nulles dans les pipelines de données ; prend par défaut `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Inclure les valeurs nulles"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "Indique s'il faut inclure aléatoirement des valeurs nulles"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator for reproducible output; only effective with `random` strategy",
+          "message": "Un entier servant de seed pour le générateur de nombres aléatoires afin d'obtenir un résultat reproductible ; n'est effectif qu'avec la stratégie `random`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "Seed aléatoire"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "Seed pour une génération aléatoire reproductible"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Apply random variations to template values",
+          "message": "Appliquer des variations aléatoires aux valeurs du modèle"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Vary template values deterministically by record index",
+          "message": "Faire varier les valeurs du modèle de façon déterministe selon l'index de l'enregistrement"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy for varying template values across generated records; `sequential` adds the record index to numeric values and appends it as a suffix to strings; `random` applies random variations; defaults to `sequential`",
+          "message": "La stratégie pour faire varier les valeurs du modèle sur les enregistrements générés ; `sequential` ajoute l'index d'enregistrement aux valeurs numériques et l'ajoute en suffixe aux chaînes ; `random` applique des variations aléatoires ; prend par défaut `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "Stratégie de génération"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How template values are varied",
+          "message": "Façon dont les valeurs du modèle sont modifiées"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.desc": {
+          "source": "A hash representing a single record whose structure and values will be used as the basis for all generated records; field types are inferred from the template values; each generated record varies the template values based on the record index or randomly",
+          "message": "Un hash représentant un enregistrement unique dont la structure et les valeurs serviront de base à tous les enregistrements générés ; les types de champs sont déduits des valeurs du modèle ; chaque enregistrement généré fait varier les valeurs du modèle en fonction de l'index de l'enregistrement ou de manière aléatoire"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Record",
+          "message": "Enregistrement modèle"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "A sample record to use as a template",
+          "message": "Un exemple d'enregistrement à utiliser comme modèle"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {
+          "source": "Generate records based on a template record",
+          "message": "Générer des enregistrements basés sur un enregistrement modèle"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.desc": {
+          "source": "Generate a stream of records with configurable count, field types, and data generation strategy for testing data pipelines",
+          "message": "Générer un flux d'enregistrements avec un nombre, des types de champs et une stratégie de génération de données configurables pour tester les pipelines de données"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
+          "source": "Generate Records",
+          "message": "Générer des enregistrements"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate in the output stream; must be a non-negative integer; defaults to 10",
+          "message": "Le nombre total d'enregistrements à générer dans le flux de sortie ; doit être un entier non négatif ; prend par défaut 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Nombre d'enregistrements"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "Nombre d'enregistrements à générer"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "Une valeur date/heure fixe utilisée comme point de référence pour générer des champs de date ; lorsqu'elle est fournie avec un seed, cela garantit une reproductibilité complète des champs de date d'une exécution à l'autre ; si elle n'est pas fournie, la date/heure actuelle au début de la génération est utilisée"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Date de base"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "Date de base fixe pour la génération de champs de date"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field definition hashes, each with keys: `name` (string, the field name), `type` (string, one of: `string`, `int`, `float`, `bool`, `date`), and optionally `desc` (string, field description).\n\nIf not provided, a default schema is used with fields: `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)",
+          "message": "Une liste de hashs de définition de champs, chacun avec les clés : `name` (chaîne, le nom du champ), `type` (chaîne, l'un des types : `string`, `int`, `float`, `bool`, `date`), et éventuellement `desc` (chaîne, description du champ).\n\nSi non fourni, un schéma par défaut est utilisé avec les champs : `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.display_name": {
+          "source": "Field Definitions",
+          "message": "Définitions des champs"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.short_desc": {
+          "source": "Schema definition for generated records",
+          "message": "Définition du schéma pour les enregistrements générés"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "Lorsque `True` et que la stratégie est `random`, environ 10%% des valeurs de champ seront définies sur `NOTHING` (null) ; utile pour tester la gestion des valeurs nulles dans les pipelines de données ; prend par défaut `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Inclure les valeurs nulles"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "Indique s'il faut inclure aléatoirement des valeurs nulles"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator; when provided, the same seed will always produce the same sequence of records, enabling reproducible test data; only effective with `random` strategy",
+          "message": "Un entier servant de seed pour le générateur de nombres aléatoires ; lorsqu'il est fourni, le même seed produira toujours la même séquence d'enregistrements, permettant des données de test reproductibles ; n'est effectif qu'avec la stratégie `random`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "Seed aléatoire"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "Seed pour une génération aléatoire reproductible"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Generate pseudo-random values for each field",
+          "message": "Générer des valeurs pseudo-aléatoires pour chaque champ"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Generate deterministic values incrementing with each record index",
+          "message": "Générer des valeurs déterministes qui s'incrémentent avec chaque index d'enregistrement"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy used to generate field values; `sequential` produces deterministic values based on the record index; `random` produces pseudo-random values; defaults to `sequential`",
+          "message": "La stratégie utilisée pour générer les valeurs des champs ; `sequential` produit des valeurs déterministes basées sur l'index de l'enregistrement ; `random` produit des valeurs pseudo-aléatoires ; prend par défaut `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "Stratégie de génération"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How field values are generated",
+          "message": "Façon dont les valeurs des champs sont générées"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
+          "source": "Generate a stream of records with a configurable schema",
+          "message": "Générer un flux d'enregistrements avec un schéma configurable"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.desc": {
+          "source": "Generate configurable record streams for testing data pipelines without any external service connections",
+          "message": "Générer des flux d'enregistrements configurables pour tester des pipelines de données sans aucune connexion à des services externes"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.display_name": {
+          "source": "Data Generator",
+          "message": "Générateur de données"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.short_desc": {
+          "source": "Generate test record streams",
+          "message": "Générer des flux d'enregistrements de test"
+        }
+      }
+    }
+  }
+}

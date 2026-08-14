@@ -1,0 +1,2109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.desc": {
+          "source": "Create a new dubbing project to translate audio/video content to another language",
+          "message": "音声/動画コンテンツを別の言語に翻訳するための新しい吹き替えプロジェクトを作成します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
+          "source": "Create Dubbing",
+          "message": "吹き替えを作成"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.desc": {
+          "source": "If `True`, removes background audio from the final dubbed output",
+          "message": "`True` の場合、吹き替え後の最終出力から背景音声を削除します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.display_name": {
+          "source": "Drop Background Audio",
+          "message": "背景音声を削除"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.short_desc": {
+          "source": "Whether to remove background audio",
+          "message": "背景音声を削除するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.desc": {
+          "source": "The end position in seconds to clip the source content before dubbing",
+          "message": "吹き替え前にソースコンテンツを切り取る終了位置（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "終了時刻"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End position in seconds",
+          "message": "終了位置（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.desc": {
+          "source": "The source audio or video file to dub. Provide either `file` or `source_url`, not both",
+          "message": "吹き替えるソース音声または動画ファイル。`file` または `source_url` のいずれかを指定してください（両方は指定できません）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.display_name": {
+          "source": "Source File",
+          "message": "ソースファイル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.short_desc": {
+          "source": "Source audio or video file for dubbing",
+          "message": "吹き替え用のソース音声または動画ファイル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.desc": {
+          "source": "If `True`, uses the highest resolution available for the dubbed content",
+          "message": "`True` の場合、吹き替えコンテンツに利用可能な最高解像度を使用します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.display_name": {
+          "source": "Highest Resolution",
+          "message": "最高解像度"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.short_desc": {
+          "source": "Whether to use the highest resolution",
+          "message": "最高解像度を使用するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.desc": {
+          "source": "The name for the new dubbing project",
+          "message": "新しい吹き替えプロジェクトの名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.short_desc": {
+          "source": "The name of the dubbing project",
+          "message": "吹き替えプロジェクトの名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The number of speakers in the source content. Set to `0` to automatically detect the number of speakers",
+          "message": "ソースコンテンツ内の話者数。`0` に設定すると話者数が自動検出されます"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "話者数"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Number of speakers in the content",
+          "message": "コンテンツ内の話者数"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.desc": {
+          "source": "The language code of the source content (e.g., `en`)",
+          "message": "ソースコンテンツの言語コード（例: `en`）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.display_name": {
+          "source": "Source Language",
+          "message": "ソース言語"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.short_desc": {
+          "source": "The source language code",
+          "message": "ソース言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.desc": {
+          "source": "The URL of the source audio or video content to dub",
+          "message": "吹き替えるソース音声または動画コンテンツの URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.display_name": {
+          "source": "Source URL",
+          "message": "ソース URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.short_desc": {
+          "source": "URL of the source content",
+          "message": "ソースコンテンツの URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start position in seconds to clip the source content before dubbing",
+          "message": "吹き替え前にソースコンテンツを切り取る開始位置（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "開始時刻"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "Start position in seconds",
+          "message": "開始位置（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.desc": {
+          "source": "If `True`, adds a watermark to the dubbed content",
+          "message": "`True` の場合、吹き替えコンテンツに透かしを追加します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.display_name": {
+          "source": "Watermark",
+          "message": "透かし"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.short_desc": {
+          "source": "Whether to add a watermark",
+          "message": "透かしを追加するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.desc": {
+          "source": "The language code to dub the content into (e.g., `es`)",
+          "message": "コンテンツの吹き替え先言語コード（例: `es`）"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.display_name": {
+          "source": "Target Language",
+          "message": "ターゲット言語"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.short_desc": {
+          "source": "The target language code",
+          "message": "ターゲット言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.desc": {
+          "source": "If `True`, profanities in the transcription will be censored. **Note**: this is a beta feature",
+          "message": "`True` の場合、文字起こし内の不適切な表現が検閲されます。**注意**: これはベータ機能です"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.display_name": {
+          "source": "Profanity Filter",
+          "message": "不適切表現フィルター"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.short_desc": {
+          "source": "Whether to censor profanities in transcripts",
+          "message": "文字起こし内の不適切な表現を検閲するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
+          "source": "Create a dubbing project",
+          "message": "吹き替えプロジェクトを作成"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Create a new pronunciation dictionary with custom pronunciation rules",
+          "message": "カスタム発音ルールを含む新しい発音辞書を作成します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Create Pronunciation Dictionary",
+          "message": "発音辞書を作成"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the pronunciation dictionary",
+          "message": "発音辞書の説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Dictionary description",
+          "message": "辞書の説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.desc": {
+          "source": "The name for the new pronunciation dictionary",
+          "message": "新しい発音辞書の名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the dictionary",
+          "message": "辞書の名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Workspace members can edit the dictionary",
+          "message": "ワークスペースメンバーが辞書を編集できます"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "編集者"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Workspace members can only view the dictionary",
+          "message": "ワークスペースメンバーは辞書の表示のみ可能です"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "閲覧者"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.desc": {
+          "source": "The access level for workspace members",
+          "message": "ワークスペースメンバーのアクセスレベル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.display_name": {
+          "source": "Workspace Access",
+          "message": "ワークスペースのアクセス権"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.short_desc": {
+          "source": "Access level for workspace members",
+          "message": "ワークスペースメンバーのアクセスレベル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Create a pronunciation dictionary",
+          "message": "発音辞書を作成"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.desc": {
+          "source": "Create a new voice with a name and optional description",
+          "message": "名前と任意の説明を指定して新しい音声を作成します"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
+          "source": "Create Voice",
+          "message": "音声を作成"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the voice",
+          "message": "音声の説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Voice description",
+          "message": "音声の説明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.desc": {
+          "source": "A list of audio sample files (as binary data) to use for voice cloning. Each file should be a clear recording of the target voice",
+          "message": "ボイスクローニングに使用する音声サンプルファイル（バイナリデータ）のリスト。各ファイルは対象の音声が明瞭に録音されたものである必要があります"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.display_name": {
+          "source": "Audio Files",
+          "message": "音声ファイル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.short_desc": {
+          "source": "Audio samples for voice cloning",
+          "message": "ボイスクローニング用音声サンプル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "音声に関連付けるキーと値のラベル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "ラベル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "音声のラベル"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.desc": {
+          "source": "The name for the new voice",
+          "message": "新しい音声の名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.short_desc": {
+          "source": "The name of the voice",
+          "message": "音声の名前"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
+          "source": "Create a new voice",
+          "message": "新しい音声を作成"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.desc": {
+          "source": "Add pronunciation rules to an existing pronunciation dictionary. Rules can be alias rules (text replacement) or phoneme rules (IPA/phoneme representation)",
+          "message": "既存の発音辞書に発音ルールを追加します。ルールにはエイリアスルール（テキスト置換）または音素ルール（IPA/音素表現）を指定できます"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
+          "source": "Add Pronunciation Rules",
+          "message": "発音ルールを追加"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to add rules to",
+          "message": "ルールを追加する発音辞書の一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "辞書ID"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "発音辞書のID"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.desc": {
+          "source": "A list of pronunciation rules to add to the dictionary. Each rule has a `type` (`alias` or `phoneme`), a `string_to_replace`, and either an `alias` or a `phoneme` with `alphabet`",
+          "message": "辞書に追加する発音ルールのリスト。各ルールには `type`（`alias` または `phoneme`）、`string_to_replace`、および `alias` または `alphabet` 付きの `phoneme` のいずれかが含まれます"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.display_name": {
+          "source": "Rules",
+          "message": "ルール"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.short_desc": {
+          "source": "Pronunciation rules to add",
+          "message": "追加する発音ルール"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {
+          "source": "Add rules to a pronunciation dictionary",
+          "message": "発音辞書にルールを追加"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.desc": {
+          "source": "Remove background noise from audio, isolating the voice using ElevenLabs AI",
+          "message": "ElevenLabs AI を使用して音声から背景ノイズを除去し、音声を分離します"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
+          "source": "Audio Isolation",
+          "message": "音声分離"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.desc": {
+          "source": "The audio data to isolate voice from. Background noise will be removed and only the voice will be preserved",
+          "message": "音声を分離する対象のオーディオデータ。背景ノイズが除去され、音声のみが保持されます"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "オーディオ"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.short_desc": {
+          "source": "The audio data to isolate voice from",
+          "message": "音声を分離する対象のオーディオデータ"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
+          "source": "Remove background noise from audio",
+          "message": "音声から背景ノイズを除去"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.desc": {
+          "source": "Get the current status and details of a dubbing project",
+          "message": "ダビングプロジェクトの現在のステータスと詳細を取得します"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
+          "source": "Get Dubbing Status",
+          "message": "ダビングステータスを取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to retrieve",
+          "message": "取得するダビングプロジェクトの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ダビングID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "ダビングプロジェクトのID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
+          "source": "Get the status of a dubbing project",
+          "message": "ダビングプロジェクトのステータスを取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.desc": {
+          "source": "Download the dubbed audio file from a dubbing project for a specific target language",
+          "message": "ダビングプロジェクトから特定の対象言語の吹き替え音声ファイルをダウンロードします"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
+          "source": "Get Dubbing Audio",
+          "message": "ダビング音声を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to get audio for",
+          "message": "音声を取得するダビングプロジェクトの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ダビングID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "ダビングプロジェクトのID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "The language code for the dubbed audio to download (e.g., `es`, `fr`, `de`)",
+          "message": "ダウンロードする吹き替え音声の言語コード（例: `es`、`fr`、`de`）"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "The target language code",
+          "message": "ターゲット言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
+          "source": "Get dubbed audio for a specific language",
+          "message": "特定言語の吹き替え音声を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.desc": {
+          "source": "Get the audio file from a specific history item",
+          "message": "特定の履歴アイテムから音声ファイルを取得します"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
+          "source": "Get History Audio",
+          "message": "履歴音声を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to get audio for",
+          "message": "音声を取得する履歴アイテムの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "履歴アイテムID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "履歴アイテムのID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
+          "source": "Get audio from a history item",
+          "message": "履歴アイテムから音声を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Get details of a specific audio generation history item",
+          "message": "特定の音声生成履歴アイテムの詳細を取得します"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Get History Item",
+          "message": "履歴アイテムを取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to retrieve",
+          "message": "取得する履歴アイテムの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "履歴アイテムID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "履歴アイテムのID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Get details of a history item",
+          "message": "履歴アイテムの詳細を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Get details of a specific pronunciation dictionary by its ID",
+          "message": "IDを指定して特定の発音辞書の詳細を取得します"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Get Pronunciation Dictionary",
+          "message": "発音辞書を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to retrieve",
+          "message": "取得する発音辞書の一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "辞書ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "発音辞書のID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Get details of a pronunciation dictionary",
+          "message": "発音辞書の詳細を取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.desc": {
+          "source": "Get details of a specific voice by its ID",
+          "message": "IDを指定して特定のボイスの詳細を取得します"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
+          "source": "Get Voice",
+          "message": "ボイスを取得"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to retrieve",
+          "message": "取得するボイスの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ボイスID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to retrieve",
+          "message": "取得するボイスのID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
+          "source": "Get details of a specific voice",
+          "message": "特定のボイスの詳細を取得"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.desc": {
+          "source": "Delete a dubbing project by its ID",
+          "message": "IDを指定してダビングプロジェクトを削除します"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
+          "source": "Delete Dubbing",
+          "message": "ダビングを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to delete",
+          "message": "削除するダビングプロジェクトの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ダビングID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project to delete",
+          "message": "削除するダビングプロジェクトのID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
+          "source": "Delete a dubbing project",
+          "message": "ダビングプロジェクトを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Delete a specific audio generation history item",
+          "message": "特定の音声生成履歴アイテムを削除します"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Delete History Item",
+          "message": "履歴アイテムを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to delete",
+          "message": "削除する履歴アイテムの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "履歴アイテムID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item to delete",
+          "message": "削除する履歴アイテムのID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Delete a history item",
+          "message": "履歴アイテムを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.desc": {
+          "source": "Delete a voice by its ID",
+          "message": "IDを指定してボイスを削除します"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
+          "source": "Delete Voice",
+          "message": "ボイスを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to delete",
+          "message": "削除するボイスの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ボイスID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to delete",
+          "message": "削除するボイスのID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
+          "source": "Delete a voice",
+          "message": "ボイスを削除"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.desc": {
+          "source": "Edit the name, description, or labels of an existing voice",
+          "message": "既存のボイスの名前、説明、またはラベルを編集します"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
+          "source": "Edit Voice",
+          "message": "ボイスを編集"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the voice",
+          "message": "ボイスの新しい説明"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new description for the voice",
+          "message": "ボイスの新しい説明"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "音声に関連付けるキーと値のラベル"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "ラベル"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "音声のラベル"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the voice",
+          "message": "ボイスの新しい名前"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.short_desc": {
+          "source": "The new name for the voice",
+          "message": "ボイスの新しい名前"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to edit",
+          "message": "編集するボイスの一意の識別子"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ボイスID"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to edit",
+          "message": "編集するボイスのID"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
+          "source": "Edit an existing voice",
+          "message": "既存のボイスを編集"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.desc": {
+          "source": "List available voices with optional filtering and pagination",
+          "message": "利用可能なボイスをオプションのフィルタリングとページネーション付きで一覧表示します"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
+          "source": "List Voices",
+          "message": "ボイスを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.desc": {
+          "source": "Cloned voices",
+          "message": "クローンされたボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.display_name": {
+          "source": "Cloned",
+          "message": "クローン済み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.desc": {
+          "source": "Generated voices",
+          "message": "生成されたボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.display_name": {
+          "source": "Generated",
+          "message": "生成済み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.desc": {
+          "source": "Premade voices",
+          "message": "作成済みのボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.display_name": {
+          "source": "Premade",
+          "message": "作成済み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.desc": {
+          "source": "Professional voices",
+          "message": "プロフェッショナルボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.display_name": {
+          "source": "Professional",
+          "message": "プロフェッショナル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter voices by category",
+          "message": "カテゴリーでボイスを絞り込む"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "カテゴリ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Filter by voice category",
+          "message": "ボイスカテゴリーで絞り込み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by voice name",
+          "message": "ボイス名で並べ替え"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.desc": {
+          "source": "Sort by creation date",
+          "message": "作成日で並び替え"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.desc": {
+          "source": "The field to sort results by",
+          "message": "結果を並べ替える基準となるフィールド"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.short_desc": {
+          "source": "Sort field for results",
+          "message": "結果の並べ替えフィールド"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "昇順で並べ替え"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "降順で並べ替え"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.desc": {
+          "source": "The direction to sort results",
+          "message": "結果を並べ替える方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.display_name": {
+          "source": "Sort Direction",
+          "message": "並べ替えの方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.short_desc": {
+          "source": "Sort direction for results",
+          "message": "結果の並べ替え方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.desc": {
+          "source": "A search term to filter voices by name",
+          "message": "名前でボイスを絞り込むための検索用語"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.short_desc": {
+          "source": "Search term to filter voices",
+          "message": "ボイスを絞り込むための検索用語"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of voices to return per page",
+          "message": "1ページあたりに返すボイスの数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of voices to return per page",
+          "message": "1ページあたりに返すボイスの数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.desc": {
+          "source": "Community voices",
+          "message": "コミュニティボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.display_name": {
+          "source": "Community",
+          "message": "コミュニティ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default voices",
+          "message": "デフォルトボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Personal voices",
+          "message": "個人ボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "個人用"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.desc": {
+          "source": "Workspace voices",
+          "message": "ワークスペースボイス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.desc": {
+          "source": "Filter voices by type",
+          "message": "タイプでボイスを絞り込む"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.display_name": {
+          "source": "Voice Type",
+          "message": "ボイスタイプ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.short_desc": {
+          "source": "Filter by voice type",
+          "message": "ボイスタイプで絞り込み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
+          "source": "List available voices",
+          "message": "利用可能なボイスを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.desc": {
+          "source": "List dubbing projects with optional filtering by status and creator",
+          "message": "ステータスおよび作成者によるオプションのフィルタリング付きでダビングプロジェクトを一覧表示します"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
+          "source": "List Dubbing Projects",
+          "message": "ダビングプロジェクトを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.desc": {
+          "source": "Cursor for fetching the next page of results",
+          "message": "次の結果ページを取得するためのカーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "カーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor for the next page",
+          "message": "次のページのページネーションカーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.desc": {
+          "source": "Successfully completed",
+          "message": "正常に完了しました"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.display_name": {
+          "source": "Dubbed",
+          "message": "ダビング完了"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.desc": {
+          "source": "Currently being processed",
+          "message": "処理中"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.display_name": {
+          "source": "Dubbing",
+          "message": "ダビング中"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.desc": {
+          "source": "Processing failed",
+          "message": "処理に失敗しました"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.display_name": {
+          "source": "Failed",
+          "message": "失敗"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.desc": {
+          "source": "Filter dubbing projects by their processing status",
+          "message": "処理ステータスでダビングプロジェクトを絞り込む"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.display_name": {
+          "source": "Dubbing Status",
+          "message": "ダビングステータス"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.short_desc": {
+          "source": "Filter by dubbing status",
+          "message": "ダビングステータスで絞り込み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.desc": {
+          "source": "Show only others' dubbing projects",
+          "message": "他のユーザーのダビングプロジェクトのみを表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.display_name": {
+          "source": "Others",
+          "message": "他のユーザー"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Show all dubbing projects",
+          "message": "すべてのダビングプロジェクトを表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "すべて"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Show only your dubbing projects",
+          "message": "自分のダビングプロジェクトのみを表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "個人用"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.desc": {
+          "source": "Filter dubbing projects by creator",
+          "message": "作成者でダビングプロジェクトを絞り込む"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.display_name": {
+          "source": "Filter by Creator",
+          "message": "作成者で絞り込み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.short_desc": {
+          "source": "Filter by who created the dubbing project",
+          "message": "ダビングプロジェクトの作成者で絞り込み"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of dubbing projects to return per page (1-200, default: 100)",
+          "message": "1ページあたりに返すダビングプロジェクトの数 (1-200、デフォルト: 100)"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dubbing projects to return per page",
+          "message": "1ページあたりに返すダビングプロジェクトの数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
+          "source": "List dubbing projects",
+          "message": "ダビングプロジェクトを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.desc": {
+          "source": "List previously generated audio history items with optional pagination",
+          "message": "過去に生成された音声履歴アイテムをオプションのページネーション付きで一覧表示します"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
+          "source": "List History",
+          "message": "履歴を一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The history item ID to start after for pagination",
+          "message": "ページネーションの開始基準となる履歴アイテムID"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "Start After History Item ID",
+          "message": "開始基準履歴アイテムID"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of history items to return per page",
+          "message": "1ページあたりに返す履歴アイテムの数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of history items to return",
+          "message": "返す履歴アイテムの数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
+          "source": "List generated audio history items",
+          "message": "生成された音声履歴アイテムを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List available ElevenLabs AI models and their capabilities",
+          "message": "利用可能なElevenLabs AIモデルとその機能を一覧表示します"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "モデルのリスト"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List available AI models",
+          "message": "利用可能なAIモデルを一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.desc": {
+          "source": "List available pronunciation dictionaries with optional pagination",
+          "message": "利用可能な発音辞書をオプションのページネーション付きで一覧表示します"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
+          "source": "List Pronunciation Dictionaries",
+          "message": "発音辞書を一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor to use for pagination to retrieve the next page of results",
+          "message": "結果の次のページを取得するためのページネーション用カーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "カーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor for pagination",
+          "message": "ページネーション用カーソル"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of pronunciation dictionaries to return per page",
+          "message": "1ページあたりに返す発音辞書の件数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dictionaries to return per page",
+          "message": "1ページあたりに返す辞書の件数"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
+          "source": "List available pronunciation dictionaries",
+          "message": "利用可能な発音辞書を一覧表示"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ElevenLabs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**ElevenLabs** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ElevenLabs",
+          "message": "ElevenLabsへのカスタムAPI呼び出しを実行"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.desc": {
+          "source": "Convert audio from one voice to another using ElevenLabs AI voice conversion",
+          "message": "ElevenLabs AI音声変換を使用して、ある音声を別の音声に変換します"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
+          "source": "Speech to Speech",
+          "message": "Speech to Speech"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.desc": {
+          "source": "The source audio data to convert to the target voice",
+          "message": "ターゲットの音声に変換する元の音声データ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "オーディオ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.short_desc": {
+          "source": "The source audio data to convert",
+          "message": "変換する元の音声データ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "音声フォーマットを自動検出（デフォルト）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "その他（自動検出）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16ビット、16kHz モノラル、リトルエンディアン — 低レイテンシ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16ビット 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "入力音声ファイルのフォーマット。`pcm_s16le_16` には16ビット、16kHz モノラル、リトルエンディアンPCMが必要で、レイテンシが低くなります"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "ファイル形式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "入力音声のフォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート64kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44.1kHz 64kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート128kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44.1kHz 128kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート192kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44.1kHz 192kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート32kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44.1kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "サンプリングレート22.05kHz、ビットレート32kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22.05kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート44.1kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44.1kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート16kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート22.05kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22.05kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート24kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "サンプリングレート8kHzのu-law音声"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the converted speech",
+          "message": "変換後の音声の出力フォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "出力フォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "出力音声フォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.desc": {
+          "source": "Default speech-to-speech model for English voice conversion",
+          "message": "英語の音声変換用のデフォルトSpeech-to-Speechモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.display_name": {
+          "source": "Eleven English STS v2",
+          "message": "Eleven English STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.desc": {
+          "source": "Multilingual speech-to-speech model for voice conversion",
+          "message": "音声変換用の多言語Speech-to-Speechモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.display_name": {
+          "source": "Eleven Multilingual STS v2",
+          "message": "Eleven Multilingual STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-speech model to use for voice conversion",
+          "message": "音声変換に使用するSpeech-to-Speechモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STS model to use",
+          "message": "使用するSTSモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "指定した場合、システムは同一のシードおよびパラメータによる繰り返しのリクエストで同じ結果が返されるよう、可能な限り決定論的にサンプリングを試みます。完全な再現性は保証されません"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "決定論的生成用のシード"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.desc": {
+          "source": "If `True`, background noise will be removed from the input audio before conversion",
+          "message": "`True` の場合、変換前に入力音声から背景ノイズが除去されます"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.display_name": {
+          "source": "Remove Background Noise",
+          "message": "背景ノイズを除去"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.short_desc": {
+          "source": "Whether to remove background noise from the input audio",
+          "message": "入力音声から背景ノイズを除去するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "変換先となる音声のID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ボイスID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "変換先となる音声のID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "指定された音声の保存済み設定をオーバーライドする音声設定。このリクエストにのみ適用されます"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "音声設定"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the conversion",
+          "message": "変換用の音声設定"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
+          "source": "Convert audio from one voice to another",
+          "message": "ある音声を別の音声に変換"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.desc": {
+          "source": "Transcribe audio to text using ElevenLabs Scribe speech-to-text model. Supports 90+ languages with word-level timestamps and speaker diarization",
+          "message": "ElevenLabs Scribe Speech-to-Textモデルを使用して音声をテキストに文字起こしします。単語レベルのタイムスタンプと話者分離に対応し、90以上の言語をサポートしています"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
+          "source": "Speech to Text",
+          "message": "Speech to Text"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.desc": {
+          "source": "The audio data to transcribe to text",
+          "message": "テキストに文字起こしする音声データ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "オーディオ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.short_desc": {
+          "source": "The audio data to transcribe",
+          "message": "文字起こしする音声データ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.desc": {
+          "source": "If `True`, the transcription will include speaker diarization, annotating which speaker is talking in each segment",
+          "message": "`True` の場合、文字起こしに話者分離が含まれ、各セグメントでどの話者が話しているかが注記されます"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "話者分離"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Whether to annotate who is speaking",
+          "message": "誰が話しているかを注記するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "音声フォーマットを自動検出（デフォルト）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "その他（自動検出）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16ビット、16kHz モノラル、リトルエンディアン — 低レイテンシ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16ビット 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "入力音声ファイルのフォーマット。`pcm_s16le_16` には16ビット、16kHz モノラル、リトルエンディアンPCMが必要で、レイテンシが低くなります"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "ファイル形式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "入力音声のフォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "An ISO 639-1 language code to specify the language of the audio. If not provided, the model will auto-detect the language",
+          "message": "音声の言語を指定するISO 639-1言語コード。指定しない場合、モデルが言語を自動検出します"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the audio (ISO 639-1)",
+          "message": "音声の言語コード（ISO 639-1）"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.desc": {
+          "source": "Speech-to-text model supporting 90+ languages with word-level timestamps and speaker diarization",
+          "message": "単語レベルのタイムスタンプと話者分離に対応し、90以上の言語をサポートするSpeech-to-Textモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.display_name": {
+          "source": "Scribe v2",
+          "message": "Scribe v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-text model to use for transcription",
+          "message": "文字起こしに使用する音声テキスト変換モデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STT model to use",
+          "message": "使用するSTTモデル"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The maximum number of speakers expected in the audio. Maximum: `32`. Only used when `diarize` is `True`",
+          "message": "音声に含まれると予想される話者の最大数。最大: `32`。`diarize` が `True` の場合のみ使用されます"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "話者数"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Maximum number of speakers in the audio",
+          "message": "音声内の最大話者数"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.desc": {
+          "source": "If `True`, audio events such as music, laughter, and applause will be tagged in the transcription",
+          "message": "`True` の場合、音楽、笑い声、拍手などの音声イベントが文字起こしにタグ付けされます"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.display_name": {
+          "source": "Tag Audio Events",
+          "message": "音声イベントのタグ付け"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.short_desc": {
+          "source": "Whether to tag audio events like music or laughter",
+          "message": "音楽や笑い声などの音声イベントをタグ付けするかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No timestamps in the response",
+          "message": "レスポンスにタイムスタンプを含めない"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.desc": {
+          "source": "Character-level timestamps",
+          "message": "文字レベルのタイムスタンプ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.display_name": {
+          "source": "Character",
+          "message": "文字"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.desc": {
+          "source": "Word-level timestamps",
+          "message": "単語レベルのタイムスタンプ"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.display_name": {
+          "source": "Word",
+          "message": "単語"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.desc": {
+          "source": "The granularity of timestamps in the transcription response",
+          "message": "文字起こしレスポンスにおけるタイムスタンプの粒度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.display_name": {
+          "source": "Timestamps Granularity",
+          "message": "タイムスタンプの粒度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.short_desc": {
+          "source": "The granularity of timestamps in the response",
+          "message": "レスポンスにおけるタイムスタンプの粒度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
+          "source": "Transcribe audio to text",
+          "message": "音声をテキストに文字起こしする"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.desc": {
+          "source": "Generate sound effects from a text description using ElevenLabs AI",
+          "message": "ElevenLabs AIを使用してテキストの説明から効果音を生成します"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
+          "source": "Text to Sound Effects",
+          "message": "テキストから効果音生成"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.desc": {
+          "source": "The duration of the generated sound effect in seconds. Range: `0.5` to `22.0`",
+          "message": "生成される効果音の長さ（秒単位）。範囲: `0.5` 〜 `22.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.display_name": {
+          "source": "Duration (Seconds)",
+          "message": "長さ（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.short_desc": {
+          "source": "Duration of the sound effect in seconds",
+          "message": "効果音の長さ（秒単位）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.desc": {
+          "source": "If `True`, creates a seamlessly looping sound effect",
+          "message": "`True` の場合、シームレスにループする効果音を作成します"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.display_name": {
+          "source": "Loop",
+          "message": "ループ"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.short_desc": {
+          "source": "Whether to create a looping sound effect",
+          "message": "ループする効果音を作成するかどうか"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.desc": {
+          "source": "How much the text prompt influences the generated sound effect. Range: `0.0` to `1.0`. Higher values make the output more closely match the prompt",
+          "message": "テキストプロンプトが生成される効果音に与える影響度。範囲: `0.0` 〜 `1.0`。値が大きいほど、出力がプロンプトにより忠実になります"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.display_name": {
+          "source": "Prompt Influence",
+          "message": "プロンプトの影響度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.short_desc": {
+          "source": "How much the text prompt influences the output",
+          "message": "テキストプロンプトが出力に与える影響度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.desc": {
+          "source": "A text description of the sound effect to generate (e.g., `dog barking in a park`)",
+          "message": "生成する効果音のテキスト説明（例: `dog barking in a park`）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.short_desc": {
+          "source": "Description of the sound effect to generate",
+          "message": "生成する効果音の説明"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
+          "source": "Generate sound effects from a text description",
+          "message": "テキストの説明から効果音を生成する"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.desc": {
+          "source": "Convert text to speech audio using ElevenLabs AI voice synthesis. Supports multiple voices, models, and output formats",
+          "message": "ElevenLabs AI音声合成を使用してテキストを音声オーディオに変換します。複数の音声、モデル、出力形式をサポートしています"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
+          "source": "Text to Speech",
+          "message": "テキスト音声変換"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.desc": {
+          "source": "Disable text normalization",
+          "message": "テキスト正規化を無効化"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Off",
+          "message": "オフ"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.desc": {
+          "source": "Always apply text normalization",
+          "message": "テキスト正規化を常に適用"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "On",
+          "message": "オン"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically decide whether to normalize text (default)",
+          "message": "テキストを正規化するかどうかを自動で判断（デフォルト）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.desc": {
+          "source": "Controls how text is normalized before synthesis",
+          "message": "合成前にテキストを正規化する方法を制御します"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.display_name": {
+          "source": "Text Normalization",
+          "message": "テキスト正規化"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.short_desc": {
+          "source": "Controls text normalization behavior",
+          "message": "テキスト正規化の動作を制御します"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート64kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44.1kHz 64kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート128kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44.1kHz 128kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート192kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44.1kHz 192kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "サンプリングレート44.1kHz、ビットレート32kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44.1kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "サンプリングレート22.05kHz、ビットレート32kbpsのMP3音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22.05kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート44.1kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44.1kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート16kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート22.05kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22.05kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "サンプリングレート24kHzのPCM音声（16ビット符号付きリトルエンディアン）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "サンプリングレート8kHzのu-law音声"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the generated speech",
+          "message": "生成される音声の出力オーディオ形式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "出力フォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "出力音声フォーマット"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (ISO 639-1) used to enforce a language for the model. Currently only supported by `eleven_turbo_v2_5`",
+          "message": "モデルに対して言語を強制するために使用される言語コード（ISO 639-1）。現在は `eleven_turbo_v2_5` でのみサポートされています"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "言語コード"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the speech (ISO 639-1)",
+          "message": "音声の言語コード（ISO 639-1）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.desc": {
+          "source": "High-quality low-latency model for 32 languages",
+          "message": "32言語に対応した高品質・低遅延モデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.display_name": {
+          "source": "Eleven Turbo v2.5",
+          "message": "Eleven Turbo v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.desc": {
+          "source": "Speed-optimized model with ~75ms latency, 32 languages, 40,000 character limit, 50% lower cost",
+          "message": "約75ミリ秒の低遅延、32言語対応、40,000文字の上限、50%低コストの速度最適化モデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.display_name": {
+          "source": "Eleven Flash v2.5",
+          "message": "Eleven Flash v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.desc": {
+          "source": "English-only model optimized for English content",
+          "message": "英語コンテンツに最適化された英語専用モデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.display_name": {
+          "source": "Eleven Monolingual v1",
+          "message": "Eleven Monolingual v1"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.desc": {
+          "source": "Mature model supporting 29 languages with 10,000 character limit",
+          "message": "29言語に対応し、10,000文字の上限を持つ実績あるモデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.display_name": {
+          "source": "Eleven Multilingual v2",
+          "message": "Eleven Multilingual v2"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.desc": {
+          "source": "The TTS model to use for speech synthesis",
+          "message": "音声合成に使用するTTSモデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The TTS model to use",
+          "message": "使用するTTSモデル"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.desc": {
+          "source": "Text that comes after the current text in a multi-part generation. Enhances continuity when concatenating audio from multiple requests",
+          "message": "複数パートの生成において現在のテキストの後に続くテキスト。複数のリクエストから音声を連結する際の連続性を高めます"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.display_name": {
+          "source": "Next Text",
+          "message": "後続テキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.short_desc": {
+          "source": "Text that comes after for continuity",
+          "message": "連続性のために後続するテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "指定した場合、システムは同一のシードおよびパラメータによる繰り返しのリクエストで同じ結果が返されるよう、可能な限り決定論的にサンプリングを試みます。完全な再現性は保証されません"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "決定論的生成用のシード"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.desc": {
+          "source": "Controls the speed of the generated speech. Range: `0.25` to `4.0`. Default: `1.0`",
+          "message": "生成される音声の速度を制御します。範囲: `0.25` 〜 `4.0`。デフォルト: `1.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.display_name": {
+          "source": "Speed",
+          "message": "速度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.short_desc": {
+          "source": "Speech speed multiplier",
+          "message": "音声速度の倍率"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.desc": {
+          "source": "Text that came before the current text in a multi-part generation. Improves prosody and continuity when splitting long text across multiple requests",
+          "message": "複数パートの生成において現在のテキストの前に位置するテキスト。長いテキストを複数のリクエストに分割する際の韻律と連続性を向上させます"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.display_name": {
+          "source": "Previous Text",
+          "message": "先行テキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.short_desc": {
+          "source": "Text that came before for continuity",
+          "message": "連続性のために先行するテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.desc": {
+          "source": "A list of pronunciation dictionary locators to apply during synthesis. Maximum of 3 dictionaries",
+          "message": "合成時に適用する発音辞書ロケーターのリスト。最大3つの辞書"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.display_name": {
+          "source": "Pronunciation Dictionaries",
+          "message": "発音辞書"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.short_desc": {
+          "source": "Pronunciation dictionaries to apply",
+          "message": "適用する発音辞書"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to convert to speech",
+          "message": "音声に変換するテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "The text to convert to speech",
+          "message": "音声に変換するテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "音声合成に使用する音声のID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ボイスID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "音声合成に使用する音声のID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "指定された音声の保存済み設定をオーバーライドする音声設定。このリクエストにのみ適用されます"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "音声設定"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the synthesis",
+          "message": "合成用の音声設定"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
+          "source": "Convert text to speech audio using AI voice synthesis",
+          "message": "AI音声合成を使用してテキストを音声オーディオに変換"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.desc": {
+          "source": "Design a new voice from a text description of the desired voice characteristics",
+          "message": "希望する音声特性のテキスト説明から新しい音声をデザイン"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
+          "source": "Voice Design",
+          "message": "ボイスデザイン"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.desc": {
+          "source": "Sample text that will be spoken by the generated voice previews",
+          "message": "生成された音声プレビューで発声されるサンプルテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.short_desc": {
+          "source": "Sample text to generate with the designed voice",
+          "message": "デザインされた音声で生成するサンプルテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the desired voice characteristics (e.g., `a warm friendly female voice with a slight British accent`)",
+          "message": "希望する音声特性のテキスト説明 (例: `a warm friendly female voice with a slight British accent`)"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.display_name": {
+          "source": "Voice Description",
+          "message": "音声の説明"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.short_desc": {
+          "source": "Text describing desired voice characteristics",
+          "message": "希望する音声特性を説明するテキスト"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
+          "source": "Design a new voice from a text description",
+          "message": "テキスト説明から新しい音声をデザイン"
+        },
+        "app.RWxldmVuTGFicw.desc": {
+          "source": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice synthesis and audio processing services.\n\nSupported operations:\n- **Speech synthesis**: text-to-speech, speech-to-speech, voice design\n- **Audio processing**: audio isolation, text-to-sound-effects\n- **Transcription**: speech-to-text with speaker diarization\n- **Voice management**: create, edit, delete, and list voices\n- **Dubbing**: create and manage dubbing projects\n- **Pronunciation**: manage pronunciation dictionaries",
+          "message": "[ElevenLabs](https://elevenlabs.io) AI音声合成およびオーディオ処理サービスとの連携機能を提供します。\n\nサポートされている操作:\n- **音声合成**: テキスト読み上げ (TTS)、音声変換 (STS)、ボイスデザイン\n- **オーディオ処理**: 音声分離、テキストからの効果音生成\n- **文字起こし**: 話者識別付き音声認識 (STT)\n- **音声管理**: 音声の作成、編集、削除、一覧表示\n- **ダビング**: ダビングプロジェクトの作成および管理\n- **発音**: 発音辞書の管理"
+        },
+        "app.RWxldmVuTGFicw.display_name": {
+          "source": "ElevenLabs",
+          "message": "ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.short_desc": {
+          "source": "ElevenLabs AI voice synthesis services",
+          "message": "ElevenLabs AI音声合成サービス"
+        }
+      }
+    }
+  }
+}

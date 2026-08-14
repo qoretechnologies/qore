@@ -1,0 +1,1177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of tokens that a model would use to process the given content. Use the `prompt` field for simple text, or `contents` for multi-turn input",
+          "message": "Підрахувати кількість токенів, які модель використає для обробки наданого вмісту. Використовуйте поле `prompt` для простого тексту або `contents` для багатокрокового введення"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "Підрахувати токени"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.desc": {
+          "source": "The content to count tokens for. For simple text, use the `prompt` field instead",
+          "message": "Вміст для підрахунку токенів. Для простого тексту замість цього використовуйте поле `prompt`"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.short_desc": {
+          "source": "The content to count tokens for",
+          "message": "Вміст для підрахунку токенів"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model name to use for token counting",
+          "message": "Назва моделі для підрахунку токенів"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for token counting",
+          "message": "Модель для підрахунку токенів"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.desc": {
+          "source": "A simple text string to count tokens for. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal input",
+          "message": "Простий текстовий рядок для підрахунку токенів. Провайдер автоматично обгортає його у формат повідомлення `contents`. Замість цього використовуйте `contents` для багатокрокового або мультимодального введення"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Промпт"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.short_desc": {
+          "source": "Simple text to count tokens for",
+          "message": "Простий текст для підрахунку токенів"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in the given content",
+          "message": "Підрахувати кількість токенів у наданому вмісті"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Create cached content that can be reused across multiple generation requests to reduce latency and cost. Use the `prompt` field for simple text, or `contents` for multi-turn or multimodal content",
+          "message": "Створити кешований вміст, який можна повторно використовувати в кількох запитах на генерацію для зменшення затримки та витрат. Використовуйте поле `prompt` для простого тексту або `contents` для багатокрокового чи мультимодального вмісту"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Create Cached Content",
+          "message": "Створити кешований вміст"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.desc": {
+          "source": "The content to cache for future use. For simple text, use the `prompt` field instead",
+          "message": "Вміст для кешування для подальшого використання. Для простого тексту замість цього використовуйте поле `prompt`"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.short_desc": {
+          "source": "The content to cache",
+          "message": "Вміст для кешування"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "Optional human-readable display name",
+          "message": "Необов'язкова зрозуміла відображувана назва"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Відображуване ім'я"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the cached content",
+          "message": "Відображувана назва кешованого вмісту"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "Timestamp in UTC when the cached content should expire (RFC 3339 format)",
+          "message": "Мітка часу в UTC, коли спливає термін дії кешованого вмісту (формат RFC 3339)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Час закінчення дії"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "Expiration timestamp",
+          "message": "Мітка часу закінчення дії"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.desc": {
+          "source": "The name of the model to use for cached content (e.g., `gemini-2.5-flash`)",
+          "message": "Назва моделі для використання з кешованим вмістом (наприклад, `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.short_desc": {
+          "source": "The model to use",
+          "message": "Модель для використання"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text to include in the cache",
+          "message": "Необов'язковий текст системної інструкції для включення в кеш"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Системна інструкція"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction to cache",
+          "message": "Системна інструкція для кешування"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.desc": {
+          "source": "A simple text string to cache for reuse across multiple requests. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal content",
+          "message": "Простий текстовий рядок для кешування з метою повторного використання в кількох запитах. Провайдер автоматично обгортає його у формат повідомлення `contents`. Замість цього використовуйте `contents` для багатокрокового чи мультимодального вмісту"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Промпт"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.short_desc": {
+          "source": "Simple text content to cache",
+          "message": "Простий текстовий вміст для кешування"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "Time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Час життя (TTL) для кешованого вмісту (наприклад, `3600s` для однієї години)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "Time-to-live duration",
+          "message": "Тривалість часу життя (TTL)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Create cached content for reuse across multiple requests",
+          "message": "Створити кешований вміст для повторного використання в кількох запитах"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Create an empty file search store for organizing and searching files",
+          "message": "Створити порожнє сховище пошуку файлів для впорядкування та пошуку файлів"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Create File Search Store",
+          "message": "Створити сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "The human-readable display name for the new file search store",
+          "message": "Зрозуміла для людини відображувана назва для нового сховища пошуку файлів"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Відображуване ім'я"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the store",
+          "message": "Відображувана назва сховища"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Create an empty file search store",
+          "message": "Створити порожнє сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.desc": {
+          "source": "Generate embeddings for multiple content items in a single batch request",
+          "message": "Генерувати ембеддінги для кількох елементів вмісту в одному пакетному запиті"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
+          "source": "Batch Embed",
+          "message": "Пакетне створення ембеддінгів"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`)",
+          "message": "Назва моделі для створення ембеддінгів (наприклад, `gemini-embedding-001`)"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "Модель ембеддінгів для використання"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.desc": {
+          "source": "List of individual embed content requests. The `model` field in each request is ignored in favor of the top-level model",
+          "message": "Список окремих запитів на створення ембеддінгів вмісту. Поле `model` у кожному запиті ігнорується на користь моделі верхнього рівня"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "Запити"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.short_desc": {
+          "source": "Embed requests to batch",
+          "message": "Запити на ембеддінг для пакетної обробки"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
+          "source": "Generate embeddings for multiple content items in a single request",
+          "message": "Генерувати ембеддінги для кількох елементів вмісту в одному запиті"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate content with a Gemini model. Use the `prompt` field for simple text requests, or the `contents` field for multi-turn conversations and multimodal input. Supports system instructions, generation configuration, and safety settings",
+          "message": "Генерувати вміст за допомогою моделі Gemini. Використовуйте поле `prompt` для простих текстових запитів або поле `contents` для багатокрокових розмов і мультимодального вводу. Підтримує системні інструкції, конфігурацію генерації та налаштування безпеки"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Згенерувати вміст"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "Вміст поточної розмови з моделлю. Для одноетапних запитів це одне повідомлення. Для багатокрокових запитів це повторюване поле, яке містить історію розмови та останній запит. Для простих текстових промптів використовуйте поле `prompt`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "Вміст розмови для багатокрокового або мультимодального вводу"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Параметри конфігурації для генерації та виводу моделі"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Конфігурація генерації"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Конфігурація генерації"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "Назва сховища пошуку файлів для використання в генерації, доповненій пошуком (RAG). Модель шукатиме документи в сховищі, щоб обґрунтувати свою відповідь релевантним вмістом"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Сховище пошуку файлів для обґрунтування RAG"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Назва моделі для генерації (наприклад, `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Модель для генерації"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Список унікальних налаштувань безпеки для блокування небезпечного вмісту"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Налаштування безпеки"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Налаштування безпеки для фільтрації вмісту"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Необов'язковий текст системної інструкції, який визначає поведінку та контекст для моделі. Наприклад: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Системна інструкція"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Системна інструкція для моделі"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Простий текстовий промпт для одноетапної генерації. Провайдер автоматично обгортає його у формат повідомлення `contents`. Використовуйте це для простих запитів; для багатокрокових розмов або мультимодального вводу використовуйте `contents`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Промпт"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Простий текстовий промпт для одноетапної генерації"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate content with a Gemini model",
+          "message": "Генерувати вміст за допомогою моделі Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Delete cached content that is no longer needed",
+          "message": "Видалити кешований вміст, який більше не потрібен"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Delete Cached Content",
+          "message": "Видалити кешований вміст"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to delete",
+          "message": "Назва ресурсу кешованого вмісту для видалення"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Кешований вміст"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to delete",
+          "message": "Кешований вміст для видалення"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Delete cached content",
+          "message": "Видалити кешований вміст"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Видалити файл, збережений у Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Видалити файл"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of the file to delete (e.g., `files/abc-123`)",
+          "message": "Назва ресурсу файлу для видалення (наприклад, `files/abc-123`)"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The file to delete",
+          "message": "Файл для видалення"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Видалити файл, збережений у Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Delete a file search store and its contents",
+          "message": "Видалити сховище пошуку файлів та його вміст"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Delete File Search Store",
+          "message": "Видалити сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The resource name of the file search store to delete",
+          "message": "Назва ресурсу сховища пошуку файлів для видалення"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to delete",
+          "message": "Сховище пошуку файлів для видалення"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Delete a file search store",
+          "message": "Видалити сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.desc": {
+          "source": "Generate an embedding vector for the given content using a Gemini embedding model. Use the `text` field for simple text input, or `content` for multimodal input",
+          "message": "Генерувати вектор ембеддінгу для наданого вмісту за допомогою моделі ембеддінгів Gemini. Використовуйте поле `text` для простого текстового вводу або `content` для мультимодального вводу"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
+          "source": "Embed Content",
+          "message": "Створити ембеддінг вмісту"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.desc": {
+          "source": "The content to embed. Only the `parts.text` fields will be counted. For simple text, use the `text` field instead",
+          "message": "Вміст для створення ембеддінгу. Враховуватимуться лише поля `parts.text`. Для простого тексту використовуйте поле `text`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.short_desc": {
+          "source": "The content to embed",
+          "message": "Вміст для створення ембеддінгу"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.desc": {
+          "source": "Optional reduced dimension for the output embedding. If set, excessive values in the output embedding are truncated from the end",
+          "message": "Необов'язкова зменшена розмірність для вихідного ембеддінгу. Якщо вказано, надлишкові значення у вихідному ембеддінгу обрізаються з кінця"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.display_name": {
+          "source": "Output Dimensionality",
+          "message": "Вихідна розмірність"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.short_desc": {
+          "source": "Optional reduced dimension for the output embedding",
+          "message": "Необов'язкова зменшена розмірність для вихідного ембеддінгу"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`). Required for standalone requests; ignored in batch requests where the top-level model is used",
+          "message": "Назва моделі для створення ембеддінгів (наприклад, `gemini-embedding-001`). Обов'язково для окремих запитів; ігнорується в пакетних запитах, де використовується модель верхнього рівня"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "Модель ембеддінгів для використання"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.desc": {
+          "source": "Specifies that the given text will be classified",
+          "message": "Вказує, що наданий текст буде класифіковано"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.display_name": {
+          "source": "Classification",
+          "message": "Класифікація"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.desc": {
+          "source": "Specifies that the embeddings will be used for clustering",
+          "message": "Вказує, що ембеддінги використовуватимуться для кластеризації"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.display_name": {
+          "source": "Clustering",
+          "message": "Кластеризація"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.desc": {
+          "source": "Specifies the given text is a document from the corpus being searched",
+          "message": "Вказує, що наданий текст є документом із корпусу, у якому здійснюється пошук"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.display_name": {
+          "source": "Retrieval Document",
+          "message": "Документ для пошуку"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.desc": {
+          "source": "Specifies the given text is a query in a search/retrieval setting",
+          "message": "Вказує, що наданий текст є запитом у контексті пошуку/вибірки"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.display_name": {
+          "source": "Retrieval Query",
+          "message": "Пошуковий запит"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.desc": {
+          "source": "Specifies the given text will be used for semantic text similarity",
+          "message": "Вказує, що наданий текст буде використано для оцінки семантичної схожості тексту"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.display_name": {
+          "source": "Semantic Similarity",
+          "message": "Семантична схожість"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.desc": {
+          "source": "Optional task type for which the embeddings will be used",
+          "message": "Необов'язковий тип завдання, для якого використовуватимуться ембеддінги"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Тип завдання"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.short_desc": {
+          "source": "The intended task type for the embedding",
+          "message": "Цільовий тип завдання для ембеддінгу"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.desc": {
+          "source": "A simple text string to generate an embedding for. The provider automatically wraps this into the `content` message format. Use `content` instead for multimodal input",
+          "message": "Простий текстовий рядок для генерації ембеддінгу. Провайдер автоматично обгортає його у формат повідомлення `content`. Використовуйте `content` для мультимодальних вхідних даних"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.short_desc": {
+          "source": "Simple text to embed",
+          "message": "Простий текст для створення ембеддінгу"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.desc": {
+          "source": "An optional title for the text. Only applicable when `taskType` is `RETRIEVAL_DOCUMENT`",
+          "message": "Необов'язкова назва для тексту. Застосовується, лише коли `taskType` має значення `RETRIEVAL_DOCUMENT`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.short_desc": {
+          "source": "An optional title for the text",
+          "message": "Необов'язкова назва для тексту"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
+          "source": "Generate an embedding vector for the given content",
+          "message": "Згенерувати вектор ембеддінгу для наданого вмісту"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.desc": {
+          "source": "Import an uploaded file into a file search store for retrieval-augmented generation. Select the target store and the file to import from dropdowns",
+          "message": "Імпортувати завантажений файл у сховище пошуку файлів для генерації з доповненою вибіркою (RAG). Виберіть цільове сховище та файл для імпорту зі спадних списків"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
+          "source": "Import File to Search Store",
+          "message": "Імпортувати файл у сховище пошуку"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.desc": {
+          "source": "Upload a new file and import it into the search store in one step. The provider uploads the file first, then imports it. Use this or `fileName` for an already-uploaded file",
+          "message": "Завантажити новий файл та імпортувати його у сховище пошуку за один крок. Провайдер спочатку завантажує файл, а потім імпортує його. Використовуйте цю опцію або `fileName` для вже завантаженого файлу"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.short_desc": {
+          "source": "Upload and import a file",
+          "message": "Завантажити й імпортувати файл"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of an already-uploaded file to import (e.g., `files/abc-123`). Use this or `file` to upload a new file directly",
+          "message": "Назва ресурсу вже завантаженого файлу для імпорту (наприклад, `files/abc-123`). Використовуйте це поле або `file`, щоб завантажити новий файл безпосередньо"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.display_name": {
+          "source": "Existing File",
+          "message": "Наявний файл"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "An already-uploaded file to import",
+          "message": "Уже завантажений файл для імпорту"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of the file search store to import the file into",
+          "message": "Назва сховища пошуку файлів, у яке потрібно імпортувати файл"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to import into",
+          "message": "Сховище пошуку файлів для імпорту"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {
+          "source": "Import an uploaded file into a file search store",
+          "message": "Імпортувати завантажений файл у сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Gemini** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати власний HTTP / REST API-виклик до **Google Gemini**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для ендпоінтів, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Gemini",
+          "message": "Виконати довільний виклик API до Google Gemini"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply. Simplifies the API by handling message formatting automatically",
+          "message": "Спілкуватися з моделлю Gemini, надсилаючи одне повідомлення та отримуючи одну відповідь. Спрощує роботу з API завдяки автоматичному форматуванню повідомлень"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Простий чат"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The text content of the message to send to the model",
+          "message": "Текстовий вміст повідомлення для надсилання моделі"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message text",
+          "message": "Текст повідомлення"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Назва моделі для генерації (наприклад, `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Модель для генерації"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.desc": {
+          "source": "The maximum number of tokens to generate in the response",
+          "message": "Максимальна кількість токенів для генерації у відповіді"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Максимум токенів виводу"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.short_desc": {
+          "source": "Maximum number of tokens to generate",
+          "message": "Максимальна кількість токенів для генерації"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model",
+          "message": "Необов'язковий текст системної інструкції, що задає поведінку та контекст для моделі"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Системна інструкція"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction text",
+          "message": "Текст системної інструкції"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the message author (default: `user`)",
+          "message": "Роль автора повідомлення (за замовчуванням: `user`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Роль"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "Роль автора повідомлення"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.desc": {
+          "source": "The maximum number of tokens to consider when sampling",
+          "message": "Максимальна кількість токенів, які враховуються під час вибірки"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.short_desc": {
+          "source": "Top-K sampling parameter",
+          "message": "Параметр вибірки Top-K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.desc": {
+          "source": "The maximum cumulative probability of tokens to consider when sampling",
+          "message": "Максимальна кумулятивна ймовірність токенів, які враховуються під час вибірки"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "Параметр ядерного семплювання"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
+          "message": "Керує випадковістю виводу. Значення варіюються від `0.0` до `2.0`"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Температура"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Controls randomness in generation",
+          "message": "Керує випадковістю під час генерації"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply",
+          "message": "Спілкуватися з моделлю Gemini, надсилаючи одне повідомлення та отримуючи одну відповідь"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events (SSE). Provides incremental responses as the model generates content",
+          "message": "Потокова передача генерації вмісту від моделі Gemini через Server-Sent Events (SSE). Забезпечує поступове надходження відповідей у міру генерації вмісту моделлю"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
+          "source": "Stream Content",
+          "message": "Потокова передача вмісту"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "Вміст поточної розмови з моделлю. Для одноетапних запитів це одне повідомлення. Для багатокрокових запитів це повторюване поле, яке містить історію розмови та останній запит. Для простих текстових промптів використовуйте поле `prompt`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Вміст"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "Вміст розмови для багатокрокового або мультимодального вводу"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Параметри конфігурації для генерації та виводу моделі"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Конфігурація генерації"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Конфігурація генерації"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "Назва сховища пошуку файлів для використання в генерації, доповненій пошуком (RAG). Модель шукатиме документи в сховищі, щоб обґрунтувати свою відповідь релевантним вмістом"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Сховище пошуку файлів"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Сховище пошуку файлів для обґрунтування RAG"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Назва моделі для генерації (наприклад, `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Модель для генерації"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Список унікальних налаштувань безпеки для блокування небезпечного вмісту"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Налаштування безпеки"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Налаштування безпеки для фільтрації вмісту"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Необов'язковий текст системної інструкції, який визначає поведінку та контекст для моделі. Наприклад: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Системна інструкція"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Системна інструкція для моделі"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Простий текстовий промпт для одноетапної генерації. Провайдер автоматично обгортає його у формат повідомлення `contents`. Використовуйте це для простих запитів; для багатокрокових розмов або мультимодального вводу використовуйте `contents`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Промпт"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Простий текстовий промпт для одноетапної генерації"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events",
+          "message": "Потокова передача генерації вмісту від моделі Gemini через Server-Sent Events"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Update the expiration time or TTL of existing cached content",
+          "message": "Оновити час закінчення терміну дії або TTL наявного кешованого вмісту"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Update Cached Content",
+          "message": "Оновити кешований вміст"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to update",
+          "message": "Назва ресурсу кешованого вмісту для оновлення"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Кешований вміст"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to update",
+          "message": "Кешований вміст для оновлення"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "New expiration timestamp in UTC (RFC 3339 format)",
+          "message": "Нова часова мітка закінчення терміну дії в UTC (формат RFC 3339)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Час закінчення дії"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "New expiration timestamp",
+          "message": "Нова часова мітка закінчення терміну дії"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "New time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Новий час життя (TTL) для кешованого вмісту (наприклад, `3600s` для однієї години)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "New time-to-live duration",
+          "message": "Нова тривалість часу життя (TTL)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Update the expiration of cached content",
+          "message": "Оновити термін дії кешованого вмісту"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file for use with the Gemini API for multimodal content generation",
+          "message": "Завантажити файл для використання з Gemini API для генерації мультимодального вмісту"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Завантажити файл"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "Optional display name for the uploaded file. If not provided, the file name from the uploaded file is used",
+          "message": "Необов'язкове відображуване ім'я для завантаженого файлу. Якщо не вказано, використовується ім'я завантаженого файлу"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "Відображуване ім'я"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "Display name for the uploaded file",
+          "message": "Відображуване ім'я для завантаженого файлу"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Google Gemini for use with multimodal content generation",
+          "message": "Файл для завантаження в Google Gemini для використання в генерації мультимодального вмісту"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Файл для завантаження"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for use with the Gemini API",
+          "message": "Завантажити файл для використання з Gemini API"
+        },
+        "app.R2VtaW5p.desc": {
+          "source": "Google Gemini generative AI services including text generation, embeddings, streaming, and multimodal content",
+          "message": "Сервіси генеративного ШІ Google Gemini, включаючи генерацію тексту, ембеддінги, потокову передачу та мультимодальний вміст"
+        },
+        "app.R2VtaW5p.display_name": {
+          "source": "Google Gemini",
+          "message": "Google Gemini"
+        },
+        "app.R2VtaW5p.short_desc": {
+          "source": "Google Gemini AI services",
+          "message": "Сервіси ШІ Google Gemini"
+        }
+      }
+    }
+  }
+}

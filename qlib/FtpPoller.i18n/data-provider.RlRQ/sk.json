@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
+          "message": "Reagovať na súbory nahrané na FTP server; konfigurácia akcie určuje, či udalosť obsahuje samotné údaje súboru alebo odkaz na umiestnenie súboru v lokálnom súborovom systéme. V každom prípade udalosť označuje, že údaje súboru už boli stiahnuté a sú lokálne dostupné"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
+          "source": "FTP File Received",
+          "message": "Prijatý súbor FTP"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.desc": {
+          "source": "Use an atomic transfer mechanism with `local_dir` where remote files are first moved to a temporary location (specified by `tempfile_template`) and then moved to the final location when they have been fully transferred.\n\nThis ensures that files will never be read until they are fully transferred",
+          "message": "Použiť mechanizmus atomického prenosu s `local_dir`, kde sa vzdialené súbory najprv presunú do dočasného umiestnenia (určeného parametrom `tempfile_template`) a potom sa po úplnom prenesení presunú do konečného umiestnenia.\n\nTým sa zabezpečí, že súbory sa nebudú čítať, kým nebudú úplne prenesené"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.display_name": {
+          "source": "Atomic File Transfer",
+          "message": "Atomický prenos súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.short_desc": {
+          "source": "Use an atomic file transfer mechanism",
+          "message": "Použiť mechanizmus atomického prenosu súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
+          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "Počet sekúnd, počas ktorých sa má čakať pred opätovným dotazovaním po chybe FTP; chyba sa zaznamená na úrovni error a po tomto oneskorení dotazovanie pokračuje.\n\nPrechodné problémy, ako je prerušenie siete alebo reštart servera, sú pri FTP bežné; nízka hodnota zabezpečuje rýchle zotavenie z takýchto problémov, zatiaľ čo vysoká hodnota znižuje zaťaženie servera, ktorý trvalo zlyháva.\n\n**POZNÁMKA**: kým je toto oneskorenie aktívne, súbory sa nedotazujú"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.display_name": {
+          "source": "Error Retry Delay",
+          "message": "Oneskorenie opakovaného pokusu pri chybe"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.short_desc": {
+          "source": "The delay in seconds before retrying after an FTP error",
+          "message": "Oneskorenie v sekundách pred opätovným pokusom po chybe FTP"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Lokálny adresár, ktorý sa použije na získanie súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.display_name": {
+          "source": "Local Directory",
+          "message": "Lokálny adresár"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.short_desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Lokálny adresár, ktorý sa použije na získanie súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.desc": {
+          "source": "The glob mask to use to match files to poll; will be treated as a regex if `regex` is `true`",
+          "message": "Maska glob na vyhľadávanie súborov na sledovanie; bude sa považovať za regulárny výraz, ak `regex` je `true`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
+          "source": "Glob Mask",
+          "message": "Maska Glob"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.short_desc": {
+          "source": "The glob mask to use to match files to poll",
+          "message": "Maska glob na vyhľadávanie súborov na sledovanie"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "Celé číslo udávajúce minimálny vek súboru v sekundách pred jeho sledovaním; slúži to ako obchádzka pri neatomických operáciách prenosu súborov.\n\nAk je táto možnosť potrebná, nastavte ju na hodnotu vyššiu, než je najdlhší čas, ktorý by mal prenos súboru trvať"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "Minimálny vek na sledovanie"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "Minimálny vek sledovaných súborov v sekundách"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "Buď `name`, alebo `date` pre údaje použité na triedenie"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "Typ triedenia"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "Pole, podľa ktorého sa majú súbory triediť"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "Triediť zostostupne; ak nie je zadané, predpokladá sa vzostupné triedenie, ak je zadané `sort_type`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "Triediť zostupne"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "Triediť súbory v zostupnom poradí"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "Interval v sekundách medzi kontrolami súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "Interval sledovania v sekundách"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "Ak `true`, potom sa `mask` považuje za regulárny výraz namiesto vzoru glob"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "Zhoda s regulárnym výrazom"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "Ak je true, argument 'mask' sa považuje za regulárny výraz"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.desc": {
+          "source": "Move the remote file after processing; in this case `remote_file_move_target` must be set",
+          "message": "Presunúť vzdialený súbor po spracovaní; v tomto prípade musí byť nastavené `remote_file_move_target`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.display_name": {
+          "source": "MOVE",
+          "message": "MOVE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.short_desc": {
+          "source": "Move the remote file after processing",
+          "message": "Presunúť vzdialený súbor po spracovaní"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "Leave the file untouched after processing; the file must be moved or deleted manually during post-processing, or the file will appear in subsequent polls as well",
+          "message": "Ponechať súbor po spracovaní nezmenený; súbor sa musí presunúť alebo vymazať manuálne počas následného spracovania, inak sa objaví aj pri nasledujúcich kontrolách"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "NONE",
+          "message": "NONE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Leave the file untouched after processing",
+          "message": "Ponechať súbor po spracovaní nezmenený"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Vymazať vzdialený súbor po spracovaní"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Vymazať vzdialený súbor po spracovaní"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.desc": {
+          "source": "Delete or move remote file after processing? If `MOVE`, `remote_file_move_target` must also be set",
+          "message": "Vymazať alebo presunúť vzdialený súbor po spracovaní? Ak `MOVE`, musí byť nastavené aj `remote_file_move_target`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.display_name": {
+          "source": "Remote File Disposition",
+          "message": "Naloženie so vzdialeným súborom"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.short_desc": {
+          "source": "Delete or move remote file after processing?",
+          "message": "Vymazať alebo presunúť vzdialený súbor po spracovaní?"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.desc": {
+          "source": "The target template for the remote file after processing; use `%s` for the original file name. This option is only used when `remote_file_disposition` is `MOVE`, otherwise it is ignored",
+          "message": "Cieľová šablóna pre vzdialený súbor po spracovaní; použite `%s` pre pôvodný názov súboru. Táto možnosť sa používa iba vtedy, keď je `remote_file_disposition` nastavené na `MOVE`, inak sa ignoruje"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.display_name": {
+          "source": "Remote File Move Target",
+          "message": "Cieľ presunutia vzdialeného súboru"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.short_desc": {
+          "source": "The target template for the remote file after processing",
+          "message": "Cieľová šablóna pre vzdialený súbor po spracovaní"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "Bitové pole možností regulárneho výrazu (`1` = ignorovať veľkosť písmen, `2` = považovať EOL za bežný znak); ignoruje sa, ak `regex` nie je `true`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "Možnosti regulárneho výrazu"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "Bitové pole možností regulárneho výrazu"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.desc": {
+          "source": "The template for temporary filenames; use `%s` for the original filename",
+          "message": "Šablóna pre dočasné názvy súborov; použite `%s` pre pôvodný názov súboru"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.display_name": {
+          "source": "Temporary Filename Template",
+          "message": "Šablóna dočasného názvu súboru"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.short_desc": {
+          "source": "The template for temporary filenames",
+          "message": "Šablóna pre dočasné názvy súborov"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {
+          "source": "A file is uploaded to an FTP server",
+          "message": "Súbor je nahraný na FTP server"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Všeobecný FTP server na výmenu súborov pomocou FTP a FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP Server"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Všeobecný FTP server na výmenu súborov pomocou FTP a FTPS"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1221 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead on an Unbounce landing page with form submission data",
+          "message": "Створити новий лід на цільовій сторінці Unbounce із даними відправленої форми"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "Створити лід"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.desc": {
+          "source": "Whether to count this lead as a conversion",
+          "message": "Чи враховувати цей лід як конверсію"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.display_name": {
+          "source": "Conversion",
+          "message": "Конверсія"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.short_desc": {
+          "source": "Count as conversion",
+          "message": "Враховувати як конверсію"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.desc": {
+          "source": "The form submission data including variant ID, submitter IP, and form field values",
+          "message": "Дані надісланої форми, зокрема ID варіанта, IP-адреса відправника та значення полів форми"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.display_name": {
+          "source": "Form Submission",
+          "message": "Надсилання форми"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.short_desc": {
+          "source": "Form submission data",
+          "message": "Дані надісланої форми"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead on",
+          "message": "ID сторінки, на якій потрібно створити лід"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "ID цільової сторінки"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.desc": {
+          "source": "The visitor ID to associate with this lead",
+          "message": "ID відвідувача для зв'язування з цим лідом"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.display_name": {
+          "source": "Visitor ID",
+          "message": "ID відвідувача"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.short_desc": {
+          "source": "Visitor identifier",
+          "message": "Ідентифікатор відвідувача"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead on a page",
+          "message": "Створити новий лід на сторінці"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Create a lead deletion request to delete leads in bulk for a specific page. Can delete specific leads by ID, all leads, or leads within a date range",
+          "message": "Створити запит на масове видалення лідів для певної сторінки. Можна видалити конкретні ліди за ID, усі ліди або ліди за діапазоном дат"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Create Lead Deletion Request",
+          "message": "Створити запит на видалення лідів"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.desc": {
+          "source": "If `True`, delete all leads for the page. Cannot be combined with `lead_ids`",
+          "message": "Якщо `True`, видалити всі ліди для сторінки. Не можна поєднувати з `lead_ids`"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.display_name": {
+          "source": "All Leads",
+          "message": "Усі ліди"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.short_desc": {
+          "source": "Delete all leads",
+          "message": "Видалити всі ліди"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.desc": {
+          "source": "Delete leads created on or after this date",
+          "message": "Видалити ліди, створені на цю дату або пізніше"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.desc": {
+          "source": "A list of specific lead IDs to delete. If not provided, use `all_leads` or date range filters instead",
+          "message": "Список конкретних ID лідів для видалення. Якщо не вказано, використовуйте натомість `all_leads` або фільтри діапазону дат"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.display_name": {
+          "source": "Lead IDs",
+          "message": "ID лідів"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.short_desc": {
+          "source": "Specific lead IDs to delete",
+          "message": "Конкретні ID лідів для видалення"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead deletion request for",
+          "message": "ID сторінки, для якої створюється запит на видалення лідів"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "ID цільової сторінки"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.desc": {
+          "source": "Delete leads created on or before this date",
+          "message": "Видалити ліди, створені на цю дату або раніше"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Create a bulk lead deletion request",
+          "message": "Створити запит на масове видалення лідів"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID",
+          "message": "Отримати один обліковий запис за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "Отримати обліковий запис"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "ID облікового запису"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Отримати один обліковий запис за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.desc": {
+          "source": "Retrieve a single domain by ID",
+          "message": "Отримати окремий домен за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
+          "source": "Get a Domain",
+          "message": "Отримати домен"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "ID домену"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.short_desc": {
+          "source": "The domain ID",
+          "message": "ID домену"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
+          "source": "Get a single domain by ID",
+          "message": "Отримати окремий домен за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID",
+          "message": "Отримати окремий лід за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "Отримати лід"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID ліда"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "ID ліда"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "Отримати один лід за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Retrieve the status of a lead deletion request by page ID and deletion request ID",
+          "message": "Отримати статус запиту на видалення ліда за ID сторінки та ID запиту на видалення"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Get Lead Deletion Request",
+          "message": "Отримати запит на видалення ліда"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.display_name": {
+          "source": "Deletion Request ID",
+          "message": "ID запиту на видалення"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.short_desc": {
+          "source": "Deletion request ID",
+          "message": "ID запиту на видалення"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Get a lead deletion request status",
+          "message": "Отримати статус запиту на видалення ліда"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.desc": {
+          "source": "Retrieve a single landing page by ID",
+          "message": "Отримати окрему цільову сторінку за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
+          "source": "Get a Page",
+          "message": "Отримати сторінку"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.short_desc": {
+          "source": "The page ID",
+          "message": "ID сторінки"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
+          "source": "Get a single page by ID",
+          "message": "Отримати окрему сторінку за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.desc": {
+          "source": "Retrieve a single sub-account by ID",
+          "message": "Отримати окремий субакаунт за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
+          "source": "Get a Sub-Account",
+          "message": "Отримати субакаунт"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "The sub-account ID",
+          "message": "ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
+          "source": "Get a single sub-account by ID",
+          "message": "Отримати окремий субакаунт за ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a user by ID, or the current authenticated user if no ID is provided",
+          "message": "Отримати користувача за ID або поточного автентифікованого користувача, якщо ID не вказано"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get User",
+          "message": "Отримати користувача"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID користувача"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID (leave empty for current user)",
+          "message": "ID користувача (залиште порожнім для поточного користувача)"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a user by ID or the current user",
+          "message": "Отримати користувача за ID або поточного користувача"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from an Unbounce landing page. The deletion is processed asynchronously (HTTP 202)",
+          "message": "Видалити лід із цільової сторінки Unbounce. Видалення обробляється асинхронно (HTTP 202)"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "Видалити лід"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.desc": {
+          "source": "The unique identifier of the lead to delete",
+          "message": "Унікальний ідентифікатор ліда для видалення"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID ліда"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "Lead to delete",
+          "message": "Лід для видалення"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page containing the lead to delete",
+          "message": "ID сторінки, що містить лід для видалення"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Page containing the lead",
+          "message": "Сторінка, що містить лід"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead from a page",
+          "message": "Видалити лід зі сторінки"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.desc": {
+          "source": "Fires when a new lead is captured on an Unbounce landing page, detected via polling",
+          "message": "Спрацьовує, коли на цільовій сторінці Unbounce фіксується новий лід (виявляється за допомогою опитування)"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
+          "source": "Watch New Leads",
+          "message": "Відстежувати нові ліди"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {
+          "source": "Trigger when new leads are captured on a page",
+          "message": "Запускати, коли на сторінці фіксуються нові ліди"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List all accounts accessible to the authenticated user",
+          "message": "Список усіх акаунтів, доступних автентифікованому користувачеві"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "Список акаунтів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "Фільтрувати за ID акаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List all accounts",
+          "message": "Список усіх акаунтів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains for a given sub-account",
+          "message": "Список усіх доменів для вказаного субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "Список доменів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "ID домену"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.short_desc": {
+          "source": "Filter by domain ID",
+          "message": "Фільтрувати за ID домену"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list domains for",
+          "message": "Субакаунт, для якого потрібно отримати список доменів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List domains for a sub-account",
+          "message": "Список доменів для субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.desc": {
+          "source": "List all form fields configured on a specific landing page",
+          "message": "Список усіх полів форми, налаштованих на певній цільовій сторінці"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
+          "source": "List Form Fields",
+          "message": "Перелічити поля форми"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list form fields for",
+          "message": "Сторінка, для якої потрібно отримати список полів форми"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
+          "source": "List form fields for a page",
+          "message": "Список полів форми для сторінки"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.desc": {
+          "source": "List all leads captured on a specific landing page",
+          "message": "Список усіх лідів, зафіксованих на певній цільовій сторінці"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Список лідів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID ліда"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Фільтрувати за ID ліда"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list leads for",
+          "message": "Сторінка, для якої потрібно отримати список лідів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads for a page",
+          "message": "Список лідів для сторінки"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.desc": {
+          "source": "List all page groups for a given sub-account",
+          "message": "Список усіх груп сторінок для вказаного субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
+          "source": "List Page Groups",
+          "message": "Список груп сторінок"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list page groups for",
+          "message": "Субакаунт, для якого потрібно отримати список груп сторінок"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
+          "source": "List page groups for a sub-account",
+          "message": "Список груп сторінок для субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.desc": {
+          "source": "List all landing pages with optional filtering by role, date range, and sort order",
+          "message": "Список усіх цільових сторінок із можливістю фільтрації за роллю, діапазоном дат і порядком сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
+          "source": "List Pages",
+          "message": "Отримати список сторінок"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Page ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Filter by page ID",
+          "message": "Фільтрувати за ID сторінки"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.desc": {
+          "source": "Pages where the user is an author",
+          "message": "Сторінки, де користувач є автором"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.display_name": {
+          "source": "Author",
+          "message": "Автор"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Pages where the user is a viewer",
+          "message": "Сторінки, де користувач є глядачем"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Переглядач"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Роль"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.short_desc": {
+          "source": "Filter by user role",
+          "message": "Фільтрувати за роллю користувача"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.display_name": {
+          "source": "With Stats",
+          "message": "Зі статистикою"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.short_desc": {
+          "source": "Include page statistics",
+          "message": "Включити статистику сторінки"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
+          "source": "List all landing pages",
+          "message": "Список усіх цільових сторінок"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.desc": {
+          "source": "List all sub-accounts for a given account",
+          "message": "Список усіх субакаунтів для вказаного акаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
+          "source": "List Sub-Accounts",
+          "message": "Список субакаунтів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Parent account ID",
+          "message": "ID батьківського акаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Фільтр початкової дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Зсув результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Сортувати за зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "За зростанням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Сортувати за спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "За спаданням"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Порядок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Filter by sub-account ID",
+          "message": "Фільтрувати за ID субакаунта"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Фільтр кінцевої дати"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
+          "source": "List sub-accounts for an account",
+          "message": "Список субакаунтів для акаунта"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unbounce** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Зробити спеціальний виклик HTTP / REST API до **Unbounce**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як першокласні дії в цьому додатку."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unbounce",
+          "message": "Зробити спеціальний виклик API до Unbounce"
+        },
+        "app.VW5ib3VuY2U.desc": {
+          "source": "Unbounce is a landing page builder and conversion optimization platform.\n\nThis integration supports listing accounts, sub-accounts, domains, pages, page groups, leads, and users, as well as creating and deleting leads, managing lead deletion requests, and watching for new leads via polling.",
+          "message": "Unbounce — це конструктор цільових сторінок і платформа оптимізації конверсій.\n\nЦя інтеграція підтримує перегляд списків акаунтів, субакаунтів, доменів, сторінок, груп сторінок, лідів і користувачів, а також створення й видалення лідів, керування запитами на видалення лідів і відстеження нових лідів за допомогою опитування."
+        },
+        "app.VW5ib3VuY2U.display_name": {
+          "source": "Unbounce",
+          "message": "Unbounce"
+        },
+        "app.VW5ib3VuY2U.short_desc": {
+          "source": "Unbounce landing page and lead management platform",
+          "message": "Платформа Unbounce для цільових сторінок та керування лідами"
+        }
+      }
+    }
+  }
+}

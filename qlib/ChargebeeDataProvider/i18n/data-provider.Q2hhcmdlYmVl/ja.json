@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.desc": {
+          "source": "Collect payment for an outstanding invoice using the customer's payment method on file.",
+          "message": "登録されている顧客の支払い方法を使用して、未払いの請求書の支払いを回収します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
+          "source": "Collect Invoice Payment",
+          "message": "請求書の支払いを回収"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "支払い金額 (セント単位)"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The invoice to collect payment for",
+          "message": "支払いを回収する対象の請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
+          "source": "Collect payment for an invoice",
+          "message": "請求書の支払いを回収"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Chargebee with contact and billing information.",
+          "message": "Chargebee に連絡先および請求情報を含む新しい顧客を作成します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "顧客を作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "顧客のメールアドレス"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "顧客の名"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "顧客の姓"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "新しい顧客を作成します"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.desc": {
+          "source": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
+          "message": "サブスクリプションまたは請求書の割引のために、Chargebee で新しいクーポンを作成します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
+          "source": "Create Coupon",
+          "message": "クーポンを作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "提供数量"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "固定金額"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "パーセンテージ"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "割引タイプ"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "割引の種類"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One Time",
+          "message": "1回限り"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmZvcmV2ZXI.desc": {
+          "source": "Forever",
+          "message": "無期限"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmxpbWl0ZWRfcGVyaW9k.desc": {
+          "source": "Limited Period",
+          "message": "期間限定"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.display_name": {
+          "source": "Duration Type",
+          "message": "期間タイプ"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.short_desc": {
+          "source": "How long the discount lasts",
+          "message": "割引の有効期間"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "クーポン ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "Unique coupon code/identifier",
+          "message": "一意のクーポンコード/識別子"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "クーポンの表示名"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
+          "source": "Create a new coupon",
+          "message": "新しいクーポンを作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Chargebee for a customer.",
+          "message": "Chargebee で顧客向けの新しい請求書を作成します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "請求書を作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "請求書の対象顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "新しい請求書を作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Create a new subscription in Chargebee for a customer with a specified plan.",
+          "message": "指定されたプランで Chargebee に顧客向けの新しいサブスクリプションを作成します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Create Subscription",
+          "message": "サブスクリプションを作成"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the subscription",
+          "message": "サブスクリプションの対象顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Create a new subscription",
+          "message": "新しいサブスクリプションを作成"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Add promotional credits to a customer's account in Chargebee.",
+          "message": "Chargebee で顧客のアカウントにプロモーションクレジットを追加します。"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Add Promotional Credit",
+          "message": "プロモーションクレジットを追加"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "通貨コード"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "クレジットの通貨"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add credits to",
+          "message": "クレジットを追加する顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "クレジット金額 (セント単位)"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Add promotional credits to a customer",
+          "message": "顧客にプロモーションクレジットを追加"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee customer.",
+          "message": "特定の Chargebee 顧客に関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "顧客を取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "顧客 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "IDで単一の顧客を取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee coupon.",
+          "message": "特定の Chargebee クーポンに関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
+          "source": "Get Coupon",
+          "message": "クーポンを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "クーポン ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon ID",
+          "message": "クーポン ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
+          "source": "Get a single coupon by ID",
+          "message": "ID で単一のクーポンを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee invoice.",
+          "message": "特定の Chargebee 請求書に関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "請求書を取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "請求書 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "ID で単一の請求書を取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.desc": {
+          "source": "Retrieve a download link for a Chargebee invoice PDF.",
+          "message": "Chargebee 請求書 PDF のダウンロードリンクを取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
+          "source": "Get Invoice Link",
+          "message": "請求書リンクを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.short_desc": {
+          "source": "The invoice to get the PDF link for",
+          "message": "PDFリンクを取得する請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
+          "source": "Get a download link for an invoice",
+          "message": "請求書のダウンロードリンクを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee promotional credit.",
+          "message": "特定のChargebeeプロモーションクレジットに関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Get Promotional Credit",
+          "message": "プロモーションクレジットを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.display_name": {
+          "source": "Promotional Credit ID",
+          "message": "プロモーションクレジットID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.short_desc": {
+          "source": "The promotional credit ID",
+          "message": "プロモーションクレジットID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Get a single promotional credit by ID",
+          "message": "IDで単一のプロモーションクレジットを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee subscription.",
+          "message": "特定のChargebeeサブスクリプションに関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "サブスクリプションを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Get a single subscription by ID",
+          "message": "IDで単一のサブスクリプションを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee transaction.",
+          "message": "特定のChargebeeトランザクションに関する詳細情報を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "トランザクションを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "取引ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "The transaction to retrieve",
+          "message": "取得するトランザクション"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a transaction by ID",
+          "message": "IDでトランザクションを取得"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Deduct promotional credits from a customer's account in Chargebee.",
+          "message": "Chargebeeで顧客のアカウントからプロモーションクレジットを差し引きます。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Deduct Promotional Credit",
+          "message": "プロモーションクレジットを差し引く"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "通貨コード"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "クレジットの通貨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to deduct credits from",
+          "message": "クレジットを差し引く対象の顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "クレジット金額 (セント単位)"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Deduct promotional credits from a customer",
+          "message": "顧客からプロモーションクレジットを差し引く"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Chargebee. This action cannot be undone.",
+          "message": "Chargebeeから顧客を削除します。この操作は元に戻せません。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "顧客を削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "削除する顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "顧客を削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.desc": {
+          "source": "Delete a coupon from Chargebee. This action cannot be undone.",
+          "message": "Chargebeeからクーポンを削除します。この操作は元に戻せません。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
+          "source": "Delete Coupon",
+          "message": "クーポンを削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "クーポン ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to delete",
+          "message": "削除するクーポン"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
+          "source": "Delete a coupon",
+          "message": "クーポンを削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Chargebee. This action cannot be undone.",
+          "message": "Chargebeeから請求書を削除します。この操作は元に戻せません。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "請求書を削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "削除する請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "請求書を削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Delete a subscription from Chargebee. This action cannot be undone.",
+          "message": "Chargebeeからサブスクリプションを削除します。この操作は元に戻せません。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Delete Subscription",
+          "message": "サブスクリプションを削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to delete",
+          "message": "削除するサブスクリプション"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Delete a subscription",
+          "message": "サブスクリプションを削除"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.desc": {
+          "source": "Retrieve a list of coupons from Chargebee.",
+          "message": "Chargebeeからクーポンの一覧を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
+          "source": "Find Coupons",
+          "message": "クーポンを検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "提供数量"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "固定金額"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "パーセンテージ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "割引タイプ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Filter by discount type",
+          "message": "割引タイプで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.short_desc": {
+          "source": "Filter by coupon name",
+          "message": "クーポン名で絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "アクティブ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived",
+          "message": "アーカイブ済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted",
+          "message": "削除済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.desc": {
+          "source": "Expired",
+          "message": "期限切れ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "将来"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by coupon status",
+          "message": "クーポンのステータスで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
+          "source": "Find and search coupons",
+          "message": "クーポンを検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.desc": {
+          "source": "Retrieve a list of customers from Chargebee with optional filtering by status, email, first name, and last name.",
+          "message": "Chargebeeから顧客の一覧を取得します。ステータス、メールアドレス、名、姓による任意の絞り込みが可能です。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
+          "source": "Find Customers",
+          "message": "顧客の検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Filter customers by their email address",
+          "message": "メールアドレスで顧客を絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "Filter customers by their first name",
+          "message": "名で顧客を絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "名で絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.desc": {
+          "source": "Filter customers by their last name",
+          "message": "姓で顧客を絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "姓で絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "アクティブ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Filter customers by their status",
+          "message": "ステータスで顧客を絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by customer status",
+          "message": "顧客ステータスで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
+          "source": "Find and search customers",
+          "message": "顧客を検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Chargebee with optional filtering by status.",
+          "message": "Chargebeeから請求書の一覧を取得します。ステータスによる任意の絞り込みが可能です。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
+          "source": "Find Invoices",
+          "message": "請求書を検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9wYWlk.desc": {
+          "source": "Not Paid",
+          "message": "未払い"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid",
+          "message": "支払い済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBheW1lbnRfZHVl.desc": {
+          "source": "Payment Due",
+          "message": "支払期日到来"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending",
+          "message": "保留中"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBvc3RlZA.desc": {
+          "source": "Posted",
+          "message": "確定済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWRlZA.desc": {
+          "source": "Voided",
+          "message": "無効"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by their status",
+          "message": "ステータスで請求書を絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "請求書ステータスで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
+          "source": "Find and search invoices",
+          "message": "請求書を検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.desc": {
+          "source": "Retrieve a list of promotional credits from Chargebee.",
+          "message": "Chargebeeからプロモーションクレジットの一覧を取得します。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
+          "source": "Find Promotional Credits",
+          "message": "プロモーションクレジットを検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "顧客で絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmRlY3JlbWVudA.desc": {
+          "source": "Decrement",
+          "message": "減算"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmluY3JlbWVudA.desc": {
+          "source": "Increment",
+          "message": "加算"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOnNldA.desc": {
+          "source": "Set",
+          "message": "設定"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.short_desc": {
+          "source": "Filter by credit type",
+          "message": "クレジットタイプで絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
+          "source": "Find and search promotional credits",
+          "message": "プロモーションクレジットを検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "Retrieve a list of subscriptions from Chargebee with optional filtering by status and customer.",
+          "message": "Chargebeeからサブスクリプションの一覧を取得します。ステータスおよび顧客による任意の絞り込みが可能です。"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "Find Subscriptions",
+          "message": "サブスクリプションを検索"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter subscriptions by the customer they belong to",
+          "message": "所属する顧客でサブスクリプションをフィルタリングします"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "顧客で絞り込み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vbl9yZW5ld2luZw.desc": {
+          "source": "Non-Renewing",
+          "message": "更新なし"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "アクティブ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "キャンセル済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "将来"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmluX3RyaWFs.desc": {
+          "source": "In Trial",
+          "message": "トライアル中"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused",
+          "message": "一時停止"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnRyYW5zZmVycmVk.desc": {
+          "source": "Transferred",
+          "message": "移管済み"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Filter subscriptions by their status",
+          "message": "ステータスでサブスクリプションをフィルタリングします"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "サブスクリプションのステータスでフィルタリング"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "Find and search subscriptions",
+          "message": "サブスクリプションの検索と照会"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Chargebee** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Chargebee** へのカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス（接続の API ベース URL からの相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Chargebee",
+          "message": "Chargebee へのカスタム API 呼び出しを行う"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Set the promotional credit balance for a customer's account in Chargebee.",
+          "message": "Chargebee で顧客のアカウントのプロモーションクレジット残高を設定します。"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Set Promotional Credit",
+          "message": "プロモーションクレジットを設定"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "通貨コード"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "クレジットの通貨"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to set credits for",
+          "message": "クレジットを設定する顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "クレジット金額 (セント単位)"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Set promotional credit balance for a customer",
+          "message": "顧客のプロモーションクレジット残高を設定"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.desc": {
+          "source": "Record an offline payment for an invoice in Chargebee.",
+          "message": "Chargebee で請求書のオフライン支払いを記録します。"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
+          "source": "Record Invoice Payment",
+          "message": "請求書の支払いを記録"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "支払い金額 (セント単位)"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.short_desc": {
+          "source": "The invoice to record payment for",
+          "message": "支払いを記録する請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
+          "source": "Record a payment for an invoice",
+          "message": "請求書の支払いを記録"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.desc": {
+          "source": "Process a refund for a paid invoice in Chargebee.",
+          "message": "Chargebee で支払い済み請求書の返金を処理します。"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
+          "source": "Refund Invoice",
+          "message": "請求書を返金"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to refund",
+          "message": "返金する請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.display_name": {
+          "source": "Refund Amount",
+          "message": "返金額"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "返金額（セント単位）"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
+          "source": "Refund an invoice",
+          "message": "請求書を返金"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.desc": {
+          "source": "Fires when a new customer is created in Chargebee. Provides customer event details.",
+          "message": "Chargebee で新しい顧客が作成されたときに発火します。顧客イベントの詳細を提供します。"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
+          "source": "Customer Created",
+          "message": "顧客が作成されました"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
+          "source": "Trigger when a customer is created",
+          "message": "顧客が作成されたときにトリガー"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.desc": {
+          "source": "Fires on any event in Chargebee. Provides full event details for all event types.",
+          "message": "Chargebee のすべてのイベントで発火します。すべてのイベントタイプの完全なイベント詳細を提供します。"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
+          "source": "Any Event (Instant)",
+          "message": "すべてのイベント (即時)"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
+          "source": "Trigger on any Chargebee event",
+          "message": "任意の Chargebee イベントでトリガー"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.desc": {
+          "source": "Fires when a new invoice is generated in Chargebee. Provides invoice event details.",
+          "message": "Chargebee で新しい請求書が生成されたときに発火します。請求書イベントの詳細を提供します。"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
+          "source": "Invoice Generated",
+          "message": "請求書が生成されました"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
+          "source": "Trigger when an invoice is generated",
+          "message": "請求書が生成されたときにトリガー"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.desc": {
+          "source": "Fires when a new subscription is created in Chargebee. Provides subscription event details.",
+          "message": "Chargebee で新しいサブスクリプションが作成されたときに発火します。サブスクリプションイベントの詳細を提供します。"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
+          "source": "Subscription Created",
+          "message": "サブスクリプション作成"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {
+          "source": "Trigger when a subscription is created",
+          "message": "サブスクリプションが作成されたときにトリガー"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Chargebee. You can modify contact details, billing information, and other customer attributes.",
+          "message": "Chargebee で既存の顧客を更新します。連絡先詳細、請求情報、その他の顧客属性を変更できます。"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "顧客を更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "顧客のメールアドレス"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "顧客の名"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "更新する顧客"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "既存の顧客を更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.desc": {
+          "source": "Update an existing coupon in Chargebee.",
+          "message": "Chargebee で既存のクーポンを更新します。"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
+          "source": "Update Coupon",
+          "message": "クーポンを更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "クーポン ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to update",
+          "message": "更新するクーポン"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "クーポンの表示名"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
+          "source": "Update an existing coupon",
+          "message": "既存のクーポンを更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Chargebee.",
+          "message": "Chargebee で既存の請求書を更新します。"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "請求書を更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "更新する請求書"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "既存の請求書を更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Update an existing subscription in Chargebee. You can modify the plan, billing cycle, add-ons, and other subscription details.",
+          "message": "Chargebee で既存のサブスクリプションを更新します。プラン、請求サイクル、アドオン、その他のサブスクリプションの詳細を変更できます。"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Update Subscription",
+          "message": "サブスクリプションを更新"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to update",
+          "message": "更新するサブスクリプション"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Update an existing subscription",
+          "message": "既存のサブスクリプションを更新"
+        },
+        "app.Q2hhcmdlYmVl.desc": {
+          "source": "Chargebee is a subscription billing and revenue management platform that helps businesses automate recurring billing, manage subscriptions, and handle invoicing. This integration enables managing customers, subscriptions, invoices, coupons, promotional credits, and receiving real-time event notifications via webhooks.\n\n**Features:**\n- Customer management (create, update, delete)\n- Subscription lifecycle management (create, update, cancel)\n- Invoice management (create, update, collect payments, refunds)\n- Coupon management (create, update, delete)\n- Promotional credit management (add, deduct, set)\n- Transaction retrieval\n- Real-time webhooks for customers, subscriptions, invoices, and events",
+          "message": "Chargebee は、企業が定期請求の自動化、サブスクリプションの管理、請求書発行の処理を支援するサブスクリプション請求および収益管理プラットフォームです。この連携により、顧客、サブスクリプション、請求書、クーポン、プロモーションクレジットの管理や、Webhook を介したリアルタイムのイベント通知の受信が可能になります。\n\n**機能:**\n- 顧客管理（作成、更新、削除）\n- サブスクリプションライフサイクル管理（作成、更新、キャンセル）\n- 請求書管理（作成、更新、支払い回収、返金）\n- クーポン管理（作成、更新、削除）\n- プロモーションクレジット管理（追加、差し引き、設定）\n- トランザクションの取得\n- 顧客、サブスクリプション、請求書、イベント用のリアルタイム Webhook"
+        },
+        "app.Q2hhcmdlYmVl.display_name": {
+          "source": "Chargebee",
+          "message": "Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.short_desc": {
+          "source": "Chargebee subscription billing and revenue management platform",
+          "message": "Chargebee サブスクリプション請求および収益管理プラットフォーム"
+        }
+      }
+    }
+  }
+}

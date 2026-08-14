@@ -1,0 +1,3125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.desc": {
+          "source": "Cancel a background response.\n\n**Note**: only responses created with `background` set to `True` can be cancelled",
+          "message": "バックグラウンドレスポンスをキャンセルします。\n\n**注意**: `background` が `True` に設定されて作成されたレスポンスのみキャンセルできます"
+        },
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.display_name": {
+          "source": "Cancel a Response",
+          "message": "レスポンスをキャンセル"
+        },
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The ID of the response to get",
+          "message": "取得するレスポンスのID"
+        },
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "回答 ID"
+        },
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to get",
+          "message": "取得するレスポンスのID"
+        },
+        "app.T3BlbkFJ.action.Y2FuY2VsLXJlc3BvbnNl.short_desc": {
+          "source": "Cancel a background response",
+          "message": "バックグラウンドレスポンスをキャンセル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.desc": {
+          "source": "Create an assistant with a model and instructions",
+          "message": "モデルと指示を指定してアシスタントを作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.display_name": {
+          "source": "Create an Assistant",
+          "message": "アシスタントを作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the assistant. The maximum length is 512 characters",
+          "message": "アシスタントの説明。最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the assistant",
+          "message": "アシスタントの説明"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "The system instructions that the assistant uses. The maximum length is 256,000 characters",
+          "message": "アシスタントが使用するシステム指示。最大長は256,000文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "The system instructions that the assistant uses",
+          "message": "アシスタントが使用するシステム指示"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bW9kZWw.desc": {
+          "source": "Model for the assistant",
+          "message": "アシスタントのモデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bW9kZWw.short_desc": {
+          "source": "Model for the assistant",
+          "message": "アシスタントのモデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maximum of 512 characters long",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を格納するのに便利です。キーの最大長は64文字、値の最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bmFtZQ.desc": {
+          "source": "The name of the assistant. The maximum length is 256 characters",
+          "message": "アシスタントの名前。最大長は256文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.bmFtZQ.short_desc": {
+          "source": "The name of the assistant",
+          "message": "アシスタントの名前"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models newer than gpt-3.5-turbo-1106.\n\nSetting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON.\n\n**Important**: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly \"stuck\" request. Also note that the message content may be partially cut off if `finish_reason=\"length\"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length",
+          "message": "モデルが出力しなければならない形式を指定するオブジェクト。GPT-4 Turboおよびgpt-3.5-turbo-1106より新しいすべてのGPT-3.5 Turboモデルと互換性があります。\n\n`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます。\n\n**重要**: JSONモードを使用する場合は、システムメッセージまたはユーザーメッセージを通じて、モデルに対してJSONを出力するよう自身で指示する必要もあります。これを行わないと、生成がトークン制限に達するまでモデルが空白文字の無限ストリームを生成し、リクエストが長時間実行されて「停止」したように見える可能性があります。また、`finish_reason=\"length\"` の場合、メッセージコンテンツが部分的に切り取られる可能性があることにも注意してください。これは生成が `max_tokens` を超えたか、会話が最大コンテキスト長を超えたことを示します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.desc": {
+          "source": "A set of resources that are used by the assistant's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "アシスタントのツールによって使用されるリソースのセット。リソースはツールのタイプ固有です。たとえば、`code_interpreter` ツールにはファイルIDのリストが必要ですが、`file_search` ツールにはベクターストアIDのリストが必要です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.display_name": {
+          "source": "Tool Resources",
+          "message": "ツールリソース"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.short_desc": {
+          "source": "A set of resources that are used by the assistant's tools",
+          "message": "アシスタントのツールによって使用されるリソースのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbHM.desc": {
+          "source": "A list of tools enabled on the assistant. There can be a maximum of 128 tools per assistant. Tools can be of types `code_interpreter`, `file_search`, or `function`",
+          "message": "アシスタントで有効になっているツールのリスト。アシスタントごとに最大128個のツールを設定できます。ツールは `code_interpreter`、`file_search`、または `function` のタイプにすることができます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools enabled on the assistant",
+          "message": "アシスタントで有効になっているツールのリスト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWFzc2lzdGFudA.short_desc": {
+          "source": "Create an assistant",
+          "message": "アシスタントを作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Create a conversation to hold response history.\n\nConversations are the Responses API replacement for Assistants API threads; pass the resulting conversation ID in the `conversation` field of a create-response request",
+          "message": "レスポンス履歴を保持する会話を作成します。\n\n会話はResponses APIにおけるAssistants APIスレッドの代替です。結果の会話IDをcreate-responseリクエストの `conversation` フィールドに渡します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "Create a Conversation",
+          "message": "会話を作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.desc": {
+          "source": "Initial items to include in the conversation context; a maximum of 20 items may be added at a time",
+          "message": "会話コンテキストに含める初期アイテム。一度に最大20個のアイテムを追加できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "アイテム"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.aXRlbXM.short_desc": {
+          "source": "Initial items to include in the conversation context",
+          "message": "会話コンテキストに含める初期アイテム"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard. Keys are strings with a maximum length of 64 characters; values are strings with a maximum length of 512 characters",
+          "message": "オブジェクトに添付可能な最大16個のキー・値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存したり、APIまたはダッシュボード経由でオブジェクトを検索したりするのに役立ちます。キーは最大64文字の文字列で、値は最大512文字の文字列です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to the conversation",
+          "message": "会話に添付可能な最大16個のキー・値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Create a conversation to hold response history",
+          "message": "応答履歴を保持する会話を作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.desc": {
+          "source": "Add items to a conversation",
+          "message": "会話にアイテムを追加"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.display_name": {
+          "source": "Add Items to a Conversation",
+          "message": "会話にアイテムを追加"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aW5jbHVkZQ.desc": {
+          "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
+          "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional fields to include in the response",
+          "message": "レスポンスに含める追加フィールド"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.desc": {
+          "source": "The items to add to the conversation; a maximum of `20` items may be added at a time",
+          "message": "会話に追加するアイテム。一度に最大`20`個のアイテムを追加できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "アイテム"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.option.aXRlbXM.short_desc": {
+          "source": "The items to add to the conversation",
+          "message": "会話に追加するアイテム"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWNvbnZlcnNhdGlvbi1pdGVtcw.short_desc": {
+          "source": "Add items to a conversation",
+          "message": "会話にアイテムを追加"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.desc": {
+          "source": "Generate an image from a prompt",
+          "message": "プロンプトから画像を生成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.display_name": {
+          "source": "Generate an Image",
+          "message": "画像を生成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOm9wYXF1ZQ.desc": {
+          "source": "Opaque background",
+          "message": "不透明な背景"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOm9wYXF1ZQ.display_name": {
+          "source": "Opaque",
+          "message": "不透明"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model will automatically determine the best background for the image",
+          "message": "モデルが画像に最適な背景を自動的に決定します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOnRyYW5zcGFyZW50.desc": {
+          "source": "Transparent background",
+          "message": "透明な背景"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.allowed-value.c3RyaW5nOnRyYW5zcGFyZW50.display_name": {
+          "source": "Transparent",
+          "message": "透明"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.desc": {
+          "source": "Allows to set transparency for the background of the generated image(s) when using `gpt-image-1`",
+          "message": "`gpt-image-1`の使用時に、生成された画像の背景の透明度を設定できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "背景"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
+          "message": "'gpt-image-1'の使用時に、生成された画像の背景の透明度を設定できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
+          "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
+          "message": "生成された画像の圧縮レベル（0〜100%）。このパラメーターは出力形式が`webp`または`jpeg`の`gpt-image-1`でのみサポートされ、デフォルトは`100`です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.display_name": {
+          "source": "Output Compression",
+          "message": "出力圧縮"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.short_desc": {
+          "source": "The compression level (0-100%) for the generated image(s)",
+          "message": "生成された画像の圧縮レベル（0〜100%）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.desc": {
+          "source": "Joint Photographic Experts Group (JPEG) format",
+          "message": "Joint Photographic Experts Group（JPEG）形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "Portable Network Graphics (PNG) format",
+          "message": "Portable Network Graphics（PNG）形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.desc": {
+          "source": "WebP format",
+          "message": "WebP形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output format for the generated image(s). This parameter is only supported for `gpt-image-1` and defaults to `png`",
+          "message": "生成された画像の出力形式。このパラメーターは`gpt-image-1`でのみサポートされ、デフォルトは`png`です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "出力フォーマット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output format for the generated image(s)",
+          "message": "生成された画像の出力形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.allowed-value.c3RyaW5nOmRhbGwtZS0y.display_name": {
+          "source": "DALL·E 2",
+          "message": "DALL·E 2"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.allowed-value.c3RyaW5nOmRhbGwtZS0z.display_name": {
+          "source": "DALL·E 3",
+          "message": "DALL·E 3"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC1pbWFnZS0x.display_name": {
+          "source": "GPT Image 1",
+          "message": "GPT Image 1"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.desc": {
+          "source": "The model to use for image generation",
+          "message": "画像生成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZWw.short_desc": {
+          "source": "The model to use for image generation",
+          "message": "画像生成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic filtering",
+          "message": "自動フィルタリング"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Less restrictive filtering",
+          "message": "制限の緩いフィルタリング"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.desc": {
+          "source": "Control the content-moderation level for images generated by `gpt-image-1`",
+          "message": "`gpt-image-1`によって生成される画像のコンテンツモデレーションレベルを制御します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.display_name": {
+          "source": "Moderation",
+          "message": "モデレーション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bW9kZXJhdGlvbg.short_desc": {
+          "source": "Control the content-moderation level for images generated by 'gpt-image-1'",
+          "message": "'gpt-image-1'によって生成される画像のコンテンツモデレーションレベルを制御します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bg.desc": {
+          "source": "The number of images to generate. For `dall-e-3`, only `n = 1` is supported",
+          "message": "生成する画像の数。`dall-e-3`では`n = 1`のみがサポートされています"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bg.display_name": {
+          "source": "Number of Images",
+          "message": "画像数"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.bg.short_desc": {
+          "source": "The number of images to generate between 1 and 10",
+          "message": "生成する画像の数（1〜10）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjE1MzZ4MTAyNA.desc": {
+          "source": "1536x1024 pixels landscape (`gpt-image-1` only)",
+          "message": "1536x1024ピクセル 横（`gpt-image-1`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjE1MzZ4MTAyNA.display_name": {
+          "source": "1536x1024 Landscape",
+          "message": "1536x1024 横"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjE3OTJ4MTAyNA.desc": {
+          "source": "1792x1024 pixels landscape (`dall-e-3` only)",
+          "message": "1792x1024ピクセル 横（`dall-e-3`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjE3OTJ4MTAyNA.display_name": {
+          "source": "1792x1024 Landscape",
+          "message": "1792x1024 横"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTAyNA.desc": {
+          "source": "1024x1024 pixels (all models)",
+          "message": "1024x1024ピクセル（すべてのモデル）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTAyNA.display_name": {
+          "source": "1024x1024",
+          "message": "1024x1024"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTUzNg.desc": {
+          "source": "1024x1536 pixels portrait (`gpt-image-1` only)",
+          "message": "1024x1536ピクセル 縦（`gpt-image-1`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTUzNg.display_name": {
+          "source": "1024x1536 Portrait",
+          "message": "1024x1536 縦"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTc5Mg.desc": {
+          "source": "1024x1792 pixels portrait (`dall-e-3` only)",
+          "message": "1024x1792ピクセル 縦（`dall-e-3`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjEwMjR4MTc5Mg.display_name": {
+          "source": "1024x1792 Portrait",
+          "message": "1024x1792 縦"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjI1NngyNTY.desc": {
+          "source": "256x256 pixels (`dall-e-2` only)",
+          "message": "256x256ピクセル（`dall-e-2`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjI1NngyNTY.display_name": {
+          "source": "256x256",
+          "message": "256x256"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjUxMng1MTI.desc": {
+          "source": "512x512 pixels (`dall-e-2` and `dall-e-3` only)",
+          "message": "512x512ピクセル（`dall-e-2`および`dall-e-3`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOjUxMng1MTI.display_name": {
+          "source": "512x512",
+          "message": "512x512"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The default size for the model (`gpt-image-1` only)",
+          "message": "モデルのデフォルトサイズ（`gpt-image-1`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.desc": {
+          "source": "The size of the generated image(s)",
+          "message": "生成される画像のサイズ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.display_name": {
+          "source": "Image Size",
+          "message": "画像サイズ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c2l6ZQ.short_desc": {
+          "source": "The size of the generated image(s)",
+          "message": "生成される画像のサイズ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOm5hdHVyYWw.desc": {
+          "source": "Causes the model to produce more natural, less hyper-real looking images",
+          "message": "モデルにより自然で、過度にリアルでない外観の画像を生成させます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOm5hdHVyYWw.display_name": {
+          "source": "Natural",
+          "message": "ナチュラル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOnZpdmlk.desc": {
+          "source": "Causes the model to lean towards generating hyper-real and dramatic images",
+          "message": "モデルによりリアルでドラマチックな画像を生成させます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.allowed-value.c3RyaW5nOnZpdmlk.display_name": {
+          "source": "Vivid",
+          "message": "ビビッド"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.desc": {
+          "source": "The style of the generated image(s) for `dall-e-3` only",
+          "message": "生成される画像のスタイル（`dall-e-3`のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.display_name": {
+          "source": "Image Style",
+          "message": "画像スタイル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.c3R5bGU.short_desc": {
+          "source": "The style of the generated image(s) for 'dall-e-3' only",
+          "message": "生成される画像のスタイル（'dall-e-3'のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.desc": {
+          "source": "A text description of the desired image(s). The maximum length is 32000 characters for `gpt-image-1`, 1000 characters for `dall-e-2` and 4000 characters for `dall-e-3`",
+          "message": "希望する画像の説明テキスト。最大文字数は`gpt-image-1`で32,000文字、`dall-e-2`で1,000文字、`dall-e-3`で4,000文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
+          "source": "A text description of the desired image(s).",
+          "message": "希望する画像の説明テキスト。"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium quality (`gpt-image-1` only)",
+          "message": "中品質（`gpt-image-1` のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model will automatically determine the best quality for the image",
+          "message": "モデルが画像に最適な品質を自動的に決定します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhk.desc": {
+          "source": "High definition (`dall-e-3` only)",
+          "message": "高解像度（`dall-e-3` のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhk.display_name": {
+          "source": "HD",
+          "message": "HD"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High quality (`gpt-image-1` only)",
+          "message": "高品質（`gpt-image-1` のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low quality (`gpt-image-1` only)",
+          "message": "低品質（`gpt-image-1` のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.desc": {
+          "source": "Standard quality (`dall-e-2` and `dall-e-3` only)",
+          "message": "標準品質（`dall-e-2` および `dall-e-3` のみ）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "Standard",
+          "message": "標準"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.desc": {
+          "source": "The quality of the generated image(s)",
+          "message": "生成される画像の品質"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.display_name": {
+          "source": "Image Quality",
+          "message": "画質"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.short_desc": {
+          "source": "The quality of the generated image(s)",
+          "message": "生成される画像の品質"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
+          "source": "Generate an image from a prompt",
+          "message": "プロンプトから画像を生成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.desc": {
+          "source": "Process a request with a model",
+          "message": "モデルを使用してリクエストを処理します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
+          "source": "Process Request With a Model",
+          "message": "モデルでリクエストを処理"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.desc": {
+          "source": "The ID of the server-side conversation that this response belongs to.\n\nItems from this conversation are prepended to the input items for this request, and the input and output items from this response are automatically added to the conversation once the response completes.\n\nThis is the Responses API replacement for Assistants API threads; create conversations with the `conversations` data provider.\n\n**Note**: cannot be used together with `previous_response_id`",
+          "message": "このレスポンスが属するサーバー側会話の ID。\n\nこの会話のアイテムは本リクエストの入力アイテムの先頭に追加され、レスポンス完了時にこのレスポンスの入力および出力アイテムが自動的に会話に追加されます。\n\nこれは Assistants API スレッドに代わる Responses API の機能です。`conversations` データプロバイダーを使用して会話を作成してください。\n\n**注意**: `previous_response_id` と併用することはできません"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.display_name": {
+          "source": "Conversation",
+          "message": "会話"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.short_desc": {
+          "source": "The ID of the server-side conversation that this response belongs to",
+          "message": "このレスポンスが属するサーバー側会話の ID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.desc": {
+          "source": "Optional context used to continue a conversation. This field is not sent to the OpenAI API; it is used to populate `previous_response_id`",
+          "message": "会話を継続するために使用されるオプションのコンテキスト。このフィールドは OpenAI API には送信されず、`previous_response_id` を設定するために使用されます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
+          "source": "Conversation Context",
+          "message": "会話コンテキスト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
+          "source": "Optional context used to continue a conversation",
+          "message": "会話を継続するために使用されるオプションのコンテキスト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "Key used for loading and saving conversation context via a configured conversation context store. This field is not sent to the OpenAI API",
+          "message": "設定された会話コンテキストストアを介して会話コンテキストを読み込みおよび保存するために使用されるキー。このフィールドは OpenAI API には送信されません"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "会話キー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key used for loading and saving conversation context",
+          "message": "会話コンテキストの読み込みおよび保存に使用されるキー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "Text, image, audio, or file inputs to the model, used to generate a response",
+          "message": "レスポンス生成に使用される、モデルへのテキスト、画像、音声、またはファイルの入力"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text, image, audio, or file inputs to the model, used to generate a response",
+          "message": "レスポンス生成に使用される、モデルへのテキスト、画像、音声、またはファイルの入力"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Inserts a system (or developer) message as the first item in the model's context\nWhen using along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses",
+          "message": "モデルのコンテキストの最初のアイテムとしてシステム（または開発者）メッセージを挿入します\n`previous_response_id` と併用する場合、前のレスポンスからの指示は次のレスポンスに引き継がれません。これにより、新しいレスポンスでシステム（または開発者）メッセージを簡単に差し替えることができます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Inserts a system (or developer) message as the first item in the model's context",
+          "message": "モデルのコンテキストの最初のアイテムとしてシステム（または開発者）メッセージを挿入します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The OpenAI model to use",
+          "message": "使用する OpenAI モデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The OpenAI model to use",
+          "message": "使用する OpenAI モデル"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a response, including visible output tokens and reasoning tokens",
+          "message": "レスポンスとして生成可能なトークン数の上限（表示される出力トークンおよび推論トークンを含む）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "最大出力トークン数"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "The maximum number of tokens to generate in the completion",
+          "message": "補完で生成する最大トークン数"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maximum of 512 characters long",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を格納するのに便利です。キーの最大長は64文字、値の最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.desc": {
+          "source": "A stable identifier used to help detect users of your application that may be violating OpenAI's usage policies. The IDs should be a string that uniquely identifies each user. OpenAI recommends hashing their username or email address, in order to avoid sending any identifying information",
+          "message": "OpenAI の利用規約に違反している可能性のあるアプリケーションのユーザーを検出するために使用される安定した識別子。ID は各ユーザーを一意に識別する文字列である必要があります。識別情報の送信を避けるため、ユーザー名またはメールアドレスをハッシュ化することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.display_name": {
+          "source": "Safety Identifier",
+          "message": "セーフティ識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.short_desc": {
+          "source": "An optional unique identifier that enables additional safety checks",
+          "message": "追加の安全性チェックを有効にするオプションの一意の識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "If the Project is Scale tier enabled, the system will utilize scale tier credits until they are exhausted; if not, the request will be processed using the default service tier with a lower uptime SLA and no latency guarentee",
+          "message": "プロジェクトで Scale ティアが有効になっている場合、システムは Scale ティアのクレジットが消費されるまで利用します。そうでない場合、リクエストは稼働率 SLA が低くレイテンシ保証のないデフォルトのサービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The request will be processed using the default service tier with a lower uptime SLA and no latency guarentee",
+          "message": "リクエストは稼働率 SLA が低くレイテンシ保証のないデフォルトのサービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmZsZXg.desc": {
+          "source": "The request will be processed using the flex service tier",
+          "message": "リクエストは Flex サービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmZsZXg.display_name": {
+          "source": "Flex",
+          "message": "Flex"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnByaW9yaXR5.desc": {
+          "source": "The request will be processed using the priority service tier",
+          "message": "リクエストは Priority サービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnByaW9yaXR5.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "サービスティア"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "Whether to store the generated model response for later retrieval via API",
+          "message": "生成されたモデルのレスポンスを後から API 経由で取得できるように保存するかどうか"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "保存しますか？"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Whether to store the generated model response for later retrieval via API",
+          "message": "生成されたモデルのレスポンスを後から API 経由で取得できるように保存するかどうか"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "設定されている場合、ChatGPT のように部分的なメッセージ差分が送信されます。トークンは利用可能になり次第データ専用のサーバー送信イベント（SSE）として送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas",
+          "message": "部分的なメッセージ差分を有効にする場合に設定"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for controlling the stream output",
+          "message": "ストリーム出力を制御するためのオプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for controlling the stream output",
+          "message": "ストリーム出力を制御するためのオプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow the model to run tool calls in parallel",
+          "message": "モデルによる並行ツール呼び出しを許可するかどうか"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls?",
+          "message": "ツールを並行して呼び出しますか？"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Whether to allow the model to run tool calls in parallel",
+          "message": "モデルによる並行ツール呼び出しを許可するかどうか"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of the previous response to the model. Use this to create multi-turn conversations",
+          "message": "モデルへの以前のレスポンスの一意の ID。これを使用して複数ターンの会話を作成します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "前回のレスポンスID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "The unique ID of the previous response to the model",
+          "message": "モデルへの以前のレスポンスの一意の ID"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0.desc": {
+          "source": "Configuration options for the prompt sent to the model",
+          "message": "モデルに送信されるプロンプトの設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0.short_desc": {
+          "source": "Configuration options for the prompt sent to the model",
+          "message": "モデルに送信されるプロンプトの設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by OpenAI to cache responses for similar requests to optimize your cache hit rates",
+          "message": "キャッシュヒット率を最適化するために、OpenAI が類似リクエストのレスポンスをキャッシュする目的で使用します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "プロンプトキャッシュキー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key that can be used to cache prompts for the model",
+          "message": "モデルのプロンプトをキャッシュするために使用できるキー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Configuration options for o-series reasoning models",
+          "message": "o シリーズ推論モデル用の設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "推論"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Configuration options for o-series reasoning models",
+          "message": "o シリーズ推論モデル用の設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model.\nSpecifying a particular tool via `{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` forces the model to call that tool.\n\n`none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。\n`{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` で特定のツールを指定すると、モデルはそのツールを強制的に呼び出します。\n\nツールが存在しない場合は `none` がデフォルトになります。ツールが存在する場合は `auto` がデフォルトになります"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "The tools that the model can use to generate a response",
+          "message": "モデルがレスポンスを生成するために使用できるツール"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "The tools that the model can use to generate a response",
+          "message": "モデルがレスポンスを生成するために使用できるツール"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数を指定する `0` から `20` までの整数（それぞれに関連する対数確率が付随）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "The number of most likely tokens to return at each token position",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration options for a text response from the model",
+          "message": "モデルからのテキストレスポンスの設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Response Text Format",
+          "message": "レスポンス テキスト形式"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration options for a text response from the model",
+          "message": "モデルからのテキストレスポンスの設定オプション"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": " the context of this response and previous ones exceeds the model's context window size, the model will truncate the response to fit the context window by dropping input items in the middle of the conversation",
+          "message": "このレスポンスおよび過去のレスポンスのコンテキストがモデルのコンテキストウィンドウサイズを超える場合、モデルは会話の途中の入力アイテムをドロップしてコンテキストウィンドウに収まるようにレスポンスを切り詰めます"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "If a model response will exceed the context window size for a model, the request will fail with a 400 error",
+          "message": "モデルのレスポンスがコンテキストウィンドウサイズを超える場合、リクエストは 400 エラーで失敗します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "The truncation strategy to use for the model response",
+          "message": "モデルレスポンスに使用する切り捨て戦略"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "切り詰め"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "The truncation strategy to use for the model response",
+          "message": "モデルレスポンスに使用する切り捨て戦略"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Process a request with a model",
+          "message": "モデルを使用してリクエストを処理します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.desc": {
+          "source": "Create a thread with the given messages",
+          "message": "指定されたメッセージでスレッドを作成します"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.display_name": {
+          "source": "Create a Thread",
+          "message": "スレッドを作成"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maxium of 512 characters long",
+          "message": "オブジェクトに添付可能な 16 個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存するのに役立ちます。キーは最大 64 文字、値は最大 512 文字です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages to start the thread with",
+          "message": "スレッドの開始時に含めるメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages to start the thread with",
+          "message": "スレッドの開始時に含めるメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.desc": {
+          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "スレッドのツールによって使用されるリソースのセット。リソースはツールの種類に固有です。例えば、`code_interpreter` ツールにはファイル ID のリストが必要ですが、`file_search` ツールにはベクトルストア ID のリストが必要です"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.display_name": {
+          "source": "Tool Resources",
+          "message": "ツールリソース"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.short_desc": {
+          "source": "A set of resources that are used by the thread's tools",
+          "message": "スレッドのツールによって使用されるリソースのセット"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.short_desc": {
+          "source": "Create a thread",
+          "message": "スレッドを作成"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Retrieve a conversation",
+          "message": "会話を取得"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "Get a Conversation",
+          "message": "会話の取得"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Retrieve a conversation",
+          "message": "会話を取得"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.desc": {
+          "source": "Retrieve a single item from a conversation",
+          "message": "会話から単一のアイテムを取得"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
+          "source": "Get a Conversation Item",
+          "message": "会話アイテムの取得"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation holding the item",
+          "message": "アイテムを含む会話のID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation holding the item",
+          "message": "アイテムを含む会話のID"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aW5jbHVkZQ.desc": {
+          "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
+          "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional fields to include in the response",
+          "message": "レスポンスに含める追加フィールド"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.desc": {
+          "source": "The item within the conversation; the list is populated from the selected conversation",
+          "message": "会話内のアイテム。リストは選択された会話から設定されます"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "アイテム"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.short_desc": {
+          "source": "The item within the conversation",
+          "message": "会話内のアイテム"
+        },
+        "app.T3BlbkFJ.action.Z2V0LWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
+          "source": "Retrieve a single item from a conversation",
+          "message": "会話から単一のアイテムを取得"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.desc": {
+          "source": "Delete an assistant",
+          "message": "アシスタントを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.display_name": {
+          "source": "Delete Assistant",
+          "message": "アシスタントの削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.desc": {
+          "source": "The ID of the assistant to delete",
+          "message": "削除するアシスタントのID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.display_name": {
+          "source": "Assistant",
+          "message": "アシスタント"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.short_desc": {
+          "source": "The ID of the assistant to delete",
+          "message": "削除するアシスタントのID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWFzc2lzdGFudA.short_desc": {
+          "source": "Delete an assistant",
+          "message": "アシスタントを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Delete a conversation.\n\n**Note**: items in the conversation are not deleted",
+          "message": "会話を削除します。\n\n**注意**: 会話内のアイテムは削除されません"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "Delete a Conversation",
+          "message": "会話の削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Delete a conversation",
+          "message": "会話を削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.desc": {
+          "source": "Delete an item from a conversation.\n\n**Note**: the API returns the updated conversation, not a deletion receipt",
+          "message": "会話からアイテムを削除します。\n\n**注意**: APIは削除受領書ではなく、更新された会話を返します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.display_name": {
+          "source": "Delete a Conversation Item",
+          "message": "会話アイテムの削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation holding the item",
+          "message": "アイテムを含む会話のID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation holding the item",
+          "message": "アイテムを含む会話のID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.desc": {
+          "source": "The item within the conversation; the list is populated from the selected conversation",
+          "message": "会話内のアイテム。リストは選択された会話から設定されます"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "アイテム"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.option.aXRlbV9pZA.short_desc": {
+          "source": "The item within the conversation",
+          "message": "会話内のアイテム"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWNvbnZlcnNhdGlvbi1pdGVt.short_desc": {
+          "source": "Delete an item from a conversation",
+          "message": "会話からアイテムを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file stored on OpenAI",
+          "message": "OpenAIに保存されているファイルを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "ファイルを削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The ID or OpenAI file name of the file to delete",
+          "message": "削除するファイルのIDまたはOpenAIファイル名"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The ID or OpenAI file name of the file to delete",
+          "message": "削除するファイルのIDまたはOpenAIファイル名"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file stored on OpenAI",
+          "message": "OpenAIに保存されているファイルを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.desc": {
+          "source": "Delete a thread",
+          "message": "スレッドを削除します"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.display_name": {
+          "source": "Delete Thread",
+          "message": "スレッドの削除"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.option.dGhyZWFkX2lk.desc": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.option.dGhyZWFkX2lk.short_desc": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.ZGVsZXRlLXRocmVhZA.short_desc": {
+          "source": "Delete a thread",
+          "message": "スレッドを削除します"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.desc": {
+          "source": "List the items in a conversation.\n\nItems are messages, tool calls, and tool call outputs recorded against the conversation",
+          "message": "会話内のアイテムを一覧表示します。\n\nアイテムとは、会話に対して記録されたメッセージ、ツール呼び出し、およびツール呼び出しの出力です"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.display_name": {
+          "source": "List Conversation Items",
+          "message": "会話アイテムの一覧表示"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.YWZ0ZXI.desc": {
+          "source": "An item ID to list items after, used in pagination",
+          "message": "ページネーションで使用される、指定したアイテム以降を一覧表示するためのアイテムID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.YWZ0ZXI.short_desc": {
+          "source": "An item ID to list items after, used in pagination",
+          "message": "ページネーションで使用される、指定したアイテム以降を一覧表示するためのアイテムID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.aW5jbHVkZQ.desc": {
+          "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
+          "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional fields to include in the response",
+          "message": "レスポンスに含める追加フィールド"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Return items in ascending order by creation timestamp (oldest first)",
+          "message": "作成日時の昇順でアイテムを返します（古い順）"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.short_desc": {
+          "source": "Oldest items first",
+          "message": "古いアイテム順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Return items in descending order by creation timestamp (newest first)",
+          "message": "作成日時の降順でアイテムを返します（新しい順）"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.short_desc": {
+          "source": "Newest items first",
+          "message": "新しいアイテム順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.desc": {
+          "source": "The sort order of the returned items by creation timestamp",
+          "message": "作成日時による返却アイテムのソート順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.b3JkZXI.short_desc": {
+          "source": "The sort order of the returned items by creation timestamp",
+          "message": "作成日時による返却アイテムのソート順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.bGltaXQ.desc": {
+          "source": "The number of items to return; defaults to `20` server-side",
+          "message": "返却するアイテム数。サーバー側のデフォルトは `20` です"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.bGltaXQ.short_desc": {
+          "source": "The number of items to return",
+          "message": "返却するアイテム数"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.short_desc": {
+          "source": "List the items in a conversation",
+          "message": "会話内のアイテムを一覧表示します"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.desc": {
+          "source": "List the input items used to generate a response.\n\nThis is the Responses API equivalent of listing the steps of an Assistants API run",
+          "message": "レスポンスの生成に使用された入力アイテムを一覧表示します。\n\nこれは、Assistants API実行のステップを一覧表示することに相当するResponses APIの機能です"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.display_name": {
+          "source": "List Response Input Items",
+          "message": "レスポンス入力アイテムの一覧表示"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.YWZ0ZXI.desc": {
+          "source": "An item ID to list items after, used in pagination",
+          "message": "ページネーションで使用される、指定したアイテム以降を一覧表示するためのアイテムID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.YWZ0ZXI.short_desc": {
+          "source": "An item ID to list items after, used in pagination",
+          "message": "ページネーションで使用される、指定したアイテム以降を一覧表示するためのアイテムID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aW5jbHVkZQ.desc": {
+          "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
+          "message": "レスポンスに含める追加フィールド。\n\nサポートされている値については、[include パラメーター](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include)のドキュメントを参照してください"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional fields to include in the response",
+          "message": "レスポンスに含める追加フィールド"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aWQ.desc": {
+          "source": "The ID of the response to get",
+          "message": "取得するレスポンスのID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "回答 ID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aWQ.short_desc": {
+          "source": "The ID of the response to get",
+          "message": "取得するレスポンスのID"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Return items in ascending order by creation timestamp (oldest first)",
+          "message": "作成日時の昇順でアイテムを返します（古い順）"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.short_desc": {
+          "source": "Oldest items first",
+          "message": "古いアイテム順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Return items in descending order by creation timestamp (newest first)",
+          "message": "作成日時の降順でアイテムを返します（新しい順）"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.short_desc": {
+          "source": "Newest items first",
+          "message": "新しいアイテム順"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.desc": {
+          "source": "The order to return the input items in",
+          "message": "入力アイテムを返却する順序"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.b3JkZXI.short_desc": {
+          "source": "The order to return the input items in",
+          "message": "入力アイテムを返却する順序"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.bGltaXQ.desc": {
+          "source": "The number of input items to return; must be between `1` and `100`",
+          "message": "返却する入力アイテム数。`1` から `100` の間である必要があります"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.bGltaXQ.short_desc": {
+          "source": "The number of input items to return",
+          "message": "返却する入力アイテム数"
+        },
+        "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.short_desc": {
+          "source": "List the input items used to generate a response",
+          "message": "レスポンスの生成に使用された入力アイテムを一覧表示します"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **OpenAI Services** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定済みの接続認証を使用して、**OpenAI Services** に対するカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエストボディを指定してください。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンスボディを含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to OpenAI Services",
+          "message": "OpenAI ServicesへのカスタムAPI呼び出しを実行します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
+          "message": "一度に複数のメッセージを送信し、複数の返答を受け取る可能性のあるAIモデルとのチャットを行います"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "マルチチャット"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキスト内の既存の頻度に基づいて新しいトークンにペナルティが課され、モデルが同じ行を逐語的に繰り返す可能性が低下します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalty to reduce the chance that tokens will be repeated in the output",
+          "message": "出力内でトークンが繰り返される可能性を下げるペナルティ"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.desc": {
+          "source": "Accepts a JSON object that maps tokens (specified by their token ID in the tokenizer) to an associated bias value from `-100` to `100`. Mathematically, the bias is added to the logits generated by the model prior to sampling. The exact effect will vary per model, but values between `-1` and `1` should decrease or increase likelihood of selection; values like `-100` or `100` should result in a ban or exclusive selection of the relevant token",
+          "message": "トークナイザー内のトークンIDで指定されたトークンを、`-100` から `100` までの関連バイアス値にマッピングするJSONオブジェクトを受け入れます。数学的には、バイアスはサンプリング前にモデルによって生成されたロジットに追加されます。正確な影響はモデルごとに異なりますが、`-1` から `1` の間の値は選択される可能性を低下または増加させ、`-100` や `100` のような値は該当トークンの禁止または排他的な選択につながるはずです"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logitバイアス"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion",
+          "message": "補完に特定のトークンが出現する可能性を変更します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens or not. If `true`, returns the log probabilities of each output token returned in the `content` of the message.",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、メッセージの `content` で返される各出力トークンの対数確率を返します。"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "対数確率"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Log probability information for the message",
+          "message": "メッセージの対数確率情報"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion",
+          "message": "チャット補完で生成できるトークンの最大数"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion",
+          "message": "チャット補完で生成できるトークンの最大数"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bg.desc": {
+          "source": "How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all of the choices. Keep `n` as `1` (the default) to minimize costs",
+          "message": "入力メッセージごとに生成するチャット補完の選択肢の数。すべての選択肢で生成されたトークンの合計数に基づいて課金されることに注意してください。コストを最小限に抑えるには、`n` を `1`（デフォルト）のままにしてください"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bg.display_name": {
+          "source": "Number of Choices",
+          "message": "選択肢の数"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.bg.short_desc": {
+          "source": "The number of choices to generate for each input message",
+          "message": "入力メッセージごとに生成する選択肢の数"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c2VlZA.desc": {
+          "source": "This feature is in Beta. If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed, and you should refer to the `system_fingerprint` response parameter to monitor changes in the backend",
+          "message": "この機能はベータ版です。指定された場合、システムは同じシードとパラメータによる繰り返しのリクエストが同じ結果を返すように、可能な限り決定論的にサンプリングします。決定論は保証されないため、バックエンドの変更を監視するには `system_fingerprint` レスポンスパラメータを参照してください"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
+          "source": "A value that helps ensure repeated requests get the same response",
+          "message": "繰り返しのリクエストが同じレスポンスを取得できるようにするための値"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "設定されている場合、ChatGPT のように部分的なメッセージ差分が送信されます。トークンは利用可能になり次第データ専用のサーバー送信イベント（SSE）として送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas",
+          "message": "部分的なメッセージ差分を有効にする場合に設定"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "ストリーミング応答のオプション。`stream: true` を設定した場合にのみ設定してください"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "ストリーミング応答のオプション"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキストに出現したかどうかに基づいて新しいトークンにペナルティが課され、モデルが新しいトピックについて話す可能性が高まります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Positive numbers increase the model's likelihood to talk about new topics",
+          "message": "正の値を指定すると、モデルが新しいトピックについて話す可能性が高くなります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models newer than gpt-3.5-turbo-1106.\n\nSetting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON.\n\n**Important**: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly \"stuck\" request. Also note that the message content may be partially cut off if `finish_reason=\"length\"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length",
+          "message": "モデルが出力しなければならない形式を指定するオブジェクト。GPT-4 Turboおよびgpt-3.5-turbo-1106より新しいすべてのGPT-3.5 Turboモデルと互換性があります。\n\n`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます。\n\n**重要**: JSONモードを使用する場合は、システムメッセージまたはユーザーメッセージを通じて、モデルに対してJSONを出力するよう自身で指示する必要もあります。これを行わないと、生成がトークン制限に達するまでモデルが空白文字の無限ストリームを生成し、リクエストが長時間実行されて「停止」したように見える可能性があります。また、`finish_reason=\"length\"` の場合、メッセージコンテンツが部分的に切り取られる可能性があることにも注意してください。これは生成が `max_tokens` を超えたか、会話が最大コンテキスト長を超えたことを示します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model.\nSpecifying a particular tool via `{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` forces the model to call that tool.\n\n`none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。\n`{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` で特定のツールを指定すると、モデルはそのツールを強制的に呼び出します。\n\nツールが存在しない場合は `none` がデフォルトになります。ツールが存在する場合は `auto` がデフォルトになります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. Use this to provide a list of functions the model may generate JSON inputs for. A max of `128` functions are supported",
+          "message": "モデルが呼び出す可能性のあるツールのリスト。現在、ツールとしては関数のみがサポートされています。モデルがJSON入力を生成する関数のリストを提供するためにこれを使用します。最大 `128` 個の関数がサポートされています"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call",
+          "message": "モデルが呼び出す可能性のあるツールのリスト"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 20 specifying the number of most likely tokens to return at each token position, each with an associated log probability. `logprobs` must be set to true if this parameter is used",
+          "message": "各トークン位置で返却する最も可能性の高いトークンの数を指定する0から20の整数（それぞれ関連する対数確率を含む）。このパラメータを使用する場合、`logprobs` をtrueに設定する必要があります"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "The number of most likely tokens to return at each token position",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
+          "message": "一度に複数のメッセージを送信し、複数の返答を受け取る可能性のあるAIモデルとのチャットを行います"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with an AI model by sending a single message and receiving a single reply",
+          "message": "単一のメッセージを送信し、単一の返答を受信してAIモデルとチャットします"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "シンプルチャット"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The contents of the message",
+          "message": "メッセージの内容"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The contents of the message",
+          "message": "メッセージの内容"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキスト内の既存の頻度に基づいて新しいトークンにペナルティが課され、モデルが同じ行を逐語的に繰り返す可能性が低下します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalty to reduce the chance that tokens will be repeated in the output",
+          "message": "出力内でトークンが繰り返される可能性を下げるペナルティ"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.desc": {
+          "source": "Accepts a JSON object that maps tokens (specified by their token ID in the tokenizer) to an associated bias value from `-100` to `100`. Mathematically, the bias is added to the logits generated by the model prior to sampling. The exact effect will vary per model, but values between `-1` and `1` should decrease or increase likelihood of selection; values like `-100` or `100` should result in a ban or exclusive selection of the relevant token",
+          "message": "トークナイザー内のトークンIDで指定されたトークンを、`-100` から `100` までの関連バイアス値にマッピングするJSONオブジェクトを受け入れます。数学的には、バイアスはサンプリング前にモデルによって生成されたロジットに追加されます。正確な影響はモデルごとに異なりますが、`-1` から `1` の間の値は選択される可能性を低下または増加させ、`-100` や `100` のような値は該当トークンの禁止または排他的な選択につながるはずです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logitバイアス"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion",
+          "message": "補完に特定のトークンが出現する可能性を変更します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens or not. If `true`, returns the log probabilities of each output token returned in the `content` of the message.",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、メッセージの `content` で返される各出力トークンの対数確率を返します。"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "対数確率"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
+          "source": "Log probability information for the message",
+          "message": "メッセージの対数確率情報"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion",
+          "message": "チャット補完で生成できるトークンの最大数"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion",
+          "message": "チャット補完で生成できるトークンの最大数"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
+          "source": "An optional name for the participant. Provides the model information to differentiate between participants of the same role",
+          "message": "参加者の任意の名前。同じロールの参加者を区別するための情報をモデルに提供します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.short_desc": {
+          "source": "An optional name for the participant",
+          "message": "参加者のオプション名"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c2VlZA.desc": {
+          "source": "This feature is in Beta. If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed, and you should refer to the `system_fingerprint` response parameter to monitor changes in the backend",
+          "message": "この機能はベータ版です。指定された場合、システムは同じシードとパラメータによる繰り返しのリクエストが同じ結果を返すように、可能な限り決定論的にサンプリングします。決定論は保証されないため、バックエンドの変更を監視するには `system_fingerprint` レスポンスパラメータを参照してください"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
+          "source": "A value that helps ensure repeated requests get the same response",
+          "message": "繰り返しのリクエストが同じレスポンスを取得できるようにするための値"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "設定されている場合、ChatGPT のように部分的なメッセージ差分が送信されます。トークンは利用可能になり次第データ専用のサーバー送信イベント（SSE）として送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas",
+          "message": "部分的なメッセージ差分を有効にする場合に設定"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "ストリーミング応答のオプション。`stream: true` を設定した場合にのみ設定してください"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "ストリーミング応答のオプション"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキストに出現したかどうかに基づいて新しいトークンにペナルティが課され、モデルが新しいトピックについて話す可能性が高まります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Positive numbers increase the model's likelihood to talk about new topics",
+          "message": "正の値を指定すると、モデルが新しいトピックについて話す可能性が高くなります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author of the message is an assistant",
+          "message": "メッセージの作成者はアシスタントです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "アシスタント"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author of the message is an assistant",
+          "message": "メッセージの作成者はアシスタントです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.desc": {
+          "source": "The author of the message is a function",
+          "message": "メッセージの作成者は関数です"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
+          "source": "Function",
+          "message": "関数"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.short_desc": {
+          "source": "The author of the message is a function",
+          "message": "メッセージの作成者は関数です"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author of the message is the system",
+          "message": "メッセージの作成者はシステムです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "システム"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author of the message is the system",
+          "message": "メッセージの作成者はシステムです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.desc": {
+          "source": "The author of the message is a tool",
+          "message": "メッセージの作成者はツールです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+          "source": "Tool",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
+          "source": "The author of the message is a tool",
+          "message": "メッセージの作成者はツールです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author of the message is the user",
+          "message": "メッセージの作成者はユーザーです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author of the message is the user",
+          "message": "メッセージの作成者はユーザーです"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "このメッセージの作成者のロール"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the author of this message",
+          "message": "このメッセージの作成者のロール"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models newer than gpt-3.5-turbo-1106.\n\nSetting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON.\n\n**Important**: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly \"stuck\" request. Also note that the message content may be partially cut off if `finish_reason=\"length\"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length",
+          "message": "モデルが出力しなければならない形式を指定するオブジェクト。GPT-4 Turboおよびgpt-3.5-turbo-1106より新しいすべてのGPT-3.5 Turboモデルと互換性があります。\n\n`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます。\n\n**重要**: JSONモードを使用する場合は、システムメッセージまたはユーザーメッセージを通じて、モデルに対してJSONを出力するよう自身で指示する必要もあります。これを行わないと、生成がトークン制限に達するまでモデルが空白文字の無限ストリームを生成し、リクエストが長時間実行されて「停止」したように見える可能性があります。また、`finish_reason=\"length\"` の場合、メッセージコンテンツが部分的に切り取られる可能性があることにも注意してください。これは生成が `max_tokens` を超えたか、会話が最大コンテキスト長を超えたことを示します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model.\nSpecifying a particular tool via `{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` forces the model to call that tool.\n\n`none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。\n`{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` で特定のツールを指定すると、モデルはそのツールを強制的に呼び出します。\n\nツールが存在しない場合は `none` がデフォルトになります。ツールが存在する場合は `auto` がデフォルトになります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. Use this to provide a list of functions the model may generate JSON inputs for. A max of `128` functions are supported",
+          "message": "モデルが呼び出す可能性のあるツールのリスト。現在、ツールとしては関数のみがサポートされています。モデルがJSON入力を生成する関数のリストを提供するためにこれを使用します。最大 `128` 個の関数がサポートされています"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call",
+          "message": "モデルが呼び出す可能性のあるツールのリスト"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 20 specifying the number of most likely tokens to return at each token position, each with an associated log probability. `logprobs` must be set to true if this parameter is used",
+          "message": "各トークン位置で返却する最も可能性の高いトークンの数を指定する0から20の整数（それぞれ関連する対数確率を含む）。このパラメータを使用する場合、`logprobs` をtrueに設定する必要があります"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "The number of most likely tokens to return at each token position",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with an AI model by sending a single message and receiving a single reply",
+          "message": "単一のメッセージを送信し、単一の返答を受信してAIモデルとチャットします"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.desc": {
+          "source": "Stream a response from a model with Server-Sent Events",
+          "message": "Server-Sent Eventsを使用してモデルからのレスポンスをストリーミングします"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
+          "source": "Stream Response",
+          "message": "レスポンスのストリーミング"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.desc": {
+          "source": "The ID of the server-side conversation that this response belongs to.\n\nItems from this conversation are prepended to the input items for this request, and the input and output items from this response are automatically added to the conversation once the response completes.\n\nThis is the Responses API replacement for Assistants API threads; create conversations with the `conversations` data provider.\n\n**Note**: cannot be used together with `previous_response_id`",
+          "message": "このレスポンスが属するサーバー側会話の ID。\n\nこの会話のアイテムは本リクエストの入力アイテムの先頭に追加され、レスポンス完了時にこのレスポンスの入力および出力アイテムが自動的に会話に追加されます。\n\nこれは Assistants API スレッドに代わる Responses API の機能です。`conversations` データプロバイダーを使用して会話を作成してください。\n\n**注意**: `previous_response_id` と併用することはできません"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.display_name": {
+          "source": "Conversation",
+          "message": "会話"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9u.short_desc": {
+          "source": "The ID of the server-side conversation that this response belongs to",
+          "message": "このレスポンスが属するサーバー側会話の ID"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.desc": {
+          "source": "Optional context used to continue a conversation. This field is not sent to the OpenAI API; it is used to populate `previous_response_id`",
+          "message": "会話を継続するために使用されるオプションのコンテキスト。このフィールドは OpenAI API には送信されず、`previous_response_id` を設定するために使用されます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.display_name": {
+          "source": "Conversation Context",
+          "message": "会話コンテキスト"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2NvbnRleHQ.short_desc": {
+          "source": "Optional context used to continue a conversation",
+          "message": "会話を継続するために使用されるオプションのコンテキスト"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "Key used for loading and saving conversation context via a configured conversation context store. This field is not sent to the OpenAI API",
+          "message": "設定された会話コンテキストストアを介して会話コンテキストを読み込みおよび保存するために使用されるキー。このフィールドは OpenAI API には送信されません"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "会話キー"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key used for loading and saving conversation context",
+          "message": "会話コンテキストの読み込みおよび保存に使用されるキー"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "Text, image, audio, or file inputs to the model, used to generate a response",
+          "message": "レスポンス生成に使用される、モデルへのテキスト、画像、音声、またはファイルの入力"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text, image, audio, or file inputs to the model, used to generate a response",
+          "message": "レスポンス生成に使用される、モデルへのテキスト、画像、音声、またはファイルの入力"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Inserts a system (or developer) message as the first item in the model's context\nWhen using along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses",
+          "message": "モデルのコンテキストの最初のアイテムとしてシステム（または開発者）メッセージを挿入します\n`previous_response_id` と併用する場合、前のレスポンスからの指示は次のレスポンスに引き継がれません。これにより、新しいレスポンスでシステム（または開発者）メッセージを簡単に差し替えることができます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Inserts a system (or developer) message as the first item in the model's context",
+          "message": "モデルのコンテキストの最初のアイテムとしてシステム（または開発者）メッセージを挿入します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The OpenAI model to use",
+          "message": "使用する OpenAI モデル"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The OpenAI model to use",
+          "message": "使用する OpenAI モデル"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a response, including visible output tokens and reasoning tokens",
+          "message": "レスポンスとして生成可能なトークン数の上限（表示される出力トークンおよび推論トークンを含む）"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "最大出力トークン数"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "The maximum number of tokens to generate in the completion",
+          "message": "補完で生成する最大トークン数"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maximum of 512 characters long",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を格納するのに便利です。キーの最大長は64文字、値の最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.desc": {
+          "source": "A stable identifier used to help detect users of your application that may be violating OpenAI's usage policies. The IDs should be a string that uniquely identifies each user. OpenAI recommends hashing their username or email address, in order to avoid sending any identifying information",
+          "message": "OpenAI の利用規約に違反している可能性のあるアプリケーションのユーザーを検出するために使用される安定した識別子。ID は各ユーザーを一意に識別する文字列である必要があります。識別情報の送信を避けるため、ユーザー名またはメールアドレスをハッシュ化することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.display_name": {
+          "source": "Safety Identifier",
+          "message": "セーフティ識別子"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2FmZXR5X2lkZW50aWZpZXI.short_desc": {
+          "source": "An optional unique identifier that enables additional safety checks",
+          "message": "追加の安全性チェックを有効にするオプションの一意の識別子"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "If the Project is Scale tier enabled, the system will utilize scale tier credits until they are exhausted; if not, the request will be processed using the default service tier with a lower uptime SLA and no latency guarentee",
+          "message": "プロジェクトで Scale ティアが有効になっている場合、システムは Scale ティアのクレジットが消費されるまで利用します。そうでない場合、リクエストは稼働率 SLA が低くレイテンシ保証のないデフォルトのサービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "The request will be processed using the default service tier with a lower uptime SLA and no latency guarentee",
+          "message": "リクエストは稼働率 SLA が低くレイテンシ保証のないデフォルトのサービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmZsZXg.desc": {
+          "source": "The request will be processed using the flex service tier",
+          "message": "リクエストは Flex サービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmZsZXg.display_name": {
+          "source": "Flex",
+          "message": "Flex"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnByaW9yaXR5.desc": {
+          "source": "The request will be processed using the priority service tier",
+          "message": "リクエストは Priority サービスティアを使用して処理されます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnByaW9yaXR5.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "サービスティア"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "Whether to store the generated model response for later retrieval via API",
+          "message": "生成されたモデルのレスポンスを後から API 経由で取得できるように保存するかどうか"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "保存しますか？"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Whether to store the generated model response for later retrieval via API",
+          "message": "生成されたモデルのレスポンスを後から API 経由で取得できるように保存するかどうか"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "設定されている場合、ChatGPT のように部分的なメッセージ差分が送信されます。トークンは利用可能になり次第データ専用のサーバー送信イベント（SSE）として送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas",
+          "message": "部分的なメッセージ差分を有効にする場合に設定"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for controlling the stream output",
+          "message": "ストリーム出力を制御するためのオプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for controlling the stream output",
+          "message": "ストリーム出力を制御するためのオプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow the model to run tool calls in parallel",
+          "message": "モデルによる並行ツール呼び出しを許可するかどうか"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls?",
+          "message": "ツールを並行して呼び出しますか？"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Whether to allow the model to run tool calls in parallel",
+          "message": "モデルによる並行ツール呼び出しを許可するかどうか"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of the previous response to the model. Use this to create multi-turn conversations",
+          "message": "モデルへの以前のレスポンスの一意の ID。これを使用して複数ターンの会話を作成します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "前回のレスポンスID"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "The unique ID of the previous response to the model",
+          "message": "モデルへの以前のレスポンスの一意の ID"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0.desc": {
+          "source": "Configuration options for the prompt sent to the model",
+          "message": "モデルに送信されるプロンプトの設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0.short_desc": {
+          "source": "Configuration options for the prompt sent to the model",
+          "message": "モデルに送信されるプロンプトの設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by OpenAI to cache responses for similar requests to optimize your cache hit rates",
+          "message": "キャッシュヒット率を最適化するために、OpenAI が類似リクエストのレスポンスをキャッシュする目的で使用します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "プロンプトキャッシュキー"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key that can be used to cache prompts for the model",
+          "message": "モデルのプロンプトをキャッシュするために使用できるキー"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Configuration options for o-series reasoning models",
+          "message": "o シリーズ推論モデル用の設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "推論"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Configuration options for o-series reasoning models",
+          "message": "o シリーズ推論モデル用の設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model.\nSpecifying a particular tool via `{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` forces the model to call that tool.\n\n`none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。\n`{\"type\": \"function\", \"function\": {\"name\": \"my_function\"}}` で特定のツールを指定すると、モデルはそのツールを強制的に呼び出します。\n\nツールが存在しない場合は `none` がデフォルトになります。ツールが存在する場合は `auto` がデフォルトになります"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "The tools that the model can use to generate a response",
+          "message": "モデルがレスポンスを生成するために使用できるツール"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "The tools that the model can use to generate a response",
+          "message": "モデルがレスポンスを生成するために使用できるツール"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数を指定する `0` から `20` までの整数（それぞれに関連する対数確率が付随）"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "The number of most likely tokens to return at each token position",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration options for a text response from the model",
+          "message": "モデルからのテキストレスポンスの設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Response Text Format",
+          "message": "レスポンス テキスト形式"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration options for a text response from the model",
+          "message": "モデルからのテキストレスポンスの設定オプション"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": " the context of this response and previous ones exceeds the model's context window size, the model will truncate the response to fit the context window by dropping input items in the middle of the conversation",
+          "message": "このレスポンスおよび過去のレスポンスのコンテキストがモデルのコンテキストウィンドウサイズを超える場合、モデルは会話の途中の入力アイテムをドロップしてコンテキストウィンドウに収まるようにレスポンスを切り詰めます"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "If a model response will exceed the context window size for a model, the request will fail with a 400 error",
+          "message": "モデルのレスポンスがコンテキストウィンドウサイズを超える場合、リクエストは 400 エラーで失敗します"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "The truncation strategy to use for the model response",
+          "message": "モデルレスポンスに使用する切り捨て戦略"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "切り詰め"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "The truncation strategy to use for the model response",
+          "message": "モデルレスポンスに使用する切り捨て戦略"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
+          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
+          "source": "Stream a response from a model",
+          "message": "モデルからのレスポンスをストリーミングします"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.desc": {
+          "source": "Update an assistant",
+          "message": "アシスタントを更新します"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.display_name": {
+          "source": "Update Assistant",
+          "message": "アシスタントの更新"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.desc": {
+          "source": "The ID of the assistant to update",
+          "message": "更新するアシスタントのID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.display_name": {
+          "source": "Assistant",
+          "message": "アシスタント"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.YXNzaXN0YW50.short_desc": {
+          "source": "The ID of the assistant to update",
+          "message": "更新するアシスタントのID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the assistant. The maximum length is 512 characters",
+          "message": "アシスタントの説明。最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the assistant",
+          "message": "アシスタントの説明"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "The system instructions that the assistant uses. The maximum length is 256,000 characters",
+          "message": "アシスタントが使用するシステム指示。最大長は256,000文字です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "The system instructions that the assistant uses",
+          "message": "アシスタントが使用するシステム指示"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bW9kZWw.desc": {
+          "source": "Model for the assistant",
+          "message": "アシスタントのモデル"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bW9kZWw.short_desc": {
+          "source": "Model for the assistant",
+          "message": "アシスタントのモデル"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maximum of 512 characters long",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を格納するのに便利です。キーの最大長は64文字、値の最大長は512文字です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bmFtZQ.desc": {
+          "source": "The name of the assistant. The maximum length is 256 characters",
+          "message": "アシスタントの名前。最大長は256文字です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.bmFtZQ.short_desc": {
+          "source": "The name of the assistant",
+          "message": "アシスタントの名前"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models newer than gpt-3.5-turbo-1106.\n\nSetting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON.\n\n**Important**: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly \"stuck\" request. Also note that the message content may be partially cut off if `finish_reason=\"length\"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length",
+          "message": "モデルが出力しなければならない形式を指定するオブジェクト。GPT-4 Turboおよびgpt-3.5-turbo-1106より新しいすべてのGPT-3.5 Turboモデルと互換性があります。\n\n`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます。\n\n**重要**: JSONモードを使用する場合は、システムメッセージまたはユーザーメッセージを通じて、モデルに対してJSONを出力するよう自身で指示する必要もあります。これを行わないと、生成がトークン制限に達するまでモデルが空白文字の無限ストリームを生成し、リクエストが長時間実行されて「停止」したように見える可能性があります。また、`finish_reason=\"length\"` の場合、メッセージコンテンツが部分的に切り取られる可能性があることにも注意してください。これは生成が `max_tokens` を超えたか、会話が最大コンテキスト長を超えたことを示します"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.desc": {
+          "source": "A set of resources that are used by the assistant's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "アシスタントのツールによって使用されるリソースのセット。リソースはツールのタイプ固有です。たとえば、`code_interpreter` ツールにはファイルIDのリストが必要ですが、`file_search` ツールにはベクターストアIDのリストが必要です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.display_name": {
+          "source": "Tool Resources",
+          "message": "ツールリソース"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbF9yZXNvdXJjZXM.short_desc": {
+          "source": "A set of resources that are used by the assistant's tools",
+          "message": "アシスタントのツールによって使用されるリソースのセット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbHM.desc": {
+          "source": "A list of tools enabled on the assistant. There can be a maximum of 128 tools per assistant. Tools can be of types `code_interpreter`, `file_search`, or `function`",
+          "message": "アシスタントで有効になっているツールのリスト。アシスタントごとに最大128個のツールを設定できます。ツールは `code_interpreter`、`file_search`、または `function` のタイプにすることができます"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools enabled on the assistant",
+          "message": "アシスタントで有効になっているツールのリスト"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or `temperature` but not both",
+          "message": "温度によるサンプリングの代替手段である核サンプリング（nucleus sampling）。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します。\n\n通常は、これまたは `temperature` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dG9wX3A.short_desc": {
+          "source": "Top p nucleus sampling value",
+          "message": "Top p（核サンプリング）値"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic.\n\nWe generally recommend altering this or `top_p` but not both",
+          "message": "使用するサンプリング温度 (`0` から `2` の間)。`0.8` のような高い値を設定すると出力がよりランダムになり、`0.2` のような低い値を設定するとより焦点を絞った決定論的な出力になります。\n\n通常は、これまたは `top_p` のいずれか一方のみを変更することをお勧めします"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.short_desc": {
+          "source": "Update an assistant",
+          "message": "アシスタントを更新します"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Update the metadata of a conversation",
+          "message": "会話のメタデータを更新します"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "Update a Conversation",
+          "message": "会話の更新"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation ID",
+          "message": "会話 ID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The ID of the conversation",
+          "message": "会話のID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard. Keys are strings with a maximum length of 64 characters; values are strings with a maximum length of 512 characters",
+          "message": "オブジェクトに添付可能な最大16個のキー・値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存したり、APIまたはダッシュボード経由でオブジェクトを検索したりするのに役立ちます。キーは最大64文字の文字列で、値は最大512文字の文字列です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to the conversation",
+          "message": "会話に添付可能な最大16個のキー・値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Update the metadata of a conversation",
+          "message": "会話のメタデータを更新します"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.desc": {
+          "source": "Update a thread",
+          "message": "スレッドを更新"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.display_name": {
+          "source": "Update Thread",
+          "message": "スレッドの更新"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format. Keys can be a maximum of 64 characters long and values can be a maxium of 512 characters long",
+          "message": "オブジェクトに添付可能な 16 個のキーと値のペアのセット。構造化された形式でオブジェクトに関する追加情報を保存するのに役立ちます。キーは最大 64 文字、値は最大 512 文字です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Set of 16 key-value pairs that can be attached to an object",
+          "message": "オブジェクトに添付できる16個のキーと値のペアのセット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages to start the thread with",
+          "message": "スレッドの開始時に含めるメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages to start the thread with",
+          "message": "スレッドの開始時に含めるメッセージのリスト"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.desc": {
+          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "スレッドのツールによって使用されるリソースのセット。リソースはツールの種類に固有です。例えば、`code_interpreter` ツールにはファイル ID のリストが必要ですが、`file_search` ツールにはベクトルストア ID のリストが必要です"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.display_name": {
+          "source": "Tool Resources",
+          "message": "ツールリソース"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.short_desc": {
+          "source": "A set of resources that are used by the thread's tools",
+          "message": "スレッドのツールによって使用されるリソースのセット"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dGhyZWFkX2lk.desc": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dGhyZWFkX2lk.short_desc": {
+          "source": "Thread ID",
+          "message": "スレッド ID"
+        },
+        "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.short_desc": {
+          "source": "Update a thread",
+          "message": "スレッドを更新"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file for an assistant, for fine tuning, or for batch processing",
+          "message": "アシスタント、ファインチューニング、またはバッチ処理用のファイルをアップロード"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "ファイルをアップロード"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The contents of the file",
+          "message": "ファイルの内容"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The contents of the file",
+          "message": "ファイルの内容"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudHM.desc": {
+          "source": "For assistants and message files",
+          "message": "アシスタントおよびメッセージファイル用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudHM.display_name": {
+          "source": "Assistants",
+          "message": "Assistants"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudHM.short_desc": {
+          "source": "For assistants and message files",
+          "message": "アシスタントおよびメッセージファイル用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmJhdGNo.desc": {
+          "source": "For the batch API",
+          "message": "Batch API用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmJhdGNo.display_name": {
+          "source": "Batch",
+          "message": "バッチ"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmJhdGNo.short_desc": {
+          "source": "For the batch API",
+          "message": "Batch API用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmZpbmUtdHVuZQ.desc": {
+          "source": "For fine tuning",
+          "message": "ファインチューニング用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmZpbmUtdHVuZQ.display_name": {
+          "source": "Fine-Tune",
+          "message": "Fine-Tune"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOmZpbmUtdHVuZQ.short_desc": {
+          "source": "For fine tuning",
+          "message": "ファインチューニング用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOnZpc2lvbg.desc": {
+          "source": "For assistants for image file inputs",
+          "message": "画像ファイル入力用のアシスタント用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOnZpc2lvbg.display_name": {
+          "source": "Vision",
+          "message": "Vision"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.allowed-value.c3RyaW5nOnZpc2lvbg.short_desc": {
+          "source": "For assistants for image file inputs",
+          "message": "画像ファイル入力用のアシスタント用"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.desc": {
+          "source": "The purpose of the file",
+          "message": "ファイルの目的"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.display_name": {
+          "source": "Purpose",
+          "message": "目的"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.option.cHVycG9zZQ.short_desc": {
+          "source": "The purpose of the file",
+          "message": "ファイルの目的"
+        },
+        "app.T3BlbkFJ.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for an assistant, for fine tuning, or for batch processing",
+          "message": "アシスタント、ファインチューニング、またはバッチ処理用のファイルをアップロード"
+        },
+        "app.T3BlbkFJ.desc": {
+          "source": "OpenAI services",
+          "message": "OpenAIサービス"
+        },
+        "app.T3BlbkFJ.display_name": {
+          "source": "OpenAI Services",
+          "message": "OpenAIサービス"
+        },
+        "app.T3BlbkFJ.short_desc": {
+          "source": "OpenAI services",
+          "message": "OpenAIサービス"
+        }
+      }
+    }
+  }
+}

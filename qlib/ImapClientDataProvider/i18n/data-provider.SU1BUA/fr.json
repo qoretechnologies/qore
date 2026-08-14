@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.desc": {
+          "source": "Store a complete RFC 822 message in a mailbox.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "Stockez un message RFC 822 complet dans une boîte aux lettres.\n\nUtilisez cette option pour classer une copie d'un message envoyé par d'autres moyens ou pour importer des e-mails depuis un autre système"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
+          "source": "Store a Message",
+          "message": "Stocker un message"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.desc": {
+          "source": "Flags to set on the stored message (ex: `\\Seen`)",
+          "message": "Indicateurs à définir sur le message stocké (ex. : `\\Seen`)"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "Indicateurs"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.short_desc": {
+          "source": "Flags to set on the stored message",
+          "message": "Indicateurs à définir sur le message stocké"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.desc": {
+          "source": "The arrival time to record for the message; defaults to the time the server stores it",
+          "message": "L'heure d'arrivée à enregistrer pour le message ; par défaut, l'heure à laquelle le serveur le stocke"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.display_name": {
+          "source": "Internal Date",
+          "message": "Date interne"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.short_desc": {
+          "source": "The arrival time to record for the message",
+          "message": "L'heure d'arrivée à enregistrer pour le message"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to append the message to; it must already exist",
+          "message": "La boîte aux lettres à laquelle ajouter le message ; elle doit déjà exister"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to append the message to",
+          "message": "La boîte aux lettres à laquelle ajouter le message"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.desc": {
+          "source": "The complete message to store, in RFC 822 form.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "Le message complet à stocker, au format RFC 822.\n\nUtilisez cette option pour classer une copie d'un message envoyé par d'autres moyens ou pour importer des e-mails depuis un autre système"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.display_name": {
+          "source": "Message",
+          "message": "Message"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.short_desc": {
+          "source": "The complete RFC 822 message to store",
+          "message": "Le message RFC 822 complet à stocker"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
+          "source": "Store a message in a mailbox",
+          "message": "Stocker un message dans une boîte aux lettres"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a complete message by UID, including its headers, decoded body text, and a summary of its attachments.\n\nRetrieval does not change any flags unless `mark_seen` is set, so a message can be inspected without the account showing it as read",
+          "message": "Récupérez un message complet par UID, y compris ses en-têtes, le texte décodé de son corps et un résumé de ses pièces jointes.\n\nLa récupération ne modifie aucun indicateur sauf si `mark_seen` est défini, de sorte qu'un message peut être inspecté sans que le compte ne l'affiche comme lu"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Retrieve a Message",
+          "message": "Récupérer un message"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "La boîte aux lettres contenant le message"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "La boîte aux lettres contenant le message"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on the message after retrieving it.\n\nRetrieval itself never changes flags, so leave this `False` to inspect a message without the sender's mail client showing it as read",
+          "message": "Définissez l'indicateur `\\Seen` sur le message après l'avoir récupéré.\n\nLa récupération en elle-même ne modifie jamais les indicateurs, laissez donc cette option sur `False` pour inspecter un message sans que le client de messagerie de l'expéditeur ne l'affiche comme lu"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "Marquer comme vu ?"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag after retrieving?",
+          "message": "Définir l'indicateur \\Seen après la récupération ?"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.desc": {
+          "source": "The UID of the message to retrieve, as returned by a search",
+          "message": "L'UID du message à récupérer, tel que renvoyé par une recherche"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "UID du message"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.short_desc": {
+          "source": "The UID of the message to retrieve",
+          "message": "L'UID du message à récupérer"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Retrieve a message by UID",
+          "message": "Récupérer un message par UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve a single MIME part of a message without transferring the whole message.\n\nThis matters when one attachment is needed from a message carrying several large ones; use the `attachments` list returned by `Retrieve a Message` to find the part specifier",
+          "message": "Récupérez une seule partie MIME d'un message sans transférer le message entier.\n\nCela est utile lorsqu'une seule pièce jointe est nécessaire parmi plusieurs volumineuses ; utilisez la liste `attachments` renvoyée par `Retrieve a Message` pour trouver le spécificateur de partie"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "Récupérer une pièce jointe"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "La boîte aux lettres contenant le message"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "La boîte aux lettres contenant le message"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.desc": {
+          "source": "The MIME part specifier to retrieve (ex: `1`, `2.1`, `HEADER`, `TEXT`).\n\nRetrieving a single part avoids transferring the whole message, which matters when one attachment is needed from a message with several large ones",
+          "message": "Le spécificateur de partie MIME à récupérer (ex. : `1`, `2.1`, `HEADER`, `TEXT`).\n\nLa récupération d'une seule partie évite de transférer le message entier, ce qui est utile lorsqu'une seule pièce jointe est nécessaire parmi plusieurs volumineuses"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.display_name": {
+          "source": "MIME Part",
+          "message": "Partie MIME"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.short_desc": {
+          "source": "The MIME part specifier to retrieve",
+          "message": "Le spécificateur de partie MIME à récupérer"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.desc": {
+          "source": "The UID of the message holding the part",
+          "message": "L'UID du message contenant la partie"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "UID du message"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.short_desc": {
+          "source": "The UID of the message holding the part",
+          "message": "L'UID du message contenant la partie"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve a single MIME part of a message",
+          "message": "Récupérer une seule partie MIME d'un message"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.desc": {
+          "source": "List the mailboxes in the account, optionally restricted to those the account is subscribed to.\n\nA mailbox carrying the `\\Noselect` flag is a hierarchy node that cannot hold messages",
+          "message": "Lister les boîtes aux lettres du compte, éventuellement limité à celles auxquelles le compte est abonné.\n\nUne boîte aux lettres portant le drapeau `\\Noselect` est un nœud de hiérarchie qui ne peut pas contenir de messages"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
+          "source": "List Mailboxes",
+          "message": "Lister les boîtes aux lettres"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.desc": {
+          "source": "List only mailboxes the account is subscribed to, using `LSUB` instead of `LIST`",
+          "message": "Lister uniquement les boîtes aux lettres auxquelles le compte est abonné, en utilisant `LSUB` au lieu de `LIST`"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.display_name": {
+          "source": "Subscribed Only?",
+          "message": "Abonné uniquement ?"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.short_desc": {
+          "source": "List only subscribed mailboxes?",
+          "message": "Lister uniquement les boîtes aux lettres abonnées ?"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.desc": {
+          "source": "The mailbox name pattern to match; `*` matches at any depth and `%` matches within a single hierarchy level",
+          "message": "Le motif de nom de boîte aux lettres à faire correspondre ; `*` correspond à n'importe quelle profondeur et `%` correspond au sein d'un seul niveau hiérarchique"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.display_name": {
+          "source": "Pattern",
+          "message": "Motif"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.short_desc": {
+          "source": "The mailbox name pattern to match",
+          "message": "Le motif de nom de boîte aux lettres à faire correspondre"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.desc": {
+          "source": "The reference name; normally left empty",
+          "message": "Le nom de référence ; normalement laissé vide"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.short_desc": {
+          "source": "The reference name",
+          "message": "Le nom de référence"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
+          "source": "List the mailboxes in the account",
+          "message": "Lister les boîtes aux lettres du compte"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.desc": {
+          "source": "Move or copy messages to another mailbox.\n\nMoving processed mail into an archive mailbox keeps the working mailbox small and makes it obvious what has already been handled. Servers without the `MOVE` capability are handled with the equivalent copy-and-delete sequence",
+          "message": "Déplacer ou copier des messages vers une autre boîte aux lettres.\n\nDéplacer le courrier traité vers une boîte d'archive permet de maintenir la boîte de travail petite et d'identifier clairement ce qui a déjà été traité. Les serveurs ne prenant pas en charge la capacité `MOVE` sont gérés avec la séquence équivalente de copie puis suppression"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
+          "source": "Move Messages",
+          "message": "Déplacer des messages"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.desc": {
+          "source": "Copy the messages instead of moving them, leaving the originals in place",
+          "message": "Copier les messages au lieu de les déplacer, en laissant les originaux en place"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.display_name": {
+          "source": "Copy Only?",
+          "message": "Copier uniquement ?"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.short_desc": {
+          "source": "Copy the messages instead of moving them?",
+          "message": "Copier les messages au lieu de les déplacer ?"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages to move",
+          "message": "La boîte aux lettres contenant les messages à déplacer"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.display_name": {
+          "source": "Source Mailbox",
+          "message": "Boîte aux lettres source"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "La boîte aux lettres contenant les messages"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.desc": {
+          "source": "The mailbox to move the messages to; it must already exist",
+          "message": "La boîte aux lettres vers laquelle déplacer les messages ; elle doit déjà exister"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.display_name": {
+          "source": "Target Mailbox",
+          "message": "Boîte aux lettres cible"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.short_desc": {
+          "source": "The mailbox to move the messages to",
+          "message": "La boîte aux lettres vers laquelle déplacer les messages"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "Les UID des messages à déplacer"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "UID des messages"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "Les UID des messages à déplacer"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
+          "source": "Move or copy messages to another mailbox",
+          "message": "Déplacer ou copier des messages vers une autre boîte aux lettres"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.desc": {
+          "source": "Add, remove, or replace the flags on a set of messages.\n\nFlags are how IMAP records state such as read (`\\Seen`), flagged (`\\Flagged`), and pending deletion (`\\Deleted`); setting them is the usual way to record that an integration has handled a message",
+          "message": "Ajouter, supprimer ou remplacer les drapeaux sur un ensemble de messages.\n\nLes drapeaux permettent à IMAP d'enregistrer des états tels que lu (`\\Seen`), marqué (`\\Flagged`) et en attente de suppression (`\\Deleted`) ; les définir est le moyen habituel d'indiquer qu'une intégration a traité un message"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
+          "source": "Change Message Flags",
+          "message": "Modifier les drapeaux des messages"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.desc": {
+          "source": "The flags to apply (ex: `\\Seen`, `\\Flagged`, `\\Answered`, `\\Deleted`)",
+          "message": "Les drapeaux à appliquer (ex. : `\\Seen`, `\\Flagged`, `\\Answered`, `\\Deleted`)"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "Indicateurs"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.short_desc": {
+          "source": "The flags to apply",
+          "message": "Les drapeaux à appliquer"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Add the given flags, leaving any others in place",
+          "message": "Ajouter les drapeaux indiqués, en laissant les autres en place"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Ajouter"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.desc": {
+          "source": "Remove the given flags, leaving any others in place",
+          "message": "Supprimer les drapeaux indiqués, en laissant les autres en place"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.display_name": {
+          "source": "Remove",
+          "message": "Supprimer"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace all flags on the messages with the given flags",
+          "message": "Remplacer tous les drapeaux sur les messages par les drapeaux indiqués"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Remplacer"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.desc": {
+          "source": "How the flags should be applied to the messages",
+          "message": "La façon dont les drapeaux doivent être appliqués aux messages"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Mode"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.short_desc": {
+          "source": "How the flags should be applied",
+          "message": "Comment les drapeaux doivent être appliqués"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages",
+          "message": "La boîte aux lettres contenant les messages"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "La boîte aux lettres contenant les messages"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages whose flags should change",
+          "message": "Les UID des messages dont les drapeaux doivent changer"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "UID des messages"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to change",
+          "message": "Les UID des messages à modifier"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
+          "source": "Add, remove, or replace message flags",
+          "message": "Ajouter, supprimer ou remplacer des drapeaux de messages"
+        },
+        "app.SU1BUA.action.c2VhcmNo.desc": {
+          "source": "Search a mailbox with server-side IMAP criteria and return the UIDs of the matching messages.\n\nSearching on the server means a mailbox with thousands of messages can be narrowed to the handful that matter without transferring the rest",
+          "message": "Rechercher dans une boîte aux lettres avec des critères IMAP côté serveur et renvoyer les UID des messages correspondants.\n\nRechercher sur le serveur permet de restreindre une boîte aux lettres contenant des milliers de messages à la poignée de messages pertinents sans transférer le reste"
+        },
+        "app.SU1BUA.action.c2VhcmNo.display_name": {
+          "source": "Search for Messages",
+          "message": "Rechercher des messages"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.desc": {
+          "source": "An optional charset for the search criteria; needed only when the criteria contain non-ASCII text",
+          "message": "Un jeu de caractères optionnel pour les critères de recherche ; nécessaire uniquement lorsque les critères contiennent du texte non-ASCII"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.display_name": {
+          "source": "Charset",
+          "message": "Jeu de caractères"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.short_desc": {
+          "source": "An optional charset for the search criteria",
+          "message": "Un jeu de caractères optionnel pour les critères de recherche"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria as defined by [RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4).\n\nSearching happens on the server, so only matching messages are transferred. Criteria can be combined freely, for example `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`",
+          "message": "Les critères de recherche IMAP tels que définis par la [RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4).\n\nLa recherche s'effectue sur le serveur, de sorte que seuls les messages correspondants sont transférés. Les critères peuvent être combinés librement, par exemple `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "Critères de recherche"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria",
+          "message": "Les critères de recherche IMAP"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to search; the mailbox is selected before the search runs",
+          "message": "La boîte aux lettres dans laquelle effectuer la recherche ; la boîte aux lettres est sélectionnée avant l'exécution de la recherche"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to search",
+          "message": "La boîte aux lettres dans laquelle rechercher"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.desc": {
+          "source": "Open the mailbox with `EXAMINE` instead of `SELECT`, so that retrieving messages cannot change any flags",
+          "message": "Ouvrir la boîte aux lettres avec `EXAMINE` au lieu de `SELECT`, afin que la récupération des messages ne puisse modifier aucun drapeau"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.display_name": {
+          "source": "Read Only?",
+          "message": "Lecture seule ?"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.short_desc": {
+          "source": "Open the mailbox read-only?",
+          "message": "Ouvrir la boîte aux lettres en lecture seule ?"
+        },
+        "app.SU1BUA.action.c2VhcmNo.short_desc": {
+          "source": "Search a mailbox for messages",
+          "message": "Rechercher des messages dans une boîte aux lettres"
+        },
+        "app.SU1BUA.action.d2F0Y2g.desc": {
+          "source": "React to new emails arriving in a mailbox.\n\nWhen a message matching the search criteria arrives, the whole message — headers, body text, and a summary of its attachments — is returned as output data. On servers that support `IDLE` the message is reported as soon as it arrives rather than on the next poll interval",
+          "message": "Réagir aux nouveaux e-mails arrivant dans une boîte aux lettres.\n\nLorsqu'un message correspondant aux critères de recherche arrive, le message entier (en-têtes, corps du texte et un résumé de ses pièces jointes) est renvoyé en tant que données de sortie. Sur les serveurs qui prennent en charge `IDLE`, le message est signalé dès son arrivée plutôt qu'au prochain intervalle d'interrogation"
+        },
+        "app.SU1BUA.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "Nouvel e-mail"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "Les critères de recherche IMAP qui déterminent quels nouveaux messages sont signalés.\n\nLa correspondance a lieu sur le serveur, de sorte que les messages qui ne correspondent pas ne sont jamais transférés ; par exemple, `UNSEEN FROM \"orders@example.com\"` réagit uniquement au courrier non lu provenant d'un expéditeur"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "Critères de recherche"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "Les critères de recherche IMAP pour faire correspondre les messages"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "Marquer chaque message signalé avec le drapeau `\\Deleted` et le purger une fois son événement déclenché.\n\n**Cela supprime le courrier du serveur de manière permanente** ; préférez `mark_seen` ou un déplacement vers une autre boîte aux lettres, à moins que la boîte aux lettres ne soit une file d'attente destinée à être vidée.\n\nLe message est purgé dès que son événement a été **déclenché**, ce qui n'est pas identique au fait que le consommateur l'ait **traité**. Si le déclenchement de l'événement lève une exception, le message reste en place pour le prochain passage, mais un consommateur qui reçoit l'événement puis échoue, expire ou redémarre en cours de traitement a déjà perdu l'unique copie. Pour une charge de travail qui ne doit pas perdre le message source, laissez cette option désactivée et agissez depuis le consommateur une fois le traitement réussi : chaque événement porte son `uid`, et les actions `set-flags` et `move-messages` le prennent en charge"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Supprimer les messages ?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "Supprimer les messages signalés une fois leur événement déclenché ?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "La boîte aux lettres à surveiller pour les nouveaux messages"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "La boîte aux lettres à surveiller"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "Définir le drapeau `\\Seen` sur chaque message signalé.\n\nUtile avec un critère `UNSEEN` afin qu'un message ne soit pas pris en compte à nouveau après avoir été traité"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "Marquer comme vu ?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "Définir le drapeau \\Seen sur les messages signalés ?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "Fréquence de vérification des nouveaux messages, en secondes.\n\nSur les serveurs qui prennent en charge `IDLE`, cela limite uniquement le temps d'attente de la connexion avant une nouvelle vérification ; le nouveau courrier est toujours signalé dès que le serveur l'envoie"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "Fréquence de vérification des nouveaux messages en secondes"
+        },
+        "app.SU1BUA.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "Réagir aux nouveaux e-mails"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to attachments on new emails arriving in a mailbox.\n\nOne event is raised per matching attachment, so a message carrying several files produces several events. Set `attachment_glob` to narrow a mixed mailbox to just the files of interest, and leave `retrieve_attachments` off to receive metadata only when attachments are large",
+          "message": "Réagir aux pièces jointes sur les nouveaux e-mails arrivant dans une boîte aux lettres.\n\nUn événement est déclenché par pièce jointe correspondante, ainsi un message comportant plusieurs fichiers produit plusieurs événements. Définissez `attachment_glob` pour restreindre une boîte aux lettres mixte aux seuls fichiers d'intérêt, et laissez `retrieve_attachments` désactivé pour ne recevoir que les métadonnées lorsque les pièces jointes sont volumineuses"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "Nouvelles pièces jointes d'e-mail"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "Les critères de recherche IMAP qui déterminent quels nouveaux messages sont signalés.\n\nLa correspondance a lieu sur le serveur, de sorte que les messages qui ne correspondent pas ne sont jamais transférés ; par exemple, `UNSEEN FROM \"orders@example.com\"` réagit uniquement au courrier non lu provenant d'un expéditeur"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "Critères de recherche"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "Les critères de recherche IMAP pour faire correspondre les messages"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments.\n\nWhen unset, every attachment is reported; when set, only attachments whose filename matches are reported, so a mailbox carrying mixed content can be narrowed to just the files of interest (ex: `*.csv`)",
+          "message": "Un motif de nom de fichier facultatif (glob) pour faire correspondre les pièces jointes.\n\nLorsqu'il n'est pas défini, chaque pièce jointe est signalée ; lorsqu'il est défini, seules les pièces jointes dont le nom de fichier correspond sont signalées, ce qui permet de filtrer une boîte aux lettres contenant des contenus variés pour ne retenir que les fichiers d'intérêt (ex. : `*.csv`)"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "Motif de fichier de pièce jointe"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern for matching attachments",
+          "message": "Un motif de nom de fichier facultatif pour faire correspondre les pièces jointes"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "Marquer chaque message signalé avec le drapeau `\\Deleted` et le purger une fois son événement déclenché.\n\n**Cela supprime le courrier du serveur de manière permanente** ; préférez `mark_seen` ou un déplacement vers une autre boîte aux lettres, à moins que la boîte aux lettres ne soit une file d'attente destinée à être vidée.\n\nLe message est purgé dès que son événement a été **déclenché**, ce qui n'est pas identique au fait que le consommateur l'ait **traité**. Si le déclenchement de l'événement lève une exception, le message reste en place pour le prochain passage, mais un consommateur qui reçoit l'événement puis échoue, expire ou redémarre en cours de traitement a déjà perdu l'unique copie. Pour une charge de travail qui ne doit pas perdre le message source, laissez cette option désactivée et agissez depuis le consommateur une fois le traitement réussi : chaque événement porte son `uid`, et les actions `set-flags` et `move-messages` le prennent en charge"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Supprimer les messages ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "Supprimer les messages signalés une fois leur événement déclenché ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Match the filename pattern case-insensitively; ignored when `attachment_glob` is not set",
+          "message": "Faire correspondre le motif de nom de fichier sans tenir compte de la casse ; ignoré lorsque `attachment_glob` n'est pas défini"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Pattern Case?",
+          "message": "Ignorer la casse du motif ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Match the filename pattern case-insensitively?",
+          "message": "Faire correspondre le motif de nom de fichier sans tenir compte de la casse ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "La boîte aux lettres à surveiller pour les nouveaux messages"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "Boîte de réception"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "La boîte aux lettres à surveiller"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "Définir le drapeau `\\Seen` sur chaque message signalé.\n\nUtile avec un critère `UNSEEN` afin qu'un message ne soit pas pris en compte à nouveau après avoir été traité"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "Marquer comme vu ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "Définir le drapeau \\Seen sur les messages signalés ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "Fréquence de vérification des nouveaux messages, en secondes.\n\nSur les serveurs qui prennent en charge `IDLE`, cela limite uniquement le temps d'attente de la connexion avant une nouvelle vérification ; le nouveau courrier est toujours signalé dès que le serveur l'envoie"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "Fréquence de vérification des nouveaux messages en secondes"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Include the decoded attachment content in the event.\n\nLeave this `False` to receive only the attachment metadata, which keeps events small when attachments are large; the content can then be retrieved on demand with the `get-attachment` action",
+          "message": "Inclure le contenu décodé de la pièce jointe dans l'événement.\n\nLaissez ceci à `False` pour recevoir uniquement les métadonnées de la pièce jointe, ce qui maintient la taille des événements réduite lorsque les pièces jointes sont volumineuses ; le contenu peut ensuite être récupéré à la demande avec l'action `get-attachment`"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachment Data?",
+          "message": "Récupérer les données de la pièce jointe ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Include the attachment content in the event?",
+          "message": "Inclure le contenu de la pièce jointe dans l'événement ?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "Réagir aux nouvelles pièces jointes d'e-mails"
+        },
+        "app.SU1BUA.desc": {
+          "source": "Read and manage email on any IMAP server.\n\n- search a mailbox with server-side criteria, so only matching messages are transferred\n- retrieve a whole message, or a single MIME part when only one attachment is needed\n- react to new mail as it arrives, using server push where the server supports it\n- change flags, move messages between mailboxes, and file messages with `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) is the standard mailbox protocol, and for many email providers it is the only programmatic access they offer. Because messages stay on the server, an integration can watch a mailbox and act on what arrives without taking over the account's mail.\n\nBoth password and OAuth2 bearer-token authentication are supported; the mechanism is chosen from what the server advertises",
+          "message": "Lisez et gérez les e-mails sur n'importe quel serveur IMAP.\n\n- recherchez dans une boîte aux lettres avec des critères côté serveur, afin que seuls les messages correspondants soient transférés\n- récupérez un message entier, ou une seule partie MIME lorsqu'une seule pièce jointe est nécessaire\n- réagissez aux nouveaux e-mails dès leur arrivée, en utilisant le push serveur lorsque le serveur le prend en charge\n- modifiez les indicateurs, déplacez des messages entre boîtes aux lettres et classez les messages avec `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) est le protocole de boîte aux lettres standard et, pour de nombreux fournisseurs de messagerie, c'est le seul accès programmatique proposé. Étant donné que les messages restent sur le serveur, une intégration peut surveiller une boîte aux lettres et agir sur ce qui arrive sans s'approprier la messagerie du compte.\n\nL'authentification par mot de passe et par jeton porteur OAuth2 sont toutes deux prises en charge ; le mécanisme est choisi en fonction de ce que le serveur annonce"
+        },
+        "app.SU1BUA.display_name": {
+          "source": "IMAP",
+          "message": "IMAP"
+        },
+        "app.SU1BUA.short_desc": {
+          "source": "IMAP email services",
+          "message": "Services de messagerie IMAP"
+        }
+      }
+    }
+  }
+}

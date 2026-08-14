@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LlamaParse** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP-/REST-API-Aufruf an **LlamaParse** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.TGxhbWFQYXJzZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LlamaParse",
+          "message": "Einen benutzerdefinierten API-Aufruf an LlamaParse durchführen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.desc": {
+          "source": "Submits a document URL to LlamaParse and waits for extraction to complete (upload → poll job → fetch result lifecycle).  Returns the extracted content as markdown, plain text, or structured JSON.\n\n**Note**: v1 supports URL-based document submission only; local file upload via multipart/form-data is planned for a follow-up release.",
+          "message": "Übermittelt eine Dokumenten-URL an LlamaParse und wartet auf den Abschluss der Extraktion (Lebenszyklus: Hochladen → Job abfragen → Ergebnis abrufen). Gibt den extrahierten Inhalt als Markdown, Klartext oder strukturiertes JSON zurück.\n\n**Hinweis**: v1 unterstützt nur die URL-basierte Dokumentenübermittlung; das Hochladen lokaler Dateien über multipart/form-data ist für ein nachfolgendes Release geplant."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.display_name": {
+          "source": "Parse Document",
+          "message": "Dokument parsen"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.am9iX3RpbWVvdXQ.desc": {
+          "source": "Overall job timeout — if extraction takes longer than this, the call errors out.",
+          "message": "Gesamter Job-Timeout – wenn die Extraktion länger dauert, schlägt der Aufruf fehl."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.am9iX3RpbWVvdXQ.display_name": {
+          "source": "Job Timeout",
+          "message": "Job-Timeout"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.am9iX3RpbWVvdXQ.short_desc": {
+          "source": "Overall job timeout",
+          "message": "Gesamter Job-Timeout"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.bGFuZ3VhZ2U.desc": {
+          "source": "Document language hint.",
+          "message": "Hinweis zur Dokumentsprache."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Sprache"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Document language hint (ISO code)",
+          "message": "Hinweis zur Dokumentsprache (ISO-Code)"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cG9sbF9pbnRlcnZhbF9tcw.desc": {
+          "source": "Polling interval in milliseconds while waiting for the extraction job to complete.",
+          "message": "Abfrageintervall in Millisekunden beim Warten auf den Abschluss des Extraktionsjobs."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cG9sbF9pbnRlcnZhbF9tcw.display_name": {
+          "source": "Poll Interval (ms)",
+          "message": "Abfrageintervall (ms)"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cG9sbF9pbnRlcnZhbF9tcw.short_desc": {
+          "source": "Time between job status polls",
+          "message": "Zeit zwischen den Statusabfragen des Jobs"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cGFyc2luZ19pbnN0cnVjdGlvbg.desc": {
+          "source": "Optional natural-language hint (e.g. \"focus on tables\").",
+          "message": "Optionaler Hinweis in natürlicher Sprache (z. B. „focus on tables“)."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cGFyc2luZ19pbnN0cnVjdGlvbg.display_name": {
+          "source": "Parsing Instruction",
+          "message": "Parsing-Anweisung"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cGFyc2luZ19pbnN0cnVjdGlvbg.short_desc": {
+          "source": "Natural-language hint guiding extraction",
+          "message": "Hinweis in natürlicher Sprache zur Steuerung der Extraktion"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.desc": {
+          "source": "Result format requested from LlamaParse.",
+          "message": "Von LlamaParse angefordertes Ergebnisformat."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.display_name": {
+          "source": "Result Type",
+          "message": "Ergebnistyp"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.cmVzdWx0X3R5cGU.short_desc": {
+          "source": "Output format: markdown, text, or json",
+          "message": "Ausgabeformat: Markdown, Text oder JSON"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.dXJs.desc": {
+          "source": "Public URL pointing at the document to parse.  LlamaParse fetches the document from this URL (no client-side upload).",
+          "message": "Öffentliche URL, die auf das zu parsende Dokument verweist. LlamaParse ruft das Dokument von dieser URL ab (kein clientseitiger Upload)."
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.dXJs.display_name": {
+          "source": "Document URL",
+          "message": "Dokument-URL"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.option.dXJs.short_desc": {
+          "source": "Public URL of the document to parse",
+          "message": "Öffentliche URL des zu parsenden Dokuments"
+        },
+        "app.TGxhbWFQYXJzZQ.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {
+          "source": "Extract structured markdown from a document URL",
+          "message": "Strukturiertes Markdown aus einer Dokumenten-URL extrahieren"
+        },
+        "app.TGxhbWFQYXJzZQ.desc": {
+          "source": "Provides access to [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) — a document extraction service from LlamaIndex that converts PDFs, docx, HTML, and image documents into structured markdown.\n\nUse the @ref QoreRagUtils::LlamaParseChunker \"LlamaParseChunker\" backend in @ref qoreragutilsintro \"QoreRagUtils\" for the supported RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+          "message": "Bietet Zugriff auf [LlamaParse](https://docs.cloud.llamaindex.ai/llamaparse/getting_started) – einen Dokumentenextraktionsdienst von LlamaIndex, der PDFs, docx, HTML und Bilddokumente in strukturiertes Markdown konvertiert.\n\nVerwenden Sie das Backend @ref QoreRagUtils::LlamaParseChunker \"LlamaParseChunker\" in @ref qoreragutilsintro \"QoreRagUtils\" für den unterstützten RAG-Ingestion-Pfad über @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+        },
+        "app.TGxhbWFQYXJzZQ.display_name": {
+          "source": "LlamaParse",
+          "message": "LlamaParse"
+        },
+        "app.TGxhbWFQYXJzZQ.short_desc": {
+          "source": "LlamaParse document extraction (PDF / docx / HTML to markdown)",
+          "message": "LlamaParse-Dokumentenextraktion (PDF / docx / HTML zu Markdown)"
+        }
+      }
+    }
+  }
+}

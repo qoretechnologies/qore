@@ -1,0 +1,2933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note attached to a contact, account, or deal",
+          "message": "Vytvoriť novú poznámku pripojenú ku kontaktu, účtu alebo obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create Note",
+          "message": "Vytvoriť poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The content/body of the note",
+          "message": "Obsah/telo poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "Obsah poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Typ záznamu na priradenie: `Contact`, `SalesAccount` alebo `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Cieľový typ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Typ priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "ID kontaktu, účtu alebo obchodu na priradenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "Cieľové ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Vytvoriť novú poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Freshsales CRM",
+          "message": "Vytvoriť nový účet vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "Vytvoriť účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "Krajina účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "Mesto účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "Ročné tržby účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "Ročné tržby"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "Ročný obrat"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "Ulica a číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Ulica a číslo domu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "ID typu podnikania pre tento účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "ID typu podnikania"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "Klasifikácia podnikania"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "Facebook profil účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "ID typu odvetvia pre tento účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "ID typu odvetvia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "Kategória odvetvia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "LinkedIn profil účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "Názov účtu/spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "Názov spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "Počet zamestnancov v účte"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "Počet zamestnancov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "Počet zamestnancov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "Štát alebo provincia účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Štát alebo provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "ID nadradeného účtu/spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "ID nadradeného účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "ID nadradenej spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "Telefónne číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "URL adresa webovej stránky účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Webová stránka spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "ID územia, do ktorého tento účet patrí"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "Používateľské meno účtu na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Používateľské meno na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "Poštové smerovacie číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "PSČ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "Vytvoriť nový účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Create a new appointment in Freshsales CRM",
+          "message": "Vytvoriť novú schôdzku vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Create Appointment",
+          "message": "Vytvoriť schôdzku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "Podrobný popis schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "Popis schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "Dátum a čas ukončenia (formát: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Koncový dátum"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "Dátum a čas ukončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "Dátum a čas začiatku (formát: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "Dátum a čas začiatku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "Miesto schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Lokalita"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "Miesto stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Typ záznamu na priradenie: `Contact`, `SalesAccount` alebo `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Cieľový typ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Typ priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "ID kontaktu, účtu alebo obchodu na priradenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "Cieľové ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "Názov schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "Názov schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "Časové pásmo schôdzky (napr. `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "Časové pásmo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Create a new appointment",
+          "message": "Vytvoriť novú schôdzku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Freshsales CRM",
+          "message": "Vytvoriť nový kontakt vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Vytvoriť kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "Krajina kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "ID klasifikácie stavu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "ID stavu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "Identifikátor stavu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "ID kampane priradenej k tomuto kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identifikátor kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "Mesto kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "Ulica a číslo kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Ulica a číslo domu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "Primárna e-mailová adresa kontaktu. Odporúča sa aspoň jedno z polí `email`, `mobile_number` alebo `twitter`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Hlavná e-mailová adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "Externý referenčný identifikátor kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "Externé referenčné ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "Používateľské meno alebo URL profilu kontaktu na Facebooku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Meno kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "Krstné meno kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "Pracovná pozícia alebo profesijné označenie kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identifikátor zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "ID fázy životného cyklu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ID fázy životného cyklu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "Identifikátor fázy životného cyklu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "URL adresa profilu kontaktu na LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "Číslo mobilného telefónu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "Štát alebo provincia kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Štát alebo provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "Číslo pracovného telefónu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "Číslo do práce"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "Číslo pracovného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "ID teritória, do ktorého tento kontakt patrí"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "Používateľské meno (handle) kontaktu na sieti Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Používateľské meno na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "Poštové smerovacie číslo kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "PSČ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvoriť nový kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal in Freshsales CRM",
+          "message": "Vytvoriť nový obchod v Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create Deal",
+          "message": "Vytvoriť obchodný prípad"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "ID kampane priradenej k tomuto obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identifikátor kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "Skutočný dátum uzavretia obchodu (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "Dátum uzavretia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "Skutočný dátum uzavretia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "ID meny pre tento obchod. Ak nie je zadané, použije sa predvolená mena účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "ID meny"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "Mena obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "Penažná hodnota obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "Hodnota obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "ID typu/kategórie obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "ID typu obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "Kategória obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "ID stavu platby obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "ID stavu platby"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "Stav platby"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "ID pipeline obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "Identifikátor pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "ID dôvodu získania alebo straty obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "ID dôvodu obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "Dôvod úspechu/neúspechu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "ID fázy obchodu v pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "ID fázy obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fáza v pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "Očakávaný dátum uzavretia (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "Očakávané uzavretie"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "Očakávaný dátum uzatvorenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "ID zdroja potenciálneho zákazníka pre tento obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identifikátor zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "Názov obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Názov obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "ID priradeného predajného účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "ID súvisiaceho účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "Pravdepodobnosť získania obchodu (`0` až `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "Pravdepodobnosť"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "Pravdepodobnosť úspechu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "ID teritória pre tento obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "Vytvoriť nový obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Freshsales CRM",
+          "message": "Vytvoriť novú úlohu v Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "Vytvoriť úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "Podrobný popis úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Popis úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "Termín dokončenia úlohy (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Termín dokončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "Termín dokončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "ID výsledku úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "ID výsledku"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "Výsledok úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "ID používateľa, ktorému sa má táto úloha priradiť"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "Dokončené"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "Stav úlohy: `0` pre otvorenú, `1` pre dokončenú"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "Stav úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Typ záznamu na priradenie: `Contact`, `SalesAccount` alebo `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Cieľový typ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Typ priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "ID kontaktu, účtu alebo obchodu na priradenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "Cieľové ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "ID typu úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "ID typu úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "Typ úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "Názov úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Názov úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Vytvoriť novú úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by its ID",
+          "message": "Získať jeden účet podľa jeho ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "Získať účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Získať jeden účet podľa ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.desc": {
+          "source": "Retrieve a single appointment by its ID",
+          "message": "Získať jedno stretnutie podľa jeho ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
+          "source": "Get Appointment",
+          "message": "Získať stretnutie"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID",
+          "message": "ID stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Get a single appointment by ID",
+          "message": "Získať jedno stretnutie podľa ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "Získať jeden kontakt podľa jeho ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získať kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Získať jeden kontakt podľa ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by its ID",
+          "message": "Získať jeden obchod podľa jeho ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get Deal",
+          "message": "Získať obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID",
+          "message": "ID obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "Získať jeden obchod podľa ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by its ID",
+          "message": "Získať jednu úlohu podľa jej ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Získať úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID",
+          "message": "ID úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Získať jednu úlohu podľa ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Freshsales CRM",
+          "message": "Odstrániť poznámku z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete Note",
+          "message": "Odstrániť poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to delete",
+          "message": "Jedinečný identifikátor poznámky na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to delete",
+          "message": "ID poznámky na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Odstrániť poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.desc": {
+          "source": "Delete an account from Freshsales CRM",
+          "message": "Odstrániť účet z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
+          "source": "Delete Account",
+          "message": "Odstrániť účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to delete",
+          "message": "Jedinečný identifikátor účtu na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to delete",
+          "message": "ID účtu na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
+          "source": "Delete an account",
+          "message": "Vymazať účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Delete an appointment from Freshsales CRM",
+          "message": "Odstrániť stretnutie z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Delete Appointment",
+          "message": "Odstrániť stretnutie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to delete",
+          "message": "Jedinečný identifikátor stretnutia na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to delete",
+          "message": "ID stretnutia na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Delete an appointment",
+          "message": "Odstrániť stretnutie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Freshsales CRM",
+          "message": "Odstrániť kontakt z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Vymazať kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "Jedinečný identifikátor kontaktu, ktorý sa má odstrániť"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "ID kontaktu na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Vymazať kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.desc": {
+          "source": "Delete a deal from Freshsales CRM",
+          "message": "Odstrániť obchod z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
+          "source": "Delete Deal",
+          "message": "Vymazať obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to delete",
+          "message": "Jedinečný identifikátor obchodu na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to delete",
+          "message": "ID obchodu na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
+          "source": "Delete a deal",
+          "message": "Odstrániť obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Freshsales CRM",
+          "message": "Odstrániť úlohu z Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "Vymazať úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "Jedinečný identifikátor úlohy na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to delete",
+          "message": "ID úlohy na odstránenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Odstrániť úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks from Freshsales CRM with optional status filtering",
+          "message": "Zoznam úloh z Freshsales CRM s voliteľným filtrovaním podľa stavu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Zoznam úloh"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm92ZXJkdWU.display_name": {
+          "source": "Overdue",
+          "message": "Po termíne"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Dokončené"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b21vcnJvdw.display_name": {
+          "source": "Due Tomorrow",
+          "message": "S termínom zajtra"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b2RheQ.display_name": {
+          "source": "Due Today",
+          "message": "S termínom dnes"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.short_desc": {
+          "source": "Get a specific task",
+          "message": "Získať konkrétnu úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filter",
+          "message": "Zoznam úloh s voliteľným filtrom"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List accounts from Freshsales CRM with optional filtering by view",
+          "message": "Zoznam účtov z Freshsales CRM s voliteľným filtrovaním podľa zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "Zoznam účtov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific account",
+          "message": "Získať konkrétny účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtrovať podľa zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List accounts from a view",
+          "message": "Zoznam účtov zo zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.desc": {
+          "source": "List appointments from Freshsales CRM with optional time period filtering",
+          "message": "Zoznam stretnutí z Freshsales CRM s voliteľným filtrovaním podľa časového obdobia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
+          "source": "List Appointments",
+          "message": "Zoznam stretnutí"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhc3Q.display_name": {
+          "source": "Past",
+          "message": "Minulé"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnVwY29taW5n.display_name": {
+          "source": "Upcoming",
+          "message": "Nadchádzajúce"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by time period",
+          "message": "Filtrovať podľa časového obdobia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.short_desc": {
+          "source": "Get a specific appointment",
+          "message": "Získať konkrétne stretnutie"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
+          "source": "List appointments with optional filter",
+          "message": "Zoznam stretnutí s voliteľným filtrom"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Freshsales CRM with optional filtering by view or email",
+          "message": "Zoznam kontaktov z Freshsales CRM s voliteľným filtrovaním podľa zobrazenia alebo e-mailu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Zoznam kontaktov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Search by email",
+          "message": "Hľadať podľa e-mailu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "Získať konkrétny kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtrovať podľa zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts from a view",
+          "message": "Zoznam kontaktov zo zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals from Freshsales CRM with optional filtering by view",
+          "message": "Zoznam obchodov z Freshsales CRM s voliteľným filtrovaním podľa zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "Zoznam obchodných prípadov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.short_desc": {
+          "source": "Get a specific deal",
+          "message": "Získať konkrétny obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtrovať podľa zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals from a view",
+          "message": "Zoznam obchodov zo zobrazenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Freshsales** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **Freshsales** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Freshsales",
+          "message": "Vykonať vlastné volanie API do Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.desc": {
+          "source": "Poll for new accounts created in Freshsales",
+          "message": "Kontrolovať nové účty vytvorené vo Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
+          "source": "New Account Event",
+          "message": "Udalosť nového účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "Sledovať nové účty"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Poll for new appointments created in Freshsales",
+          "message": "Kontrolovať nové stretnutia vytvorené vo Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment Event",
+          "message": "Udalosť nového stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Watch for new appointments",
+          "message": "Sledovať nové stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Poll for new contacts created in Freshsales",
+          "message": "Kontrolovať nové kontakty vytvorené vo Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact Event",
+          "message": "Udalosť nového kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Sledovať nové kontakty"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.desc": {
+          "source": "Poll for new deals created in Freshsales",
+          "message": "Kontrolovať nové obchody vytvorené vo Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
+          "source": "New Deal Event",
+          "message": "Udalosť nového obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
+          "source": "Watch for new deals",
+          "message": "Sledovať nové obchody"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.desc": {
+          "source": "Poll for new tasks created in Freshsales",
+          "message": "Kontrolovať nové úlohy vytvorené vo Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
+          "source": "New Task Event",
+          "message": "Udalosť novej úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "Sledovať nové úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Freshsales CRM",
+          "message": "Aktualizovať existujúcu poznámku vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update Note",
+          "message": "Aktualizovať poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated content/body of the note",
+          "message": "Aktualizovaný obsah/telo poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "Obsah poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to update",
+          "message": "Jedinečný identifikátor poznámky, ktorá sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to update",
+          "message": "ID poznámky na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Aktualizovať existujúcu poznámku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Freshsales CRM",
+          "message": "Aktualizovať existujúci účet vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "Aktualizovať účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "Krajina účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "Mesto účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "Ročné tržby účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "Ročné tržby"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "Ročný obrat"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "Ulica a číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Ulica a číslo domu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "ID typu podnikania pre tento účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "ID typu podnikania"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "Klasifikácia podnikania"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "Facebook profil účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "ID typu odvetvia pre tento účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "ID typu odvetvia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "Kategória odvetvia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to update",
+          "message": "Jedinečný identifikátor účtu, ktorý sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to update",
+          "message": "ID účtu na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "LinkedIn profil účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "Názov účtu/spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "Názov spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "Počet zamestnancov v účte"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "Počet zamestnancov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "Počet zamestnancov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "Štát alebo provincia účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Štát alebo provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "ID nadradeného účtu/spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "ID nadradeného účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "ID nadradenej spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "Telefónne číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "URL adresa webovej stránky účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Webová stránka spoločnosti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "ID územia, do ktorého tento účet patrí"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "Používateľské meno účtu na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Používateľské meno na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "Poštové smerovacie číslo účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "PSČ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "Aktualizovať existujúci účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Update an existing appointment in Freshsales CRM",
+          "message": "Aktualizovať existujúcu schôdzku vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Update Appointment",
+          "message": "Aktualizovať schôdzku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "Podrobný popis schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "Popis schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "Dátum a čas ukončenia (formát: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Koncový dátum"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "Dátum a čas ukončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "Dátum a čas začiatku (formát: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "Dátum a čas začiatku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to update",
+          "message": "Jedinečný identifikátor schôdzky, ktorá sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to update",
+          "message": "ID schôdzky na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "Miesto schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Lokalita"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "Miesto stretnutia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Typ záznamu na priradenie: `Contact`, `SalesAccount` alebo `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Cieľový typ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Typ priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "ID kontaktu, účtu alebo obchodu na priradenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "Cieľové ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "Názov schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "Názov schôdzky"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "Časové pásmo schôdzky (napr. `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "Časové pásmo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Update an existing appointment",
+          "message": "Aktualizovať existujúcu schôdzku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Freshsales CRM",
+          "message": "Aktualizovať existujúci kontakt vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovať kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "Krajina kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "ID klasifikácie stavu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "ID stavu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "Identifikátor stavu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "ID kampane priradenej k tomuto kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identifikátor kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "Mesto kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "Ulica a číslo kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Ulica a číslo domu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "Primárna e-mailová adresa kontaktu. Odporúča sa aspoň jedno z polí `email`, `mobile_number` alebo `twitter`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Hlavná e-mailová adresa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "Externý referenčný identifikátor kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "Externé referenčné ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "Používateľské meno alebo URL profilu kontaktu na Facebooku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Meno kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "Krstné meno kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "Jedinečný identifikátor kontaktu, ktorý sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "ID kontaktu na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "Pracovná pozícia alebo profesijné označenie kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "Priezvisko kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identifikátor zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "ID fázy životného cyklu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ID fázy životného cyklu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "Identifikátor fázy životného cyklu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "URL adresa profilu kontaktu na LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn profil"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "Číslo mobilného telefónu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Číslo mobilného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "Štát alebo provincia kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Štát alebo provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "Číslo pracovného telefónu kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "Číslo do práce"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "Číslo pracovného telefónu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "ID teritória, do ktorého tento kontakt patrí"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "Používateľské meno (handle) kontaktu na sieti Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Používateľské meno na Twitteri"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "Poštové smerovacie číslo kontaktu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "PSČ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovať existujúci kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal in Freshsales CRM",
+          "message": "Aktualizovať existujúci obchod vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update Deal",
+          "message": "Aktualizovať obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "ID kampane priradenej k tomuto obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identifikátor kampane"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "Skutočný dátum uzavretia obchodu (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "Dátum uzavretia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "Skutočný dátum uzavretia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "ID meny pre tento obchod. Ak nie je zadané, použije sa predvolená mena účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "ID meny"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "Mena obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "Penažná hodnota obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "Hodnota obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "ID typu/kategórie obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "ID typu obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "Kategória obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "ID stavu platby obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "ID stavu platby"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "Stav platby"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "ID pipeline obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "Identifikátor pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "ID dôvodu získania alebo straty obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "ID dôvodu obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "Dôvod úspechu/neúspechu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "ID fázy obchodu v pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "ID fázy obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fáza v pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "Očakávaný dátum uzavretia (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "Očakávané uzavretie"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "Očakávaný dátum uzatvorenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to update",
+          "message": "Jedinečný identifikátor obchodu, ktorý sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to update",
+          "message": "ID obchodu na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "ID používateľa, ktorý sa má priradiť ako vlastník"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "ID zdroja potenciálneho zákazníka pre tento obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identifikátor zdroja potenciálneho zákazníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "Názov obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Názov obchodu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "ID priradeného predajného účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "ID súvisiaceho účtu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "Pravdepodobnosť získania obchodu (`0` až `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "Pravdepodobnosť"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "Pravdepodobnosť úspechu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "ID teritória pre tento obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identifikátor územia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "Aktualizovať existujúci obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Freshsales CRM",
+          "message": "Aktualizovať existujúcu úlohu vo Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "Aktualizovať úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "Podrobný popis úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Popis úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "Termín dokončenia úlohy (formát: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Termín dokončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "Termín dokončenia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "Jedinečný identifikátor úlohy, ktorá sa má aktualizovať"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to update",
+          "message": "ID úlohy na aktualizáciu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "ID výsledku úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "ID výsledku"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "Výsledok úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "ID používateľa, ktorému sa má táto úloha priradiť"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "Dokončené"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "Stav úlohy: `0` pre otvorenú, `1` pre dokončenú"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "Stav úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Obchod"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Typ záznamu na priradenie: `Contact`, `SalesAccount` alebo `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Cieľový typ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Typ priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "ID kontaktu, účtu alebo obchodu na priradenie"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "Cieľové ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID priradeného záznamu"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "ID typu úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "ID typu úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "Typ úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "Názov úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Názov úlohy"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Aktualizovať existujúcu úlohu"
+        },
+        "app.RnJlc2hzYWxlcw.desc": {
+          "source": "Freshsales is a CRM platform by Freshworks for managing contacts, accounts, deals, tasks, appointments, and notes.\n\nThis integration supports full CRUD operations on core CRM objects and polling-based triggers for new records.",
+          "message": "Freshsales je CRM platforma od spoločnosti Freshworks na správu kontaktov, účtov, obchodov, úloh, schôdzok a poznámok.\n\nTáto integrácia podporuje kompletné operácie CRUD pre základné CRM objekty a triggery založené na dopytovaní pre nové záznamy."
+        },
+        "app.RnJlc2hzYWxlcw.display_name": {
+          "source": "Freshsales",
+          "message": "Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.short_desc": {
+          "source": "Freshsales CRM integration",
+          "message": "Integrácia Freshsales CRM"
+        }
+      }
+    }
+  }
+}

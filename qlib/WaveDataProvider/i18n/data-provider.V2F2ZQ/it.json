@@ -1,0 +1,1717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new chart of accounts entry in a Wave business",
+          "message": "Crea una nuova voce del piano dei conti in un'azienda Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "Crea account"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the account",
+          "message": "Il codice valuta del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "The account currency",
+          "message": "La valuta del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the account in",
+          "message": "L'azienda in cui creare il conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the account in",
+          "message": "L'azienda in cui creare il conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the account",
+          "message": "La descrizione del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The account description",
+          "message": "La descrizione del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "Il nome dell'account"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "The account name",
+          "message": "Il nome dell'account"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.desc": {
+          "source": "The subtype of the account",
+          "message": "Il sottotipo del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.display_name": {
+          "source": "Subtype",
+          "message": "Sottotipo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.short_desc": {
+          "source": "The account subtype",
+          "message": "Il sottotipo del conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.desc": {
+          "source": "Asset account",
+          "message": "Conto attività"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.display_name": {
+          "source": "Asset",
+          "message": "Asset"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.desc": {
+          "source": "Equity account",
+          "message": "Conto patrimonio netto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.display_name": {
+          "source": "Equity",
+          "message": "Patrimonio netto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.desc": {
+          "source": "Expense account",
+          "message": "Conto spese"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.display_name": {
+          "source": "Expense",
+          "message": "Spesa"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.desc": {
+          "source": "Income account",
+          "message": "Conto ricavi"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.display_name": {
+          "source": "Income",
+          "message": "Ricavo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.desc": {
+          "source": "Liability account",
+          "message": "Conto passività"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.display_name": {
+          "source": "Liability",
+          "message": "Passività"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.desc": {
+          "source": "The type of account",
+          "message": "Il tipo di conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.short_desc": {
+          "source": "The account type",
+          "message": "Il tipo di conto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account in Wave",
+          "message": "Crea un nuovo conto in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in a Wave business with name, email, and contact details",
+          "message": "Crea un nuovo cliente in un'azienda Wave con nome, email e dettagli di contatto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Crea cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the customer in",
+          "message": "L'azienda in cui creare il cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the customer in",
+          "message": "L'azienda in cui creare il cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The email address of the customer",
+          "message": "L'indirizzo email del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The customer email",
+          "message": "L'email del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the customer contact",
+          "message": "Il nome del contatto del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The customer first name",
+          "message": "Il nome del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes about the customer (not visible to the customer)",
+          "message": "Note interne sul cliente (non visibili al cliente)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Note interne"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes about the customer",
+          "message": "Note interne sul cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the customer contact",
+          "message": "Il cognome del contatto del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The customer last name",
+          "message": "Il cognome del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The name of the customer",
+          "message": "Il nome del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The customer name",
+          "message": "Il nome del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The phone number of the customer",
+          "message": "Il numero di telefono del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The customer phone number",
+          "message": "Il numero di telefono del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the customer",
+          "message": "L'URL del sito web del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The customer website",
+          "message": "Il sito web del cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer in Wave",
+          "message": "Crea un nuovo cliente in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.desc": {
+          "source": "Create a new income or expense entry in a Wave business",
+          "message": "Crea una nuova voce di entrata o di uscita in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
+          "source": "Create Income/Expense",
+          "message": "Crea entrata/uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the income/expense entry in",
+          "message": "L'attività in cui creare la voce di entrata/uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the entry in",
+          "message": "L'attività in cui creare la voce"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.desc": {
+          "source": "The date of the income or expense entry",
+          "message": "La data della voce di entrata o di uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "La data della transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the income or expense entry",
+          "message": "La descrizione della voce di entrata o di uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "La descrizione della transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "Un identificatore esterno univoco per la transazione (per l'idempotenza)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "ID esterno"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "L'ID transazione esterno"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.desc": {
+          "source": "Expense entry",
+          "message": "Voce di uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.display_name": {
+          "source": "Expense",
+          "message": "Spesa"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.desc": {
+          "source": "Income entry",
+          "message": "Voce di entrata"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.display_name": {
+          "source": "Income",
+          "message": "Ricavo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.desc": {
+          "source": "The type of the entry: income or expense",
+          "message": "Il tipo di voce: entrata o uscita"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.short_desc": {
+          "source": "The entry type",
+          "message": "Il tipo di voce"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
+          "source": "Create an income or expense entry in Wave",
+          "message": "Crea una voce di entrata o di uscita in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice for a customer in a Wave business",
+          "message": "Crea una nuova fattura per un cliente in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Crea fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the invoice",
+          "message": "Il codice valuta per la fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.short_desc": {
+          "source": "The invoice currency",
+          "message": "La valuta della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.desc": {
+          "source": "The customer to create the invoice for",
+          "message": "Il cliente per cui creare la fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer to invoice",
+          "message": "Il cliente a cui emettere fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the invoice in",
+          "message": "L'attività in cui creare la fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the invoice in",
+          "message": "L'attività in cui creare la fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.desc": {
+          "source": "The payment due date of the invoice (YYYY-MM-DD format)",
+          "message": "La data di scadenza del pagamento della fattura (formato YYYY-MM-DD)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "The due date",
+          "message": "La data di scadenza"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.desc": {
+          "source": "The footer text on the invoice",
+          "message": "Il testo a piè di pagina nella fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.display_name": {
+          "source": "Footer",
+          "message": "Piè di pagina"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.short_desc": {
+          "source": "The invoice footer",
+          "message": "Il piè di pagina della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.desc": {
+          "source": "The date of the invoice (YYYY-MM-DD format)",
+          "message": "La data della fattura (formato YYYY-MM-DD)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.display_name": {
+          "source": "Invoice Date",
+          "message": "Data fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.short_desc": {
+          "source": "The invoice date",
+          "message": "La data della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.desc": {
+          "source": "A memo/note on the invoice",
+          "message": "Un promemoria/nota sulla fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Promemoria"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.short_desc": {
+          "source": "The invoice memo",
+          "message": "Il promemoria della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoice",
+          "message": "Bozza di fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Bozza"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoice",
+          "message": "Fattura salvata"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "Salvata"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.desc": {
+          "source": "The initial status of the invoice",
+          "message": "Lo stato iniziale della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.short_desc": {
+          "source": "The invoice status",
+          "message": "Lo stato della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.desc": {
+          "source": "The subheading of the invoice",
+          "message": "Il sottotitolo della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.display_name": {
+          "source": "Subhead",
+          "message": "Sottotitolo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.short_desc": {
+          "source": "The invoice subhead",
+          "message": "Il sottotitolo della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.desc": {
+          "source": "The purchase order number associated with the invoice",
+          "message": "Il numero dell'ordine di acquisto associato alla fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.display_name": {
+          "source": "PO Number",
+          "message": "Numero PO"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.short_desc": {
+          "source": "The purchase order number",
+          "message": "Il numero dell'ordine di acquisto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.desc": {
+          "source": "The title of the invoice",
+          "message": "Il titolo della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "The invoice title",
+          "message": "Il titolo della fattura"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice in Wave",
+          "message": "Crea una nuova fattura in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product or service in a Wave business",
+          "message": "Crea un nuovo prodotto o servizio in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "Crea prodotto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the product in",
+          "message": "L'attività in cui creare il prodotto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the product in",
+          "message": "L'attività in cui creare il prodotto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the product or service",
+          "message": "La descrizione del prodotto o servizio"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description",
+          "message": "La descrizione del prodotto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product or service",
+          "message": "Il nome del prodotto o servizio"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Il nome del prodotto"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The unit price of the product or service",
+          "message": "Il prezzo unitario del prodotto o servizio"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Prezzo unitario"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The unit price",
+          "message": "Il prezzo unitario"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product in Wave",
+          "message": "Crea un nuovo prodotto in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.desc": {
+          "source": "Create a new sales tax rate in a Wave business",
+          "message": "Crea una nuova aliquota d'imposta sulle vendite in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
+          "source": "Create Sales Tax",
+          "message": "Crea imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.desc": {
+          "source": "The abbreviation for the sales tax",
+          "message": "L'abbreviazione dell'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.display_name": {
+          "source": "Abbreviation",
+          "message": "Abbreviazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.short_desc": {
+          "source": "The tax abbreviation",
+          "message": "L'abbreviazione dell'imposta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the sales tax in",
+          "message": "L'attività in cui creare l'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the sales tax in",
+          "message": "L'attività in cui creare l'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the sales tax",
+          "message": "La descrizione dell'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The tax description",
+          "message": "La descrizione dell'imposta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.desc": {
+          "source": "Whether the tax is a compound tax (calculated on top of other taxes)",
+          "message": "Indica se l'imposta è un'imposta composta (calcolata su altre imposte)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.display_name": {
+          "source": "Is Compound",
+          "message": "È composta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.short_desc": {
+          "source": "Whether the tax is compound",
+          "message": "Indica se l'imposta è composta"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.desc": {
+          "source": "Whether the tax is recoverable (can be claimed back)",
+          "message": "Indica se l'imposta è recuperabile (può essere richiesta a rimborso)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.display_name": {
+          "source": "Is Recoverable",
+          "message": "È recuperabile"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.short_desc": {
+          "source": "Whether the tax is recoverable",
+          "message": "Indica se l'imposta è recuperabile"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.desc": {
+          "source": "The name of the sales tax",
+          "message": "Il nome dell'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.short_desc": {
+          "source": "The sales tax name",
+          "message": "Il nome dell'imposta sulle vendite"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.desc": {
+          "source": "The tax rate as a percentage",
+          "message": "L'aliquota fiscale in percentuale"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tariffa"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.short_desc": {
+          "source": "The tax rate",
+          "message": "L'aliquota fiscale"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.desc": {
+          "source": "The tax registration number",
+          "message": "Il numero di registrazione fiscale"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Codice fiscale"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.short_desc": {
+          "source": "The tax number",
+          "message": "Il numero fiscale"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
+          "source": "Create a new sales tax in Wave",
+          "message": "Crea una nuova imposta sulle vendite in Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.desc": {
+          "source": "Create a new money transaction in a Wave business",
+          "message": "Crea una nuova transazione monetaria in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "Crea transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the transaction in",
+          "message": "L'attività in cui creare la transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the transaction in",
+          "message": "L'attività in cui creare la transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.desc": {
+          "source": "The date of the transaction (YYYY-MM-DD format)",
+          "message": "La data della transazione (formato AAAA-MM-GG)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "La data della transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the transaction",
+          "message": "La descrizione della transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "La descrizione della transazione"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "Un identificatore esterno univoco per la transazione (per l'idempotenza)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "ID esterno"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "L'ID transazione esterno"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a new transaction in Wave",
+          "message": "Crea una nuova transazione in Wave"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.desc": {
+          "source": "Approve a draft or saved invoice in Wave, making it ready to send",
+          "message": "Approva una fattura in bozza o salvata in Wave, rendendola pronta per l'invio"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
+          "source": "Approve Invoice",
+          "message": "Approva fattura"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to approve",
+          "message": "La fattura da approvare"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "Fattura"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to approve",
+          "message": "La fattura da approvare"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
+          "source": "Approve an invoice by ID",
+          "message": "Approva una fattura tramite ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a specific customer by their ID",
+          "message": "Recupera un cliente specifico tramite il relativo ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Recupera cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "L'attività a cui appartiene il cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "L'attività a cui appartiene il cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to retrieve",
+          "message": "Il cliente da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to retrieve",
+          "message": "Il cliente da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a specific customer from Wave",
+          "message": "Ottieni un cliente specifico da Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.desc": {
+          "source": "Retrieve a specific customer by their email address",
+          "message": "Recupera un cliente specifico tramite il relativo indirizzo email"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
+          "source": "Get Customer by Email",
+          "message": "Ottieni cliente tramite email"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "L'attività a cui appartiene il cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "L'attività a cui appartiene il cliente"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.desc": {
+          "source": "The email address of the customer to retrieve",
+          "message": "L'indirizzo email del cliente da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.short_desc": {
+          "source": "The customer email to search for",
+          "message": "L'email del cliente da cercare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
+          "source": "Get a specific customer by email from Wave",
+          "message": "Ottieni un cliente specifico tramite email da Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a specific invoice by its ID",
+          "message": "Recupera una fattura specifica tramite il relativo ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Recupera fattura"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the invoice belongs to",
+          "message": "L'attività a cui appartiene la fattura"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the invoice belongs to",
+          "message": "L'attività a cui appartiene la fattura"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.desc": {
+          "source": "The invoice to retrieve",
+          "message": "La fattura da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice",
+          "message": "Fattura"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "La fattura da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a specific invoice from Wave",
+          "message": "Ottieni una fattura specifica da Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a specific product by its ID",
+          "message": "Recupera un prodotto specifico tramite il relativo ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Ottieni prodotto"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the product belongs to",
+          "message": "L'attività a cui appartiene il prodotto"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the product belongs to",
+          "message": "L'attività a cui appartiene il prodotto"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to retrieve",
+          "message": "Il prodotto da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "Prodotto"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to retrieve",
+          "message": "Il prodotto da recuperare"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a specific product from Wave",
+          "message": "Ottieni un prodotto specifico da Wave"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete an existing customer from a Wave business",
+          "message": "Elimina un cliente esistente da un'attività Wave"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "Elimina cliente"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to delete",
+          "message": "Il cliente da eliminare"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Il cliente da eliminare"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer in Wave",
+          "message": "Elimina un cliente in Wave"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.desc": {
+          "source": "Execute an arbitrary GraphQL query or mutation against the Wave API",
+          "message": "Esegui una query o mutation GraphQL arbitraria sull'API di Wave"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.display_name": {
+          "source": "Execute GraphQL",
+          "message": "Esegui GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.desc": {
+          "source": "The GraphQL query or mutation string to execute",
+          "message": "La stringa di query o mutation GraphQL da eseguire"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Query"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.short_desc": {
+          "source": "The GraphQL query",
+          "message": "La query GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.desc": {
+          "source": "Optional variables to pass to the GraphQL query",
+          "message": "Variabili opzionali da passare alla query GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.display_name": {
+          "source": "Variables",
+          "message": "Variabili"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.short_desc": {
+          "source": "The query variables",
+          "message": "Le variabili della query"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.short_desc": {
+          "source": "Execute an arbitrary GraphQL query",
+          "message": "Esegui una query GraphQL arbitraria"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in Wave. Uses webhooks for real-time notifications.",
+          "message": "Si attiva quando viene creata una nuova fattura in Wave. Utilizza webhook per le notifiche in tempo reale."
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "Invoice Created",
+          "message": "Fattura creata"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.desc": {
+          "source": "Only trigger for invoices in this business (optional)",
+          "message": "Attiva solo per le fatture di questa attività (opzionale)"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "Filter to invoices from a specific business",
+          "message": "Filtra in base alle fatture di un'attività specifica"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Si attiva quando viene creata una nuova fattura"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Wave** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP/REST personalizzata a **Wave** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine in questa app."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Wave",
+          "message": "Esegui una chiamata API personalizzata a Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search for chart of accounts entries in a Wave business",
+          "message": "Cerca le voci del piano dei conti in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "Cerca account"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search accounts in",
+          "message": "L'attività in cui cercare i conti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search accounts in",
+          "message": "L'attività in cui cercare i conti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Numero massimo di risultati"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search for accounts in Wave",
+          "message": "Cerca conti in Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Search for customers in a Wave business with optional filters",
+          "message": "Cerca clienti in un'attività Wave con filtri opzionali"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Cerca clienti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search customers in",
+          "message": "L'attività in cui cercare i clienti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search customers in",
+          "message": "L'attività in cui cercare i clienti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Numero massimo di risultati"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "Search for customers in Wave",
+          "message": "Cerca clienti in Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in a Wave business with optional status filter",
+          "message": "Cerca fatture in un'attività Wave con filtro di stato opzionale"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Cerca fatture"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search invoices in",
+          "message": "L'attività in cui cercare le fatture"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search invoices in",
+          "message": "L'attività in cui cercare le fatture"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Numero massimo di risultati"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.desc": {
+          "source": "Overdue invoices",
+          "message": "Fatture scadute"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.display_name": {
+          "source": "Overdue",
+          "message": "In ritardo"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoices",
+          "message": "Fatture in bozza"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Bozza"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid invoices",
+          "message": "Fatture pagate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.display_name": {
+          "source": "Paid",
+          "message": "Pagato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.desc": {
+          "source": "Partially paid invoices",
+          "message": "Fatture parzialmente pagate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.display_name": {
+          "source": "Partial",
+          "message": "Parziale"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoices",
+          "message": "Fatture salvate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "Salvata"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.desc": {
+          "source": "Sent invoices",
+          "message": "Fatture inviate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.display_name": {
+          "source": "Sent",
+          "message": "Inviato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Fatture non pagate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.display_name": {
+          "source": "Unpaid",
+          "message": "Non pagato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.desc": {
+          "source": "Viewed invoices",
+          "message": "Fatture visualizzate"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.display_name": {
+          "source": "Viewed",
+          "message": "Visualizzato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Filtra le fatture per stato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtra per stato fattura"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Wave",
+          "message": "Cerca fatture in Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Search for products in a Wave business",
+          "message": "Cerca prodotti in un'attività Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Cerca prodotti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search products in",
+          "message": "L'attività in cui cercare i prodotti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Azienda"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search products in",
+          "message": "L'attività in cui cercare i prodotti"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Numero massimo di risultati"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "Search for products in Wave",
+          "message": "Cerca prodotti in Wave"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Send an approved invoice to the customer via email",
+          "message": "Invia una fattura approvata al cliente tramite email"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "Invia fattura"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to send",
+          "message": "La fattura da inviare"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "Fattura"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to send",
+          "message": "La fattura da inviare"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send an invoice in Wave",
+          "message": "Invia una fattura in Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the properties of an existing customer in Wave",
+          "message": "Aggiorna le proprietà di un cliente esistente in Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Aggiorna cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The new email address of the customer",
+          "message": "Il nuovo indirizzo email del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The new email",
+          "message": "La nuova email"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The new first name of the customer contact",
+          "message": "Il nuovo nome del contatto del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The new first name",
+          "message": "Il nuovo nome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "The new internal notes about the customer",
+          "message": "Le nuove note interne sul cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Note interne"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "The new internal notes",
+          "message": "Le nuove note interne"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to update",
+          "message": "Il cliente da aggiornare"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Il cliente da aggiornare"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The new last name of the customer contact",
+          "message": "Il nuovo cognome del contatto del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The new last name",
+          "message": "Il nuovo cognome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The new name of the customer",
+          "message": "Il nuovo nome del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The new customer name",
+          "message": "Il nuovo nome del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The new phone number of the customer",
+          "message": "Il nuovo numero di telefono del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The new phone number",
+          "message": "Il nuovo numero di telefono"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The new website URL of the customer",
+          "message": "Il nuovo URL del sito web del cliente"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The new website",
+          "message": "Il nuovo sito web"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer in Wave",
+          "message": "Aggiorna un cliente esistente in Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update the properties of an existing product in Wave",
+          "message": "Aggiorna le proprietà di un prodotto esistente in Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "Aggiorna Prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the product",
+          "message": "La nuova descrizione del prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new product description",
+          "message": "La nuova descrizione del prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to update",
+          "message": "Il prodotto da aggiornare"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "Prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to update",
+          "message": "Il prodotto da aggiornare"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the product",
+          "message": "Il nuovo nome del prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The new product name",
+          "message": "Il nuovo nome del prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The new unit price of the product",
+          "message": "Il nuovo prezzo unitario del prodotto"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Prezzo unitario"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The new unit price",
+          "message": "Il nuovo prezzo unitario"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product in Wave",
+          "message": "Aggiorna un prodotto esistente in Wave"
+        },
+        "app.V2F2ZQ.desc": {
+          "source": "Wave is a free accounting, invoicing, and receipt scanning software for small businesses. This integration enables managing customers, invoices, products, accounts, and transactions through Wave's GraphQL API.",
+          "message": "Wave è un software gratuito di contabilità, fatturazione e scansione delle ricevute per le piccole imprese. Questa integrazione consente di gestire clienti, fatture, prodotti, conti e transazioni tramite l'API GraphQL di Wave."
+        },
+        "app.V2F2ZQ.display_name": {
+          "source": "Wave",
+          "message": "Wave"
+        },
+        "app.V2F2ZQ.short_desc": {
+          "source": "Wave accounting and invoicing",
+          "message": "Contabilità e fatturazione Wave"
+        }
+      }
+    }
+  }
+}

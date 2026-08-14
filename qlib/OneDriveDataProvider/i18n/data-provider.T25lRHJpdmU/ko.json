@@ -1,0 +1,973 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a file or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "파일이나 폴더를 새 위치로 비동기식으로 복사하며, 선택적으로 새 이름을 지정할 수 있습니다. 복사 진행 상황을 추적할 수 있는 모니터링 URL을 반환합니다."
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Item",
+          "message": "항목 복사"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "새 복사본 이름 자동 변경"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "기존 파일 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "대상 위치에 같은 이름의 항목이 있는 경우 충돌 해결 동작:\n- `rename`: 새 복사본의 이름을 자동으로 바꿈\n- `replace`: 기존 파일을 바꿈(폴더가 아닌 파일에만 지원됨)\n- `fail`: 오류와 함께 요청 실패 처리(기본값)"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "복사할 파일 또는 폴더의 고유 식별자"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "복사할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "복사된 항목의 새 이름입니다. 제공하지 않으면 원본과 동일한 이름이 사용됩니다."
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "새 이름"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "복사본의 새 이름"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "대상 드라이브의 고유 식별자입니다. 다른 드라이브로 복사할 때 필요합니다."
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "대상 드라이브 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "복사 대상 드라이브 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "대상 폴더의 ID입니다. 생략하면 항목이 드라이브 루트로 복사됩니다."
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "대상 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "복사 대상 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a file or folder",
+          "message": "파일 또는 폴더 복사"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in OneDrive, optionally within a specific parent folder",
+          "message": "OneDrive에 새 폴더를 생성하며, 선택적으로 특정 상위 폴더 내에 생성할 수 있습니다."
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "폴더 생성"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "새 폴더 이름 자동 변경"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "기존 항목 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "동일한 이름의 항목이 이미 있는 경우 충돌 해결 동작:\n- `rename`: 새 폴더의 이름을 자동으로 바꿈\n- `replace`: 기존 항목을 바꿈\n- `fail`: 오류와 함께 요청 실패 처리"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "폴더에 대한 선택적 설명"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "폴더 설명"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "새 폴더의 이름"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "폴더 이름"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "생성할 폴더의 이름"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 폴더가 드라이브 루트에 생성됩니다."
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "새 폴더 생성"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a file or folder in OneDrive",
+          "message": "OneDrive의 파일 또는 폴더에 대한 공유 링크(보기, 편집 또는 임베드)를 생성합니다."
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "공유 링크 생성"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "공유 링크가 만료되는 날짜 및 시간"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "만료 날짜"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "링크 만료 일시"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "공유 링크를 생성할 항목의 고유 식별자"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "공유할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "동일한 조직의 사용자만"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "조직"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "링크가 있는 모든 사용자가 액세스 가능"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "익명"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "링크의 범위:\n- `anonymous`: 링크가 있는 모든 사용자가 액세스 가능\n- `organization`: 동일한 조직의 사용자만 액세스 가능"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "링크 범위"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "공유 링크의 범위"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "공유 링크의 비밀번호(선택 사항)"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "비밀번호"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "공유 링크 비밀번호"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "읽기/쓰기 권한"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "편집"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "임베드 가능 링크"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "임베드"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "읽기 전용 권한"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "뷰"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "생성할 공유 링크의 유형:\n- `view`: 읽기 전용 링크\n- `edit`: 읽기/쓰기 링크\n- `embed`: 임베드 가능 링크"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "링크 유형"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "공유 링크 유형"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for an item",
+          "message": "항목에 대한 공유 링크 생성"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading large files (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "대용량 파일(4MB 초과)을 청크 단위로 업로드하기 위한 이어올리기 가능한 업로드 세션을 생성합니다. 바이트 범위가 포함된 PUT 요청을 허용하는 업로드 URL을 반환합니다."
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "업로드 세션 생성"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "새 파일 이름 자동 변경"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "기존 파일 바꾸기"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "동일한 이름의 파일이 이미 있는 경우 충돌 해결 동작:\n- `rename`: 새 파일의 이름을 자동으로 바꿈\n- `replace`: 기존 파일을 바꿈\n- `fail`: 오류와 함께 요청 실패 처리"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "업로드할 파일의 이름(예: `large-file.zip`)"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "파일 이름"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "업로드할 파일의 이름"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 파일이 드라이브 루트에 업로드됩니다."
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "이어올리기 가능한 업로드 세션 생성"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve the current user's OneDrive metadata including storage quota, drive type, and owner information",
+          "message": "저장 공간 할당량, 드라이브 유형 및 소유자 정보를 포함한 현재 사용자의 OneDrive 메타데이터를 검색합니다."
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Drive Info",
+          "message": "드라이브 정보 가져오기"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get drive metadata and quota",
+          "message": "드라이브 메타데이터 및 할당량 가져오기"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a specific file or folder by ID or path",
+          "message": "ID 또는 경로로 특정 파일이나 폴더의 메타데이터 검색"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "품목 가져오기"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "검색할 항목의 고유 식별자입니다. `id` 또는 `path` 중 하나를 제공하세요."
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "검색할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "드라이브 루트 기준 항목 경로(예: `/Documents/file.txt`). `id` 또는 `path` 중 하나를 제공하세요."
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "항목 경로"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "검색할 항목 경로"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get file or folder metadata",
+          "message": "파일 또는 폴더 메타데이터 가져오기"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a file. Returns a pre-authenticated download URL that can be used to download the file content directly",
+          "message": "파일의 다운로드 URL 및 메타데이터를 가져옵니다. 파일 콘텐츠를 직접 다운로드하는 데 사용할 수 있는 사전 인증된 다운로드 URL을 반환합니다."
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "파일 다운로드"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "다운로드할 파일의 고유 식별자"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "다운로드할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file",
+          "message": "파일 다운로드"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a file or folder from OneDrive. The item is moved to the recycle bin",
+          "message": "OneDrive에서 파일 또는 폴더를 삭제합니다. 항목이 휴지통으로 이동됩니다."
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "항목 삭제"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "삭제할 항목의 고유 식별자"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "삭제할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a file or folder",
+          "message": "파일 또는 폴더 삭제"
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.desc": {
+          "source": "Fires when a file or folder is created, modified, or deleted in OneDrive. Uses delta queries to track changes efficiently",
+          "message": "OneDrive에서 파일 또는 폴더가 생성, 수정 또는 삭제될 때 발생합니다. 델타 쿼리를 사용하여 변경 사항을 효율적으로 추적합니다."
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
+          "source": "File or Folder Changed",
+          "message": "파일 또는 폴더 변경됨"
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {
+          "source": "Trigger when a file or folder is created, modified, or deleted",
+          "message": "파일 또는 폴더가 생성, 수정 또는 삭제될 때 트리거"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft OneDrive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Microsoft OneDrive**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft OneDrive",
+          "message": "Microsoft OneDrive에 사용자 지정 API 호출 수행"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List items in a folder or search across the drive. Supports pagination and sorting",
+          "message": "폴더 내 항목을 나열하거나 드라이브 전체에서 검색합니다. 페이지 매김 및 정렬을 지원합니다."
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Items",
+          "message": "품목 검색"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the drive root",
+          "message": "항목을 나열할 폴더의 ID입니다. 생략하면 드라이브 루트의 항목을 나열합니다."
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "항목을 나열할 폴더"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "결과 정렬 순서(예: `name asc`, `size desc`)"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "정렬 필드 및 방향"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "이름 또는 콘텐츠별로 항목을 필터링하기 위한 검색 쿼리 문자열"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "검색 쿼리 문자열"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "페이지당 반환할 최대 항목 수(기본값 `200`, 최대 `1000`)"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "위쪽"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "페이지당 반환할 최대 항목 수"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search files and folders",
+          "message": "파일 및 폴더 나열 또는 검색"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a file or folder in OneDrive. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "OneDrive의 파일 또는 폴더 메타데이터를 업데이트합니다. 항목 이름 변경, 다른 폴더로 이동 또는 설명 업데이트에 사용할 수 있습니다."
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "항목 업데이트"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "사용자에게 표시되는 항목 설명을 제공합니다."
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "사용자에게 표시되는 항목 설명"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "업데이트할 항목의 고유 식별자"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "업데이트할 항목 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "파일 또는 폴더의 새 이름(파일의 경우 확장자 포함)"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "새 이름"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "항목의 새 이름"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "항목을 이동할 대상 폴더의 ID입니다. 항목을 다른 폴더로 이동하려면 이 값을 설정하세요."
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "새 상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "이동할 대상 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a file or folder",
+          "message": "파일 또는 폴더 이름 바꾸기, 이동 또는 업데이트"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file to OneDrive using simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "단순 업로드를 사용하여 OneDrive에 파일을 업로드합니다. 4MB보다 큰 파일의 경우 `create-upload-session` 액션을 대신 사용하세요."
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "파일 업로드"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "OneDrive에 업로드할 파일(파일명, 콘텐츠, MIME 타입 포함)입니다. 4MB보다 큰 파일의 경우 `create-upload-session` 액션을 대신 사용하세요."
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "파일"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "업로드할 파일"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 파일이 드라이브 루트에 업로드됩니다."
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file (up to 4 MB)",
+          "message": "파일 업로드(최대 4MB)"
+        },
+        "app.T25lRHJpdmU.desc": {
+          "source": "Provides access to [Microsoft OneDrive](https://onedrive.live.com/) for cloud file storage and management via the Microsoft Graph API.\n\n**Common use cases**:\n- **File management**: list, upload, download, and delete files and folders\n- **Sharing**: create sharing links for files and folders\n- **Change tracking**: watch for file changes using delta queries\n- **Large file uploads**: create resumable upload sessions for files larger than 4 MB\n\nMicrosoft and OneDrive are trademarks of the Microsoft group of companies",
+          "message": "Microsoft Graph API를 통해 클라우드 파일 저장 및 관리를 위한 [Microsoft OneDrive](https://onedrive.live.com/) 액세스를 제공합니다.\n\n**일반적인 사용 사례**:\n- **파일 관리**: 파일 및 폴더 나열, 업로드, 다운로드 및 삭제\n- **공유**: 파일 및 폴더의 공유 링크 생성\n- **변경 사항 추적**: 델타 쿼리를 사용하여 파일 변경 감시\n- **대용량 파일 업로드**: 4MB보다 큰 파일에 대한 재개 가능한 업로드 세션 생성\n\nMicrosoft 및 OneDrive는 Microsoft 그룹 계열사의 상표입니다."
+        },
+        "app.T25lRHJpdmU.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "app.T25lRHJpdmU.short_desc": {
+          "source": "Microsoft OneDrive cloud file storage",
+          "message": "Microsoft OneDrive 클라우드 파일 스토리지"
+        }
+      }
+    }
+  }
+}

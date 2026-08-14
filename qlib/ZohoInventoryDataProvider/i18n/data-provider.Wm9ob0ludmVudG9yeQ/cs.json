@@ -1,0 +1,3277 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Zoho Inventory",
+          "message": "Vytvořit nový kontakt v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Název společnosti pro kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kontakt zákazníka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Kontakt dodavatele"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the contact",
+          "message": "Měna pro kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Poznámky ke kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "URL webu kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Create a new contact person for a contact in Zoho Inventory",
+          "message": "Vytvořit novou kontaktní osobu pro kontakt v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Create Contact Person",
+          "message": "Vytvořit kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Nadřazený kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Funkce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Pracovní pozice nebo funkce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Křestní jméno kontaktní osoby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Příjmení kontaktní osoby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Create a new contact person",
+          "message": "Vytvořit novou kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new item in Zoho Inventory",
+          "message": "Vytvořit novou položku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Vytvořit položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Sales Account",
+          "message": "Účet výnosů z prodeje"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Sales account",
+          "message": "Účet prodeje"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Popis položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.display_name": {
+          "source": "Inventory Account",
+          "message": "Skladový účet"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.short_desc": {
+          "source": "Inventory account",
+          "message": "Skladový účet"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory item",
+          "message": "Skladová položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase item",
+          "message": "Nákupní položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales item",
+          "message": "Prodejní položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase item",
+          "message": "Prodejní a nákupní položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.desc": {
+          "source": "The type of the item",
+          "message": "Typ položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Typ položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.short_desc": {
+          "source": "Type of item",
+          "message": "Typ položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Název položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Skladová jednotka (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.display_name": {
+          "source": "Purchase Account",
+          "message": "Účet nákupů"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.short_desc": {
+          "source": "Purchase account",
+          "message": "Nákupní účet"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Nákupní cena"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Nákupní cena položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Sazba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Prodejní cena položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Měrná jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Vytvořit novou položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Create a new inventory adjustment in Zoho Inventory",
+          "message": "Vytvořit novou úpravu zásob v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Create Item Adjustment",
+          "message": "Vytvořit úpravu položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnF1YW50aXR5.desc": {
+          "source": "Quantity adjustment",
+          "message": "Úprava množství"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnZhbHVl.desc": {
+          "source": "Value adjustment",
+          "message": "Úprava hodnoty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.desc": {
+          "source": "The type of inventory adjustment",
+          "message": "Typ úpravy zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.display_name": {
+          "source": "Adjustment Type",
+          "message": "Typ úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.short_desc": {
+          "source": "Type of adjustment",
+          "message": "Typ úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.short_desc": {
+          "source": "Adjustment date",
+          "message": "Datum úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Adjustment description",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, quantity_adjusted, etc.",
+          "message": "Seznam řádkových položek s item_id, quantity_adjusted atd."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Adjustment line items",
+          "message": "Řádkové položky úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Důvod"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.short_desc": {
+          "source": "Reason for the adjustment",
+          "message": "Důvod úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number for the adjustment",
+          "message": "Referenční číslo úpravy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new inventory adjustment",
+          "message": "Vytvořit novou úpravu zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Create a new item group in Zoho Inventory",
+          "message": "Vytvořit novou skupinu položek v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Create Item Group",
+          "message": "Vytvořit skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Značka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Název značky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Název skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Název skupiny položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Popis skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.desc": {
+          "source": "List of items in the group with attributes",
+          "message": "Seznam položek ve skupině s atributy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Položky ve skupině"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Výrobce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Název výrobce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Měrná jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Create a new item group",
+          "message": "Vytvořit novou skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Inventory",
+          "message": "Vytvořit novou fakturu v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Vytvořit fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Zákazník pro tuto fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Výše nebo procento slevy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Číslo faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Vlastní číslo faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, rate, quantity, etc.",
+          "message": "Seznam řádkových položek s item_id, rate, quantity atd."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Řádkové položky faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Poznámky k faktuře"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Associated sales order",
+          "message": "Přidružená prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Vytvořit novou fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Create a new purchase order in Zoho Inventory",
+          "message": "Vytvořit novou nákupní objednávku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Create Purchase Order",
+          "message": "Vytvořit nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Datum nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Datum doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Očekávané datum doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Řádkové položky nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Poznámky k nákupní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.display_name": {
+          "source": "Purchase Order Number",
+          "message": "Číslo nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom purchase order number",
+          "message": "Vlastní číslo nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Dodavatel pro tuto nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Create a new purchase order",
+          "message": "Vytvořit novou nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.desc": {
+          "source": "Create a new package for a sales order in Zoho Inventory",
+          "message": "Vytvořit nový balík pro prodejní objednávku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
+          "source": "Create Package",
+          "message": "Vytvořit balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Datum balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of items with so_line_item_id and quantity",
+          "message": "Seznam položek s so_line_item_id a quantity"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Řádkové položky balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Poznámky k balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this package",
+          "message": "Prodejní objednávka pro tento balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Číslo balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Custom package number",
+          "message": "Vlastní číslo balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Create a new package",
+          "message": "Vytvořit nový balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Zoho Inventory",
+          "message": "Vytvořit novou prodejní objednávku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "Vytvořit prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Zákazník pro tuto prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Položky prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Poznámky k prodejní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.display_name": {
+          "source": "Sales Order Number",
+          "message": "Číslo prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom sales order number",
+          "message": "Vlastní číslo prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Očekávané datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Vytvořit novou prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Create a new shipment order in Zoho Inventory",
+          "message": "Vytvořit novou objednávku zásilky v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Create Shipment Order",
+          "message": "Vytvořit objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Způsob čerpání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Způsob doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Poznámky k zásilce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this shipment",
+          "message": "Prodejní objednávka pro tuto zásilku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Číslo zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Číslo objednávky zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Poplatek za dopravu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Částka za dopravu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.desc": {
+          "source": "List of package IDs to include",
+          "message": "Seznam ID balíků k zahrnutí"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.display_name": {
+          "source": "Package IDs",
+          "message": "ID balíků"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.short_desc": {
+          "source": "Packages to include in shipment",
+          "message": "Balíky k zahrnutí do zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Sledovací číslo zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Create a new shipment order",
+          "message": "Vytvořit novou objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact from Zoho Inventory",
+          "message": "Získat podrobnosti o konkrétním kontaktu ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získat kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Kontakt k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get contact details",
+          "message": "Získat podrobnosti kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Retrieve details of a specific contact person from Zoho Inventory",
+          "message": "Získat podrobnosti o konkrétní kontaktní osobě ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Get Contact Person",
+          "message": "Získat kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktní osoba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to retrieve",
+          "message": "Kontaktní osoba k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Get contact person details",
+          "message": "Získat podrobnosti o kontaktní osobě"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní položce ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Získat položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "Položka k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get item details",
+          "message": "Získat podrobnosti o položce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní úpravě zásob ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Get Item Adjustment",
+          "message": "Získat úpravu zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Úprava zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to retrieve",
+          "message": "Úprava zásob k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Get inventory adjustment details",
+          "message": "Získat podrobnosti o úpravě zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Retrieve details of a specific item group from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní skupině položek ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Get Item Group",
+          "message": "Získat skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Skupina položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to retrieve",
+          "message": "Skupina položek k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Get item group details",
+          "message": "Získat podrobnosti o skupině položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní faktuře ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Získat fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Faktura k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Získat podrobnosti o faktuře"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific purchase order from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní nákupní objednávce ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Získat nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Nákupní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Nákupní objednávka, která se má načíst"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Get purchase order details",
+          "message": "Získat podrobnosti o nákupní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.desc": {
+          "source": "Retrieve details of a specific package from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétním balíku ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
+          "source": "Get Package",
+          "message": "Získat balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to retrieve",
+          "message": "Balík k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
+          "source": "Get package details",
+          "message": "Získat podrobnosti o balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific sales order from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní prodejní objednávce ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "Získat prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Prodejní objednávka, která se má načíst"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get sales order details",
+          "message": "Získat podrobnosti o prodejní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Retrieve details of a specific shipment order from Zoho Inventory",
+          "message": "Načíst podrobnosti o konkrétní objednávce zásilky ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Get Shipment Order",
+          "message": "Získat objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Objednávka zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to retrieve",
+          "message": "Objednávka zásilky k načtení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Get shipment order details",
+          "message": "Získat podrobnosti o objednávce zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Zoho Inventory",
+          "message": "Smazat kontakt ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Smazat kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Kontakt k odstranění"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Delete a contact person from Zoho Inventory",
+          "message": "Smazat kontaktní osobu ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Delete Contact Person",
+          "message": "Smazat kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktní osoba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to delete",
+          "message": "Kontaktní osoba ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Delete a contact person",
+          "message": "Smazat kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete an item from Zoho Inventory",
+          "message": "Smazat položku ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "Smazat položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to delete",
+          "message": "Položka ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "Smazat položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Delete an inventory adjustment from Zoho Inventory",
+          "message": "Smazat úpravu zásob ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Delete Item Adjustment",
+          "message": "Smazat úpravu zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Úprava zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to delete",
+          "message": "Úprava zásob ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an inventory adjustment",
+          "message": "Smazat úpravu zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Delete an item group from Zoho Inventory",
+          "message": "Smazat skupinu položek ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Delete Item Group",
+          "message": "Smazat skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Skupina položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to delete",
+          "message": "Skupina položek ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Delete an item group",
+          "message": "Smazat skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Inventory",
+          "message": "Smazat fakturu ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Faktura ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Delete a purchase order from Zoho Inventory",
+          "message": "Smazat nákupní objednávku ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Delete Purchase Order",
+          "message": "Smazat nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Nákupní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to delete",
+          "message": "Nákupní objednávka ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Delete a purchase order",
+          "message": "Odstranit nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.desc": {
+          "source": "Delete a package from Zoho Inventory",
+          "message": "Smazat balík ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
+          "source": "Delete Package",
+          "message": "Smazat balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to delete",
+          "message": "Balík ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
+          "source": "Delete a package",
+          "message": "Smazat balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Zoho Inventory",
+          "message": "Smazat prodejní objednávku ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Odstranit prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Prodejní objednávka k odstranění"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Odstranit prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Delete a shipment order from Zoho Inventory",
+          "message": "Smazat objednávku zásilky ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Delete Shipment Order",
+          "message": "Smazat objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Objednávka zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to delete",
+          "message": "Objednávka zásilky ke smazání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Delete a shipment order",
+          "message": "Smazat objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.desc": {
+          "source": "Retrieve a list of contact persons for a specific contact in Zoho Inventory",
+          "message": "Načíst seznam kontaktních osob pro konkrétní kontakt v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
+          "source": "List Contact Persons",
+          "message": "Zobrazit seznam kontaktních osob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Nadřazený kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
+          "source": "List contact persons for a contact",
+          "message": "Zobrazit seznam kontaktních osob pro kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Search and retrieve a list of contacts from Zoho Inventory with optional filtering",
+          "message": "Vyhledat a načíst seznam kontaktů ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "Search Contacts",
+          "message": "Vyhledat kontakty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kontakt zákazníka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Kontakt dodavatele"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Filtrovat podle typu kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Filter by contact name",
+          "message": "Filtrovat podle jména kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Filtrovat podle e-mailové adresy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "Aktivní kontakty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive contacts",
+          "message": "Neaktivní kontakty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "Filtrovat podle stavu kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.short_desc": {
+          "source": "Filter by phone number",
+          "message": "Filtrovat podle telefonního čísla"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "Search and list contacts",
+          "message": "Vyhledat a vypsat kontakty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam faktur ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Vypsat faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovat podle zákazníka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Filtrovat podle ID faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Faktury po splatnosti"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Koncepty faktur"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Uhrazené faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Částečně zaplacené faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Odeslané faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Nezaplacené faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void invoices",
+          "message": "Neplatné faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtrovat podle stavu faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List and search invoices",
+          "message": "Zobrazit a vyhledávat faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of inventory adjustments from Zoho Inventory",
+          "message": "Načíst seznam úprav zásob ze Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
+          "source": "List Item Adjustments",
+          "message": "Zobrazit seznam úprav položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List inventory adjustments",
+          "message": "Zobrazit úpravy zásob"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.desc": {
+          "source": "Retrieve a list of item groups from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam skupin položek ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
+          "source": "List Item Groups",
+          "message": "Zobrazit seznam skupin položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Název skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Filter by group name",
+          "message": "Filtrovat podle názvu skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
+          "source": "List and search item groups",
+          "message": "Zobrazit a vyhledávat skupiny položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam položek ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Zobrazit položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory items",
+          "message": "Skladové položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase items",
+          "message": "Nákupní položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales items",
+          "message": "Prodejní položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase items",
+          "message": "Prodejní a nákupní položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Typ položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.short_desc": {
+          "source": "Filter by item type",
+          "message": "Filtrovat podle typu položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by item name",
+          "message": "Filtrovat podle názvu položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "Filtrovat podle SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List and search items",
+          "message": "Zobrazit a vyhledávat položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.desc": {
+          "source": "Retrieve a list of packages from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam balíků ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
+          "source": "List Packages",
+          "message": "Zobrazit balíky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Filtrovat podle prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Číslo balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Filter by package number",
+          "message": "Filtrovat podle čísla balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
+          "source": "List packages",
+          "message": "Zobrazit balíky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.desc": {
+          "source": "Retrieve a list of purchase orders from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam nákupních objednávek ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Zobrazit nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open purchase orders",
+          "message": "Otevřené nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.desc": {
+          "source": "Billed purchase orders",
+          "message": "Vyfakturované nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled purchase orders",
+          "message": "Zrušené nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.desc": {
+          "source": "Closed purchase orders",
+          "message": "Uzavřené nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmlzc3VlZA.desc": {
+          "source": "Issued purchase orders",
+          "message": "Vystavené nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "Filtrovat podle stavu objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Filtrovat podle dodavatele"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
+          "source": "List and search purchase orders",
+          "message": "Zobrazit a vyhledávat nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.desc": {
+          "source": "Retrieve a list of sales orders from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam prodejních objednávek ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
+          "source": "List Sales Orders",
+          "message": "Zobrazit prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovat podle zákazníka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open sales orders",
+          "message": "Otevřené prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbmZpcm1lZA.desc": {
+          "source": "Confirmed sales orders",
+          "message": "Potvrzené prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1bGZpbGxlZA.desc": {
+          "source": "Fulfilled sales orders",
+          "message": "Vyřízené prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void sales orders",
+          "message": "Neplatné prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by sales order status",
+          "message": "Filtrovat podle stavu prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Vypsat a vyhledat prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of shipment orders from Zoho Inventory with optional filtering",
+          "message": "Načíst seznam zásilek ze Zoho Inventory s volitelným filtrováním"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
+          "source": "List Shipment Orders",
+          "message": "Zobrazit seznam zásilek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Filtrovat podle prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by shipment status",
+          "message": "Filtrovat podle stavu zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
+          "source": "List and search shipment orders",
+          "message": "Zobrazit a vyhledávat zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Inventory** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Proveďte vlastní volání HTTP / REST API do **Zoho Inventory** s využitím ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci k dispozici jako samostatné akce."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Inventory",
+          "message": "Provést vlastní volání API do Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.desc": {
+          "source": "Mark a contact as active or inactive in Zoho Inventory",
+          "message": "Označit kontakt v Zoho Inventory jako aktivní nebo neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
+          "source": "Mark Contact Active/Inactive",
+          "message": "Označit kontakt jako aktivní/neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to mark",
+          "message": "Kontakt k označení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.desc": {
+          "source": "`True` to mark active, `False` to mark inactive",
+          "message": "`True` pro označení jako aktivní, `False` pro označení jako neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Stav aktivity"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
+          "source": "Mark a contact as active or inactive",
+          "message": "Označit kontakt jako aktivní nebo neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.desc": {
+          "source": "Mark a contact person as the primary contact person in Zoho Inventory",
+          "message": "Označit kontaktní osobu v Zoho Inventory jako primární"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
+          "source": "Mark Contact Person Primary",
+          "message": "Označit kontaktní osobu jako primární"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktní osoba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to mark as primary",
+          "message": "Kontaktní osoba k označení jako primární"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
+          "source": "Mark a contact person as primary",
+          "message": "Označit kontaktní osobu jako primární"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.desc": {
+          "source": "Mark an item as active or inactive in Zoho Inventory",
+          "message": "Označit položku v Zoho Inventory jako aktivní nebo neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
+          "source": "Mark Item Active/Inactive",
+          "message": "Označit položku jako aktivní/neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Stav aktivity"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to mark",
+          "message": "Položka k označení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
+          "source": "Mark an item as active or inactive",
+          "message": "Označit položku jako aktivní nebo neaktivní"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.desc": {
+          "source": "Mark a shipment order as delivered in Zoho Inventory",
+          "message": "Označit zásilku v Zoho Inventory jako doručenou"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
+          "source": "Mark Shipment Delivered",
+          "message": "Označit zásilku jako doručenou"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Objednávka zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to mark as delivered",
+          "message": "Zásilka k označení jako doručená"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Mark a shipment as delivered",
+          "message": "Označit zásilku jako doručenou"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nového kontaktu v Zoho Inventory. K detekci nových záznamů používá dotazování (polling)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nový kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new contacts (seconds)",
+          "message": "Jak často kontrolovat nové kontakty (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Spustit při vytvoření nového kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new item is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové položky v Zoho Inventory. K detekci nových záznamů používá dotazování (polling)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Nová položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Jak často kontrolovat nové položky (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Spustit při vytvoření nové položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Fires when a new item adjustment is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové úpravy položky v Zoho Inventory. K detekci nových záznamů používá dotazování (polling)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "New Item Adjustment",
+          "message": "Nová úprava položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item adjustments (seconds)",
+          "message": "Jak často kontrolovat nové úpravy položek (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Trigger when a new item adjustment is created",
+          "message": "Spustit při vytvoření nové úpravy položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Fires when a new item group is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové skupiny položek v Zoho Inventory. K detekci nových záznamů používá dotazování."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "New Item Group",
+          "message": "Nová skupina položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item groups (seconds)",
+          "message": "Jak často kontrolovat nové skupiny položek (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Trigger when a new item group is created",
+          "message": "Spustit při vytvoření nové skupiny položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové faktury v Zoho Inventory. K detekci nových záznamů používá dotazování."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Nová faktura"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Jak často kontrolovat nové faktury (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Spustit při vytvoření nové faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové nákupní objednávky v Zoho Inventory. K detekci nových záznamů používá dotazování."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "Nová objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Jak často kontrolovat nové nákupní objednávky (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Spustit při vytvoření nové nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.desc": {
+          "source": "Fires when a new package is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nového balíku v Zoho Inventory. K detekci nových záznamů používá dotazování."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
+          "source": "New Package",
+          "message": "Nový balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new packages (seconds)",
+          "message": "Jak často kontrolovat nové balíky (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
+          "source": "Trigger when a new package is created",
+          "message": "Spustit při vytvoření nového balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové prodejní objednávky v Zoho Inventory. K detekci nových záznamů používá dotazování."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "Nová prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Jak často kontrolovat nové prodejní objednávky (v sekundách)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Spustit při vytvoření nové prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Zoho Inventory",
+          "message": "Aktualizovat existující kontakt v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Název společnosti pro kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kontakt zákazníka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Kontakt dodavatele"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Poznámky ke kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "URL webu kontaktu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Update an existing contact person in Zoho Inventory",
+          "message": "Aktualizovat existující kontaktní osobu v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Update Contact Person",
+          "message": "Aktualizovat kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Kontaktní osoba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to update",
+          "message": "Kontaktní osoba k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Funkce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Pracovní pozice nebo funkce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Křestní jméno kontaktní osoby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Příjmení kontaktní osoby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Update an existing contact person",
+          "message": "Aktualizovat existující kontaktní osobu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in Zoho Inventory",
+          "message": "Aktualizovat existující položku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "Aktualizovat položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Popis položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to update",
+          "message": "Položka k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Název položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Skladová jednotka (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Nákupní cena"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Nákupní cena položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Sazba"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Prodejní cena položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Měrná jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "Aktualizovat existující položku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Update an existing item group in Zoho Inventory",
+          "message": "Aktualizovat existující skupinu položek v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Update Item Group",
+          "message": "Aktualizovat skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Značka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Název značky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Skupina položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to update",
+          "message": "Skupina položek k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Název skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Název skupiny položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Popis skupiny"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Položky ve skupině"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Výrobce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Název výrobce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Měrná jednotka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Update an existing item group",
+          "message": "Aktualizovat existující skupinu položek"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Inventory",
+          "message": "Aktualizovat existující fakturu v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Aktualizovat fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Zákazník pro tuto fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Výše nebo procento slevy"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to update",
+          "message": "Faktura k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Řádkové položky faktury"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Poznámky k faktuře"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Aktualizovat existující fakturu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Update an existing purchase order in Zoho Inventory",
+          "message": "Aktualizovat existující nákupní objednávku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Update Purchase Order",
+          "message": "Aktualizovat nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Datum nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Datum doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Očekávané datum doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Řádkové položky nákupní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Poznámky k nákupní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Nákupní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to update",
+          "message": "Nákupní objednávka k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Dodavatel pro tuto nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Update an existing purchase order",
+          "message": "Aktualizovat existující nákupní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.desc": {
+          "source": "Update an existing package in Zoho Inventory",
+          "message": "Aktualizovat existující balík v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
+          "source": "Update Package",
+          "message": "Aktualizovat balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Datum balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Řádkové položky balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Poznámky k balíku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to update",
+          "message": "Balík k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Update an existing package",
+          "message": "Aktualizovat existující balík"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Zoho Inventory",
+          "message": "Aktualizovat existující prodejní objednávku v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "Aktualizovat prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Zákazník pro tuto prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Položky prodejní objednávky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Poznámky k prodejní objednávce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Prodejní objednávka"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Prodejní objednávka k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Očekávané datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Aktualizovat existující prodejní objednávku"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Update an existing shipment order in Zoho Inventory",
+          "message": "Aktualizovat existující objednávku zásilky v Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Update Shipment Order",
+          "message": "Aktualizovat objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Způsob čerpání"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Způsob doručení"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Organizace Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Poznámky k zásilce"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Objednávka zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to update",
+          "message": "Objednávka zásilky k aktualizaci"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Číslo zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Číslo objednávky zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Poplatek za dopravu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Částka za dopravu"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Sledovací číslo zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Update an existing shipment order",
+          "message": "Aktualizovat existující objednávku zásilky"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.desc": {
+          "source": "Zoho Inventory is an online inventory management software that helps businesses manage orders, warehousing, and shipping.\n\nThis integration supports contacts, items, item groups, item adjustments, packages, purchase orders, sales orders, and shipment orders.",
+          "message": "Zoho Inventory je online software pro správu zásob, který pomáhá podnikům spravovat objednávky, skladování a expedici.\n\nTato integrace podporuje kontakty, položky, skupiny položek, úpravy položek, balíky, nákupní objednávky, prodejní objednávky a objednávky zásilek."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.display_name": {
+          "source": "Zoho Inventory",
+          "message": "Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.short_desc": {
+          "source": "Zoho Inventory management software",
+          "message": "Software pro správu zásob Zoho Inventory"
+        }
+      }
+    }
+  }
+}

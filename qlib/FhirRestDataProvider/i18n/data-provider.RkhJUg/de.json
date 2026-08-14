@@ -1,0 +1,3045 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Conditionally update a FHIR `Observation` resource by search criteria.",
+          "message": "Bedingtes Aktualisieren einer FHIR-`Observation`-Ressource nach Suchkriterien."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Conditional Update Observation",
+          "message": "Bedingtes Aktualisieren einer Observation"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "FHIR-Suchparameter, die in der URL der bedingten Aktualisierungsanfrage verwendet werden"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Suchparameter für bedingte Aktualisierung"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "FHIR-`Observation`-Ressourcen-Textkörper, der bedingt aktualisiert werden soll. Der Hash muss `resourceType` mit dem festen Wert `Observation` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Conditionally update a FHIR Observation resource",
+          "message": "Bedingtes Aktualisieren einer FHIR-Observation-Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Conditionally update a FHIR `Bundle` resource by search criteria.",
+          "message": "Bedingtes Aktualisieren einer FHIR-`Bundle`-Ressource nach Suchkriterien."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Conditional Update Bundle",
+          "message": "Bedingtes Aktualisieren eines Bundle"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "FHIR-Suchparameter, die in der URL der bedingten Aktualisierungsanfrage verwendet werden"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Suchparameter für bedingte Aktualisierung"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "FHIR-`Bundle`-Ressourcen-Textkörper, der bedingt aktualisiert werden soll. Der Hash muss `resourceType` mit dem festen Wert `Bundle` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Conditionally update a FHIR Bundle resource",
+          "message": "Bedingtes Aktualisieren einer FHIR-Bundle-Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Conditionally update a FHIR `Patient` resource by search criteria.",
+          "message": "Bedingtes Aktualisieren einer FHIR-`Patient`-Ressource nach Suchkriterien."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Conditional Update Patient",
+          "message": "Bedingtes Aktualisieren eines Patient"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "FHIR-Suchparameter, die in der URL der bedingten Aktualisierungsanfrage verwendet werden"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Suchparameter für bedingte Aktualisierung"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "FHIR-`Patient`-Ressourcen-Textkörper, der bedingt aktualisiert werden soll. Der Hash muss `resourceType` mit dem festen Wert `Patient` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Conditionally update a FHIR Patient resource",
+          "message": "Bedingtes Aktualisieren einer FHIR-Patient-Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Conditionally update a FHIR resource by type and search parameters.",
+          "message": "Bedingtes Aktualisieren einer FHIR-Ressource nach Typ und Suchparametern."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Conditional Update Resource",
+          "message": "Bedingtes Aktualisieren einer Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "FHIR-Suchparameter, die in der URL der bedingten Aktualisierungsanfrage verwendet werden"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Suchparameter für bedingte Aktualisierung"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` matching `resource_type`.",
+          "message": "FHIR-Ressourcen-Textkörper als JSON-kompatibler Hash. Der Hash muss `resourceType` passend zu `resource_type` enthalten."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update conditionally",
+          "message": "FHIR-Ressourcentyp, der bedingt aktualisiert werden soll"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Conditionally update a FHIR resource",
+          "message": "FHIR-Ressource bedingt aktualisieren"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Create a FHIR `Observation` resource with resource-specific action metadata.",
+          "message": "Erstellen Sie eine FHIR-`Observation`-Ressource mit ressourcenspezifischen Aktionsmetadaten."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Create Observation",
+          "message": "Observation erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Suchausdruck für bedingtes Erstellen in FHIR, der im Header `If-None-Exist` gesendet wird"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kriterien für bedingtes Erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to create. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "FHIR-`Observation`-Ressourcen-Body zum Erstellen. Der Hash muss `resourceType` mit dem festen Wert `Observation` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Create a FHIR Observation resource",
+          "message": "FHIR-Observation-Ressource erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.desc": {
+          "source": "Create a FHIR `Bundle` resource with resource-specific action metadata.",
+          "message": "Erstellen Sie eine FHIR-`Bundle`-Ressource mit ressourcenspezifischen Aktionsmetadaten."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Create Bundle",
+          "message": "Bundle erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Suchausdruck für bedingtes Erstellen in FHIR, der im Header `If-None-Exist` gesendet wird"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kriterien für bedingtes Erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to create. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "FHIR-`Bundle`-Ressourcen-Body zum Erstellen. Der Hash muss `resourceType` mit dem festen Wert `Bundle` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Create a FHIR Bundle resource",
+          "message": "FHIR-Bundle-Ressource erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.desc": {
+          "source": "Create a FHIR `Patient` resource with resource-specific action metadata.",
+          "message": "Erstellen Sie eine FHIR-`Patient`-Ressource mit ressourcenspezifischen Aktionsmetadaten."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.display_name": {
+          "source": "Create Patient",
+          "message": "Patient erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Suchausdruck für bedingtes Erstellen in FHIR, der im Header `If-None-Exist` gesendet wird"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kriterien für bedingtes Erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to create. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "FHIR-`Patient`-Ressourcen-Body zum Erstellen. Der Hash muss `resourceType` mit dem festen Wert `Patient` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Create a FHIR Patient resource",
+          "message": "FHIR-Patient-Ressource erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.desc": {
+          "source": "Create a FHIR resource with an optional `If-None-Exist` conditional create header for idempotent writes.",
+          "message": "Erstellen Sie eine FHIR-Ressource mit einem optionalen bedingten Erstellungs-Header `If-None-Exist` für idempotente Schreibvorgänge."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
+          "source": "Create Resource",
+          "message": "Ressource erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Suchausdruck für bedingtes Erstellen in FHIR, der im Header `If-None-Exist` gesendet wird"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kriterien für bedingtes Erstellen"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`",
+          "message": "FHIR-Ressourcen-Body als JSON-kompatibler Hash. Der Hash muss `resourceType` enthalten.\n\n**Beispiel**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to create",
+          "message": "Zu erstellender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
+          "source": "Create a FHIR resource",
+          "message": "FHIR-Ressource erstellen"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.desc": {
+          "source": "Read the server `CapabilityStatement` from the FHIR `metadata` endpoint.",
+          "message": "Lesen Sie den Server-`CapabilityStatement` vom FHIR-Endpunkt `metadata`."
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
+          "source": "Get Capability Statement",
+          "message": "CapabilityStatement abrufen"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
+          "source": "Read FHIR server metadata",
+          "message": "FHIR-Servermetadaten lesen"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.desc": {
+          "source": "Read the SMART on FHIR discovery document from `.well-known/smart-configuration`.",
+          "message": "Lesen Sie das SMART-on-FHIR-Discovery-Dokument von `.well-known/smart-configuration`."
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
+          "source": "Get SMART Configuration",
+          "message": "SMART-Konfiguration abrufen"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
+          "source": "Read SMART on FHIR discovery metadata",
+          "message": "SMART-on-FHIR-Discovery-Metadaten lesen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Delete a FHIR `Observation` resource by logical `id`.",
+          "message": "Löschen Sie eine FHIR-`Observation`-Ressource nach logischer `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Delete Observation",
+          "message": "Observation löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Delete a FHIR Observation resource",
+          "message": "FHIR-Observation-Ressource löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.desc": {
+          "source": "Delete a FHIR `Bundle` resource by logical `id`.",
+          "message": "Löschen Sie eine FHIR-`Bundle`-Ressource nach logischer `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.display_name": {
+          "source": "Delete Bundle",
+          "message": "Bundle löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Delete a FHIR Bundle resource",
+          "message": "FHIR-Bundle-Ressource löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.desc": {
+          "source": "Delete a FHIR `Patient` resource by logical `id`.",
+          "message": "Löschen Sie eine FHIR-`Patient`-Ressource nach logischer `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.display_name": {
+          "source": "Delete Patient",
+          "message": "Patient löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.short_desc": {
+          "source": "Delete a FHIR Patient resource",
+          "message": "FHIR-Patient-Ressource löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.desc": {
+          "source": "Delete a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Löschen Sie eine FHIR-Ressource nach Typ und ID. Geben Sie `etag` an, um einen `If-Match`-Header für optimistische Nebenläufigkeit zu senden."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
+          "source": "Delete Resource",
+          "message": "Ressource löschen"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to delete",
+          "message": "Zu löschender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
+          "source": "Delete a FHIR resource",
+          "message": "FHIR-Ressource löschen"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.desc": {
+          "source": "Expand a FHIR ValueSet by delegating to a terminology server. The `path` value is a relative ValueSet path such as `ValueSet/example`.",
+          "message": "Erweitern Sie ein FHIR-ValueSet durch Delegieren an einen Terminologieserver. Der Wert von `path` ist ein relativer ValueSet-Pfad wie `ValueSet/example`."
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.display_name": {
+          "source": "Expand ValueSet",
+          "message": "ValueSet erweitern"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ValueSet endpoint",
+          "message": "Relativer FHIR-Pfad zu einem ValueSet-Endpunkt"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Pfad"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.short_desc": {
+          "source": "ValueSet path",
+          "message": "ValueSet-Pfad"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.desc": {
+          "source": "Optional FHIR `$expand` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"filter\": \"smi\"}`",
+          "message": "Optionale FHIR-`$expand`-Operationsparameter als Abfrageparameter. Schlüssel sind vom Server akzeptierte Operationsparameternamen.\n\n**Beispiel**: `{\"filter\": \"smi\"}`"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parameter"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Operationsparameter"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.short_desc": {
+          "source": "Call a ValueSet $expand operation",
+          "message": "Eine ValueSet-$expand-Operation aufrufen"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.desc": {
+          "source": "Look up code display, designation, and property metadata by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem path such as `CodeSystem/example`.",
+          "message": "Schlagen Sie Code-Anzeige, Bezeichnung und Eigenschaftsmetadaten nach, indem Sie an einen FHIR-Terminologie-Endpunkt delegieren. Der Wert von `path` ist ein relativer CodeSystem-Pfad wie `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
+          "source": "Lookup Code",
+          "message": "Code nachschlagen"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem endpoint",
+          "message": "Relativer FHIR-Pfad zu einem CodeSystem-Endpunkt"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Pfad"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "CodeSystem path",
+          "message": "CodeSystem-Pfad"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$lookup` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`",
+          "message": "FHIR-`$lookup`-Operationsparameter als Abfrageparameter. Schlüssel sind vom Server akzeptierte Operationsparameternamen.\n\n**Beispiel**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parameter"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Operationsparameter"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
+          "source": "Call a terminology $lookup operation",
+          "message": "Eine Terminologie-$lookup-Operation aufrufen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FHIR R4** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **FHIR R4** unter Verwendung der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfrage-Body an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antwort-Body enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die auf dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FHIR R4",
+          "message": "Einen benutzerdefinierten API-Aufruf an FHIR R4 durchführen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.desc": {
+          "source": "Search FHIR `Observation` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Durchsuchen von FHIR-`Observation`-Ressourcen. Verwenden Sie `params` für vom Server unterstützte FHIR-Suchparameter."
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.display_name": {
+          "source": "Search Observation",
+          "message": "Observation suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Search FHIR Observation resources",
+          "message": "FHIR-Observation-Ressourcen suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.desc": {
+          "source": "Search FHIR `Bundle` resources and follow Bundle `next` pagination links.",
+          "message": "Durchsuchen von FHIR-`Bundle`-Ressourcen und Verfolgen von Bundle-`next`-Paginierungs-Links."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
+          "source": "Search All Bundle",
+          "message": "Alle Bundle suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten durch Verfolgen von `next`-Paginierungs-Links"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximale Seitenanzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
+          "source": "Search all FHIR Bundle resource pages",
+          "message": "Alle Seiten der FHIR-Bundle-Ressourcen durchsuchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Search FHIR `Observation` resources and follow Bundle `next` pagination links.",
+          "message": "Durchsuchen von FHIR-`Observation`-Ressourcen und Verfolgen von Bundle-`next`-Paginierungs-Links."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Search All Observation",
+          "message": "Alle Observation suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten durch Verfolgen von `next`-Paginierungs-Links"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximale Seitenanzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Search all FHIR Observation resource pages",
+          "message": "Alle Seiten der FHIR-Observation-Ressourcen durchsuchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.desc": {
+          "source": "Search FHIR `Patient` resources and follow Bundle `next` pagination links.",
+          "message": "Durchsuchen von FHIR-`Patient`-Ressourcen und Verfolgen von Bundle-`next`-Paginierungs-Links."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
+          "source": "Search All Patient",
+          "message": "Alle Patient suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten durch Verfolgen von `next`-Paginierungs-Links"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximale Seitenanzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
+          "source": "Search all FHIR Patient resource pages",
+          "message": "Alle Seiten der FHIR-Patient-Ressourcen durchsuchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.desc": {
+          "source": "Search a FHIR resource type and follow Bundle `next` pagination links. The `params` hash remains available for advanced search parameters.",
+          "message": "Durchsuchen eines FHIR-Ressourcentyps und Verfolgen von Bundle-`next`-Paginierungs-Links. Der Hash `params` bleibt für erweiterte Suchparameter verfügbar."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
+          "source": "Search All Resources",
+          "message": "Alle Ressourcen suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten durch Verfolgen von `next`-Paginierungs-Links"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximale Seitenanzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximale Anzahl abzurufender Bundle-Seiten"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Zu suchender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
+          "source": "Search FHIR resources and follow pagination",
+          "message": "FHIR-Ressourcen durchsuchen und Paginierung folgen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.desc": {
+          "source": "Search FHIR `Bundle` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Durchsuchen von FHIR-`Bundle`-Ressourcen. Verwenden Sie `params` für vom Server unterstützte FHIR-Suchparameter."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.display_name": {
+          "source": "Search Bundle",
+          "message": "Bundle suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.short_desc": {
+          "source": "Search FHIR Bundle resources",
+          "message": "FHIR-Bundle-Ressourcen suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.desc": {
+          "source": "Search FHIR `Patient` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Durchsuchen von FHIR-`Patient`-Ressourcen. Verwenden Sie `params` für vom Server unterstützte FHIR-Suchparameter."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.display_name": {
+          "source": "Search Patient",
+          "message": "Patienten suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.short_desc": {
+          "source": "Search FHIR Patient resources",
+          "message": "FHIR-Patient-Ressourcen suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.desc": {
+          "source": "Search a FHIR resource type. The `params` hash accepts FHIR search parameter names, including modifiers, chained parameters, `_include`, and `_revinclude`.",
+          "message": "Einen FHIR-Ressourcentyp suchen. Der Hash `params` akzeptiert Namen von FHIR-Suchparametern, einschließlich Modifikatoren, verketteter Parameter, `_include` und `_revinclude`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
+          "source": "Search Resources",
+          "message": "Ressourcen suchen"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_count` für die Seitengröße zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Anzahl"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "FHIR-Suchparameter `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_content` für den vollständigen Inhalt zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "FHIR-Suchparameter `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_include` zugewiesen ist; verwenden Sie eine Liste für wiederholte Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "FHIR-Suchparameter `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_id` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "ID-Suche"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "FHIR-Suchparameter `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_lastUpdated` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Zuletzt aktualisiert"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "FHIR-Suchparameter `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_sort` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "FHIR-Suchparameter `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_security` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Sicherheit"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "FHIR-Suchparameter `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "FHIR-Suchparameter als Hash. Schlüssel sind FHIR-Parameternamen wie `family`, `_include` oder `_revinclude`; Listenwerte werden als wiederholte Abfrageparameter gesendet.\n\n**Beispiel**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "FHIR-Suchparameter"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_profile` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "FHIR-Suchparameter `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_revinclude` zugewiesen ist; verwenden Sie eine Liste für wiederholte Reverse-Include-Werte"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "FHIR-Suchparameter `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Zu suchender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Komfortfeld, das dem FHIR-Suchparameter `_tag` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "FHIR-Suchparameter `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Komfortfeld, das dem FHIR-Volltext-Suchparameter `_text` zugewiesen ist"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "FHIR-Suchparameter `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
+          "source": "Search FHIR resources with query parameters",
+          "message": "FHIR-Ressourcen mit Abfrageparametern suchen"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.desc": {
+          "source": "Submit a FHIR `Bundle` with `type` set to `transaction` or `batch` to the FHIR service base. Use this action when related resource writes must be processed together by the server.",
+          "message": "Ein FHIR-`Bundle` mit `type` eingestellt auf `transaction` oder `batch` an die FHIR-Dienstbasis übermitteln. Verwenden Sie diese Aktion, wenn zusammenhängende Schreibvorgänge von Ressourcen gemeinsam vom Server verarbeitet werden müssen."
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
+          "source": "Submit Bundle",
+          "message": "Bundle übermitteln"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.desc": {
+          "source": "FHIR `Bundle` resource with `type` set to `transaction` or `batch`. The Bundle is POSTed to the FHIR service base for atomic transaction writes or batch execution.\n\n**Example**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`",
+          "message": "FHIR-`Bundle`-Ressource mit `type` eingestellt auf `transaction` oder `batch`. Das Bundle wird per POST an die FHIR-Dienstbasis für atomare Transaktionsschreibvorgänge oder Batch-Ausführung gesendet.\n\n**Beispiel**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.display_name": {
+          "source": "Bundle",
+          "message": "Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.short_desc": {
+          "source": "FHIR transaction or batch Bundle",
+          "message": "FHIR-Transaktions- oder Batch-Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
+          "source": "Submit a FHIR transaction or batch Bundle",
+          "message": "Ein FHIR-Transaktions- oder Batch-Bundle übermitteln"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.desc": {
+          "source": "Patch a FHIR `Bundle` resource by logical `id`.",
+          "message": "Eine FHIR-`Bundle`-Ressource anhand der logischen `id` patchen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.display_name": {
+          "source": "Patch Bundle",
+          "message": "Bundle patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Inhaltstyp des Patch-Dokuments; Standardwert ist `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Inhaltstyp des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Textkörper des FHIR-Patch-Dokuments. Verwenden Sie `content_type`, um die Kodierung für JSON Patch, XML Patch oder FHIRPath Patch auszuwählen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Textkörper des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.short_desc": {
+          "source": "Patch a FHIR Bundle resource",
+          "message": "Eine FHIR-Bundle-Ressource patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.desc": {
+          "source": "Patch a FHIR `Observation` resource by logical `id`.",
+          "message": "Eine FHIR-`Observation`-Ressource anhand der logischen `id` patchen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Patch Observation",
+          "message": "Observation patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Inhaltstyp des Patch-Dokuments; Standardwert ist `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Inhaltstyp des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Textkörper des FHIR-Patch-Dokuments. Verwenden Sie `content_type`, um die Kodierung für JSON Patch, XML Patch oder FHIRPath Patch auszuwählen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Textkörper des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Patch a FHIR Observation resource",
+          "message": "Eine FHIR-Observation-Ressource patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.desc": {
+          "source": "Patch a FHIR `Patient` resource by logical `id`.",
+          "message": "Eine FHIR-`Patient`-Ressource anhand der logischen `id` patchen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.display_name": {
+          "source": "Patch Patient",
+          "message": "Patient patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Inhaltstyp des Patch-Dokuments; Standardwert ist `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Inhaltstyp des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Textkörper des FHIR-Patch-Dokuments. Verwenden Sie `content_type`, um die Kodierung für JSON Patch, XML Patch oder FHIRPath Patch auszuwählen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Textkörper des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.short_desc": {
+          "source": "Patch a FHIR Patient resource",
+          "message": "Eine FHIR-Patient-Ressource patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.desc": {
+          "source": "Patch a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Eine FHIR-Ressource nach Typ und ID patchen. Geben Sie `etag` an, um einen Header `If-Match` für optimistische Nebenläufigkeit zu senden."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
+          "source": "Patch Resource",
+          "message": "Ressource patchen"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Inhaltstyp des Patch-Dokuments; Standardwert ist `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Inhaltstyp des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Textkörper des FHIR-Patch-Dokuments. Verwenden Sie `content_type`, um die Kodierung für JSON Patch, XML Patch oder FHIRPath Patch auszuwählen."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Textkörper des Patch-Dokuments"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to patch",
+          "message": "Zu patchender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
+          "source": "Patch a FHIR resource",
+          "message": "Eine FHIR-Ressource patchen"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.desc": {
+          "source": "Read one FHIR `Bundle` resource instance using its logical `id`.",
+          "message": "Eine FHIR-`Bundle`-Ressourceninstanz unter Verwendung ihrer logischen `id` lesen."
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.display_name": {
+          "source": "Read Bundle",
+          "message": "Bundle lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.short_desc": {
+          "source": "Read a FHIR Bundle resource by ID",
+          "message": "Eine FHIR-Bundle-Ressource nach ID lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Read one FHIR `Observation` resource instance using its logical `id`.",
+          "message": "Eine FHIR-`Observation`-Ressourceninstanz unter Verwendung ihrer logischen `id` lesen."
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Read Observation",
+          "message": "Observation lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Read a FHIR Observation resource by ID",
+          "message": "Eine FHIR-Observation-Ressource nach ID lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.desc": {
+          "source": "Read one FHIR `Patient` resource instance using its logical `id`.",
+          "message": "Eine FHIR-`Patient`-Ressourceninstanz unter Verwendung ihrer logischen `id` lesen."
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.display_name": {
+          "source": "Read Patient",
+          "message": "Patient lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.short_desc": {
+          "source": "Read a FHIR Patient resource by ID",
+          "message": "Eine FHIR-Patient-Ressource nach ID lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read one FHIR resource instance using its `resource_type` and logical `id`.",
+          "message": "Eine FHIR-Ressourceninstanz unter Verwendung ihres `resource_type` und der logischen `id` lesen."
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "Ressource lesen"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type, for example `Patient` or `Observation`",
+          "message": "FHIR-Ressourcentyp, zum Beispiel `Patient` oder `Observation`"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read a FHIR resource by type and ID",
+          "message": "Eine FHIR-Ressource nach Typ und ID lesen"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.desc": {
+          "source": "Translate a code through a FHIR ConceptMap by delegating to a terminology endpoint. The `path` value is a relative ConceptMap path such as `ConceptMap/example`.",
+          "message": "Einen Code über eine FHIR ConceptMap übersetzen, indem an einen Terminologie-Endpunkt delegiert wird. Der Wert `path` ist ein relativer ConceptMap-Pfad wie `ConceptMap/example`."
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
+          "source": "Translate Code",
+          "message": "Code übersetzen"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ConceptMap endpoint",
+          "message": "Relativer FHIR-Pfad zu einem ConceptMap-Endpunkt"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Pfad"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "ConceptMap path",
+          "message": "ConceptMap-Pfad"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$translate` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`",
+          "message": "FHIR-`$translate`-Operationsparameter als Abfrageparameter. Schlüssel sind vom Server akzeptierte Operationsparameternamen.\n\n**Beispiel**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parameter"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Operationsparameter"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {
+          "source": "Call a terminology $translate operation",
+          "message": "Eine Terminologie-Operation $translate aufrufen"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Update a FHIR `Observation` resource by logical `id` with resource-specific action metadata.",
+          "message": "Eine FHIR-`Observation`-Ressource anhand der logischen `id` mit ressourcenspezifischen Aktionsmetadaten aktualisieren."
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Update Observation",
+          "message": "Observation aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Zu aktualisierender Textkörper der FHIR-`Observation`-Ressource. Der Hash muss `resourceType` mit dem festen Wert `Observation` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Update a FHIR Observation resource",
+          "message": "Eine FHIR-Observation-Ressource aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Update a FHIR `Bundle` resource by logical `id` with resource-specific action metadata.",
+          "message": "Eine FHIR-`Bundle`-Ressource anhand der logischen `id` mit ressourcenspezifischen Aktionsmetadaten aktualisieren."
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Update Bundle",
+          "message": "Bundle aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Zu aktualisierender Textkörper der FHIR-`Bundle`-Ressource. Der Hash muss `resourceType` mit dem festen Wert `Bundle` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Update a FHIR Bundle resource",
+          "message": "Eine FHIR-Bundle-Ressource aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Update a FHIR `Patient` resource by logical `id` with resource-specific action metadata.",
+          "message": "Eine FHIR-`Patient`-Ressource anhand der logischen `id` mit ressourcenspezifischen Aktionsmetadaten aktualisieren."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Update Patient",
+          "message": "Patient aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Zu aktualisierender Textkörper der FHIR-`Patient`-Ressource. Der Hash muss `resourceType` mit dem festen Wert `Patient` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Update a FHIR Patient resource",
+          "message": "Eine FHIR-Patient-Ressource aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Update a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Eine FHIR-Ressource nach Typ und ID aktualisieren. Geben Sie `etag` an, um einen Header `If-Match` für optimistische Nebenläufigkeit zu senden."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Update Resource",
+          "message": "Ressource aktualisieren"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "ETag-Wert, der im Header `If-Match` für optimistische Nebenläufigkeit gesendet wird"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "FHIR-Version ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logische FHIR-ID der Ressourceninstanz"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` and should include the logical `id` being updated.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`",
+          "message": "Textkörper der FHIR-Ressource als JSON-kompatibler Hash. Der Hash muss `resourceType` enthalten und sollte die logische `id` enthalten, die aktualisiert wird.\n\n**Beispiel**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update",
+          "message": "Zu aktualisierender FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Update a FHIR resource",
+          "message": "FHIR-Ressource aktualisieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.desc": {
+          "source": "Validate a code by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem or ValueSet path such as `CodeSystem/example`.",
+          "message": "Validieren Sie einen Code durch Delegieren an einen FHIR-Terminologie-Endpunkt. Der Wert `path` ist ein relativer CodeSystem- oder ValueSet-Pfad wie `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
+          "source": "Validate Code",
+          "message": "Code validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem or ValueSet endpoint",
+          "message": "Relativer FHIR-Pfad zu einem CodeSystem- oder ValueSet-Endpunkt"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Pfad"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.short_desc": {
+          "source": "CodeSystem or ValueSet path",
+          "message": "CodeSystem- oder ValueSet-Pfad"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR `$validate-code` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"code\": \"abc\"}`",
+          "message": "FHIR-`$validate-code`-Operationsparameter als Abfrageparameter. Schlüssel sind vom Server akzeptierte Operationsparameternamen.\n\n**Beispiel**: `{\"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parameter"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Operationsparameter"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
+          "source": "Call a terminology $validate-code operation",
+          "message": "Eine Terminologie-$validate-code-Operation aufrufen"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.desc": {
+          "source": "Validate a FHIR `Bundle` resource by delegating to the server's `$validate` operation.",
+          "message": "Validieren Sie eine FHIR-`Bundle`-Ressource durch Delegieren an die `$validate`-Operation des Servers."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.display_name": {
+          "source": "Validate Bundle",
+          "message": "Bundle validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Optionale logische FHIR-ID für die Validierung auf Instanzebene"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to validate. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Zu validierender FHIR-`Bundle`-Ressourcen-Body. Der Hash muss `resourceType` mit dem festen Wert `Bundle` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.short_desc": {
+          "source": "Validate a FHIR Bundle resource",
+          "message": "Eine FHIR-Bundle-Ressource validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.desc": {
+          "source": "Validate a FHIR `Observation` resource by delegating to the server's `$validate` operation.",
+          "message": "Validieren Sie eine FHIR-`Observation`-Ressource durch Delegieren an die `$validate`-Operation des Servers."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Validate Observation",
+          "message": "Observation validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Optionale logische FHIR-ID für die Validierung auf Instanzebene"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to validate. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Zu validierender FHIR-`Observation`-Ressourcen-Body. Der Hash muss `resourceType` mit dem festen Wert `Observation` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Validate a FHIR Observation resource",
+          "message": "Eine FHIR-Observation-Ressource validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.desc": {
+          "source": "Validate a FHIR `Patient` resource by delegating to the server's `$validate` operation.",
+          "message": "Validieren Sie eine FHIR-`Patient`-Ressource durch Delegieren an die `$validate`-Operation des Servers."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.display_name": {
+          "source": "Validate Patient",
+          "message": "Patient validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Optionale logische FHIR-ID für die Validierung auf Instanzebene"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to validate. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Zu validierender FHIR-`Patient`-Ressourcen-Body. Der Hash muss `resourceType` mit dem festen Wert `Patient` enthalten.\n\n**Beispiel**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.short_desc": {
+          "source": "Validate a FHIR Patient resource",
+          "message": "Eine FHIR-Patient-Ressource validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.desc": {
+          "source": "Validate a FHIR resource by delegating to the server's `$validate` operation. Use `resource_type` and `id` for type-level or instance-level validation.",
+          "message": "Validieren Sie eine FHIR-Ressource durch Delegieren an die `$validate`-Operation des Servers. Verwenden Sie `resource_type` und `id` für die Validierung auf Typebene oder Instanzebene."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
+          "source": "Validate Resource",
+          "message": "Ressource validieren"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Optionale logische FHIR-ID für die Validierung auf Instanzebene"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logische FHIR-ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body to validate. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`",
+          "message": "Zu validierender FHIR-Ressourcen-Body. Der Hash muss `resourceType` enthalten.\n\n**Beispiel**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ressource"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "FHIR-Ressourcen-Textkörper"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "Optional FHIR resource type for type-level or instance-level validation",
+          "message": "Optionaler FHIR-Ressourcentyp für die Validierung auf Typebene oder Instanzebene"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Ressourcentyp"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "FHIR-Ressourcentyp"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
+          "source": "Call the FHIR $validate operation",
+          "message": "Die FHIR-$validate-Operation aufrufen"
+        },
+        "app.RkhJUg.desc": {
+          "source": "Connect to HL7 FHIR R4 JSON servers for healthcare interoperability.\n\nSupported operations:\n- **Metadata**: read `CapabilityStatement` and SMART configuration\n- **Resources**: read, search, paginated search, create, submit transaction/batch Bundles, update, conditional update, patch, delete, and validate resources advertised by the server `CapabilityStatement`\n- **Generated R4 resources**: use typed actions for supported `Patient`, `Observation`, and `Bundle` resources\n- **Terminology**: delegate `$validate-code`, `$lookup`, `$translate`, and `$expand` operations to a FHIR server\n\n**Note**: Generic actions validate resource names against the generated R4 catalog and the server `CapabilityStatement`. Structured metadata is included for `Patient`, `Observation`, and `Bundle`.",
+          "message": "Verbinden Sie sich mit HL7 FHIR R4 JSON-Servern für Interoperabilität im Gesundheitswesen.\n\nUnterstützte Operationen:\n- **Metadaten**: Lesen von `CapabilityStatement` und SMART-Konfiguration\n- **Ressourcen**: Lesen, Suchen, paginierte Suche, Erstellen, Übermitteln von Transaktions-/Batch-Bundles, Aktualisieren, bedingtes Aktualisieren, Patchen, Löschen und Validieren von Ressourcen, die vom Server angekündigt werden `CapabilityStatement`\n- **Generierte R4-Ressourcen**: Verwenden Sie typisierte Aktionen für unterstützte `Patient`-, `Observation`- und `Bundle`-Ressourcen\n- **Terminologie**: Delegieren von `$validate-code`-, `$lookup`-, `$translate`- und `$expand`-Operationen an einen FHIR-Server\n\n**Hinweis**: Generische Aktionen validieren Ressourcennamen gegen den generierten R4-Katalog und den Server `CapabilityStatement`. Strukturierte Metadaten sind für `Patient`, `Observation` und `Bundle` enthalten."
+        },
+        "app.RkhJUg.display_name": {
+          "source": "FHIR R4",
+          "message": "FHIR R4"
+        },
+        "app.RkhJUg.short_desc": {
+          "source": "FHIR R4 JSON server integration",
+          "message": "FHIR R4 JSON-Server-Integration"
+        }
+      }
+    }
+  }
+}

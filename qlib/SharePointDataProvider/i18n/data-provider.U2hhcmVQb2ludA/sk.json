@@ -1,0 +1,1893 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a document or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "Asynchrónne skopírovať dokument alebo priečinok do nového umiestnenia, voliteľne s novým názvom. Vráti monitorovaciu adresu URL na sledovanie priebehu kopírovania"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Document",
+          "message": "Kopírovať dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zlyhať požiadavku s chybou"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zlyhať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "Automaticky premenovať novú kópiu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Premenovať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Nahradiť existujúci súbor"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Nahradiť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "Správanie pri riešení konfliktov, ak v cieľovom umiestnení existuje položka s rovnakým názvom:\n- `rename`: automaticky premenovať novú kópiu\n- `replace`: nahradiť existujúci súbor (podporované len pre súbory, nie priečinky)\n- `fail`: zlyhať požiadavku s chybou (predvolené)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Správanie pri konflikte"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Ako spracovať konflikty v názvoch"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "Jedinečný identifikátor súboru alebo priečinka, ktorý sa má skopírovať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "ID položky na kopírovanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "Nový názov pre skopírovanú položku. Ak nie je zadaný, použije sa rovnaký názov ako pôvodný"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nový názov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "Nový názov pre kópiu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "Jedinečný identifikátor cieľového disku. Vyžaduje sa pri kopírovaní na iný disk"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "ID cieľového disku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "ID cieľového disku pre kópiu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "ID cieľového priečinka. Ak je vynechané, položka sa skopíruje do koreňového adresára disku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "ID cieľového priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "ID cieľového priečinka pre kópiu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a document or folder",
+          "message": "Kopírovať dokument alebo priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in a document library, optionally within a parent folder",
+          "message": "Vytvoriť nový priečinok v knižnici dokumentov, voliteľne v nadradenom priečinku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Vytvoriť priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zlyhať požiadavku s chybou"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zlyhať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "Automaticky premenovať nový priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Premenovať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "Nahradiť existujúcu položku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Nahradiť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "Správanie pri riešení konfliktov, ak existuje položka s rovnakým názvom:\n- `rename`: automaticky premenovať nový priečinok\n- `replace`: nahradiť existujúcu položku\n- `fail`: zlyhať požiadavku s chybou"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Správanie pri konflikte"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Ako spracovať konflikty v názvoch"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "Voliteľný popis priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "Popis priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "Názov nového priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "Názov priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "Názov priečinka, ktorý sa má vytvoriť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "ID nadradeného priečinka. Ak je vynechané, priečinok sa vytvorí v koreňovom adresári disku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "Vytvoriť nový priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.desc": {
+          "source": "Create a new list in a SharePoint site, optionally with its columns",
+          "message": "Vytvoriť nový zoznam na lokalite SharePoint, voliteľne s jeho stĺpcami"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
+          "source": "Create List",
+          "message": "Vytvoriť zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.desc": {
+          "source": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column",
+          "message": "Stĺpce, s ktorými sa má zoznam vytvoriť, ako zoznam objektov Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition), napríklad `{\"name\": \"Amount\", \"number\": {}}`. Ak sa vynechá, zoznam sa vytvorí iba s predvoleným stĺpcom `Title`"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "Stĺpce"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.short_desc": {
+          "source": "The columns to create the list with",
+          "message": "Stĺpce, s ktorými sa má zoznam vytvoriť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the list to create",
+          "message": "Popis zoznamu, ktorý sa má vytvoriť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the new list",
+          "message": "Popis nového zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "The title of the list to create, as shown to users",
+          "message": "Názov zoznamu, ktorý sa má vytvoriť, ako sa zobrazuje používateľom"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "List Name",
+          "message": "Názov zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "The name of the new list",
+          "message": "Názov nového zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.desc": {
+          "source": "A library of files, reached with the file actions",
+          "message": "Knižnica súborov dostupná prostredníctvom akcií pre súbory"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "A calendar of events",
+          "message": "Kalendár udalostí"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Calendar",
+          "message": "Kalendár"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.desc": {
+          "source": "An ordinary list of records",
+          "message": "Bežný zoznam záznamov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.display_name": {
+          "source": "Generic List",
+          "message": "Všeobecný zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.desc": {
+          "source": "A task list",
+          "message": "Zoznam úloh"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.display_name": {
+          "source": "Tasks",
+          "message": "Úlohy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.desc": {
+          "source": "The SharePoint template the list is based on; `genericList` is an ordinary list of records and `documentLibrary` holds files",
+          "message": "Šablóna SharePoint, na ktorej je zoznam založený; `genericList` je bežný zoznam záznamov a `documentLibrary` obsahuje súbory"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "Šablóna"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.short_desc": {
+          "source": "The kind of list to create",
+          "message": "Druh zoznamu, ktorý sa má vytvoriť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
+          "source": "Create a new list",
+          "message": "Vytvoriť nový zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Create an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "Vytvoriť položku v zozname SharePoint. Po výbere lokality a zoznamu sa vlastné stĺpce zoznamu ponúknu ako jednotlivé typované možnosti"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Create List Item",
+          "message": "Vytvoriť položku zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "Hodnoty, ktoré sa majú nastaviť pre stĺpce položky, indexované podľa interného názvu stĺpca. Po výbere lokality a zoznamu sa jednotlivé stĺpce ponúknu s vlastnými typmi; akcia `columns` ich vypíše"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "Hodnoty stĺpcov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "Hodnoty, ktoré sa majú nastaviť pre stĺpce položky"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Create an item in a list",
+          "message": "Vytvoriť položku v zozname"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a document or folder",
+          "message": "Vytvoriť odkaz na zdieľanie (zobrazenie, úpravu alebo vloženie) pre dokument alebo priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "Vytvoriť odkaz na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "Dátum a čas vypršania platnosti odkazu na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "Dátum vypršania platnosti"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "Kedy vyprší platnosť odkazu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "Jedinečný identifikátor položky, pre ktorú sa má vytvoriť odkaz na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "ID položky na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "Iba používatelia v rovnakej organizácii"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "Organizácia"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "Prístup má ktokoľvek s odkazom"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "Anonymný"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "Rozsah odkazu:\n- `anonymous`: prístup má ktokoľvek s odkazom\n- `organization`: prístup majú iba používatelia v rovnakej organizácii"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "Rozsah odkazu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "Rozsah odkazu na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "Heslo pre odkaz na zdieľanie (voliteľné)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "Heslo pre odkaz na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "Prístup na čítanie a zápis"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "Upraviť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "Vložiteľný odkaz"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "Vložiť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "Prístup iba na čítanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "Zobrazenie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "Typ odkazu na zdieľanie, ktorý sa má vytvoriť:\n- `view`: odkaz iba na čítanie\n- `edit`: odkaz na čítanie a zápis\n- `embed`: vložiteľný odkaz"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "Typ odkazu"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "Typ odkazu na zdieľanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for a document",
+          "message": "Vytvoriť odkaz na zdieľanie pre dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading a large document (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "Vytvoriť reláciu obnoviteľného nahrávania na nahrávanie veľkého dokumentu (>4 MB) po častiach. Vráti adresu URL na nahrávanie, ktorá prijíma požiadavky PUT s rozsahmi bajtov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "Vytvoriť reláciu nahrávania"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zlyhať požiadavku s chybou"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zlyhať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "Automaticky premenovať nový súbor"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Premenovať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Nahradiť existujúci súbor"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Nahradiť"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "Správanie pri riešení konfliktov, ak existuje súbor s rovnakým názvom:\n- `rename`: automaticky premenovať nový súbor\n- `replace`: nahradiť existujúci súbor\n- `fail`: zlyhať požiadavku s chybou"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Správanie pri konflikte"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Ako spracovať konflikty v názvoch"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "Názov súboru, ktorý sa má nahrať (napr. `large-file.zip`)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Názov súboru"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "Názov súboru, ktorý sa má nahrať"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "ID nadradeného priečinka. Ak je vynechané, súbor sa nahrá do koreňového adresára disku"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "Vytvoriť obnoviteľnú reláciu nahrávania"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve a document library's metadata, including its storage quota and owner",
+          "message": "Získať metaúdaje knižnice dokumentov vrátane jej kvóty úložiska a vlastníka"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Document Library Info",
+          "message": "Získať informácie o knižnici dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get document library metadata and quota",
+          "message": "Získať metaúdaje a kvótu knižnice dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a document or folder by ID or by path within the library",
+          "message": "Získať metaúdaje pre dokument alebo priečinok podľa ID alebo podľa cesty v rámci knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Document",
+          "message": "Získať dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "Jedinečný identifikátor položky na získanie. Zadajte buď `id` alebo `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "ID položky na získanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "Cesta položky relatívna ku koreňu disku (napr. `/Documents/file.txt`). Zadajte buď `id` alebo `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "Cesta k položke"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "Cesta k položke na získanie"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get document or folder metadata",
+          "message": "Získať metaúdaje dokumentu alebo priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.desc": {
+          "source": "Retrieve metadata for a SharePoint list",
+          "message": "Získať metaúdaje pre zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
+          "source": "Get List",
+          "message": "Získať zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
+          "source": "Get list metadata",
+          "message": "Získať metaúdaje zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.desc": {
+          "source": "Retrieve a list item with the values of all of its columns",
+          "message": "Získať položku zoznamu s hodnotami všetkých jej stĺpcov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
+          "source": "Get List Item",
+          "message": "Získať položku zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "Položka zoznamu, ktorú chcete adresovať"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "Položka zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
+          "source": "Get a list item and its column values",
+          "message": "Získať položku zoznamu a hodnoty jej stĺpcov"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.desc": {
+          "source": "Retrieve metadata for a SharePoint site",
+          "message": "Získať metaúdaje pre lokalitu SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
+          "source": "Get Site",
+          "message": "Získať web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
+          "source": "Get site metadata",
+          "message": "Získať metaúdaje lokality"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a document. Returns a pre-authenticated download URL that can be used to download the content directly",
+          "message": "Získať URL adresu na stiahnutie a metaúdaje pre dokument. Vráti vopred overenú URL adresu na stiahnutie, ktorú možno použiť na priame stiahnutie obsahu"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download Document",
+          "message": "Stiahnuť dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "Jedinečný identifikátor súboru na stiahnutie"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "ID položky na stiahnutie"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a document",
+          "message": "Stiahnuť dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a document or folder from a library. The item is moved to the recycle bin",
+          "message": "Odstrániť dokument alebo priečinok z knižnice. Položka sa presunie do koša"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Document",
+          "message": "Odstrániť dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "Jedinečný identifikátor položky na odstránenie"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "ID položky na odstránenie"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a document or folder",
+          "message": "Odstrániť dokument alebo priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.desc": {
+          "source": "Delete a SharePoint list and every item in it",
+          "message": "Odstrániť zoznam SharePoint a každú položku v ňom"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "Vymazať zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
+          "source": "Delete a list",
+          "message": "Odstrániť zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Delete an item from a SharePoint list",
+          "message": "Odstrániť položku zo zoznamu SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Delete List Item",
+          "message": "Odstrániť položku zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "Položka zoznamu, ktorú chcete adresovať"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "Položka zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Delete an item from a list",
+          "message": "Odstrániť položku zo zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "Spustí sa pri úprave dokumentu, ktorý sa už nachádza v knižnici. Používa rozdielové dopyty (delta queries), ktoré pokračujú presne tam, kde skončili, namiesto opätovného načítavania knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "Document Modified",
+          "message": "Dokument bol upravený"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "Trigger when a document is modified",
+          "message": "Spustiť pri úprave dokumentu"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.desc": {
+          "source": "List the columns of a SharePoint list, with their types and whether they can be written",
+          "message": "Vypísať zoznam stĺpcov zoznamu SharePoint s ich typmi a informáciou, či sú zapisovateľné"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
+          "source": "List Columns",
+          "message": "Vypísať stĺpce"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.desc": {
+          "source": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject",
+          "message": "Vrátiť iba stĺpce, do ktorých je možné zapisovať; SharePoint udržiava mnoho stĺpcov iba na čítanie, ktoré by volanie na vytvorenie alebo aktualizáciu odmietlo"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.display_name": {
+          "source": "Writable Only",
+          "message": "Iba zapisovateľné"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.short_desc": {
+          "source": "Return only columns that can be written",
+          "message": "Vrátiť iba stĺpce, do ktorých je možné zapisovať"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
+          "source": "List the columns of a list",
+          "message": "Vypísať zoznam stĺpcov zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.desc": {
+          "source": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a library identifies it to every file action",
+          "message": "Vypísať zoznam knižníc dokumentov (diskov) na lokalite SharePoint. Hodnota `drive_id` knižnice ju identifikuje pre každú operáciu so súbormi"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
+          "source": "List Document Libraries",
+          "message": "Vypísať knižnice dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
+          "source": "List the document libraries in a site",
+          "message": "Vypísať zoznam knižníc dokumentov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.desc": {
+          "source": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded by default",
+          "message": "Vypísať zoznamy na lokalite SharePoint. Vlastné interné zoznamy služby SharePoint sú predvolene vylúčené"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "Vypísať zoznamy"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.desc": {
+          "source": "Include lists whose template is `documentLibrary`",
+          "message": "Zahrnúť zoznamy, ktorých šablóna je `documentLibrary`"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.display_name": {
+          "source": "Include Document Libraries",
+          "message": "Zahrnúť knižnice dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.short_desc": {
+          "source": "Include document libraries as well as record lists",
+          "message": "Zahrnúť knižnice dokumentov aj zoznamy záznamov"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.desc": {
+          "source": "Include the lists SharePoint maintains for its own bookkeeping",
+          "message": "Zahrnúť zoznamy, ktoré SharePoint udržiava pre vlastné interné potreby"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.display_name": {
+          "source": "Include System Lists",
+          "message": "Zahrnúť systémové zoznamy"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.short_desc": {
+          "source": "Include SharePoint's own internal lists",
+          "message": "Zahrnúť vlastné interné zoznamy služby SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
+          "source": "List the lists in a site",
+          "message": "Vypísať zoznamy na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.desc": {
+          "source": "List the sites available. With no search term the tenant's root site and its subsites are returned, which always works; a search term is answered from the SharePoint search index",
+          "message": "Vypísať dostupné lokality. Bez vyhľadávacieho výrazu sa vráti koreňová lokalita tenanta a jej podlokality, čo funguje vždy; vyhľadávací výraz sa vyhodnocuje z indexu vyhľadávania SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
+          "source": "List Sites",
+          "message": "Zoznam webov"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.desc": {
+          "source": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned",
+          "message": "Výraz na vyhľadávanie v názvoch a URL adresách lokalít. Pri vynechaní sa vráti koreňová lokalita tenanta a jej podlokality"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Hľadať"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.short_desc": {
+          "source": "Search term to match sites against",
+          "message": "Vyhľadávací výraz na porovnanie lokalít"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
+          "source": "List or search SharePoint sites",
+          "message": "Vypísať alebo vyhľadať lokality SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft SharePoint** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Microsoft SharePoint** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré v tejto aplikácii zatiaľ nie sú vystavené ako priame akcie."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft SharePoint",
+          "message": "Vykonať vlastné volanie API do Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "Spustí sa po pridaní dokumentu do knižnice dokumentov. Používa rozdielové dopyty (delta queries), ktoré pokračujú presne tam, kde skončili, namiesto opätovného načítavania knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
+          "source": "Document Added",
+          "message": "Dokument bol pridaný"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
+          "source": "Trigger when a document is added to a library",
+          "message": "Spustiť pri pridaní dokumentu do knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is added to a document library",
+          "message": "Spustí sa po pridaní priečinka do knižnice dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "Folder Added",
+          "message": "Priečinok bol pridaný"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "Trigger when a folder is added to a library",
+          "message": "Spustiť pri pridaní priečinka do knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.desc": {
+          "source": "Fires when an item is added to a SharePoint list. Uses delta queries, which resume exactly where they left off rather than polling the head of the list",
+          "message": "Spustí sa po pridaní položky do zoznamu SharePoint. Používa rozdielové dopyty (delta queries), ktoré pokračujú presne tam, kde skončili, namiesto cyklického dopytovania začiatku zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
+          "source": "List Item Added",
+          "message": "Položka zoznamu bola pridaná"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {
+          "source": "Trigger when an item is added to a list",
+          "message": "Spustiť pri pridaní položky do zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List the items in a folder of a document library, or search the whole library. Supports pagination and sorting",
+          "message": "Vypísať položky v priečinku knižnice dokumentov alebo prehľadať celú knižnicu. Podporuje stránkovanie a triedenie"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Documents",
+          "message": "Vyhľadať dokumenty"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the root of the library",
+          "message": "ID priečinka, z ktorého sa majú vypísať položky. Ak je vynechané, vypíšu sa položky z koreňa knižnice"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "Priečinok, z ktorého sa majú vypísať položky"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "Poradie zoradenia výsledkov (napr. `name asc`, `size desc`)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Zoradiť podľa"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "Vyhľadávací reťazec na filtrovanie položiek podľa názvu alebo obsahu"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "Vyhľadávací dopyt"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "Reťazec vyhľadávacieho dopytu"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "Maximálny počet položiek, ktoré sa majú vrátiť na stránku (predvolené `200`, max. `1000`)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "Hore"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "Maximálny počet položiek na stránku"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search documents and folders",
+          "message": "Vypísať alebo vyhľadať dokumenty a priečinky"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.desc": {
+          "source": "List the items in a SharePoint list, optionally filtered with an OData expression over the item's columns",
+          "message": "Vypísať položky v zozname SharePoint, voliteľne filtrované pomocou výrazu OData cez stĺpce položky"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
+          "source": "Search List Items",
+          "message": "Vyhľadať položky zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.desc": {
+          "source": "An OData `$filter` expression over the item's columns, for example `fields/Title eq 'Widget'`. Column names are prefixed with `fields/`",
+          "message": "Výraz OData `$filter` nad stĺpcami položky, napríklad `fields/Title eq 'Widget'`. Názvy stĺpcov majú predponu `fields/`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.short_desc": {
+          "source": "An OData filter expression",
+          "message": "Filtrovací výraz OData"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results, for example `fields/Title asc`",
+          "message": "Poradie zoradenia výsledkov, napríklad `fields/Title asc`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Zoradiť podľa"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.desc": {
+          "source": "Stop after this many items in total, across all pages",
+          "message": "Zastaviť po tomto celkovom počte položiek na všetkých stránkach"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum items to return in total",
+          "message": "Maximálny celkový počet vrátených položiek"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
+          "source": "List or search the items in a list",
+          "message": "Zobraziť zoznam alebo vyhľadať položky v zozname"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a document or folder. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "Aktualizovať metaúdaje dokumentu alebo priečinka. Dá sa použiť na premenovanie položky, jej presunutie do iného priečinka alebo aktualizáciu jej popisu"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Document",
+          "message": "Aktualizovať dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "Poskytuje popis položky viditeľný pre používateľa"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "Popis položky viditeľný pre používateľa"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "Jedinečný identifikátor položky na aktualizáciu"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "ID položky na aktualizáciu"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "Nový názov súboru alebo priečinka (vrátane prípony pre súbory)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nový názov"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "Nový názov položky"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "ID cieľového priečinka, do ktorého sa má položka presunúť. Nastavte toto pole, ak chcete položku presunúť do iného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "ID nového nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "ID cieľového priečinka na presun"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a document or folder",
+          "message": "Premenovať, presunúť alebo aktualizovať dokument či priečinok"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Update the column values of an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "Aktualizovať hodnoty stĺpcov položky v zozname SharePoint. Po výbere lokality a zoznamu sa vlastné stĺpce zoznamu ponúkajú ako jednotlivé typované možnosti"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Update List Item",
+          "message": "Aktualizovať položku zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "Hodnoty, ktoré sa majú nastaviť pre stĺpce položky, indexované podľa interného názvu stĺpca. Po výbere lokality a zoznamu sa jednotlivé stĺpce ponúknu s vlastnými typmi; akcia `columns` ich vypíše"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "Hodnoty stĺpcov"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "Hodnoty, ktoré sa majú nastaviť pre stĺpce položky"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "Položka zoznamu, ktorú chcete adresovať"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Položka"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "Položka zoznamu"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "Zoznam, ktorý chcete adresovať. Akciu `list-lists` použite na zoznam zoznamov na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "Zoznam SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Update an item's column values",
+          "message": "Aktualizovať hodnoty stĺpcov položky"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a document to a library using a simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "Nahrať dokument do knižnice pomocou jednoduchého nahratia. Pre súbory väčšie ako 4 MB použite radšej akciu `create-upload-session`"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload Document",
+          "message": "Nahrať dokument"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "Knižnica dokumentov, ktorú chcete adresovať. Akciu `list-drives` použite na zoznam knižníc na lokalite"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "Knižnica dokumentov"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "Knižnica dokumentov (drive)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "Súbor na nahranie do OneDrivu vrátane názvu súboru, obsahu a typu MIME. Pre súbory väčšie ako 4 MB použite namiesto toho akciu `create-upload-session`"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Súbor na nahranie"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "Lokalita SharePoint, ktorú chcete adresovať. Akciu `list-sites` použite na vyhľadanie dostupných lokalít; koreňová lokalita tenanta je ponúkaná vždy"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "Web"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "Lokalita SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "ID nadradeného priečinka. Ak je vynechané, súbor sa nahrá do koreňového adresára disku"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "ID nadradeného priečinka"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a document (up to 4 MB)",
+          "message": "Nahrať dokument (do 4 MB)"
+        },
+        "app.U2hhcmVQb2ludA.desc": {
+          "source": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) document libraries and lists via the Microsoft Graph API.\n\n**Common use cases**:\n- **Document management**: upload, download, copy, move, and delete documents in a document library, including resumable uploads for large files\n- **Sharing**: create sharing links for documents and folders\n- **Lists**: create and delete lists, and create, update, search, and delete list items\n- **Records**: read and write list items as records, typed from each list's own columns\n- **Change tracking**: react to new and modified documents and to new list items, using delta queries that resume exactly where they left off\n\nMicrosoft and SharePoint are trademarks of the Microsoft group of companies",
+          "message": "Poskytuje prístup ku knižniciam dokumentov a zoznamom [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) cez Microsoft Graph API.\n\n**Bežné prípady použitia**:\n- **Správa dokumentov**: nahrávanie, sťahovanie, kopírovanie, presúvanie a odstraňovanie dokumentov v knižnici dokumentov vrátane obnoviteľného nahrávania veľkých súborov\n- **Zdieľanie**: vytváranie odkazov na zdieľanie dokumentov a priečinkov\n- **Zoznamy**: vytváranie a odstraňovanie zoznamov a vytváranie, aktualizácia, vyhľadávanie a odstraňovanie položiek zoznamu\n- **Záznamy**: čítanie a zápis položiek zoznamu ako záznamov, typovaných podľa vlastných stĺpcov každého zoznamu\n- **Sledovanie zmien**: reagovanie na nové a upravené dokumenty a na nové položky zoznamu pomocou delta dotazov, ktoré pokračujú presne tam, kde skončili\n\nMicrosoft a SharePoint sú ochranné známky skupiny spoločností Microsoft"
+        },
+        "app.U2hhcmVQb2ludA.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.short_desc": {
+          "source": "Microsoft SharePoint document libraries and lists",
+          "message": "Knižnice dokumentov a zoznamy Microsoft SharePoint"
+        }
+      }
+    }
+  }
+}

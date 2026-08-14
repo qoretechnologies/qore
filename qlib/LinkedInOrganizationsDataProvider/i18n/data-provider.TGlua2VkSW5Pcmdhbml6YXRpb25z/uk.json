@@ -1,0 +1,1197 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Retrieves one organization's profile: its name, description, tagline, website, logo, cover photo, size, industries, specialties and page URL.",
+          "message": "Отримує профіль організації: її назву, опис, слоган, вебсайт, логотип, обкладинку, розмір, галузі, спеціалізації та URL-адресу сторінки."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Get Organization",
+          "message": "Отримати організацію"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Get one organization's profile",
+          "message": "Отримати профіль організації"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.desc": {
+          "source": "Retrieves the profile of the member whose authorization this connection carries.\n\nUseful for confirming which account a connection is bound to; the organizations that account administers are what every other action can reach.",
+          "message": "Отримує профіль учасника, чию авторизацію використовує це підключення.\n\nКорисно для перевірки, до якого облікового запису прив'язано підключення; решта дій матиме доступ до організацій, якими керує цей обліковий запис."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
+          "source": "Get Current Member",
+          "message": "Отримати поточного учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
+          "source": "Get the authenticated member's profile",
+          "message": "Отримати профіль автентифікованого учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.desc": {
+          "source": "Breaks an organization's current followers down by one member attribute — industry, seniority, job function, company size, country, region, or whether they are an employee — and reports how many followers fall into each value.\n\nThis is a snapshot of the page's followers as they stand now, not a count over a period: LinkedIn ignores any date range for follower analytics. Use **Get Visitor Statistics** for a figure that covers a period.\n\nLinkedIn deliberately protects member privacy in these numbers: a count below an undisclosed threshold is reported as `0`, and the same request repeated can return slightly different values.",
+          "message": "Розподіляє поточних підписників організації за одним атрибутом учасника — галузь, рівень посади, посадові обов'язки, розмір компанії, країна, регіон або чи є вони співробітниками — та повідомляє кількість підписників для кожного значення.\n\nЦе моментальний знімок підписників сторінки на поточний момент, а не підрахунок за період: LinkedIn ігнорує будь-який діапазон дат для аналітики підписників. Використовуйте **Get Visitor Statistics** для отримання показників за період.\n\nLinkedIn свідомо захищає конфіденційність учасників у цих показниках: значення, менше за нерозголошений поріг, відображається як `0`, а повторення того самого запиту може повертати дещо інші значення."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
+          "source": "Get Follower Statistics",
+          "message": "Отримати статистику підписників"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.desc": {
+          "source": "Break down by the member's country",
+          "message": "Розподілити за країною учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.short_desc": {
+          "source": "Break down by the member's country",
+          "message": "Розподілити за країною учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.desc": {
+          "source": "Break down by the member's industry",
+          "message": "Розподілити за галуззю учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.display_name": {
+          "source": "Industry",
+          "message": "Галузь"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.short_desc": {
+          "source": "Break down by the member's industry",
+          "message": "Розподілити за галуззю учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.desc": {
+          "source": "Break down by the member's job function",
+          "message": "Розподілити за посадовими обов'язками учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.display_name": {
+          "source": "Job Function",
+          "message": "Посадові обов'язки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.short_desc": {
+          "source": "Break down by the member's job function",
+          "message": "Розподілити за посадовими обов'язками учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.desc": {
+          "source": "Break down by the member's region",
+          "message": "Розподілити за регіоном учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.short_desc": {
+          "source": "Break down by the member's region",
+          "message": "Розподілити за регіоном учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.desc": {
+          "source": "Break down by the member's relationship to the organization, which distinguishes employees from everyone else",
+          "message": "Розбивка за зв'язком учасника з організацією, що відрізняє працівників від усіх інших"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.display_name": {
+          "source": "Relationship",
+          "message": "Зв'язок"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.short_desc": {
+          "source": "Break down by the member's relationship to the organization",
+          "message": "Розбивка за зв'язком учасника з організацією"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Розбивка за рівнем посади учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.display_name": {
+          "source": "Seniority",
+          "message": "Рівень кваліфікації"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.short_desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Розбивка за рівнем посади учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Розбивка за розміром компанії учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.display_name": {
+          "source": "Company Size",
+          "message": "Розмір компанії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.short_desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Розбивка за розміром компанії учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.desc": {
+          "source": "The member attribute to break the followers down by",
+          "message": "Атрибут учасника для розбивки підписників"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.display_name": {
+          "source": "Break Down By",
+          "message": "Розбити за"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.short_desc": {
+          "source": "The member attribute to break the followers down by",
+          "message": "Атрибут учасника для розбивки підписників"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
+          "source": "Break an organization's followers down by demographic",
+          "message": "Розбити підписників організації за демографічними даними"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves one of an organization's posts by URN, with its text, visibility, attached content, distribution and timestamps.\n\nA post is reachable when the organization authored it, or when it reshares a post the organization authored.",
+          "message": "Отримує одну з публікацій організації за URN разом із її текстом, видимістю, прикріпленим вмістом, розповсюдженням і мітками часу.\n\nПублікація доступна, якщо організація є її автором або якщо вона поширює публікацію, автором якої є організація."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "Отримати допис"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve, as returned by the **List Posts** action",
+          "message": "URN публікації для отримання, повернутий дією **List Posts**"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "URN допису"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "URN допису для отримання"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set",
+          "message": "Остання версія, яка може бути чернеткою або запланованою публікацією; запланована публікація визначається наявністю встановленого поля `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "Автор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and scheduled posts",
+          "message": "Остання версія, включно з чернетками та запланованими публікаціями"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Опублікована версія, видима для загальної аудиторії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "Читач"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Опублікована версія, видима для загальної аудиторії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "Чи читати допис як його автор або як читач"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "Контекст перегляду"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "Чи читати допис як його автор або як читач"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Get one of an organization's posts",
+          "message": "Отримати одну з публікацій організації"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves how much engagement one or more posts, activities or comments have received: the total number of reactions, the count of each reaction type, the number of comments and whether the comment thread is still open.\n\nSeveral URNs can be summarized in one call, which is far cheaper than listing every reaction on each of them.",
+          "message": "Отримує рівень взаємодії з однією чи кількома публікаціями, діями або коментарями: загальну кількість реакцій, кількість кожного типу реакцій, кількість коментарів і стан гілки коментарів (відкрита чи закрита).\n\nКілька URN можна підсумувати за один виклик, що набагато економніше, ніж отримувати список кожної реакції окремо."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Engagement Summary",
+          "message": "Отримати підсумок взаємодії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.desc": {
+          "source": "The URNs of the content to summarize: posts, activities or comments.  Several can be given at once, which is much cheaper than one call each",
+          "message": "URN вмісту для підсумовування: публікації, дії або коментарі. Можна вказати кілька одночасно, що значно економніше, ніж окремий виклик для кожного"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.display_name": {
+          "source": "Content URNs",
+          "message": "URN вмісту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.short_desc": {
+          "source": "The URNs of the content to summarize",
+          "message": "URN вмісту для підсумовування"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get the reaction and comment counts of content",
+          "message": "Отримати кількість реакцій і коментарів до вмісту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.desc": {
+          "source": "Breaks the members who visited an organization's page down by one member attribute, and reports how many visits fall into each value.\n\nUnlike follower statistics, this **does** honour a date range, and it can be narrowed to a single section of the page — the jobs tab, the life tab, and so on — with `source_type`.\n\nThe same privacy protections apply: small counts are reported as `0` and repeated requests can differ slightly.",
+          "message": "Розбиває учасників, які відвідали сторінку організації, за одним атрибутом учасника та повідомляє кількість відвідувань для кожного значення.\n\nНа відміну від статистики підписників, тут **враховується** діапазон дат, а вибірку можна звузити до окремого розділу сторінки — вкладки вакансій, вкладки життя тощо — за допомогою `source_type`.\n\nЗастосовуються ті самі правила захисту конфіденційності: малі значення повертаються як `0`, а повторні запити можуть дещо відрізнятися."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
+          "source": "Get Visitor Statistics",
+          "message": "Отримати статистику відвідувачів"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.desc": {
+          "source": "Break down by the member's country",
+          "message": "Розподілити за країною учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.short_desc": {
+          "source": "Break down by the member's country",
+          "message": "Розподілити за країною учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.desc": {
+          "source": "Break down by the member's industry",
+          "message": "Розподілити за галуззю учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.display_name": {
+          "source": "Industry",
+          "message": "Галузь"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.short_desc": {
+          "source": "Break down by the member's industry",
+          "message": "Розподілити за галуззю учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.desc": {
+          "source": "Break down by the member's job function",
+          "message": "Розподілити за посадовими обов'язками учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.display_name": {
+          "source": "Job Function",
+          "message": "Посадові обов'язки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.short_desc": {
+          "source": "Break down by the member's job function",
+          "message": "Розподілити за посадовими обов'язками учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.desc": {
+          "source": "Break down by the member's region",
+          "message": "Розподілити за регіоном учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.short_desc": {
+          "source": "Break down by the member's region",
+          "message": "Розподілити за регіоном учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.desc": {
+          "source": "Break down by the member's relationship to the organization, which distinguishes employees from everyone else",
+          "message": "Розбивка за зв'язком учасника з організацією, що відрізняє працівників від усіх інших"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.display_name": {
+          "source": "Relationship",
+          "message": "Зв'язок"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.short_desc": {
+          "source": "Break down by the member's relationship to the organization",
+          "message": "Розбивка за зв'язком учасника з організацією"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Розбивка за рівнем посади учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.display_name": {
+          "source": "Seniority",
+          "message": "Рівень кваліфікації"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.short_desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Розбивка за рівнем посади учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Розбивка за розміром компанії учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.display_name": {
+          "source": "Company Size",
+          "message": "Розмір компанії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.short_desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Розбивка за розміром компанії учасника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.desc": {
+          "source": "The member attribute to break the visitors down by",
+          "message": "Атрибут учасника для розбивки відвідувачів"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.display_name": {
+          "source": "Break Down By",
+          "message": "Розбити за"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.short_desc": {
+          "source": "The member attribute to break the visitors down by",
+          "message": "Атрибут учасника для розбивки відвідувачів"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.desc": {
+          "source": "The end of the period to count visits in (exclusive)",
+          "message": "Кінець періоду підрахунку відвідувань (не включно)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.short_desc": {
+          "source": "The end of the period to count visits in",
+          "message": "Кінець періоду підрахунку відвідувань"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.desc": {
+          "source": "The page's overview tab",
+          "message": "Вкладка огляду сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.display_name": {
+          "source": "Overview",
+          "message": "Огляд"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.short_desc": {
+          "source": "The page's overview tab",
+          "message": "Вкладка огляду сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.desc": {
+          "source": "The page's about tab",
+          "message": "Вкладка «Про нас» сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.display_name": {
+          "source": "About",
+          "message": "Про нас"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.short_desc": {
+          "source": "The page's about tab",
+          "message": "Вкладка «Про нас» сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.desc": {
+          "source": "The page's careers tab",
+          "message": "Вкладка кар'єри сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.display_name": {
+          "source": "Careers",
+          "message": "Кар'єра"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.short_desc": {
+          "source": "The page's careers tab",
+          "message": "Вкладка кар'єри сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.desc": {
+          "source": "The page's insights tab",
+          "message": "Вкладка аналітики сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.display_name": {
+          "source": "Insights",
+          "message": "Аналітика"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.short_desc": {
+          "source": "The page's insights tab",
+          "message": "Вкладка аналітики сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.desc": {
+          "source": "The page's jobs tab",
+          "message": "Вкладка вакансій сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.display_name": {
+          "source": "Jobs",
+          "message": "Вакансії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.short_desc": {
+          "source": "The page's jobs tab",
+          "message": "Вкладка вакансій сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.desc": {
+          "source": "The page's life tab",
+          "message": "Вкладка «Життя» сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.display_name": {
+          "source": "Life",
+          "message": "Життя"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.short_desc": {
+          "source": "The page's life tab",
+          "message": "Вкладка «Життя» сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.desc": {
+          "source": "The page's people tab",
+          "message": "Вкладка людей сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.display_name": {
+          "source": "People",
+          "message": "Люди"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.short_desc": {
+          "source": "The page's people tab",
+          "message": "Вкладка людей сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.desc": {
+          "source": "The page's products tab",
+          "message": "Вкладка продуктів сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.display_name": {
+          "source": "Products",
+          "message": "Товари"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.short_desc": {
+          "source": "The page's products tab",
+          "message": "Вкладка продуктів сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.desc": {
+          "source": "Count visits to one section of the page only; when unset, visits to every section are counted together",
+          "message": "Підраховувати відвідування лише одного розділу сторінки; якщо не встановлено, підраховуються відвідування всіх розділів разом"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Page Section",
+          "message": "Розділ сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Count visits to one section of the page only",
+          "message": "Підраховувати відвідування лише одного розділу сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.desc": {
+          "source": "The start of the period to count visits in (inclusive)",
+          "message": "Початок періоду підрахунку відвідувань (включно)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.display_name": {
+          "source": "From",
+          "message": "Від"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.short_desc": {
+          "source": "The start of the period to count visits in",
+          "message": "Початок періоду підрахунку відвідувань"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
+          "source": "Break an organization's page visitors down by demographic",
+          "message": "Розбити відвідувачів сторінки організації за демографічними даними"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "Lists the comments on a post, activity or comment, newest first, with each one's text, author and timestamps.\n\nA comment made by a member who has not opted in to sharing their data arrives without its author **and without its text** — LinkedIn removes both together.",
+          "message": "Перелічує коментарі до публікації, дії або коментаря (спочатку найновіші) разом із текстом, автором і мітками часу кожного з них.\n\nКоментар, залишений учасником, який не надав згоду на надання доступу до своїх даних, повертається без інформації про автора **та без тексту** — LinkedIn вилучає і те, і інше."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "Список коментарів"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Максимальна кількість елементів для повернення на одній сторінці (максимум у LinkedIn становить `1000`). Менше елементів може повертатися навіть тоді, коли доступно більше, тому саме наявність `cursor` у відповіді, а не коротка сторінка, свідчить про продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Максимальна кількість елементів для повернення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Курсор із попереднього виклику для продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.desc": {
+          "source": "The URN of the content to read engagement for: a post (`urn:li:share:...`, `urn:li:ugcPost:...`), an activity (`urn:li:activity:...`) or a comment (`urn:li:comment:(...)`).  The **List Posts** action returns post URNs in this form",
+          "message": "URN вмісту, для якого потрібно отримати показники взаємодії: публікація (`urn:li:share:...`, `urn:li:ugcPost:...`), дія (`urn:li:activity:...`) або коментар (`urn:li:comment:(...)`). Дія **List Posts** повертає URN публікацій у цьому форматі"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.display_name": {
+          "source": "Content URN",
+          "message": "URN вмісту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.short_desc": {
+          "source": "The URN of the post, comment or activity",
+          "message": "URN публікації, коментаря або дії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List the comments on a post or comment",
+          "message": "Список коментарів до публікації або коментаря"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.desc": {
+          "source": "Lists who follows an organization's page — members or other pages, chosen with `edge_type` — and when each follow last changed.\n\nA follower who has not opted in to sharing their data arrives with only a timestamp; that setting is off by default, so expect many such entries.",
+          "message": "Перелічує підписників сторінки організації — учасників або інші сторінки, вибрані за допомогою `edge_type` — і час останньої зміни кожного підписування.\n\nПідписник, який не надав згоду на надання доступу до своїх даних, повертається лише з міткою часу; цей параметр вимкнено за замовчуванням, тому слід очікувати багато таких записів."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
+          "source": "List Followers",
+          "message": "Список підписників"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Максимальна кількість елементів для повернення на одній сторінці (максимум у LinkedIn становить `1000`). Менше елементів може повертатися навіть тоді, коли доступно більше, тому саме наявність `cursor` у відповіді, а не коротка сторінка, свідчить про продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Максимальна кількість елементів для повернення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Курсор із попереднього виклику для продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.desc": {
+          "source": "Members who follow the page",
+          "message": "Учасники, які стежать за сторінкою"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.display_name": {
+          "source": "Members",
+          "message": "Учасники"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.short_desc": {
+          "source": "Members who follow the page",
+          "message": "Учасники, які стежать за сторінкою"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.desc": {
+          "source": "Other organizational pages that follow the page",
+          "message": "Інші сторінки організацій, які стежать за сторінкою"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.display_name": {
+          "source": "Organizations",
+          "message": "Організації"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.short_desc": {
+          "source": "Other organizational pages that follow the page",
+          "message": "Інші сторінки організацій, які стежать за сторінкою"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.desc": {
+          "source": "Whether to list members or other organizational pages as followers",
+          "message": "Чи отримувати як підписників учасників, чи інші сторінки організацій"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.display_name": {
+          "source": "Follower Type",
+          "message": "Тип підписника"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.short_desc": {
+          "source": "Whether to list members or other pages",
+          "message": "Виводити учасників чи інші сторінки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
+          "source": "List the members and pages following an organization",
+          "message": "Список учасників і сторінок, які стежать за організацією"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.desc": {
+          "source": "Lists the organizational pages that an organization's own page follows.",
+          "message": "Повертає список сторінок організацій, за якими стежить власна сторінка організації."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
+          "source": "List Following",
+          "message": "Список відстежуваних"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Максимальна кількість елементів для повернення на одній сторінці (максимум у LinkedIn становить `1000`). Менше елементів може повертатися навіть тоді, коли доступно більше, тому саме наявність `cursor` у відповіді, а не коротка сторінка, свідчить про продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Максимальна кількість елементів для повернення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Курсор із попереднього виклику для продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
+          "source": "List the pages an organization follows",
+          "message": "Отримати список сторінок, за якими стежить організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.desc": {
+          "source": "Lists the organizations the authenticated member administers, with each one's name, description, logo, size, industries and page URL.\n\nThe `id` of an organization here is what every other action takes, and the `organizational_page` URN is what LinkedIn's analytics and follows APIs address.",
+          "message": "Повертає список організацій, якими керує автентифікований учасник, із назвою, описом, логотипом, розміром, галузями та URL-адресою сторінки для кожної з них.\n\n`id` організації тут є тим, що приймає кожна інша дія, а URN `organizational_page` є тим, до чого звертаються API аналітики та підписок LinkedIn."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
+          "source": "List Organizations",
+          "message": "Отримати список організацій"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
+          "source": "List the organizations the authenticated member administers",
+          "message": "Отримати список організацій, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.desc": {
+          "source": "Lists the posts an organization has published, newest first.\n\nPass the `cursor` from a response back in the next call to continue the listing. A page can come back shorter than `count` even when more posts exist, so it is the **presence of a cursor**, not a full page, that says the listing continues.\n\nReading with the `AUTHOR` view context also returns drafts and scheduled posts; a scheduled post is the one with `scheduled_at` set.",
+          "message": "Повертає список публікацій, опублікованих організацією, починаючи з найновіших.\n\nПередайте `cursor` з відповіді в наступний виклик, щоб продовжити отримання списку. Сторінка може повернутися коротшою за `count`, навіть якщо існує більше публікацій, тому саме **наявність курсора**, а не повна сторінка, вказує на те, що список продовжується.\n\nЗчитування з контекстом перегляду `AUTHOR` також повертає чернетки та заплановані публікації; запланованою є публікація зі встановленим `scheduled_at`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "Список публікацій"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Максимальна кількість елементів для повернення на одній сторінці (максимум у LinkedIn становить `1000`). Менше елементів може повертатися навіть тоді, коли доступно більше, тому саме наявність `cursor` у відповіді, а не коротка сторінка, свідчить про продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Максимальна кількість елементів для повернення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Курсор із попереднього виклику для продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set",
+          "message": "Остання версія, яка може бути чернеткою або запланованою публікацією; запланована публікація визначається наявністю встановленого поля `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "Автор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and scheduled posts",
+          "message": "Остання версія, включно з чернетками та запланованими публікаціями"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Опублікована версія, видима для загальної аудиторії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "Читач"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Опублікована версія, видима для загальної аудиторії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the posts as their author or as a reader.  `AUTHOR` also returns drafts and scheduled posts, which carry a `scheduled_at` value",
+          "message": "Визначає, чи читати публікації як їхній автор чи як читач. `AUTHOR` також повертає чернетки та заплановані публікації, які містять значення `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "Контекст перегляду"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the posts as their author or as a reader",
+          "message": "Чи читати публікації як їхній автор або як читач"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List the posts an organization has published",
+          "message": "Отримати список публікацій, опублікованих організацією"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.desc": {
+          "source": "Lists the individual reactions on a post, activity or comment, newest first, with which reaction was given and when.\n\n**This list is normally shorter than the true reaction count**, and often much shorter. LinkedIn returns an individual reaction only when the reactor is the organization itself, or a member who has explicitly consented to sharing their data through the Data Portability APIs — and that consent is off by default. A post with eight reactions can therefore yield a single entry here.\n\n**Use Get Engagement Summary for counts.** Its `reaction_count` is the authoritative total and is not reduced by consent; this action is for identifying *who* reacted, as far as LinkedIn will say.",
+          "message": "Повертає список окремих реакцій на публікацію, активність або коментар, починаючи з найновіших, із зазначенням типу реакції та часу її надання.\n\n**Цей список зазвичай коротший за справжню кількість реакцій**, і часто значно коротший. LinkedIn повертає окрему реакцію лише тоді, коли автором реакції є сама організація або учасник, який надав явну згоду на надання своїх даних через API перенесення даних (Data Portability API) — і ця згода за замовчуванням вимкнена. Тому публікація з вісьмома реакціями може дати лише один запис тут.\n\n**Використовуйте Get Engagement Summary для отримання кількостей.** Його `reaction_count` є авторитетною загальною кількістю і не зменшується через відсутність згоди; ця дія призначена для визначення того, *хто* відреагував, наскільки це дозволяє LinkedIn."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
+          "source": "List Reactions",
+          "message": "Список реакцій"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Максимальна кількість елементів для повернення на одній сторінці (максимум у LinkedIn становить `1000`). Менше елементів може повертатися навіть тоді, коли доступно більше, тому саме наявність `cursor` у відповіді, а не коротка сторінка, свідчить про продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Максимальна кількість елементів для повернення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Значення `cursor`, повернене попереднім викликом, для отримання наступної сторінки. Залиште порожнім, щоб почати з початку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Курсор із попереднього виклику для продовження списку"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.desc": {
+          "source": "The URN of the content to read engagement for: a post (`urn:li:share:...`, `urn:li:ugcPost:...`), an activity (`urn:li:activity:...`) or a comment (`urn:li:comment:(...)`).  The **List Posts** action returns post URNs in this form",
+          "message": "URN вмісту, для якого потрібно отримати показники взаємодії: публікація (`urn:li:share:...`, `urn:li:ugcPost:...`), дія (`urn:li:activity:...`) або коментар (`urn:li:comment:(...)`). Дія **List Posts** повертає URN публікацій у цьому форматі"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.display_name": {
+          "source": "Content URN",
+          "message": "URN вмісту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.short_desc": {
+          "source": "The URN of the post, comment or activity",
+          "message": "URN публікації, коментаря або дії"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
+          "source": "List the reactions on a post or comment",
+          "message": "Отримати список реакцій на публікацію або коментар"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn Organizations** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати власний HTTP / REST API-виклик до **LinkedIn Organizations** з використанням автентифікації налаштованого з'єднання.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому застосунку."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn Organizations",
+          "message": "Зробити власний API-виклик до LinkedIn Organizations"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when an organization publishes a post, delivering the post itself.\n\nTurning the trigger on establishes a baseline without replaying the organization's history; only posts published afterwards are delivered, oldest first.\n\nLinkedIn rate-limits this API to one request per 60 seconds and its data can be up to 48 hours behind, so a post is not delivered the moment it appears on LinkedIn. Polling faster does not change that.",
+          "message": "Спрацьовує, коли організація публікує допис, передаючи сам допис.\n\nУвімкнення тригера встановлює базову лінію без повторення історії організації; передаються лише дописи, опубліковані після цього, починаючи з найстаріших.\n\nLinkedIn обмежує швидкість цього API до одного запиту на 60 секунд, а його дані можуть відставати на строк до 48 годин, тому допис не передається в момент його появи в LinkedIn. Частіше опитування цього не змінить."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "Новий допис"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Організація, дані якої зчитуються. У списку пропонуються організації, якими керує автентифікований учасник"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Організація, дані якої зчитуються"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Polling interval in seconds (minimum `60`, default `900`).\n\nLinkedIn rate-limits the feed API to **one request per 60 seconds** and serves data that can be up to 48 hours old, so polling faster than the minimum cannot see anything sooner and earns HTTP 429s.",
+          "message": "Інтервал опитування в секундах (мінімум `60`, за замовчуванням `900`).\n\nLinkedIn обмежує швидкість API стрічки до **одного запиту на 60 секунд** і надає дані, які можуть бути застарілими на термін до 48 годин, тому частіше опитування за мінімальний інтервал не дозволить побачити щось раніше та призведе до помилок HTTP 429."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Fires when an organization publishes a post",
+          "message": "Спрацьовує, коли організація публікує допис"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.desc": {
+          "source": "Provides access to a [LinkedIn](https://www.linkedin.com) Page's own data through the [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview), which LinkedIn provides so that Page administrators can retrieve the data their organization has generated on the platform.\n\n**Common use cases**:\n- **Content**: list the posts a Page has published and read any one of them, including drafts and scheduled posts\n- **Engagement**: read the comments and reactions on a post, or a single summary of every reaction and comment count on it\n- **Audience**: list the members and pages that follow a Page, and the pages it follows\n- **Analytics**: break followers or page visitors down by industry, seniority, job function, company size, country, region, or employee relationship\n- **Triggers**: run a flow whenever the Page publishes a post\n\nThis application needs a LinkedIn developer application **approved for the Pages Data Portability API product**, which grants the `r_dma_admin_pages_content` permission. That approval is requested separately from the Page's *Products* tab and takes several business days.\n\n**Two limits are worth designing around**: LinkedIn rate-limits the feed and follows APIs to **one request per 60 seconds**, and the data they return can be up to **48 hours old**. Analytics counts are also deliberately perturbed and floored to zero below an undisclosed threshold, to protect member privacy.\n\nMember identities are shown only where the member has opted in to sharing their data through these APIs — that setting is off by default, so many followers, comments and reactions arrive without an identity attached.\n\nTo publish content as the signed-in member, use the **LinkedIn** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "Забезпечує доступ до власних даних сторінки [LinkedIn](https://www.linkedin.com) через [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview), які LinkedIn надає для того, щоб адміністратори сторінок могли отримувати дані, створені їхньою організацією на платформі.\n\n**Поширені випадки використання**:\n- **Контент**: отримати список публікацій, опублікованих сторінкою, та прочитати будь-яку з них, включно з чернетками та запланованими публікаціями\n- **Взаємодія**: прочитати коментарі та реакції на публікацію або єдине зведення про кількість кожної реакції та коментаря до неї\n- **Аудиторія**: отримати список учасників і сторінок, які стежать за сторінкою, а також сторінок, за якими вона стежить\n- **Аналітика**: розподілити підписників або відвідувачів сторінки за галуззю, рівнем посади, посадовими обов'язками, розміром компанії, країною, регіоном або трудовими відносинами\n- **Тригери**: запускати процес щоразу, коли сторінка публікує допис\n\nЦьому застосунку потрібен застосунок розробника LinkedIn, **схвалений для продукту Pages Data Portability API**, що надає дозвіл `r_dma_admin_pages_content`. Цей дозвіл запитується окремо на вкладці *Products* сторінки та розглядається кілька робочих днів.\n\n**Два обмеження, які слід враховувати при проектуванні**: LinkedIn обмежує швидкість API стрічки та підписок до **одного запиту на 60 секунд**, а дані, які вони повертають, можуть бути застарілими на строк до **48 годин**. Кількісні показники аналітики також навмисно змінюються та округлюються до нуля нижче нерозголошеного порогу для захисту конфіденційності учасників.\n\nОсоби учасників відображаються лише тоді, коли учасник погодився на надання своїх даних через ці API — цей параметр вимкнено за замовчуванням, тому багато підписників, коментарів і реакцій надходять без зазначення особи.\n\nЩоб публікувати контент від імені увійшовшого учасника, використовуйте застосунок **LinkedIn** замість цього.\n\nLinkedIn є торговельною маркою LinkedIn Corporation"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.display_name": {
+          "source": "LinkedIn Organizations",
+          "message": "LinkedIn Organizations"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.short_desc": {
+          "source": "Read a LinkedIn Page's content, engagement and analytics",
+          "message": "Зчитування контенту, взаємодії та аналітики сторінки LinkedIn"
+        }
+      }
+    }
+  }
+}

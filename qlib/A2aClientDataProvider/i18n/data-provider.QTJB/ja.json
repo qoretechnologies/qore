@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.desc": {
+          "source": "Cancel a running A2A task by its ID",
+          "message": "ID を指定して実行中の A2A タスクをキャンセルします"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
+          "source": "Cancel Task",
+          "message": "タスクのキャンセル"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to cancel",
+          "message": "キャンセルするタスクの一意の識別子"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
+          "source": "Cancel a running task",
+          "message": "実行中のタスクをキャンセル"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.desc": {
+          "source": "Retrieve the A2A agent's card with its capabilities and skills",
+          "message": "機能とスキルを含む A2A エージェントのカードを取得します"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Agent Card",
+          "message": "エージェントカードの取得"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get the agent's card",
+          "message": "エージェントのカードを取得"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.desc": {
+          "source": "Get the authenticated extended agent card with additional details",
+          "message": "詳細情報が含まれる認証済み拡張エージェントカードを取得します"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Extended Agent Card",
+          "message": "拡張エージェントカードの取得"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get authenticated extended agent card",
+          "message": "認証済み拡張エージェントカードを取得"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Get the push notification configuration for an A2A task",
+          "message": "A2A タスクのプッシュ通知設定を取得します"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Get Push Notification Config",
+          "message": "プッシュ通知設定の取得"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "プッシュ通知設定を管理するタスク ID"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Get push notification config for a task",
+          "message": "タスクのプッシュ通知設定を取得"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve the current status of an A2A task by its ID",
+          "message": "ID を指定して A2A タスクの現在のステータスを取得します"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "タスクの取得"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "取得するタスクの一意の識別子"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get task status by ID",
+          "message": "ID でタスクのステータスを取得"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Delete push notification configuration for an A2A task",
+          "message": "A2A タスクのプッシュ通知設定を削除します"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Delete Push Notification Config",
+          "message": "プッシュ通知設定の削除"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to delete push notification config for",
+          "message": "プッシュ通知設定を削除するタスク ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.desc": {
+          "source": "The ID of the push notification config to delete",
+          "message": "削除するプッシュ通知設定の ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.display_name": {
+          "source": "Config ID",
+          "message": "設定 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.short_desc": {
+          "source": "Push notification config ID",
+          "message": "プッシュ通知設定 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Delete push notification config for a task",
+          "message": "タスクのプッシュ通知設定を削除"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.desc": {
+          "source": "List A2A tasks, optionally filtered by context ID",
+          "message": "A2A タスクを一覧表示します (オプションでコンテキスト ID による絞り込み可能)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "タスクの一覧表示"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID to filter tasks by",
+          "message": "タスクの絞り込みに使用するオプションのコンテキスト ID"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "コンテキスト ID"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.short_desc": {
+          "source": "Filter by context ID",
+          "message": "コンテキスト ID で絞り込み"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.desc": {
+          "source": "Optional page size for cursor-based pagination",
+          "message": "カーソルベースのページネーション用オプションのページサイズ"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.short_desc": {
+          "source": "Number of results per page (v1.0)",
+          "message": "1 ページあたりの結果数 (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.desc": {
+          "source": "Optional cursor for retrieving the next page of results",
+          "message": "次のページの結果を取得するためのオプションのカーソル"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Pagination cursor (v1.0)",
+          "message": "ページネーションカーソル (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filtering",
+          "message": "オプションのフィルターでタスクを一覧表示"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.desc": {
+          "source": "List all push notification configurations for an A2A task",
+          "message": "A2A タスクのすべてのプッシュ通知設定を一覧表示します"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
+          "source": "List Push Notification Configs",
+          "message": "プッシュ通知設定の一覧表示"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "プッシュ通知設定を管理するタスク ID"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
+          "source": "List push notification configs for a task",
+          "message": "タスクのプッシュ通知設定を一覧表示"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Set the push notification configuration for an A2A task",
+          "message": "A2A タスクのプッシュ通知設定を設定します"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Set Push Notification Config",
+          "message": "プッシュ通知設定の設定"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to set push notification config for",
+          "message": "プッシュ通知設定を行うタスク ID"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "タスク識別子"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.desc": {
+          "source": "Optional verification token for the webhook",
+          "message": "Webhook のオプションの検証トークン"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.display_name": {
+          "source": "Token",
+          "message": "トークン"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.short_desc": {
+          "source": "Verification token",
+          "message": "検証トークン"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.desc": {
+          "source": "The URL to receive push notifications for task events",
+          "message": "タスクイベントのプッシュ通知を受信する URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.display_name": {
+          "source": "Webhook URL",
+          "message": "Webhook URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.short_desc": {
+          "source": "Push notification webhook URL",
+          "message": "プッシュ通知のWebhook URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Set push notification config for a task",
+          "message": "タスクのプッシュ通知設定を設定"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message to the A2A agent and get back a task",
+          "message": "A2Aエージェントにメッセージを送信し、タスクを取得"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send Message",
+          "message": "メッセージを送信"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.desc": {
+          "source": "Optional v1.0 configuration including `acceptedOutputModes`, `historyLength`, `returnImmediately`",
+          "message": "`acceptedOutputModes`、`historyLength`、`returnImmediately` を含むオプションの v1.0 設定"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.display_name": {
+          "source": "Configuration",
+          "message": "設定"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.short_desc": {
+          "source": "Send message configuration (v1.0)",
+          "message": "メッセージ送信設定 (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID for grouping related tasks into a conversation",
+          "message": "関連するタスクを会話にグループ化するためのオプションのコンテキストID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "コンテキスト ID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.short_desc": {
+          "source": "Context identifier",
+          "message": "コンテキスト識別子"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata for the message",
+          "message": "メッセージのオプションのメタデータ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Message metadata",
+          "message": "メッセージのメタデータ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.desc": {
+          "source": "Optional unique identifier for the message",
+          "message": "メッセージのオプションの一意の識別子"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.short_desc": {
+          "source": "Optional message identifier",
+          "message": "オプションのメッセージ識別子"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.desc": {
+          "source": "List of message parts (text, file, or data).\n\nEach part is a hash with a `type` key:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`",
+          "message": "メッセージパーツ (テキスト、ファイル、またはデータ) のリスト。\n\n各パーツは `type` キーを持つハッシュです:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.display_name": {
+          "source": "Parts",
+          "message": "パーツ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.short_desc": {
+          "source": "Message parts",
+          "message": "メッセージパーツ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.desc": {
+          "source": "A message from the agent",
+          "message": "エージェントからのメッセージ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.display_name": {
+          "source": "Agent",
+          "message": "エージェント"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.short_desc": {
+          "source": "Message from agent",
+          "message": "エージェントからのメッセージ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A message from the user",
+          "message": "ユーザーからのメッセージ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Message from user",
+          "message": "ユーザーからのメッセージ"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.desc": {
+          "source": "The role of the message sender: `user` or `agent`",
+          "message": "メッセージ送信者の役割: `user` または `agent`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.short_desc": {
+          "source": "Message role",
+          "message": "メッセージの役割"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.desc": {
+          "source": "Optional tenant identifier for multi-tenancy support",
+          "message": "マルチテナンシーサポートのためのオプションのテナント識別子"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "テナント"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.short_desc": {
+          "source": "Tenant identifier (v1.0)",
+          "message": "テナント識別子 (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to the agent",
+          "message": "エージェントにメッセージを送信"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.desc": {
+          "source": "Receive a notification when an A2A task artifact is added or modified",
+          "message": "A2Aタスクアーティファクトが追加または変更されたときに通知を受信"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
+          "source": "Task Artifact Update",
+          "message": "タスクアーティファクト更新"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
+          "source": "An A2A task artifact has been updated",
+          "message": "A2Aタスクアーティファクトが更新されました"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.desc": {
+          "source": "Receive a notification when a new message is added to an A2A task",
+          "message": "A2Aタスクに新しいメッセージが追加されたときに通知を受信"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
+          "source": "Task Message Update",
+          "message": "タスクメッセージ更新"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {
+          "source": "An A2A task has a new message",
+          "message": "A2Aタスクに新しいメッセージがあります"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.desc": {
+          "source": "Receive a notification when an A2A task status changes",
+          "message": "A2Aタスクステータスが変更されたときに通知を受信"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
+          "source": "Task Status Update",
+          "message": "タスクステータス更新"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
+          "source": "An A2A task status has changed",
+          "message": "A2Aタスクステータスが変更されました"
+        },
+        "app.QTJB.desc": {
+          "source": "Connect to A2A agents for agent-to-agent collaboration",
+          "message": "エージェント間コラボレーションのためにA2Aエージェントに接続"
+        },
+        "app.QTJB.display_name": {
+          "source": "A2A Agent",
+          "message": "A2Aエージェント"
+        },
+        "app.QTJB.short_desc": {
+          "source": "Agent-to-Agent protocol",
+          "message": "Agent-to-Agentプロトコル"
+        }
+      }
+    }
+  }
+}

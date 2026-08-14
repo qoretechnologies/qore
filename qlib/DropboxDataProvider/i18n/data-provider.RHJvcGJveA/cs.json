@@ -1,0 +1,2229 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.desc": {
+          "source": "Copies several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Zkopíruje několik souborů v jednom volání místo samostatného požadavku pro každý soubor.\n\nKaždá položka uvádí `from_path` a `to_path`. **Dávka jako celek neselže**, takže každá položka nese svůj vlastní výsledek; velká dávka se provádí na pozadí a odpověď uvádí úlohu, kterou lze sledovat pomocí `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
+          "source": "Copy Files (Batch)",
+          "message": "Kopírovat soubory (dávkově)"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Operace k provedení jako seznam hashů, z nichž každý obsahuje `from_path` a `to_path`.\n\n**Příklad**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Položky"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Přesuny nebo kopie k provedení"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
+          "source": "Copy several files in one call",
+          "message": "Zkopírovat několik souborů v jednom volání"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file or folder to a new path; copying a folder copies everything in it.",
+          "message": "Zkopíruje soubor nebo složku do nové cesty; zkopírováním složky se zkopíruje veškerý její obsah."
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File or Folder",
+          "message": "Zkopírovat soubor nebo složku"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Cesta k souboru nebo složce ke zkopírování"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Zdrojová cesta"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Cesta k souboru nebo složce ke zkopírování"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to copy to, including the new name",
+          "message": "Úplná cílová cesta ke zkopírování včetně nového názvu"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Cílová cesta"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to copy to",
+          "message": "Cílová cesta pro kopírování"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file or folder",
+          "message": "Zkopírovat soubor nebo složku"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.desc": {
+          "source": "Follows an operation Dropbox is performing in the background.\n\n`save-url`, `delete-batch`, `move-batch`, and `copy-batch` each finish immediately when the work is small and hand back a job when it is not; this reports whether that job has finished, and what it produced.",
+          "message": "Sleduje operaci, kterou Dropbox provádí na pozadí.\n\nOperace `save-url`, `delete-batch`, `move-batch` a `copy-batch` se dokončí okamžitě, pokud jde o malý rozsah práce, a pokud ne, vrátí úlohu; tato operace hlásí, zda byla tato úloha dokončena a co vytvořila."
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
+          "source": "Check Job Status",
+          "message": "Zkontrolovat stav úlohy"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.desc": {
+          "source": "The identifier of the job to check, as returned by the operation that started it",
+          "message": "Identifikátor úlohy ke kontrole, jak byl vrácen operací, která ji spustila"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.short_desc": {
+          "source": "The job to check",
+          "message": "Úloha ke kontrole"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.desc": {
+          "source": "A batch move started by `move-batch`",
+          "message": "Dávkový přesun spuštěný operací `move-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.display_name": {
+          "source": "Batch Move",
+          "message": "Dávkový přesun"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.short_desc": {
+          "source": "A batch move",
+          "message": "Dávkový přesun"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.desc": {
+          "source": "A batch copy started by `copy-batch`",
+          "message": "Dávkové kopírování spuštěné operací `copy-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.display_name": {
+          "source": "Batch Copy",
+          "message": "Dávkové kopírování"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.short_desc": {
+          "source": "A batch copy",
+          "message": "Dávkové kopírování"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.desc": {
+          "source": "A batch delete started by `delete-batch`",
+          "message": "Dávkové smazání spuštěné operací `delete-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.display_name": {
+          "source": "Batch Delete",
+          "message": "Dávkové smazání"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.short_desc": {
+          "source": "A batch delete",
+          "message": "Dávkové smazání"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.desc": {
+          "source": "A file being fetched from a URL by `save-url`",
+          "message": "Soubor stahovaný z URL adresy operací `save-url`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.display_name": {
+          "source": "Save URL",
+          "message": "Uložit URL"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.short_desc": {
+          "source": "A file being fetched from a URL",
+          "message": "Soubor stahovaný z URL adresy"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.desc": {
+          "source": "Which operation started the job.\n\nDropbox has a separate status endpoint per operation, so the kind of job has to be named in order to check it",
+          "message": "Která operace úlohu spustila.\n\nDropbox má pro každou operaci samostatný stavový koncový bod, takže pro kontrolu úlohy je nutné uvést její typ"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.display_name": {
+          "source": "Job Type",
+          "message": "Typ úlohy"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.short_desc": {
+          "source": "Which operation started the job",
+          "message": "Která operace úlohu spustila"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
+          "source": "Follow an operation Dropbox is performing in the background",
+          "message": "Sledovat operaci, kterou Dropbox provádí na pozadí"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, creating any parent folders that do not yet exist.",
+          "message": "Vytvoří složku včetně všech případných dosud neexistujících nadřazených složek."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Vytvořit složku"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The full path of the folder to create; parent folders are created as needed",
+          "message": "Úplná cesta k vytvářené složce; nadřazené složky se v případě potřeby vytvoří automaticky"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Cesta ke složce"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The path of the folder to create",
+          "message": "Cesta k vytvářené složce"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "Vytvořit složku"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.desc": {
+          "source": "Creates a link granting access to a file or folder.\n\n**A `public` link makes the file reachable by anyone who has it, without signing in.**  `team_only`, a password, and an expiry all require a paid Dropbox account; where the account does not support the visibility requested, Dropbox narrows it silently, so the visibility Dropbox actually applied is returned in `visibility`.",
+          "message": "Vytvoří odkaz umožňující přístup k souboru nebo složce.\n\n**Odkaz typu `public` zpřístupní soubor komukoli, kdo odkaz má, aniž by se musel přihlašovat.** `team_only`, heslo i vypršení platnosti vyžadují placený účet Dropbox; pokud účet nepodporuje požadovanou viditelnost, Dropbox ji bez upozornění omezí, přičemž skutečně použitá viditelnost je vrácena v `visibility`."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Create Shared Link",
+          "message": "Vytvořit sdílený odkaz"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.desc": {
+          "source": "When the link stops working; requires a paid Dropbox account",
+          "message": "Kdy odkaz přestane fungovat; vyžaduje placený účet Dropbox"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.display_name": {
+          "source": "Expires",
+          "message": "Vyprší"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.short_desc": {
+          "source": "When the link stops working",
+          "message": "Kdy odkaz přestane fungovat"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.desc": {
+          "source": "The password required to use the link; only used when `requested_visibility` is `password`",
+          "message": "Heslo vyžadované k použití odkazu; použije se pouze tehdy, když je `requested_visibility` nastaveno na `password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.display_name": {
+          "source": "Link Password",
+          "message": "Heslo odkazu"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.short_desc": {
+          "source": "The password required to use the link",
+          "message": "Heslo vyžadované k použití odkazu"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to create a shared link for",
+          "message": "Cesta k souboru nebo složce, pro kterou se má vytvořit sdílený odkaz"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to share",
+          "message": "Cesta k souboru nebo složce ke sdílení"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.desc": {
+          "source": "Anyone with the link can view the file, without signing in; **this makes the file publicly reachable**",
+          "message": "Kdokoli s odkazem může soubor zobrazit bez přihlášení; **tím se soubor stane veřejně přístupným**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Veřejné"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.short_desc": {
+          "source": "Anyone with the link can view the file",
+          "message": "Kdokoli s odkazem může soubor zobrazit"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "Anyone with the link and the password can view the file; requires a paid Dropbox account, and the password must be set in `link_password`",
+          "message": "Kdokoli s odkazem a heslem může soubor zobrazit; vyžaduje placený účet Dropbox a heslo musí být nastaveno v `link_password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.display_name": {
+          "source": "Password Protected",
+          "message": "Chráněno heslem"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.short_desc": {
+          "source": "Anyone with the link and the password can view the file",
+          "message": "Kdokoli s odkazem a heslem může soubor zobrazit"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.desc": {
+          "source": "Only members of the same Dropbox team can view the file; requires a Dropbox Business account",
+          "message": "Soubor mohou zobrazit pouze členové stejného týmu Dropbox; vyžaduje účet Dropbox Business"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.display_name": {
+          "source": "Team Only",
+          "message": "Pouze tým"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.short_desc": {
+          "source": "Only members of the same Dropbox team can view the file",
+          "message": "Soubor mohou zobrazit pouze členové stejného týmu Dropbox"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.desc": {
+          "source": "Who may use the link; if not set, the account's default is used",
+          "message": "Kdo může odkaz použít; pokud není nastaveno, použije se výchozí hodnota účtu"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.display_name": {
+          "source": "Visibility",
+          "message": "Viditelnost"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.short_desc": {
+          "source": "Who may use the link",
+          "message": "Kdo může odkaz použít"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Create a link granting access to a file or folder",
+          "message": "Vytvořit odkaz umožňující přístup k souboru nebo složce"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "Vytvoří soubor přímo z textového obsahu bez nutnosti existujícího souboru.\n\nUžitečné pro zápis generovaných reportů, manifestů a poznámek."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "Vytvořit textový soubor"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "Textový obsah nového souboru"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "Textový obsah nového souboru"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Nahradit existující soubor v dané cestě; **předchozí obsah lze obnovit pouze prostřednictvím historie revizí souboru**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Přepsat"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Nahradit existující soubor v dané cestě"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Nepřepisovat existující soubor; nahrávání selže nebo se vybere nový název, pokud je nastaveno `autorename`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Přidat"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Nepřepisovat existující soubor"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Co dělat, pokud soubor v dané cestě již existuje"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Režim zápisu"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Co dělat, pokud soubor v dané cestě již existuje"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change",
+          "message": "Nezobrazovat uživateli oznámení na ploše o této změně"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Ztlumit oznámení"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Neupozorňovat uživatele na tuto změnu"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The full path to create the file at, including the file name",
+          "message": "Úplná cesta k vytvoření souboru, včetně názvu souboru"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Cílová cesta"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path to create the file at",
+          "message": "Cesta k vytvoření souboru"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "Vytvořit soubor z textového obsahu"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.desc": {
+          "source": "Grants named people access to a file.\n\n`create-shared-link` hands out a link that anyone holding it can use; this grants access to specific people, which is what an audit trail and a later withdrawal both need.\n\nThe file's membership is returned afterwards, so the result shows who has access rather than only what this call did.",
+          "message": "Umožní přístup k souboru konkrétním osobám.\n\n`create-shared-link` vytvoří odkaz, který může použít kdokoli, kdo jej má k dispozici; tato akce uděluje přístup konkrétním osobám, což je nezbytné pro záznamy auditu i případné pozdější odebrání přístupu.\n\nNásledně se vrátí seznam uživatelů s přístupem k souboru, takže výsledek zobrazuje, kdo má přístup, nikoli pouze to, co toto volání provedlo."
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
+          "source": "Share File with People",
+          "message": "Sdílet soubor s lidmi"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.desc": {
+          "source": "A message to include in the notification email; ignored when `quiet` is set",
+          "message": "Zpráva, která se zahrne do e-mailového oznámení; ignoruje se, pokud je nastaveno `quiet`"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.display_name": {
+          "source": "Message",
+          "message": "Zpráva"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.short_desc": {
+          "source": "A message to include in the notification email",
+          "message": "Zpráva, která se zahrne do e-mailového oznámení"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.desc": {
+          "source": "Takes ownership of the file; **the current owner loses it**",
+          "message": "Převezme vlastnictví souboru; **aktuální vlastník o něj přijde**"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "Owner",
+          "message": "Vlastník"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.short_desc": {
+          "source": "Takes ownership of the file",
+          "message": "Převezme vlastnictví souboru"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Can view and change the file",
+          "message": "Může soubor prohlížet a upravovat"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "Editor"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "Může soubor prohlížet a upravovat"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Can view and comment on the file but not change it",
+          "message": "Může soubor prohlížet a komentovat, ale ne upravovat"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Čtenář"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "Může soubor prohlížet a komentovat"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.desc": {
+          "source": "The level of access to grant",
+          "message": "Úroveň přístupu, která má být udělena"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.display_name": {
+          "source": "Access Level",
+          "message": "Úroveň přístupu"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.short_desc": {
+          "source": "The level of access to grant",
+          "message": "Úroveň přístupu, která má být udělena"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.desc": {
+          "source": "The email addresses of the people to grant access to",
+          "message": "E-mailové adresy osob, kterým má být udělen přístup"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "E-mailové adresy"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.short_desc": {
+          "source": "The people to grant access to",
+          "message": "Osoby, kterým má být udělen přístup"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.desc": {
+          "source": "The file to share, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Soubor ke sdílení jako ID souboru Dropbox (`id:...`) nebo cesta"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "ID souboru"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.short_desc": {
+          "source": "The file to share",
+          "message": "Soubor ke sdílení"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.desc": {
+          "source": "Do not send a notification email to the people given access",
+          "message": "Neodesílat e-mailové oznámení osobám, kterým byl udělen přístup"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.display_name": {
+          "source": "Quiet",
+          "message": "Tichý režim"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.short_desc": {
+          "source": "Do not send a notification email",
+          "message": "Neodesílat e-mailové oznámení"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
+          "source": "Grant named people access to a file",
+          "message": "Udělit konkrétním osobám přístup k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.desc": {
+          "source": "Retrieves the metadata of a file or folder: its name, size, revision, timestamps, and content hash.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "Získá metadata souboru nebo složky: název, velikost, revizi, časová razítka a kontrolní součet obsahu.\n\nPro načtení samotného obsahu použijte `download-file`."
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
+          "source": "Get File Info",
+          "message": "Získat informace o souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.desc": {
+          "source": "The path of the file or folder whose metadata is wanted",
+          "message": "Cesta k souboru nebo složce, jejichž metadata jsou požadována"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder",
+          "message": "Cesta k souboru nebo složce"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
+          "source": "Get the metadata of a file or folder",
+          "message": "Získat metadata souboru nebo složky"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.desc": {
+          "source": "Returns information about the Dropbox account the connection authenticates as: who it belongs to, the email address it is registered under, and what kind of account it is.\n\nThe account type matters for several other actions: a shared link cannot be password-protected on a `basic` account, and `team_only` link visibility needs a `business` account.",
+          "message": "Vrátí informace o účtu Dropbox, přes který se připojení ověřuje: komu patří, e-mailovou adresu, pod kterou je registrován, a jaký je to typ účtu.\n\nTyp účtu je důležitý pro několik dalších akcí: sdílený odkaz nelze chránit heslem na účtu `basic` a viditelnost odkazu `team_only` vyžaduje účet `business`."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
+          "source": "Get Account Info",
+          "message": "Získat informace o účtu"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
+          "source": "Get information about the connected Dropbox account",
+          "message": "Získat informace o připojeném účtu Dropbox"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.desc": {
+          "source": "Returns a direct download link for a file, valid for four hours and usable without signing in.\n\nUse this to hand a file to a system that cannot authenticate to Dropbox; use `create-shared-link` for a link that lasts.",
+          "message": "Vrátí přímý odkaz ke stažení souboru, platný čtyři hodiny a použitelný bez přihlášení.\n\nToto použijte k předání souboru systému, který se nemůže ověřit vůči Dropboxu; pro trvalý odkaz použijte `create-shared-link`."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
+          "source": "Get Temporary Link",
+          "message": "Získat dočasný odkaz"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.desc": {
+          "source": "The path of the file to produce a temporary link for",
+          "message": "Cesta k souboru, pro který se má vygenerovat dočasný odkaz"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
+          "source": "Get a temporary direct download link for a file",
+          "message": "Získat dočasný přímý odkaz ke stažení souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.desc": {
+          "source": "Returns a PDF preview of a document.\n\nDropbox renders it, so a document in a format this system cannot read - a Word file, a spreadsheet, a presentation - can still be shown or archived as a PDF.",
+          "message": "Vrátí náhled dokumentu ve formátu PDF.\n\nDropbox jej vykreslí, takže dokument ve formátu, který tento systém nedokáže přečíst – soubor Word, tabulku, prezentaci – lze stále zobrazit nebo archivovat jako PDF."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
+          "source": "Get Preview",
+          "message": "Získat náhled"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.desc": {
+          "source": "The path of the document to render as a PDF preview",
+          "message": "Cesta k dokumentu, který má být vykreslen jako náhled PDF"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
+          "source": "Get a PDF preview of a document",
+          "message": "Získat náhled dokumentu ve formátu PDF"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Dropbox rejects an upload that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.",
+          "message": "Vrátí, jak velká část úložiště účtu je využita a kolik je k dispozici.\n\nUžitečné před nahráváním velkého objemu dat: Dropbox odmítne nahrávání, které by překročilo kvótu, a nahlásí to jako běžnou chybu zápisu, nikoli jako problém s kapacitou."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
+          "source": "Get Space Usage",
+          "message": "Získat využití prostoru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "Zjistit, jak velká část úložiště účtu je využita"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.desc": {
+          "source": "Returns a thumbnail image of a file.\n\nDropbox renders it, so a preview can be shown without downloading the file itself.  Thumbnails are available for images and for common document formats.",
+          "message": "Vrátí miniaturu souboru.\n\nDropbox ji vykreslí, takže lze zobrazit náhled bez nutnosti stahovat samotný soubor. Miniatury jsou k dispozici pro obrázky a běžné formáty dokumentů."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
+          "source": "Get Thumbnail",
+          "message": "Získat miniaturu"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.desc": {
+          "source": "JPEG; smaller files, but lossy and with no transparency",
+          "message": "JPEG; menší soubory, ale ztrátový a bez průhlednosti"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.short_desc": {
+          "source": "JPEG, smaller but lossy",
+          "message": "JPEG, menší, ale ztrátový"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "PNG; larger files, but lossless and with transparency",
+          "message": "PNG; větší soubory, ale bezeztrátový a s průhledností"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.short_desc": {
+          "source": "PNG, larger but lossless",
+          "message": "PNG, větší, ale bezeztrátový"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Formát obrázku pro miniaturu"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.display_name": {
+          "source": "Format",
+          "message": "Formát"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.short_desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Formát obrázku pro miniaturu"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 na 320 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.display_name": {
+          "source": "480 x 320",
+          "message": "480 × 320"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.short_desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 na 320 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 na 480 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.display_name": {
+          "source": "640 x 480",
+          "message": "640 × 480"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.short_desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 na 480 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 na 64 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.display_name": {
+          "source": "64 x 64",
+          "message": "64 × 64"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.short_desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 na 64 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 na 640 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.display_name": {
+          "source": "960 x 640",
+          "message": "960 × 640"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.short_desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 na 640 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 na 768 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.display_name": {
+          "source": "1024 x 768",
+          "message": "1024 x 768"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.short_desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 na 768 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 × 128 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.display_name": {
+          "source": "128 x 128",
+          "message": "128 x 128"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.short_desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 × 128 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 × 1536 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.display_name": {
+          "source": "2048 x 1536",
+          "message": "2048 x 1536"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.short_desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 × 1536 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 × 256 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.display_name": {
+          "source": "256 x 256",
+          "message": "256 x 256"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.short_desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 × 256 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 × 32 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.display_name": {
+          "source": "32 x 32",
+          "message": "32 x 32"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.short_desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 × 32 pixelů"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.desc": {
+          "source": "The dimensions of the thumbnail in pixels",
+          "message": "Rozměry miniatury v pixelech"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Velikost"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.short_desc": {
+          "source": "The dimensions of the thumbnail",
+          "message": "Rozměry miniatury"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.desc": {
+          "source": "The path of the file to render",
+          "message": "Cesta k souboru, který se má vykreslit"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
+          "source": "Get a thumbnail image of a file",
+          "message": "Získat miniaturu souboru"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nThe content is returned base64-encoded, along with the file's metadata.",
+          "message": "Stáhne obsah souboru.\n\nObsah je vrácen zakódovaný ve formátu base64 spolu s metadaty souboru."
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Stáhnout soubor"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The path of the file to download",
+          "message": "Cesta k souboru ke stažení"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "Stáhnout obsah souboru"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.desc": {
+          "source": "Deletes several files or folders in one call, rather than one request per path.\n\n**A batch does not fail as a whole**: individual paths can be refused while the request succeeds, so each entry carries its own outcome.  A large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Smaže několik souborů nebo složek v jednom volání namísto jednoho požadavku na cestu.\n\n**Dávka neselže jako celek**: jednotlivé cesty mohou být odmítnuty, i když požadavek uspěje, takže každá položka nese svůj vlastní výsledek. Velká dávka se provádí na pozadí a odpověď uvádí úlohu, kterou lze sledovat pomocí `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
+          "source": "Delete Files (Batch)",
+          "message": "Smazat soubory (dávkově)"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.desc": {
+          "source": "The paths to delete.\n\nDropbox performs a batch in the background when it is large, so the response may name a job to follow rather than the results themselves",
+          "message": "Cesty ke smazání.\n\nDropbox provádí dávku na pozadí, pokud je velká, takže odpověď může namísto samotných výsledků uvést úlohu ke sledování"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.display_name": {
+          "source": "Paths",
+          "message": "Cesty"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.short_desc": {
+          "source": "The paths to delete",
+          "message": "Cesty ke smazání"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
+          "source": "Delete several files or folders in one call",
+          "message": "Smazat několik souborů nebo složek v jednom volání"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file or folder.\n\n**Deleting a folder deletes everything in it.**  Dropbox keeps deleted files for a period that depends on the account, so a deletion can usually be undone from the Dropbox web interface, but not through this API.",
+          "message": "Smaže soubor nebo složku.\n\n**Smazáním složky se smaže vše, co v ní je.** Dropbox uchovává smazané soubory po dobu závislou na účtu, takže smazání lze obvykle vrátit zpět z webového rozhraní Dropboxu, nikoli však prostřednictvím tohoto API."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File or Folder",
+          "message": "Smazat soubor nebo složku"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to delete; deleting a folder deletes everything in it",
+          "message": "Cesta k souboru nebo složce ke smazání; smazáním složky se smaže vše v ní"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to delete",
+          "message": "Cesta k souboru nebo složce ke smazání"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or folder",
+          "message": "Smazat soubor nebo složku"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a file that was already in the folder being watched is changed.\n\nA file appearing for the first time is reported by `new-file` instead.  A file moved into the watched folder keeps its Dropbox identity, so it arrives here rather than as a new file.",
+          "message": "Spustí se, když je změněn soubor, který se již nacházel ve sledované složce.\n\nSoubor, který se objeví poprvé, je místo toho hlášen pomocí `new-file`. Soubor přesunutý do sledované složky si zachová svou identitu v Dropboxu, takže dorazí sem a nikoli jako nový soubor."
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "File Modified",
+          "message": "Soubor upraven"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Kolik identit položek si sledování pamatuje, aby odlišilo nový soubor od upraveného (výchozí hodnota `100000`).\n\nDropbox hlásí vytvoření a úpravu identicky, takže rozdíl lze zjistit pouze zapamatováním toho, co již bylo viděno. Sledování, které dosáhne tohoto limitu, zaznamená varování; místo zvyšování této hodnoty zúžíte rozsah pomocí `path` a `recursive`"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Maximální počet sledovaných položek"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Kolik identit položek si sledování pamatuje"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Jak často kontrolovat změny, v sekundách (minimum `30`, výchozí `60`)"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Jak často kontrolovat změny, v sekundách"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Složka ke sledování; ponechte nenastavené pro sledování celého účtu od kořene"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Složka"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Složka ke sledování"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Sledovat obsah podsložek i samotné složky.\n\nTím se rozšíří jak hlášené položky, tak index, který si sledování udržuje pro odlišení nového souboru od upraveného, takže ponechte nezaškrtnuté, pokud záleží pouze na jedné složce"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Rekurzivně"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Sledovat také podsložky"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "React to a change to an existing file",
+          "message": "Reagovat na změnu existujícího souboru"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.desc": {
+          "source": "Searches for files by name and, for supported file types, by content, and reads the results as a stream of records.\n\nUnlike `search`, which answers one page and leaves the cursor to the caller, this walks every page of matches.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; read the folder instead when the result has to reflect the current state exactly.",
+          "message": "Vyhledává soubory podle názvu a u podporovaných typů souborů i podle obsahu a načítá výsledky jako proud záznamů.\n\nNa rozdíl od `search`, který odpoví jednu stránku a kurzor přenechá volajícímu, tato operace projde každou stránku shod.\n\nDropbox indexuje obsah asynchronně, takže soubor nahraný před malou chvílí ještě nemusí být nalezen; pokud musí výsledek přesně odrážet aktuální stav, načtěte raději složku."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
+          "source": "Find Files by Search",
+          "message": "Najít soubory vyhledáváním"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, comma-separated and without a leading `.`",
+          "message": "Vyhledat pouze soubory s těmito příponami, oddělenými čárkou a bez počátečního `.`"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Přípony souborů"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only these file extensions",
+          "message": "Odpovídat pouze těmto příponám souborů"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Pouze soubory, které nebyly smazány"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Pouze soubory, které nebyly smazány"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Pouze soubory, které byly smazány a jsou stále obnovitelné"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Smazané"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Pouze smazané soubory"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Which files to search",
+          "message": "Které soubory vyhledávat"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Stav souboru"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Which files to search",
+          "message": "Které soubory vyhledávat"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match file names only rather than searching content as well",
+          "message": "Porovnávat pouze názvy souborů namísto prohledávání i obsahu"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "Filename Only",
+          "message": "Pouze název souboru"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match names only, not content",
+          "message": "Porovnávat pouze názvy, nikoli obsah"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Nejnověji upravené jako první"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Naposledy změněno"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Nejnověji upravené jako první"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Nejlepší shody jako první"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "Relevance"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Nejlepší shody jako první"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results",
+          "message": "Pořadí řazení výsledků"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Seřadit podle"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "Pořadí řazení výsledků"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.desc": {
+          "source": "Search only within this folder; the empty string searches the whole account",
+          "message": "Hledat pouze v této složce; prázdný řetězec prohledá celý účet"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Složka"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Hledat pouze v této složce"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.desc": {
+          "source": "How many matches to fetch per request.\n\nThis affects how the walk is split into requests, not how many records are returned",
+          "message": "Kolik shod načíst na jeden požadavek.\n\nToto ovlivňuje, jak je procházení rozděleno do požadavků, nikoli celkový počet vrácených záznamů"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many matches to fetch per request",
+          "message": "Kolik shod načíst na jeden požadavek"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.desc": {
+          "source": "What to search for; matched against file names and, for supported types, content",
+          "message": "Co vyhledat; porovnává se s názvy souborů a u podporovaných typů i s obsahem"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dotaz"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.short_desc": {
+          "source": "What to search for",
+          "message": "Co vyhledat"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
+          "source": "Search for files and read the results as records",
+          "message": "Vyhledat soubory a načíst výsledky jako záznamy"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.desc": {
+          "source": "Reads the contents of a folder as a stream of records.\n\nUnlike `list-folder`, which answers one page and leaves the cursor to the caller, this walks the whole folder: pages are fetched as they are reached.\n\nSet `recursive` to include subfolders.  Entries that describe a deletion are not returned, since they are not contents of the folder.",
+          "message": "Načte obsah složky jako proud záznamů.\n\nNa rozdíl od `list-folder`, který vrátí jednu stránku a kurzor přenechá volajícímu, tato operace projde celou složku: stránky jsou načítány tak, jak se k nim dospěje.\n\nNastavte `recursive` pro zahrnutí podsložek. Položky popisující smazání se nevracejí, protože nejsou obsahem složky."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files in a Folder",
+          "message": "Najít soubory ve složce"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.desc": {
+          "source": "The folder to read; the empty string reads the account root",
+          "message": "Složka ke čtení; prázdný řetězec čte kořenový adresář účtu"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Složka"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.short_desc": {
+          "source": "The folder to read",
+          "message": "Složka ke čtení"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many entries to fetch per request; Dropbox treats this as a hint.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "Kolik položek načíst na jeden požadavek; Dropbox toto považuje za doporučení.\n\nToto ovlivňuje způsob rozdělení procházení do požadavků, nikoli počet vrácených záznamů – iterátor načítá další stránky podle potřeby"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many entries to fetch per request",
+          "message": "Kolik položek načíst na jeden požadavek"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Zahrnout obsah podsložek i samotné složky"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Rekurzivně"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Zahrnout obsah podsložek"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Read the contents of a folder as records",
+          "message": "Přečíst obsah složky jako záznamy"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.desc": {
+          "source": "Lists the people and groups who have access to a file, and at what level.\n\nSomeone who has been invited but has not yet accepted appears under `invitees` rather than `users`.",
+          "message": "Zobrazí seznam osob a skupin, které mají k souboru přístup, a úroveň jejich oprávnění.\n\nNěkdo, kdo byl pozván, ale pozvánku ještě nepřijal, se zobrazí pod `invitees` namísto `users`."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
+          "source": "List File Members",
+          "message": "Zobrazit členy souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.desc": {
+          "source": "The file whose members are to be listed, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Soubor, jehož členové mají být vypsáni, jako ID souboru Dropbox (`id:...`) nebo cesta"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "ID souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.short_desc": {
+          "source": "The file whose members are to be listed",
+          "message": "Soubor, jehož členové mají být vypsáni"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.desc": {
+          "source": "The maximum number of members to return",
+          "message": "Maximální počet členů k vrácení"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of members to return",
+          "message": "Maximální počet členů k vrácení"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
+          "source": "List who has access to a file",
+          "message": "Zobrazit, kdo má k souboru přístup"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.desc": {
+          "source": "Lists the earlier revisions of a file, newest first.\n\nHow long revisions are kept depends on the account.",
+          "message": "Vypíše dřívější revize souboru, od nejnovější.\n\nDoba uchování revizí závisí na typu účtu."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
+          "source": "List File Revisions",
+          "message": "Zobrazit revize souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Maximální počet revizí k vrácení"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Maximální počet revizí k vrácení"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Return revisions of the file identified by the path, following it through renames and moves",
+          "message": "Vrátit revize souboru identifikovaného cestou a sledovat jej přes přejmenování a přesuny"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.display_name": {
+          "source": "By File ID",
+          "message": "Podle ID souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.short_desc": {
+          "source": "Return revisions of the file itself, wherever it now lives",
+          "message": "Vrátit revize samotného souboru, ať se nyní nachází kdekoli"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.desc": {
+          "source": "Return revisions of whatever file is now at the path; if the file was deleted and another was created with the same name, the revisions of the new file are returned",
+          "message": "Vrátit revize jakéhokoli souboru, který se nyní na dané cestě nachází; pokud byl soubor smazán a vytvořen jiný se stejným názvem, vrátí se revize nového souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.display_name": {
+          "source": "By Path",
+          "message": "Podle cesty"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.short_desc": {
+          "source": "Return revisions of whatever file is now at the path",
+          "message": "Vrátit revize jakéhokoli souboru, který se nyní nachází na dané cestě"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.desc": {
+          "source": "How the file is identified: by whatever is now at the path, or by the file itself",
+          "message": "Způsob identifikace souboru: podle toho, co se nyní nachází na dané cestě, nebo podle samotného souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Režim"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.short_desc": {
+          "source": "How the file is identified",
+          "message": "Způsob identifikace souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.desc": {
+          "source": "The path of the file whose revisions are wanted",
+          "message": "Cesta k souboru, jehož revize jsou požadovány"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
+          "source": "List the earlier revisions of a file",
+          "message": "Zobrazit dřívější revize souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.desc": {
+          "source": "Lists the files and folders in a folder.\n\nResults are paginated; when `has_more` is returned, pass the returned `cursor` back in `cursor` to retrieve the following page.  A cursor already carries the folder and the recursion flag, so the other options are ignored when one is supplied.",
+          "message": "Vypíše soubory a složky ve složce.\n\nVýsledky jsou stránkovány; pokud je vráceno `has_more`, předejte vrácenou hodnotu `cursor` zpět v `cursor` pro načtení následující stránky. Kurzor již obsahuje informace o složce i příznak rekurze, takže ostatní volby jsou při jeho zadání ignorovány."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
+          "source": "List Folder",
+          "message": "Zobrazit obsah složky"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous listing, used to retrieve the following page; when set, every other option is ignored, since the cursor already carries them",
+          "message": "Hodnota `cursor` vrácená předchozím výpisem, použitá k načtení následující stránky; je-li nastavena, všechny ostatní možnosti jsou ignorovány, protože je kurzor již obsahuje"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated listing",
+          "message": "Kurzor vrácený předchozím zkráceným výpisem"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.desc": {
+          "source": "The maximum number of entries to return per page; Dropbox treats this as a hint and may return fewer",
+          "message": "Maximální počet položek k vrácení na stránku; Dropbox toto považuje za doporučení a může vrátit méně"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of entries to return per page",
+          "message": "Maximální počet položek k vrácení na stránku"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.desc": {
+          "source": "The folder to list; the empty string lists the account root",
+          "message": "Složka k výpisu; prázdný řetězec vypíše kořenový adresář účtu"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Cesta ke složce"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.short_desc": {
+          "source": "The folder to list",
+          "message": "Složka k výpisu"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Zahrnout obsah podsložek i samotné složky"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Rekurzivně"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Zahrnout obsah podsložek"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
+          "source": "List the contents of a folder",
+          "message": "Zobrazit obsah složky"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.desc": {
+          "source": "Lists the shared links in the account, or the links granting access to one file or folder.\n\nBy default a link to a parent folder is listed as well, since it also grants access; set `direct_only` to list only links created for the path itself.",
+          "message": "Vypíše sdílené odkazy v účtu nebo odkazy udělující přístup k jednomu souboru či složce.\n\nVe výchozím nastavení je vypsán také odkaz na nadřazenou složku, protože rovněž uděluje přístup; nastavte `direct_only`, chcete-li vypsat pouze odkazy vytvořené přímo pro danou cestu."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
+          "source": "List Shared Links",
+          "message": "Zobrazit sdílené odkazy"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.desc": {
+          "source": "List only links created for the path itself, excluding links to a parent folder that also grant access to it",
+          "message": "Vypsat pouze odkazy vytvořené přímo pro danou cestu s vyloučením odkazů na nadřazenou složku, které k ní také udělují přístup"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.display_name": {
+          "source": "Direct Links Only",
+          "message": "Pouze přímé odkazy"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.short_desc": {
+          "source": "Exclude links inherited from a parent folder",
+          "message": "Vyloučit odkazy zděděné z nadřazené složky"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.desc": {
+          "source": "List only links to this file or folder; if not set, all of the account's links are listed",
+          "message": "Vypsat pouze odkazy na tento soubor nebo složku; není-li nastaveno, vypíší se všechny odkazy účtu"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.short_desc": {
+          "source": "List only links to this file or folder",
+          "message": "Vypsat pouze odkazy na tento soubor nebo složku"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
+          "source": "List the shared links in the account",
+          "message": "Zobrazit sdílené odkazy v účtu"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.desc": {
+          "source": "Moves several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Přesune několik souborů v jednom volání namísto jednoho požadavku na soubor.\n\nKaždá položka uvádí `from_path` a `to_path`. **Dávka neselže jako celek**, takže každá položka nese svůj vlastní výsledek; velká dávka se provádí na pozadí a odpověď uvádí úlohu, kterou lze sledovat pomocí `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
+          "source": "Move Files (Batch)",
+          "message": "Přesunout soubory (dávkově)"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Operace k provedení jako seznam hashů, z nichž každý obsahuje `from_path` a `to_path`.\n\n**Příklad**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Položky"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Přesuny nebo kopie k provedení"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
+          "source": "Move several files in one call",
+          "message": "Přesunout několik souborů v jednom volání"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
+          "message": "Přesune soubor nebo složku do nové cesty.\n\nPřesun na jiný název ve stejné složce položku přejmenuje."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
+          "source": "Move or Rename File or Folder",
+          "message": "Přesunout nebo přejmenovat soubor či složku"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Cesta k souboru nebo složce k přesunutí"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Zdrojová cesta"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Cesta k souboru nebo složce k přesunutí"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to move to, including the new name; a move to a different name in the same folder renames the file",
+          "message": "Úplná cílová cesta včetně nového názvu; přesun na jiný název ve stejné složce soubor přejmenuje"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Cílová cesta"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to move to",
+          "message": "Cílová cesta pro přesun"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move or rename a file or folder",
+          "message": "Přesunout nebo přejmenovat soubor či složku"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provede vlastní volání HTTP / REST API do služby **Dropbox** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API daného připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci k dispozici jako samostatné akce."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Dropbox",
+          "message": "Provést vlastní volání API do Dropboxu"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the folder being watched.\n\nUses Dropbox's delta feed, so the cost of a poll follows what has changed rather than how much the folder holds.\n\nA file that was already there and has since been edited is reported by `file-modified` instead.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Aktivuje se při vytvoření souboru ve sledované složce.\n\nVyužívá delta kanál Dropboxu, takže náročnost dotazování odpovídá tomu, co se změnilo, nikoli objemu dat ve složce.\n\nSoubor, který již existoval a byl od té doby upraven, je hlášen pomocí `file-modified`. Nastavte `path` pro sledování jedné složky a zrušte nastavení `recursive` pro ignorování jejích podsložek."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "Nový soubor"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Kolik identit položek si sledování pamatuje, aby odlišilo nový soubor od upraveného (výchozí hodnota `100000`).\n\nDropbox hlásí vytvoření a úpravu identicky, takže rozdíl lze zjistit pouze zapamatováním toho, co již bylo viděno. Sledování, které dosáhne tohoto limitu, zaznamená varování; místo zvyšování této hodnoty zúžíte rozsah pomocí `path` a `recursive`"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Maximální počet sledovaných položek"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Kolik identit položek si sledování pamatuje"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Jak často kontrolovat změny, v sekundách (minimum `30`, výchozí `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Jak často kontrolovat změny, v sekundách"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Složka ke sledování; ponechte nenastavené pro sledování celého účtu od kořene"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Složka"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Složka ke sledování"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Sledovat obsah podsložek i samotné složky.\n\nTím se rozšíří jak hlášené položky, tak index, který si sledování udržuje pro odlišení nového souboru od upraveného, takže ponechte nezaškrtnuté, pokud záleží pouze na jedné složce"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Rekurzivně"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Sledovat také podsložky"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in a folder",
+          "message": "Reagovat na vytvoření souboru ve složce"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the folder being watched.\n\nA folder that was already there and has since been renamed or moved is **not** reported.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Aktivuje se při vytvoření složky ve sledované složce.\n\nSložka, která již existovala a byla od té doby přejmenována nebo přesunuta, **není** hlášena. Nastavte `path` pro sledování jedné složky a zrušte nastavení `recursive` pro ignorování jejích podsložek."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "Nová složka"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Kolik identit položek si sledování pamatuje, aby odlišilo nový soubor od upraveného (výchozí hodnota `100000`).\n\nDropbox hlásí vytvoření a úpravu identicky, takže rozdíl lze zjistit pouze zapamatováním toho, co již bylo viděno. Sledování, které dosáhne tohoto limitu, zaznamená varování; místo zvyšování této hodnoty zúžíte rozsah pomocí `path` a `recursive`"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Maximální počet sledovaných položek"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Kolik identit položek si sledování pamatuje"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Jak často kontrolovat změny, v sekundách (minimum `30`, výchozí `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Jak často kontrolovat změny, v sekundách"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Složka ke sledování; ponechte nenastavené pro sledování celého účtu od kořene"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Složka"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Složka ke sledování"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Sledovat obsah podsložek i samotné složky.\n\nTím se rozšíří jak hlášené položky, tak index, který si sledování udržuje pro odlišení nového souboru od upraveného, takže ponechte nezaškrtnuté, pokud záleží pouze na jedné složce"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Rekurzivně"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Sledovat také podsložky"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created",
+          "message": "Reagovat na vytvoření složky"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.desc": {
+          "source": "Has Dropbox fetch a URL and store the result in the account.\n\n**The content never passes through this system**: Dropbox downloads it from its own servers, so a large file costs nothing here in memory, time, or bandwidth.  The URL must be reachable from the public internet.\n\nA small file is usually fetched before the call returns; a large one is not, and the response then names a job to follow with `check-job-status`.",
+          "message": "Nechá Dropbox stáhnout adresu URL a uložit výsledek do účtu.\n\n**Obsah nikdy neprochází tímto systémem**: Dropbox jej stahuje ze svých vlastních serverů, takže velký soubor zde nespotřebovává žádnou paměť, čas ani šířku pásma. Adresa URL musí být dostupná z veřejného internetu.\n\nMalý soubor se obvykle stáhne ještě před dokončením volání; velký nikoli a odpověď pak uvádí úlohu, kterou lze sledovat pomocí `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.display_name": {
+          "source": "Save URL to Dropbox",
+          "message": "Uložit URL do Dropboxu"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.desc": {
+          "source": "The path in the Dropbox account to save the downloaded file to",
+          "message": "Cesta v účtu Dropbox, do které se má stažený soubor uložit"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.short_desc": {
+          "source": "The path to save the downloaded file to",
+          "message": "Cesta pro uložení staženého souboru"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.desc": {
+          "source": "The URL for Dropbox to fetch.\n\n**Dropbox fetches it from its own servers**, so the URL must be reachable from the public internet and the content never passes through this system",
+          "message": "Adresa URL, kterou má Dropbox stáhnout.\n\n**Dropbox ji stahuje ze svých vlastních serverů**, takže adresa URL musí být dostupná z veřejného internetu a obsah nikdy neprochází tímto systémem"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.short_desc": {
+          "source": "The URL for Dropbox to fetch",
+          "message": "Adresa URL, kterou má Dropbox stáhnout"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.short_desc": {
+          "source": "Have Dropbox fetch a URL directly into the account",
+          "message": "Nechat Dropbox stáhnout URL přímo do účtu"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.desc": {
+          "source": "Searches for files and folders by name and, for supported file types, by content.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; use `list-folder` when the result has to reflect the current state exactly.",
+          "message": "Vyhledává soubory a složky podle názvu a u podporovaných typů souborů i podle obsahu.\n\nDropbox indexuje obsah asynchronně, takže soubor nahraný před malou chvílí ještě nemusí být nalezen; použijte `list-folder`, pokud výsledek musí přesně odrážet aktuální stav."
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Hledat"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous search, used to retrieve the following page.\n\nA cursor already carries the query and every option it was created with, so when it is set the other options are ignored",
+          "message": "Hodnota `cursor` vrácená předchozím vyhledáváním, která se používá k načtení následující stránky.\n\nKurzor již obsahuje dotaz a všechny možnosti, se kterými byl vytvořen, takže pokud je nastaven, ostatní možnosti jsou ignorovány"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated search",
+          "message": "Kurzor vrácený předchozím zkráceným vyhledáváním"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, given without a leading dot and separated by commas",
+          "message": "Vyhledat pouze soubory s těmito příponami, zadanými bez úvodní tečky a oddělenými čárkami"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Přípony souborů"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only files with these extensions",
+          "message": "Vyhledat pouze soubory s těmito příponami"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Pouze soubory, které nebyly smazány"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Pouze soubory, které nebyly smazány"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Pouze soubory, které byly smazány a jsou stále obnovitelné"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Smazané"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Pouze smazané soubory"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Zda vyhledávat aktivní nebo smazané soubory"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Stav souboru"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Zda vyhledávat aktivní nebo smazané soubory"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match on the file name only, rather than also searching inside file content",
+          "message": "Vyhledávat pouze podle názvu souboru namísto vyhledávání i v obsahu souboru"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "File Name Only",
+          "message": "Pouze název souboru"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match on the file name only, not on content",
+          "message": "Vyhledávat pouze podle názvu souboru, nikoli podle obsahu"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Nejnověji upravené jako první"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Naposledy změněno"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Nejnověji upravené jako první"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Nejlepší shody jako první"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "Relevance"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Nejlepší shody jako první"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for matches",
+          "message": "Pořadí řazení shod"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Seřadit podle"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for matches",
+          "message": "Pořadí řazení shod"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Maximální počet shod, které se mají vrátit"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Maximum Results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Maximální počet shod, které se mají vrátit"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.desc": {
+          "source": "Search only within this folder and its subfolders; the empty string searches the whole account",
+          "message": "Hledat pouze v této složce a jejích podsložkách; prázdný řetězec prohledá celý účet"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Cesta ke složce"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Hledat pouze v této složce"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The text to search for, in file names and, for supported file types, in content",
+          "message": "Text k vyhledání v názvech souborů a u podporovaných typů souborů i v obsahu"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dotaz"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The text to search for",
+          "message": "Text k vyhledání"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.short_desc": {
+          "source": "Search for files and folders",
+          "message": "Vyhledat soubory a složky"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.desc": {
+          "source": "Removes a file or folder entirely, bypassing the trash.\n\n`delete-file` leaves the file recoverable and still counting against the account's storage; this does not.  **It cannot be undone.**\n\nThe Dropbox app must have been granted permission for this; without it Dropbox refuses the request rather than quietly doing nothing.",
+          "message": "Úplně odstraní soubor nebo složku s vynecháním koše.\n\n`delete-file` ponechává soubor obnovitelný a stále se započítává do úložiště účtu; toto nikoli.  **Tuto akci nelze vrátit zpět.**\n\nAplikaci Dropbox musí být pro toto uděleno oprávnění; bez něj Dropbox požadavek odmítne, místo aby tiše neudělal nic."
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "Trvale smazat"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to remove permanently",
+          "message": "Cesta k souboru nebo složce, které se mají trvale odstranit"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
+          "source": "Remove a file outright, bypassing the trash",
+          "message": "Trvale odstranit soubor s vynecháním koše"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.desc": {
+          "source": "Withdraws a shared link, so that it no longer grants access.\n\nThe file itself is not changed, and other links to it keep working.",
+          "message": "Zruší sdílený odkaz, takže již neposkytuje přístup.\n\nSamotný soubor se nezmění a ostatní odkazy na něj zůstanou funkční."
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Revoke Shared Link",
+          "message": "Zrušit sdílený odkaz"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.desc": {
+          "source": "The shared link to revoke, as returned by `create-shared-link` or `list-shared-links`",
+          "message": "Sdílený odkaz ke zrušení, jak byl vrácen funkcí `create-shared-link` nebo `list-shared-links`"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.short_desc": {
+          "source": "The shared link to revoke",
+          "message": "Sdílený odkaz ke zrušení"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Withdraw a shared link",
+          "message": "Zrušit sdílený odkaz"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.desc": {
+          "source": "Restores a file to an earlier revision, listed by `list-file-revisions`.\n\nThe current content becomes a revision in its turn, so a restore can itself be undone.",
+          "message": "Obnoví soubor do dřívější revize ze seznamu `list-file-revisions`.\n\nAktuální obsah se následně stane revizí, takže samotné obnovení lze vrátit zpět."
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
+          "source": "Restore File Revision",
+          "message": "Obnovit revizi souboru"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.desc": {
+          "source": "The path of the file to restore a revision of",
+          "message": "Cesta k souboru, jehož revize se má obnovit"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Cesta k souboru"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.desc": {
+          "source": "The revision identifier to restore, as returned by `list-file-revisions`",
+          "message": "Identifikátor revize k obnovení, jak byl vrácen funkcí `list-file-revisions`"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.display_name": {
+          "source": "Revision",
+          "message": "Revize"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.short_desc": {
+          "source": "The revision to restore",
+          "message": "Revize k obnovení"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
+          "source": "Restore a file to an earlier revision",
+          "message": "Obnovit soubor do dřívější revize"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "Nahraje soubor do Dropboxu.\n\nPokud není nastavena hodnota `path`, použije se vlastní název souboru a soubor se uloží do kořenového adresáře účtu.  Ve výchozím nastavení se existující soubor na dané cestě nenahrazuje; chcete-li to změnit, nastavte `mode` na `overwrite` nebo `autorename`.\n\nVelké soubory se nahrávají po částech prostřednictvím nahrávací relace Dropboxu, takže přerušený přenos nemusí začínat znovu od začátku."
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Nahrát soubor"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Zvolit nekonfliktní název namísto selhání, pokud soubor v cíli již existuje"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Automaticky přejmenovat"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Přejmenovat namísto selhání, pokud je cíl již obsazen"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name and content",
+          "message": "Soubor k nahrání včetně jeho názvu a obsahu"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Soubor"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Soubor k nahrání"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Nahradit existující soubor v dané cestě; **předchozí obsah lze obnovit pouze prostřednictvím historie revizí souboru**"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Přepsat"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Nahradit existující soubor v dané cestě"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Nepřepisovat existující soubor; nahrávání selže nebo se vybere nový název, pokud je nastaveno `autorename`"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Přidat"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Nepřepisovat existující soubor"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Co dělat, pokud soubor v dané cestě již existuje"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Režim zápisu"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Co dělat, pokud soubor v dané cestě již existuje"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change; useful for uploads made in bulk",
+          "message": "Nezobrazovat uživateli oznámení na ploše o této změně; užitečné pro hromadná nahrávání"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Ztlumit oznámení"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Neupozorňovat uživatele na tuto změnu"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.desc": {
+          "source": "The full path to store the file at, including the file name; if not set, the file's own name is used and the file is stored in the account root",
+          "message": "Úplná cesta, kam se má soubor uložit, včetně názvu souboru; pokud není nastavena, použije se vlastní název souboru a soubor se uloží do kořenového adresáře účtu"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Cílová cesta"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path to store the file at",
+          "message": "Cesta, kam se má soubor uložit"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Dropbox",
+          "message": "Nahrát soubor do Dropboxu"
+        },
+        "app.RHJvcGJveA.desc": {
+          "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",
+          "message": "Poskytuje přístup ke službě [Dropbox](https://www.dropbox.com) pro cloudové úložiště a sdílení souborů.\n\nK souborům se přistupuje pomocí cesty od kořene účtu a cesty nerozlišují velká a malá písmena; samotným kořenem účtu je prázdný řetězec, nikoli `/`.\n\n**Běžné případy použití**:\n- **Výměna souborů**: ukládání vygenerovaných dokumentů pro kolegy nebo shromažďování souborů, které nahrají\n- **Distribuce obsahu**: vytváření sdílených odkazů, s vypršením platnosti nebo heslem či bez nich\n- **Zálohování a obnova**: zobrazení seznamu revizí souboru a obnovení dřívější revize\n- **Organizace**: vytváření složek a kopírování, přesouvání a odstraňování souborů\n\nDropbox je ochranná známka společnosti Dropbox, Inc."
+        },
+        "app.RHJvcGJveA.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "app.RHJvcGJveA.short_desc": {
+          "source": "Dropbox cloud file storage",
+          "message": "Cloudové úložiště souborů Dropbox"
+        }
+      }
+    }
+  }
+}

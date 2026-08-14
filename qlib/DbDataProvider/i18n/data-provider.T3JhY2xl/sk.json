@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "Vytvárajte a spravujte pripojenia k databázovému serveru Oracle"
+        },
+        "app.T3JhY2xl.display_name": {
+          "source": "Oracle",
+          "message": "Oracle"
+        },
+        "app.T3JhY2xl.short_desc": {
+          "source": "Oracle database server",
+          "message": "Databázový server Oracle"
+        }
+      }
+    }
+  }
+}

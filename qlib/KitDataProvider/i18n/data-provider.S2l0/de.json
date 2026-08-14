@@ -1,0 +1,1869 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber enrolls in a course in Kit",
+          "message": "Wird ausgelöst, wenn sich ein Abonnent für einen Kurs in Kit anmeldet"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
+          "source": "Course Subscription",
+          "message": "Kurs-Abonnement"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for course subscriptions",
+          "message": "Auf Kurs-Abonnements überwachen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+          "message": "Einen neuen Broadcast in Kit erstellen. Setzen Sie `send_at`, um ihn zu planen, oder lassen Sie das Feld leer für einen Entwurf"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Create a Broadcast",
+          "message": "Broadcast erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "Der HTML-Inhalt der Broadcast-E-Mail"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "Der HTML-Inhalt des Broadcasts"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "Eine Beschreibung des Broadcasts für interne Referenzzwecke"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "Die Broadcast-Beschreibung"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "Die E-Mail-Adresse, die als Absender für den Broadcast verwendet wird"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "Die Absender-E-Mail-Adresse"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "Die Kennung der E-Mail-Vorlage, die für den Broadcast verwendet werden soll"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "E-Mail-Vorlagen-ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "Die E-Mail-Vorlagen-ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "Der Zeitstempel, wann der Broadcast gesendet werden soll; für einen Entwurf auf `null` setzen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Senden um"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "Wann der Broadcast gesendet werden soll"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "Die Betreffzeile der Broadcast-E-Mail"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "Die Broadcast-Betreffzeile"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "Der Vorschautext, der in E-Mail-Clients angezeigt wird, bevor die E-Mail geöffnet wird"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Vorschautext"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "Der Vorschautext"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Gibt an, ob der Broadcast öffentlich zugänglich ist"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Ob der Broadcast öffentlich ist"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "Der Zeitstempel, wann der Broadcast veröffentlicht werden soll"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Veröffentlicht am"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "Wann der Broadcast veröffentlicht werden soll"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "Der Alternativtext für das Broadcast-Vorschaubild"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Vorschaubild-Alt-Text"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "Der Vorschaubild-Alt-Text"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "Die URL des Broadcast-Vorschaubilds"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "Vorschaubild-URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "Die Vorschaubild-URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Create a new broadcast or draft",
+          "message": "Einen neuen Broadcast oder Entwurf erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Kit",
+          "message": "Ein neues benutzerdefiniertes Feld in Kit erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "Benutzerdefiniertes Feld erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The display label of the custom field to create",
+          "message": "Die Anzeigebezeichnung des zu erstellenden benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Label"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The custom field label",
+          "message": "Die Bezeichnung des benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "Neues benutzerdefiniertes Feld erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.desc": {
+          "source": "Create a new purchase record in Kit for e-commerce tracking",
+          "message": "Einen neuen Kaufeintrag in Kit für das E-Commerce-Tracking erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
+          "source": "Create a Purchase",
+          "message": "Einen Kauf erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for the purchase (defaults to `USD`)",
+          "message": "Der ISO-4217-Währungscode für den Kauf (Standardwert ist `USD`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "Der Währungscode"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount applied to the purchase",
+          "message": "Der auf den Kauf angewendete Rabattbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.short_desc": {
+          "source": "The discount amount",
+          "message": "Der Rabattbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the buyer",
+          "message": "Die E-Mail-Adresse des Käufers"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The buyer's email address",
+          "message": "Die E-Mail-Adresse des Käufers"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.desc": {
+          "source": "The shipping cost for the purchase",
+          "message": "Die Versandkosten für den Kauf"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.display_name": {
+          "source": "Shipping",
+          "message": "Versand"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.short_desc": {
+          "source": "The shipping cost",
+          "message": "Die Versandkosten"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.desc": {
+          "source": "The current status of the purchase",
+          "message": "Der aktuelle Status des Kaufs"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.short_desc": {
+          "source": "The purchase status",
+          "message": "Der Kaufstatus"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.desc": {
+          "source": "The subtotal amount of the purchase before tax, shipping, and discount",
+          "message": "Der Zwischensummenbetrag des Kaufs vor Steuern, Versand und Rabatt"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "Zwischensumme"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.short_desc": {
+          "source": "The purchase subtotal",
+          "message": "Die Kauf-Zwischensumme"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.desc": {
+          "source": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`",
+          "message": "Eine Liste der Produkte im Kauf, jeweils mit Produktdetails wie `name`, `pid`, `lid`, `quantity` und `unit_price`"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Produkte"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.short_desc": {
+          "source": "List of products in the purchase",
+          "message": "Liste der Produkte im Kauf"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.desc": {
+          "source": "The total amount of the purchase",
+          "message": "Der Gesamtbetrag des Kaufs"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.display_name": {
+          "source": "Total",
+          "message": "Gesamtbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.short_desc": {
+          "source": "The total amount",
+          "message": "Der Gesamtbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.desc": {
+          "source": "The tax amount applied to the purchase",
+          "message": "Der auf den Kauf angewendete Steuerbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.display_name": {
+          "source": "Tax",
+          "message": "Steuer"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.short_desc": {
+          "source": "The tax amount",
+          "message": "Der Steuerbetrag"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The external transaction identifier for the purchase",
+          "message": "Die externe Transaktionskennung für den Kauf"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "Transaktions-ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The external transaction ID",
+          "message": "Die externe Transaktions-ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.desc": {
+          "source": "The timestamp when the transaction occurred",
+          "message": "Der Zeitstempel, wann die Transaktion stattgefunden hat"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.display_name": {
+          "source": "Transaction Time",
+          "message": "Transaktionszeit"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.short_desc": {
+          "source": "When the transaction occurred",
+          "message": "Wann die Transaktion stattgefunden hat"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
+          "source": "Create a new purchase record",
+          "message": "Einen neuen Kaufeintrag erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+          "message": "Einen neuen Abonnenten in Kit erstellen (Upsert-Verhalten — aktualisiert, falls E-Mail bereits vorhanden)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Create a Subscriber",
+          "message": "Einen Abonnenten erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to create or update (upsert behavior)",
+          "message": "Die E-Mail-Adresse des zu erstellenden oder aktualisierenden Abonnenten (Upsert-Verhalten)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "Ein Hash von benutzerdefinierten Feldwerten, die für den Abonnenten festgelegt werden sollen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Benutzerdefinierte Felder"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Benutzerdefinierte Feldwerte"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.desc": {
+          "source": "The state of the subscriber (e.g., `active`, `inactive`)",
+          "message": "Der Status des Abonnenten (z. B. `active`, `inactive`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Bundesstaat"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.short_desc": {
+          "source": "The subscriber's state",
+          "message": "Der Status des Abonnenten"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Create or update a subscriber",
+          "message": "Einen Abonnenten erstellen oder aktualisieren"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Kit",
+          "message": "Einen neuen Tag in Kit erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Tag erstellen"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "Der Name des zu erstellenden Tags"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Tag-Name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "Der Tag-Name"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Neuen Tag erstellen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.desc": {
+          "source": "Add a subscriber to a form in Kit by email address",
+          "message": "Einen Abonnenten anhand der E-Mail-Adresse zu einem Formular in Kit hinzufügen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
+          "source": "Add Subscriber to Form",
+          "message": "Abonnenten zu Formular hinzufügen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the form",
+          "message": "Die E-Mail-Adresse des Abonnenten, der zum Formular hinzugefügt werden soll"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to add the subscriber to",
+          "message": "Die eindeutige Kennung des Formulars, zu dem der Abonnent hinzugefügt werden soll"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "Die Formular-ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
+          "source": "Add a subscriber to a form",
+          "message": "Einen Abonnenten zu einem Formular hinzufügen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.desc": {
+          "source": "Add a subscriber to an email sequence in Kit",
+          "message": "Einen Abonnenten zu einer E-Mail-Sequenz in Kit hinzufügen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
+          "source": "Add Subscriber to Sequence",
+          "message": "Abonnenten zu Sequenz hinzufügen"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the sequence",
+          "message": "Die E-Mail-Adresse des Abonnenten, der zur Sequenz hinzugefügt werden soll"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.desc": {
+          "source": "The unique identifier of the sequence to add the subscriber to",
+          "message": "Die eindeutige Kennung der Sequenz, zu der der Abonnent hinzugefügt werden soll"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequenz-ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence ID",
+          "message": "Die Sequenz-ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
+          "source": "Add a subscriber to a sequence",
+          "message": "Einen Abonnenten zu einer Sequenz hinzufügen"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "Apply a tag to multiple subscribers in Kit at once",
+          "message": "Ein Tag gleichzeitig auf mehrere Abonnenten in Kit anwenden"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Tag Subscribers",
+          "message": "Abonnenten per Massenvorgang taggen"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscriber email addresses to tag",
+          "message": "Eine Liste von E-Mail-Adressen von Abonnenten, die getaggt werden sollen"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Abonnenten"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscriber email addresses",
+          "message": "Liste von E-Mail-Adressen von Abonnenten"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscribers",
+          "message": "Die eindeutige Kennung des Tags, das auf die Abonnenten angewendet werden soll"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Apply a tag to multiple subscribers",
+          "message": "Ein Tag auf mehrere Abonnenten anwenden"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.desc": {
+          "source": "Bulk create subscribers in Kit (async processing)",
+          "message": "Abonnenten per Massenvorgang in Kit erstellen (asynchrone Verarbeitung)"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Create Subscribers",
+          "message": "Abonnenten per Massenvorgang erstellen"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.desc": {
+          "source": "A URL that will receive a webhook when the bulk operation completes",
+          "message": "Eine URL, die einen Webhook empfängt, wenn der Massenvorgang abgeschlossen ist"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.display_name": {
+          "source": "Callback URL",
+          "message": "Callback-URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.short_desc": {
+          "source": "URL to receive completion callback",
+          "message": "URL für den Empfang des Abschluss-Callbacks"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscribers to create, each containing at least an `email_address` field",
+          "message": "Eine Liste der zu erstellenden Abonnenten, die jeweils mindestens ein Feld `email_address` enthalten"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "Abonnenten"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscribers to create",
+          "message": "Liste der zu erstellenden Abonnenten"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Create multiple subscribers at once",
+          "message": "Mehrere Abonnenten gleichzeitig erstellen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a single broadcast by ID from Kit",
+          "message": "Einen einzelnen Broadcast nach ID aus Kit abrufen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get a Broadcast",
+          "message": "Einen Broadcast abrufen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast-ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "Die Broadcast-ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a single broadcast by ID",
+          "message": "Einen einzelnen Broadcast nach ID abrufen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.desc": {
+          "source": "Get statistics for a specific broadcast in Kit",
+          "message": "Statistiken für einen bestimmten Broadcast in Kit abrufen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
+          "source": "Get Broadcast Stats",
+          "message": "Broadcast-Statistiken abrufen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to get stats for",
+          "message": "Die eindeutige Kennung des Broadcasts, für den Statistiken abgerufen werden sollen"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast-ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "Die Broadcast-ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
+          "source": "Get statistics for a broadcast",
+          "message": "Statistiken für einen Broadcast abrufen"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.desc": {
+          "source": "Retrieve a single purchase record by ID from Kit",
+          "message": "Einen einzelnen Kaufdatensatz nach ID aus Kit abrufen"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
+          "source": "Get a Purchase",
+          "message": "Einen Kauf abrufen"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "Kauf-ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "The purchase ID",
+          "message": "Die Kauf-ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
+          "source": "Get a single purchase by ID",
+          "message": "Einen einzelnen Kauf nach ID abrufen"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.desc": {
+          "source": "Retrieve a single subscriber by ID from Kit",
+          "message": "Einen einzelnen Abonnenten nach ID aus Kit abrufen"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
+          "source": "Get a Subscriber",
+          "message": "Einen Abonnenten abrufen"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Abonnenten-ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "Die Abonnenten-ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
+          "source": "Get a single subscriber by ID",
+          "message": "Einen einzelnen Abonnenten nach ID abrufen"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Delete a broadcast from Kit (only before sending)",
+          "message": "Einen Broadcast aus Kit löschen (nur vor dem Senden)"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Delete a Broadcast",
+          "message": "Einen Broadcast löschen"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Broadcasts"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast-ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to delete",
+          "message": "Die zu löschende Broadcast-ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Delete a broadcast",
+          "message": "Einen Broadcast löschen"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Kit",
+          "message": "Ein benutzerdefiniertes Feld aus Kit löschen"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "Benutzerdefiniertes Feld löschen"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to delete",
+          "message": "Die eindeutige Kennung des zu löschenden benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Benutzerdefiniertes Feld-ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to delete",
+          "message": "Die zu löschende benutzerdefinierte Feld-ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "Benutzerdefiniertes Feld löschen"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.desc": {
+          "source": "Triggers when a subscriber signs up through a form in Kit",
+          "message": "Wird ausgelöst, wenn sich ein Abonnent über ein Formular in Kit anmeldet"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
+          "source": "Form Subscription",
+          "message": "Formular-Abonnement"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
+          "source": "Watch for form subscriptions",
+          "message": "Auf Formular-Abonnements überwachen"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "List all subscribers that have a specific tag applied in Kit",
+          "message": "Alle Abonnenten auflisten, denen in Kit ein bestimmtes Tag zugewiesen ist"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "List Tag Subscribers",
+          "message": "Tag-Abonnenten auflisten"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Abonnentenstatus"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Nach Abonnentenstatus filtern"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag to list subscribers for",
+          "message": "Das Tag, für das Abonnenten aufgelistet werden sollen"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "List subscribers for a tag",
+          "message": "Abonnenten für ein Tag auflisten"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Kit with optional filtering",
+          "message": "Tags in Kit mit optionaler Filterung auflisten"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Tags auflisten"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Nach Name filtern"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Nach Tag-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "Alle Tags auflisten"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "List broadcasts in Kit",
+          "message": "Broadcasts in Kit auflisten"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "Broadcasts auflisten"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast-ID"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "Filter by broadcast ID",
+          "message": "Nach Broadcast-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List all broadcasts",
+          "message": "Alle Broadcasts auflisten"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List all custom fields in Kit",
+          "message": "Alle benutzerdefinierten Felder in Kit auflisten"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "Benutzerdefinierte Felder auflisten"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "Alle benutzerdefinierten Felder auflisten"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.desc": {
+          "source": "List all subscribers that subscribed through a specific form in Kit",
+          "message": "Alle Abonnenten auflisten, die sich über ein bestimmtes Formular in Kit angemeldet haben"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
+          "source": "List Form Subscribers",
+          "message": "Formularabonnenten auflisten"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list subscribers for",
+          "message": "Das Formular, für das Abonnenten aufgelistet werden sollen"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Abonnentenstatus"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Nach Abonnentenstatus filtern"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
+          "source": "List subscribers for a form",
+          "message": "Abonnenten für ein Formular auflisten"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in Kit with optional status filter",
+          "message": "Formulare in Kit mit optionalem Statusfilter auflisten"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "Formulare auflisten"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "Nach Formular-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by form status",
+          "message": "Nach Formularstatus filtern"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "Alle Formulare auflisten"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.desc": {
+          "source": "List purchase records in Kit",
+          "message": "Kaufeinträge in Kit auflisten"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
+          "source": "List Purchases",
+          "message": "Einkäufe auflisten"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "Kauf-ID"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "Filter by purchase ID",
+          "message": "Nach Kauf-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
+          "source": "List all purchases",
+          "message": "Alle Käufe auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.desc": {
+          "source": "List all subscribers in a specific email sequence in Kit",
+          "message": "Alle Abonnenten in einer bestimmten E-Mail-Sequenz in Kit auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Sequence Subscribers",
+          "message": "Sequenzabonnenten auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequenz-ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence to list subscribers for",
+          "message": "Die Sequenz, für die Abonnenten aufgelistet werden sollen"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "Abonnentenstatus"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "Nach Abonnentenstatus filtern"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List subscribers for a sequence",
+          "message": "Abonnenten für eine Sequenz auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.desc": {
+          "source": "List email sequences in Kit",
+          "message": "E-Mail-Sequenzen in Kit auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
+          "source": "List Sequences",
+          "message": "Sequenzen auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "Sequenz-ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "Filter by sequence ID",
+          "message": "Nach Sequenz-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
+          "source": "List all sequences",
+          "message": "Alle Sequenzen auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.desc": {
+          "source": "List subscribers in Kit with optional filtering",
+          "message": "Abonnenten in Kit mit optionaler Filterung auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Subscribers",
+          "message": "Abonnenten auflisten"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "Erstellt nach"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Nach Erstellungsdatum filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "Erstellt vor"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Nach Erstellungsdatum filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Filter by email",
+          "message": "Nach E-Mail filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Sortierfeld"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Feld zum Sortieren"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Bundesstaat"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by state",
+          "message": "Nach Status filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Abonnenten-ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "Filter by subscriber ID",
+          "message": "Nach Abonnenten-ID filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "Nach Tag filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "Aktualisiert nach"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "Nach Aktualisierungsdatum filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.display_name": {
+          "source": "Updated Before",
+          "message": "Aktualisiert vor"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by update date",
+          "message": "Nach Aktualisierungsdatum filtern"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List all subscribers",
+          "message": "Alle Abonnenten auflisten"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Kit** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwortheader und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Kit",
+          "message": "Benutzerdefinierten API-Aufruf an Kit durchführen"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber unsubscribes in Kit",
+          "message": "Wird ausgelöst, wenn sich ein Abonnent in Kit abmeldet"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
+          "source": "Subscriber Unsubscribed",
+          "message": "Abonnent abgemeldet"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for subscriber unsubscribes",
+          "message": "Auf Abmeldungen von Abonnenten achten"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.desc": {
+          "source": "Triggers when a subscriber is activated in Kit",
+          "message": "Wird ausgelöst, wenn ein Abonnent in Kit aktiviert wird"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
+          "source": "Subscriber Activated",
+          "message": "Abonnent aktiviert"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
+          "source": "Watch for new subscriber activations",
+          "message": "Auf neue Aktivierungen von Abonnenten achten"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.desc": {
+          "source": "Triggers when a subscriber's email bounces in Kit",
+          "message": "Wird ausgelöst, wenn die E-Mail eines Abonnenten in Kit bounct"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
+          "source": "Subscriber Bounced",
+          "message": "Abonnent gebounct"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
+          "source": "Watch for subscriber bounces",
+          "message": "Auf Abonnenten-Bounces achten"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.desc": {
+          "source": "Triggers when a subscriber marks an email as spam in Kit",
+          "message": "Wird ausgelöst, wenn ein Abonnent in Kit eine E-Mail als Spam markiert"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
+          "source": "Subscriber Complained",
+          "message": "Abonnenten-Beschwerde"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
+          "source": "Watch for subscriber complaints",
+          "message": "Auf Beschwerden von Abonnenten achten"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.desc": {
+          "source": "Apply a tag to a subscriber in Kit by email address",
+          "message": "Einem Abonnenten in Kit anhand der E-Mail-Adresse ein Tag zuweisen"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
+          "source": "Tag a Subscriber",
+          "message": "Abonnenten taggen"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to tag",
+          "message": "Die E-Mail-Adresse des zu taggenden Abonnenten"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscriber",
+          "message": "Die eindeutige Kennung des Tags, das dem Abonnenten zugewiesen werden soll"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
+          "source": "Apply a tag to a subscriber",
+          "message": "Einem Abonnenten ein Tag zuweisen"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.desc": {
+          "source": "Remove a tag from a subscriber in Kit",
+          "message": "Ein Tag von einem Abonnenten in Kit entfernen"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
+          "source": "Untag a Subscriber",
+          "message": "Tag von Abonnenten entfernen"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to untag",
+          "message": "Die eindeutige Kennung des Abonnenten, dessen Tag entfernt werden soll"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Abonnenten-ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "Die Abonnenten-ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to remove from the subscriber",
+          "message": "Die eindeutige Kennung des vom Abonnenten zu entfernenden Tags"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
+          "source": "Remove a tag from a subscriber",
+          "message": "Ein Tag von einem Abonnenten entfernen"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.desc": {
+          "source": "Unsubscribe a subscriber from Kit",
+          "message": "Einen Abonnenten in Kit abmelden"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
+          "source": "Unsubscribe a Subscriber",
+          "message": "Abonnenten abmelden"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to unsubscribe",
+          "message": "Die eindeutige Kennung des abzumeldenden Abonnenten"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Abonnenten-ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to unsubscribe",
+          "message": "Die Abonnenten-ID zum Abmelden"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
+          "source": "Unsubscribe a subscriber",
+          "message": "Einen Abonnenten abmelden"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Update an existing broadcast in Kit",
+          "message": "Einen bestehenden Broadcast in Kit aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Update a Broadcast",
+          "message": "Einen Broadcast aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "Der HTML-Inhalt der Broadcast-E-Mail"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Inhalt"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "Der HTML-Inhalt des Broadcasts"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Broadcasts"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Broadcast-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to update",
+          "message": "Die zu aktualisierende Broadcast-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "Eine Beschreibung des Broadcasts für interne Referenzzwecke"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "Die Broadcast-Beschreibung"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "Die E-Mail-Adresse, die als Absender für den Broadcast verwendet wird"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "Die Absender-E-Mail-Adresse"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "Die Kennung der E-Mail-Vorlage, die für den Broadcast verwendet werden soll"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "E-Mail-Vorlagen-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "Die E-Mail-Vorlagen-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "Der Zeitstempel, wann der Broadcast gesendet werden soll; für einen Entwurf auf `null` setzen"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "Senden um"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "Wann der Broadcast gesendet werden soll"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "Die Betreffzeile der Broadcast-E-Mail"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "Die Broadcast-Betreffzeile"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "Der Vorschautext, der in E-Mail-Clients angezeigt wird, bevor die E-Mail geöffnet wird"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "Vorschautext"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "Der Vorschautext"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "Gibt an, ob der Broadcast öffentlich zugänglich ist"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "Ob der Broadcast öffentlich ist"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "Der Zeitstempel, wann der Broadcast veröffentlicht werden soll"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Veröffentlicht am"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "Wann der Broadcast veröffentlicht werden soll"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "Der Alternativtext für das Broadcast-Vorschaubild"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "Vorschaubild-Alt-Text"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "Der Vorschaubild-Alt-Text"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "Die URL des Broadcast-Vorschaubilds"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "Vorschaubild-URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "Die Vorschaubild-URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Update an existing broadcast",
+          "message": "Einen bestehenden Broadcast aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update the label of an existing custom field in Kit",
+          "message": "Die Bezeichnung eines bestehenden benutzerdefinierten Felds in Kit aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "Benutzerdefiniertes Feld aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Benutzerdefiniertes Feld-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to update",
+          "message": "Die zu aktualisierende ID des benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new display label for the custom field",
+          "message": "Die neue Anzeigenbezeichnung für das benutzerdefinierte Feld"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Label"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The new custom field label",
+          "message": "Die neue Bezeichnung des benutzerdefinierten Felds"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update a custom field label",
+          "message": "Bezeichnung eines benutzerdefinierten Felds aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Update an existing subscriber in Kit",
+          "message": "Einen bestehenden Abonnenten in Kit aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Update a Subscriber",
+          "message": "Einen Abonnenten aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "Die E-Mail-Adresse des Abonnenten"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "Ein Hash von benutzerdefinierten Feldwerten, die für den Abonnenten festgelegt werden sollen"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Benutzerdefinierte Felder"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Benutzerdefinierte Feldwerte"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "Der Vorname des Abonnenten"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Abonnenten"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "Abonnenten-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to update",
+          "message": "Die zu aktualisierende Abonnenten-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Update an existing subscriber",
+          "message": "Einen bestehenden Abonnenten aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name of an existing tag in Kit",
+          "message": "Den Namen eines bestehenden Tags in Kit aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Tag aktualisieren"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "Der neue Name für den Tag"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Tag-Name"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The new tag name",
+          "message": "Der neue Tag-Name"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Tags"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "Die ID des zu aktualisierenden Tags"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update a tag name",
+          "message": "Einen Tag-Namen aktualisieren"
+        },
+        "app.S2l0.desc": {
+          "source": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers.",
+          "message": "Kit (ehemals ConvertKit) ist eine E-Mail-Marketing-Plattform für Creators, die Abonnenten, Tags, benutzerdefinierte Felder, Broadcasts, Formulare, Sequenzen und Käufe unterstützt.\n\nDiese Integration unterstützt vollständige CRUD-Operationen für Kernressourcen und ereignisbasierte Trigger."
+        },
+        "app.S2l0.display_name": {
+          "source": "Kit",
+          "message": "Kit"
+        },
+        "app.S2l0.short_desc": {
+          "source": "Kit email marketing platform for creators",
+          "message": "Kit-E-Mail-Marketing-Plattform für Creators"
+        }
+      }
+    }
+  }
+}

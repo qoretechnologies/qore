@@ -1,0 +1,2933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note attached to a contact, account, or deal",
+          "message": "Crea una nuova nota allegata a un contatto, un account o una trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create Note",
+          "message": "Crea nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The content/body of the note",
+          "message": "Il contenuto/corpo della nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "Contenuto della nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Il tipo di record da associare: `Contact`, `SalesAccount` o `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Tipo di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Tipo di record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "L'ID del contatto, account o trattativa da associare"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ID di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID del record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Crea una nuova nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Freshsales CRM",
+          "message": "Crea un nuovo account in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "Crea account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "Il paese dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Nome del paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "La città dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "Il fatturato annuo dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "Fatturato annuo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "Fatturato annuo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "L'indirizzo dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "L'ID del tipo di attività per questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "ID tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "Classificazione dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "Il profilo Facebook dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Profilo Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "L'ID del settore per questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "ID tipo di settore"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "Categoria di settore"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "Il profilo LinkedIn dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "Profilo LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "Il nome dell'account/azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "Nome azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "Il numero di dipendenti dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "Numero di dipendenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "Numero di dipendenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "Lo stato o la provincia dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "L'ID dell'account/azienda principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "ID account principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "ID azienda principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "Il numero di telefono dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "L'URL del sito web dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Sito web dell'azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "L'ID del territorio a cui appartiene questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "L'handle Twitter dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Handle Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "Il codice postale o CAP dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "CAP"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "Crea un nuovo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Create a new appointment in Freshsales CRM",
+          "message": "Crea un nuovo appuntamento in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Create Appointment",
+          "message": "Crea appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "Una descrizione dettagliata dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "Descrizione dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "La data e l'ora di fine (formato: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Data di fine"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "Data e ora di fine"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "La data e l'ora di inizio (formato: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Data di inizio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "Data e ora di inizio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "Il luogo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Posizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "Luogo dell'incontro"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Il tipo di record da associare: `Contact`, `SalesAccount` o `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Tipo di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Tipo di record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "L'ID del contatto, account o trattativa da associare"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ID di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID del record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "Il titolo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "Titolo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "Il fuso orario per l'appuntamento (es. `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Fuso orario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "Fuso orario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Create a new appointment",
+          "message": "Crea un nuovo appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Freshsales CRM",
+          "message": "Crea un nuovo contatto in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Crea contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "Il paese del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Nome del paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "L'ID della classificazione di stato del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "ID stato contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "Identificatore di stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "L'ID della campagna associata a questo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identificatore della campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "La città del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "L'indirizzo stradale del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "L'indirizzo email principale del contatto. Si consiglia almeno uno tra `email`, `mobile_number` o `twitter`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Indirizzo email principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "Un identificatore di riferimento esterno per il contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "ID esterno"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "ID riferimento esterno"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "Il nome utente Facebook o l'URL del profilo del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Profilo Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Il nome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "Nome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "La qualifica professionale o la designazione del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Qualifica professionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "Qualifica professionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Il cognome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "Cognome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "L'ID dell'origine del lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identificatore origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "L'ID della fase del ciclo di vita del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ID fase del ciclo di vita"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "Identificatore fase del ciclo di vita"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "L'URL del profilo LinkedIn del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "Profilo LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "Il numero di cellulare del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "Numero di cellulare"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Numero di telefono cellulare"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "Lo stato o la provincia del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "Il numero di telefono di lavoro del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "Numero di lavoro"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "Numero di telefono di lavoro"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "L'ID del territorio a cui appartiene questo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "L'handle Twitter del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Handle Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "Il codice postale o CAP del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "CAP"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Crea un nuovo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal in Freshsales CRM",
+          "message": "Crea una nuova trattativa in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create Deal",
+          "message": "Crea trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "L'ID della campagna associata a questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identificatore della campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "La data effettiva di chiusura della trattativa (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "Data di chiusura"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "Data effettiva di chiusura"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "L'ID della valuta per questa trattativa. Se non specificato, viene utilizzata la valuta predefinita dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "ID valuta"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "Valuta per la trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "Il valore monetario della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Quantità"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "Valore della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "L'ID del tipo/categoria di trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "ID tipo di trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "Categoria trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "L'ID dello stato del pagamento della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "ID stato pagamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "Stato del pagamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "L'ID della pipeline della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "Identificatore pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "L'ID del motivo di vincita o perdita della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "ID motivo trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "Motivo vincita/perdita"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "L'ID della fase della trattativa nella pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "ID fase della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fase della pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "La data di chiusura prevista (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "Chiusura prevista"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "Data di chiusura prevista"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "L'ID dell'origine del lead per questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identificatore origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "Il nome o il titolo della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Nome trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "L'ID dell'account di vendita associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "ID account correlato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "La probabilità di vincere la trattativa (da `0` a `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "Probabilità"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "Probabilità di vincita"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "L'ID del territorio per questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "Crea una nuova trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Freshsales CRM",
+          "message": "Crea una nuova attività in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "Crea attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "Una descrizione dettagliata dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Descrizione dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "La data di scadenza dell'attività (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "Termine di completamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "L'ID del risultato dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "ID risultato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "Risultato attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "L'ID dell'utente da assegnare a questa attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "Aperto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "Completato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "Lo stato dell'attività: `0` per aperto, `1` per completato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "Stato dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Il tipo di record da associare: `Contact`, `SalesAccount` o `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Tipo di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Tipo di record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "L'ID del contatto, account o trattativa da associare"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ID di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID del record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "L'ID del tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "ID tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "Tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "Il titolo dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Titolo dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Crea una nuova attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by its ID",
+          "message": "Recupera un singolo account tramite il suo ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "Ottieni account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID",
+          "message": "L'ID dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Ottieni un singolo account tramite ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.desc": {
+          "source": "Retrieve a single appointment by its ID",
+          "message": "Recupera un singolo appuntamento tramite il suo ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
+          "source": "Get Appointment",
+          "message": "Ottieni appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID",
+          "message": "L'ID dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Get a single appointment by ID",
+          "message": "Ottieni un singolo appuntamento tramite ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "Recupera un singolo contatto tramite il suo ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Ottieni contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "L'ID del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Ottieni un singolo contatto tramite ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by its ID",
+          "message": "Recupera una singola trattativa tramite il suo ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get Deal",
+          "message": "Ottieni trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID",
+          "message": "L'ID della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "Ottieni una singola trattativa tramite ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by its ID",
+          "message": "Recupera una singola attività tramite il suo ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Ottieni attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID",
+          "message": "L'ID dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Ottieni una singola attività tramite ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Freshsales CRM",
+          "message": "Elimina una nota da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete Note",
+          "message": "Elimina nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to delete",
+          "message": "L'identificatore univoco della nota da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "ID nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to delete",
+          "message": "L'ID della nota da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Elimina una nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.desc": {
+          "source": "Delete an account from Freshsales CRM",
+          "message": "Elimina un account da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
+          "source": "Delete Account",
+          "message": "Elimina account"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to delete",
+          "message": "L'identificatore univoco dell'account da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to delete",
+          "message": "L'ID dell'account da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
+          "source": "Delete an account",
+          "message": "Elimina un account"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Delete an appointment from Freshsales CRM",
+          "message": "Elimina un appuntamento da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Delete Appointment",
+          "message": "Elimina appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to delete",
+          "message": "L'identificatore univoco dell'appuntamento da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to delete",
+          "message": "L'ID dell'appuntamento da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Delete an appointment",
+          "message": "Elimina un appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Freshsales CRM",
+          "message": "Elimina un contatto da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Elimina contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "L'identificatore univoco del contatto da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "L'ID del contatto da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Elimina un contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.desc": {
+          "source": "Delete a deal from Freshsales CRM",
+          "message": "Elimina una trattativa da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
+          "source": "Delete Deal",
+          "message": "Elimina opportunità"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to delete",
+          "message": "L'identificatore univoco della trattativa da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to delete",
+          "message": "L'ID della trattativa da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
+          "source": "Delete a deal",
+          "message": "Elimina una trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Freshsales CRM",
+          "message": "Elimina un'attività da Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "Elimina attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "L'identificatore univoco dell'attività da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to delete",
+          "message": "L'ID dell'attività da eliminare"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Elimina un'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks from Freshsales CRM with optional status filtering",
+          "message": "Elenca le attività da Freshsales CRM con filtro opzionale sullo stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Elenca attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm92ZXJkdWU.display_name": {
+          "source": "Overdue",
+          "message": "In ritardo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Aperto"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Completato"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b21vcnJvdw.display_name": {
+          "source": "Due Tomorrow",
+          "message": "In scadenza domani"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b2RheQ.display_name": {
+          "source": "Due Today",
+          "message": "In scadenza oggi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtra per stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.short_desc": {
+          "source": "Get a specific task",
+          "message": "Ottieni un'attività specifica"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filter",
+          "message": "Elenca le attività con filtro opzionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List accounts from Freshsales CRM with optional filtering by view",
+          "message": "Elenca gli account da Freshsales CRM con filtro opzionale per vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "Elenca account"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific account",
+          "message": "Ottieni un account specifico"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtra per vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List accounts from a view",
+          "message": "Elenca gli account da una vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.desc": {
+          "source": "List appointments from Freshsales CRM with optional time period filtering",
+          "message": "Elenca gli appuntamenti da Freshsales CRM con filtro opzionale per periodo di tempo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
+          "source": "List Appointments",
+          "message": "Elenca appuntamenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhc3Q.display_name": {
+          "source": "Past",
+          "message": "Passati"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnVwY29taW5n.display_name": {
+          "source": "Upcoming",
+          "message": "In arrivo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by time period",
+          "message": "Filtra per periodo di tempo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.short_desc": {
+          "source": "Get a specific appointment",
+          "message": "Ottieni un appuntamento specifico"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
+          "source": "List appointments with optional filter",
+          "message": "Elenca gli appuntamenti con filtro opzionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Freshsales CRM with optional filtering by view or email",
+          "message": "Elenca i contatti da Freshsales CRM con filtro opzionale per vista o email"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Elenca contatti"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Search by email",
+          "message": "Cerca per email"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "Ottieni un contatto specifico"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtra per vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts from a view",
+          "message": "Elenca i contatti da una vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals from Freshsales CRM with optional filtering by view",
+          "message": "Elenca le trattative da Freshsales CRM con filtro opzionale per vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "Elenca trattative"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.short_desc": {
+          "source": "Get a specific deal",
+          "message": "Ottieni una trattativa specifica"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ID vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "Filtra per vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals from a view",
+          "message": "Elenca le trattative da una vista"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Freshsales** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Freshsales** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine in questa app."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Freshsales",
+          "message": "Esegui una chiamata API personalizzata a Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.desc": {
+          "source": "Poll for new accounts created in Freshsales",
+          "message": "Verifica la presenza di nuovi account creati in Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
+          "source": "New Account Event",
+          "message": "Evento nuovo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "Monitora i nuovi account"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Poll for new appointments created in Freshsales",
+          "message": "Verifica la presenza di nuovi appuntamenti creati in Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment Event",
+          "message": "Evento nuovo appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Watch for new appointments",
+          "message": "Controlla nuovi appuntamenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Poll for new contacts created in Freshsales",
+          "message": "Verifica la presenza di nuovi contatti creati in Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact Event",
+          "message": "Evento nuovo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Monitora nuovi contatti"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.desc": {
+          "source": "Poll for new deals created in Freshsales",
+          "message": "Esegui il polling per le nuove trattative create in Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
+          "source": "New Deal Event",
+          "message": "Evento nuova trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
+          "source": "Watch for new deals",
+          "message": "Monitora nuove trattative"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.desc": {
+          "source": "Poll for new tasks created in Freshsales",
+          "message": "Esegui il polling per le nuove attività create in Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
+          "source": "New Task Event",
+          "message": "Evento nuova attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "Verifica la presenza di nuove attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Freshsales CRM",
+          "message": "Aggiorna una nota esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update Note",
+          "message": "Aggiorna nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated content/body of the note",
+          "message": "Il contenuto/corpo aggiornato della nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "Contenuto della nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to update",
+          "message": "L'identificatore univoco della nota da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "ID nota"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to update",
+          "message": "L'ID della nota da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Aggiorna una nota esistente"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Freshsales CRM",
+          "message": "Aggiorna un account esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "Aggiorna account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "Il paese dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Nome del paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "La città dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "Il fatturato annuo dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "Fatturato annuo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "Fatturato annuo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "L'indirizzo dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "L'ID del tipo di attività per questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "ID tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "Classificazione dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "Il profilo Facebook dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Profilo Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "L'ID del settore per questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "ID tipo di settore"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "Categoria di settore"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to update",
+          "message": "L'identificatore univoco dell'account da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to update",
+          "message": "L'ID dell'account da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "Il profilo LinkedIn dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "Profilo LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "Il nome dell'account/azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "Nome azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "Il numero di dipendenti dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "Numero di dipendenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "Numero di dipendenti"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "Lo stato o la provincia dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "L'ID dell'account/azienda principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "ID account principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "ID azienda principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "Il numero di telefono dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "L'URL del sito web dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Sito web dell'azienda"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "L'ID del territorio a cui appartiene questo account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "L'handle Twitter dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Handle Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "Il codice postale o CAP dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "CAP"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "Aggiorna un account esistente"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Update an existing appointment in Freshsales CRM",
+          "message": "Aggiorna un appuntamento esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Update Appointment",
+          "message": "Aggiorna appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "Una descrizione dettagliata dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "Descrizione dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "La data e l'ora di fine (formato: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Data di fine"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "Data e ora di fine"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "La data e l'ora di inizio (formato: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Data di inizio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "Data e ora di inizio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to update",
+          "message": "L'identificatore univoco dell'appuntamento da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "ID appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to update",
+          "message": "L'ID dell'appuntamento da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "Il luogo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Posizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "Luogo dell'incontro"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Il tipo di record da associare: `Contact`, `SalesAccount` o `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Tipo di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Tipo di record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "L'ID del contatto, account o trattativa da associare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ID di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID del record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "Il titolo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "Titolo dell'appuntamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "Il fuso orario per l'appuntamento (es. `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Fuso orario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "Fuso orario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Update an existing appointment",
+          "message": "Aggiorna un appuntamento esistente"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Freshsales CRM",
+          "message": "Aggiorna un contatto esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aggiorna contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "Il paese del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Nome del paese"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "L'ID della classificazione di stato del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "ID stato contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "Identificatore di stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "L'ID della campagna associata a questo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identificatore della campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "La città del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "L'indirizzo stradale del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "L'indirizzo email principale del contatto. Si consiglia almeno uno tra `email`, `mobile_number` o `twitter`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Indirizzo email principale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "Un identificatore di riferimento esterno per il contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "ID esterno"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "ID riferimento esterno"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "Il nome utente Facebook o l'URL del profilo del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Profilo Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Il nome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "Nome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "L'identificatore univoco del contatto da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "L'ID del contatto da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "La qualifica professionale o la designazione del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Qualifica professionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "Qualifica professionale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Il cognome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "Cognome del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "L'ID dell'origine del lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identificatore origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "L'ID della fase del ciclo di vita del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ID fase del ciclo di vita"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "Identificatore fase del ciclo di vita"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "L'URL del profilo LinkedIn del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "Profilo LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "Il numero di cellulare del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "Numero di cellulare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Numero di telefono cellulare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "Lo stato o la provincia del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "Il numero di telefono di lavoro del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "Numero di lavoro"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "Numero di telefono di lavoro"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "L'ID del territorio a cui appartiene questo contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "L'handle Twitter del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Handle Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "Il codice postale o CAP del contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "CAP"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aggiorna un contatto esistente"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal in Freshsales CRM",
+          "message": "Aggiorna una trattativa esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update Deal",
+          "message": "Aggiorna opportunità"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "L'ID della campagna associata a questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "Identificatore della campagna"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "La data effettiva di chiusura della trattativa (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "Data di chiusura"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "Data effettiva di chiusura"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "L'ID della valuta per questa trattativa. Se non specificato, viene utilizzata la valuta predefinita dell'account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "ID valuta"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "Valuta per la trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "Il valore monetario della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Quantità"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "Valore della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "L'ID del tipo/categoria di trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "ID tipo di trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "Categoria trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "L'ID dello stato del pagamento della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "ID stato pagamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "Stato del pagamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "L'ID della pipeline della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "Identificatore pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "L'ID del motivo di vincita o perdita della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "ID motivo trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "Motivo vincita/perdita"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "L'ID della fase della trattativa nella pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "ID fase della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fase della pipeline"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "La data di chiusura prevista (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "Chiusura prevista"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "Data di chiusura prevista"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to update",
+          "message": "L'identificatore univoco della trattativa da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "ID trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to update",
+          "message": "L'ID della trattativa da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "L'ID dell'utente da assegnare come proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "L'ID dell'origine del lead per questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "Identificatore origine lead"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "Il nome o il titolo della trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Nome trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "L'ID dell'account di vendita associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "ID account correlato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "La probabilità di vincere la trattativa (da `0` a `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "Probabilità"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "Probabilità di vincita"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "L'ID del territorio per questa trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "ID territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "Identificatore del territorio"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "Aggiorna un'opportunità esistente"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Freshsales CRM",
+          "message": "Aggiorna un'attività esistente in Freshsales CRM"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "Aggiorna attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "Una descrizione dettagliata dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Descrizione dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "La data di scadenza dell'attività (formato: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "Termine di completamento"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "L'identificatore univoco dell'attività da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to update",
+          "message": "L'ID dell'attività da aggiornare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "L'ID del risultato dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "ID risultato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "Risultato attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "L'ID dell'utente da assegnare a questa attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID proprietario"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "ID utente assegnato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "Aperto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "Completato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "Lo stato dell'attività: `0` per aperto, `1` per completato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "Stato dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contatto"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "Trattativa"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Account"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "Il tipo di record da associare: `Contact`, `SalesAccount` o `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "Tipo di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "Tipo di record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "L'ID del contatto, account o trattativa da associare"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ID di destinazione"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "ID del record associato"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "L'ID del tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "ID tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "Tipo di attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "Il titolo dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Titolo dell'attività"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Aggiorna un'attività esistente"
+        },
+        "app.RnJlc2hzYWxlcw.desc": {
+          "source": "Freshsales is a CRM platform by Freshworks for managing contacts, accounts, deals, tasks, appointments, and notes.\n\nThis integration supports full CRUD operations on core CRM objects and polling-based triggers for new records.",
+          "message": "Freshsales è una piattaforma CRM di Freshworks per la gestione di contatti, account, trattative, attività, appuntamenti e note.\n\nQuesta integrazione supporta operazioni CRUD complete sugli oggetti CRM principali e trigger basati su polling per i nuovi record."
+        },
+        "app.RnJlc2hzYWxlcw.display_name": {
+          "source": "Freshsales",
+          "message": "Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.short_desc": {
+          "source": "Freshsales CRM integration",
+          "message": "Integrazione Freshsales CRM"
+        }
+      }
+    }
+  }
+}

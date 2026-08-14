@@ -1,0 +1,2109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.desc": {
+          "source": "Create a new dubbing project to translate audio/video content to another language",
+          "message": "Vytvořit nový dabingový projekt pro překlad audio/video obsahu do jiného jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
+          "source": "Create Dubbing",
+          "message": "Vytvořit dabing"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.desc": {
+          "source": "If `True`, removes background audio from the final dubbed output",
+          "message": "Pokud je `True`, odstraní zvuk na pozadí z konečného dabovaného výstupu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.display_name": {
+          "source": "Drop Background Audio",
+          "message": "Odstranit zvuk na pozadí"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.short_desc": {
+          "source": "Whether to remove background audio",
+          "message": "Zda odstranit zvuk na pozadí"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.desc": {
+          "source": "The end position in seconds to clip the source content before dubbing",
+          "message": "Koncová pozice v sekundách pro oříznutí zdrojového obsahu před dabingem"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Čas ukončení"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End position in seconds",
+          "message": "Koncová pozice v sekundách"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.desc": {
+          "source": "The source audio or video file to dub. Provide either `file` or `source_url`, not both",
+          "message": "Zdrojový audio nebo video soubor k dabování. Zadejte buď `file`, nebo `source_url`, ne obojí"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.display_name": {
+          "source": "Source File",
+          "message": "Zdrojový soubor"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.short_desc": {
+          "source": "Source audio or video file for dubbing",
+          "message": "Zdrojový audio nebo video soubor pro dabing"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.desc": {
+          "source": "If `True`, uses the highest resolution available for the dubbed content",
+          "message": "Pokud je `True`, použije se pro dabovaný obsah nejvyšší dostupné rozlišení"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.display_name": {
+          "source": "Highest Resolution",
+          "message": "Nejvyšší rozlišení"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.short_desc": {
+          "source": "Whether to use the highest resolution",
+          "message": "Zda použít nejvyšší rozlišení"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.desc": {
+          "source": "The name for the new dubbing project",
+          "message": "Název nového dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.short_desc": {
+          "source": "The name of the dubbing project",
+          "message": "Název dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The number of speakers in the source content. Set to `0` to automatically detect the number of speakers",
+          "message": "Počet mluvčích ve zdrojovém obsahu. Nastavte na `0` pro automatické rozpoznání počtu mluvčích"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "Počet mluvčích"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Number of speakers in the content",
+          "message": "Počet mluvčích v obsahu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.desc": {
+          "source": "The language code of the source content (e.g., `en`)",
+          "message": "Kód jazyka zdrojového obsahu (např. `en`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.display_name": {
+          "source": "Source Language",
+          "message": "Zdrojový jazyk"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.short_desc": {
+          "source": "The source language code",
+          "message": "Kód zdrojového jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.desc": {
+          "source": "The URL of the source audio or video content to dub",
+          "message": "URL zdrojového audio nebo video obsahu k dabování"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.display_name": {
+          "source": "Source URL",
+          "message": "Zdrojová URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.short_desc": {
+          "source": "URL of the source content",
+          "message": "URL zdrojového obsahu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start position in seconds to clip the source content before dubbing",
+          "message": "Počáteční pozice v sekundách pro oříznutí zdrojového obsahu před dabingem"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "Čas zahájení"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "Start position in seconds",
+          "message": "Počáteční pozice v sekundách"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.desc": {
+          "source": "If `True`, adds a watermark to the dubbed content",
+          "message": "Pokud je `True`, přidá do dabovaného obsahu vodoznak"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.display_name": {
+          "source": "Watermark",
+          "message": "Vodoznak"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.short_desc": {
+          "source": "Whether to add a watermark",
+          "message": "Zda přidat vodoznak"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.desc": {
+          "source": "The language code to dub the content into (e.g., `es`)",
+          "message": "Kód jazyka, do kterého se má obsah nadabovat (např. `es`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.display_name": {
+          "source": "Target Language",
+          "message": "Cílový jazyk"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.short_desc": {
+          "source": "The target language code",
+          "message": "Kód cílového jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.desc": {
+          "source": "If `True`, profanities in the transcription will be censored. **Note**: this is a beta feature",
+          "message": "Pokud je `True`, vulgární výrazy v přepisu budou cenzurovány. **Poznámka**: toto je beta funkce"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.display_name": {
+          "source": "Profanity Filter",
+          "message": "Filtr vulgarismů"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.short_desc": {
+          "source": "Whether to censor profanities in transcripts",
+          "message": "Zda cenzurovat vulgární výrazy v přepisech"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
+          "source": "Create a dubbing project",
+          "message": "Vytvořit dabingový projekt"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Create a new pronunciation dictionary with custom pronunciation rules",
+          "message": "Vytvořit nový výslovnostní slovník s vlastními pravidly výslovnosti"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Create Pronunciation Dictionary",
+          "message": "Vytvořit výslovnostní slovník"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the pronunciation dictionary",
+          "message": "Popis výslovnostního slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Dictionary description",
+          "message": "Popis slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.desc": {
+          "source": "The name for the new pronunciation dictionary",
+          "message": "Název nového výslovnostního slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the dictionary",
+          "message": "Název slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Workspace members can edit the dictionary",
+          "message": "Členové pracovního prostoru mohou slovník upravovat"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "Editor"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Workspace members can only view the dictionary",
+          "message": "Členové pracovního prostoru mohou slovník pouze prohlížet"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Čtenář"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.desc": {
+          "source": "The access level for workspace members",
+          "message": "Úroveň přístupu pro členy pracovního prostoru"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.display_name": {
+          "source": "Workspace Access",
+          "message": "Přístup k pracovnímu prostoru"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.short_desc": {
+          "source": "Access level for workspace members",
+          "message": "Úroveň přístupu pro členy pracovního prostoru"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Create a pronunciation dictionary",
+          "message": "Vytvořit výslovnostní slovník"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.desc": {
+          "source": "Create a new voice with a name and optional description",
+          "message": "Vytvořit nový hlas s názvem a volitelným popisem"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
+          "source": "Create Voice",
+          "message": "Vytvořit hlas"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the voice",
+          "message": "Popis hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Voice description",
+          "message": "Popis hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.desc": {
+          "source": "A list of audio sample files (as binary data) to use for voice cloning. Each file should be a clear recording of the target voice",
+          "message": "Seznam souborů se zvukovými vzorky (ve formě binárních dat), které se mají použít pro klonování hlasu. Každý soubor by měl být čistou nahrávkou cílového hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.display_name": {
+          "source": "Audio Files",
+          "message": "Zvukové soubory"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.short_desc": {
+          "source": "Audio samples for voice cloning",
+          "message": "Zvukové vzorky pro klonování hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "Štítky klíč-hodnota pro přiřazení k hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "Štítky"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "Štítky pro hlas"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.desc": {
+          "source": "The name for the new voice",
+          "message": "Název pro nový hlas"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.short_desc": {
+          "source": "The name of the voice",
+          "message": "Název hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
+          "source": "Create a new voice",
+          "message": "Vytvořit nový hlas"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.desc": {
+          "source": "Add pronunciation rules to an existing pronunciation dictionary. Rules can be alias rules (text replacement) or phoneme rules (IPA/phoneme representation)",
+          "message": "Přidat pravidla výslovnosti do existujícího výslovnostního slovníku. Pravidla mohou být typu alias (nahrazení textu) nebo fonémová pravidla (reprezentace IPA/fonémem)"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
+          "source": "Add Pronunciation Rules",
+          "message": "Přidat pravidla výslovnosti"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to add rules to",
+          "message": "Jedinečný identifikátor výslovnostního slovníku, do kterého se mají pravidla přidat"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "ID slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "ID výslovnostního slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.desc": {
+          "source": "A list of pronunciation rules to add to the dictionary. Each rule has a `type` (`alias` or `phoneme`), a `string_to_replace`, and either an `alias` or a `phoneme` with `alphabet`",
+          "message": "Seznam pravidel výslovnosti, která se mají přidat do slovníku. Každé pravidlo obsahuje `type` (`alias` nebo `phoneme`), `string_to_replace` a buď `alias`, nebo `phoneme` s `alphabet`"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.display_name": {
+          "source": "Rules",
+          "message": "Pravidla"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.short_desc": {
+          "source": "Pronunciation rules to add",
+          "message": "Pravidla výslovnosti k přidání"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {
+          "source": "Add rules to a pronunciation dictionary",
+          "message": "Přidat pravidla do výslovnostního slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.desc": {
+          "source": "Remove background noise from audio, isolating the voice using ElevenLabs AI",
+          "message": "Odstranit hluk na pozadí ze zvuku a izolovat hlas pomocí ElevenLabs AI"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
+          "source": "Audio Isolation",
+          "message": "Izolace zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.desc": {
+          "source": "The audio data to isolate voice from. Background noise will be removed and only the voice will be preserved",
+          "message": "Zvuková data, ze kterých se má izolovat hlas. Hluk na pozadí bude odstraněn a zachován zůstane pouze hlas"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.short_desc": {
+          "source": "The audio data to isolate voice from",
+          "message": "Zvuková data, ze kterých se má izolovat hlas"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
+          "source": "Remove background noise from audio",
+          "message": "Odstranit hluk na pozadí ze zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.desc": {
+          "source": "Get the current status and details of a dubbing project",
+          "message": "Získat aktuální stav a podrobnosti dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
+          "source": "Get Dubbing Status",
+          "message": "Získat stav dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to retrieve",
+          "message": "Jedinečný identifikátor dabingového projektu, který se má načíst"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "ID dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
+          "source": "Get the status of a dubbing project",
+          "message": "Získat stav dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.desc": {
+          "source": "Download the dubbed audio file from a dubbing project for a specific target language",
+          "message": "Stáhnout nadabovaný zvukový soubor z dabingového projektu pro konkrétní cílový jazyk"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
+          "source": "Get Dubbing Audio",
+          "message": "Získat nadabovaný zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to get audio for",
+          "message": "Jedinečný identifikátor dabingového projektu, pro který se má získat zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "ID dabingového projektu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "The language code for the dubbed audio to download (e.g., `es`, `fr`, `de`)",
+          "message": "Kód jazyka pro nadabovaný zvuk ke stažení (např. `es`, `fr`, `de`)"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Kód jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "The target language code",
+          "message": "Kód cílového jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
+          "source": "Get dubbed audio for a specific language",
+          "message": "Získat nadabovaný zvuk pro konkrétní jazyk"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.desc": {
+          "source": "Get the audio file from a specific history item",
+          "message": "Získat zvukový soubor z konkrétní položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
+          "source": "Get History Audio",
+          "message": "Získat zvuk z historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to get audio for",
+          "message": "Jedinečný identifikátor položky historie, pro kterou se má získat zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
+          "source": "Get audio from a history item",
+          "message": "Získat zvuk z položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Get details of a specific audio generation history item",
+          "message": "Získat podrobnosti o konkrétní položce historie generování zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Get History Item",
+          "message": "Získat položku historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to retrieve",
+          "message": "Jedinečný identifikátor položky historie, která se má načíst"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Get details of a history item",
+          "message": "Získat podrobnosti položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Get details of a specific pronunciation dictionary by its ID",
+          "message": "Získat podrobnosti o konkrétním výslovnostním slovníku podle jeho ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Get Pronunciation Dictionary",
+          "message": "Získat výslovnostní slovník"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to retrieve",
+          "message": "Jedinečný identifikátor výslovnostního slovníku, který se má načíst"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "ID slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "ID výslovnostního slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Get details of a pronunciation dictionary",
+          "message": "Získat podrobnosti o výslovnostním slovníku"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.desc": {
+          "source": "Get details of a specific voice by its ID",
+          "message": "Získat podrobnosti o konkrétním hlasu podle jeho ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
+          "source": "Get Voice",
+          "message": "Získat hlas"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to retrieve",
+          "message": "Jedinečný identifikátor hlasu, který se má načíst"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to retrieve",
+          "message": "ID hlasu, který se má načíst"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
+          "source": "Get details of a specific voice",
+          "message": "Získat podrobnosti o konkrétním hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.desc": {
+          "source": "Delete a dubbing project by its ID",
+          "message": "Smazat dabingový projekt podle jeho ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
+          "source": "Delete Dubbing",
+          "message": "Smazat dabing"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to delete",
+          "message": "Jedinečný identifikátor dabingového projektu, který se má smazat"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project to delete",
+          "message": "ID dabingového projektu ke smazání"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
+          "source": "Delete a dubbing project",
+          "message": "Smazat dabingový projekt"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Delete a specific audio generation history item",
+          "message": "Smazat konkrétní položku historie generování zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Delete History Item",
+          "message": "Smazat položku historie"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to delete",
+          "message": "Jedinečný identifikátor položky historie, která se má smazat"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item to delete",
+          "message": "ID položky historie ke smazání"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Delete a history item",
+          "message": "Smazat položku historie"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.desc": {
+          "source": "Delete a voice by its ID",
+          "message": "Smazat hlas podle jeho ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
+          "source": "Delete Voice",
+          "message": "Smazat hlas"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to delete",
+          "message": "Jedinečný identifikátor hlasu ke smazání"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to delete",
+          "message": "ID hlasu ke smazání"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
+          "source": "Delete a voice",
+          "message": "Smazat hlas"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.desc": {
+          "source": "Edit the name, description, or labels of an existing voice",
+          "message": "Upravit název, popis nebo štítky existujícího hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
+          "source": "Edit Voice",
+          "message": "Upravit hlas"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the voice",
+          "message": "Nový popis hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new description for the voice",
+          "message": "Nový popis hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "Štítky klíč-hodnota pro přiřazení k hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "Štítky"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "Štítky pro hlas"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the voice",
+          "message": "Nový název hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.short_desc": {
+          "source": "The new name for the voice",
+          "message": "Nový název hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to edit",
+          "message": "Jedinečný identifikátor hlasu k úpravě"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to edit",
+          "message": "ID hlasu k úpravě"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
+          "source": "Edit an existing voice",
+          "message": "Upravit existující hlas"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.desc": {
+          "source": "List available voices with optional filtering and pagination",
+          "message": "Zobrazit seznam dostupných hlasů s volitelným filtrováním a stránkováním"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
+          "source": "List Voices",
+          "message": "Zobrazit seznam hlasů"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.desc": {
+          "source": "Cloned voices",
+          "message": "Klonované hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.display_name": {
+          "source": "Cloned",
+          "message": "Klonované"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.desc": {
+          "source": "Generated voices",
+          "message": "Generované hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.display_name": {
+          "source": "Generated",
+          "message": "Generované"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.desc": {
+          "source": "Premade voices",
+          "message": "Předpřipravené hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.display_name": {
+          "source": "Premade",
+          "message": "Předpřipravené"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.desc": {
+          "source": "Professional voices",
+          "message": "Profesionální hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.display_name": {
+          "source": "Professional",
+          "message": "Profesionální"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter voices by category",
+          "message": "Filtrovat hlasy podle kategorie"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "Kategorie"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Filter by voice category",
+          "message": "Filtrovat podle kategorie hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by voice name",
+          "message": "Seřadit podle názvu hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.desc": {
+          "source": "Sort by creation date",
+          "message": "Řadit podle data vytvoření"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.display_name": {
+          "source": "Created At",
+          "message": "Vytvořeno"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.desc": {
+          "source": "The field to sort results by",
+          "message": "Pole, podle kterého se mají seřadit výsledky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Řazení"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.short_desc": {
+          "source": "Sort field for results",
+          "message": "Pole pro řazení výsledků"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.desc": {
+          "source": "The direction to sort results",
+          "message": "Směr řazení výsledků"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.display_name": {
+          "source": "Sort Direction",
+          "message": "Směr řazení"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.short_desc": {
+          "source": "Sort direction for results",
+          "message": "Směr řazení výsledků"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.desc": {
+          "source": "A search term to filter voices by name",
+          "message": "Hledaný výraz pro filtrování hlasů podle názvu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Hledat"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.short_desc": {
+          "source": "Search term to filter voices",
+          "message": "Hledaný výraz pro filtrování hlasů"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of voices to return per page",
+          "message": "Počet hlasů vrácených na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of voices to return per page",
+          "message": "Počet hlasů vrácených na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.desc": {
+          "source": "Community voices",
+          "message": "Komunitní hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.display_name": {
+          "source": "Community",
+          "message": "Komunitní"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default voices",
+          "message": "Výchozí hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Výchozí"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Personal voices",
+          "message": "Osobní hlasy"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "Osobní"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.desc": {
+          "source": "Workspace voices",
+          "message": "Hlasy pracovního prostoru"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.display_name": {
+          "source": "Workspace",
+          "message": "Pracovní prostor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.desc": {
+          "source": "Filter voices by type",
+          "message": "Filtrovat hlasy podle typu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.display_name": {
+          "source": "Voice Type",
+          "message": "Typ hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.short_desc": {
+          "source": "Filter by voice type",
+          "message": "Filtrovat podle typu hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
+          "source": "List available voices",
+          "message": "Zobrazit seznam dostupných hlasů"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.desc": {
+          "source": "List dubbing projects with optional filtering by status and creator",
+          "message": "Zobrazit seznam dabingových projektů s volitelným filtrováním podle stavu a autora"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
+          "source": "List Dubbing Projects",
+          "message": "Zobrazit seznam dabingových projektů"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.desc": {
+          "source": "Cursor for fetching the next page of results",
+          "message": "Kurzor pro načtení další stránky výsledků"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor for the next page",
+          "message": "Kurzor stránkování pro další stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.desc": {
+          "source": "Successfully completed",
+          "message": "Úspěšně dokončeno"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.display_name": {
+          "source": "Dubbed",
+          "message": "Nadabováno"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.desc": {
+          "source": "Currently being processed",
+          "message": "Aktuálně se zpracovává"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.display_name": {
+          "source": "Dubbing",
+          "message": "Dabování"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.desc": {
+          "source": "Processing failed",
+          "message": "Zpracování se nezdařilo"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.display_name": {
+          "source": "Failed",
+          "message": "Selhalo"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.desc": {
+          "source": "Filter dubbing projects by their processing status",
+          "message": "Filtrovat dabingové projekty podle stavu zpracování"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.display_name": {
+          "source": "Dubbing Status",
+          "message": "Stav dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.short_desc": {
+          "source": "Filter by dubbing status",
+          "message": "Filtrovat podle stavu dabingu"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.desc": {
+          "source": "Show only others' dubbing projects",
+          "message": "Zobrazit pouze dabingové projekty ostatních"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.display_name": {
+          "source": "Others",
+          "message": "Ostatní"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Show all dubbing projects",
+          "message": "Zobrazit všechny dabingové projekty"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Vše"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Show only your dubbing projects",
+          "message": "Zobrazit pouze vaše dabingové projekty"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "Osobní"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.desc": {
+          "source": "Filter dubbing projects by creator",
+          "message": "Filtrovat dabingové projekty podle autora"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.display_name": {
+          "source": "Filter by Creator",
+          "message": "Filtrovat podle autora"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.short_desc": {
+          "source": "Filter by who created the dubbing project",
+          "message": "Filtrovat podle toho, kdo dabingový projekt vytvořil"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of dubbing projects to return per page (1-200, default: 100)",
+          "message": "Počet dabingových projektů vrácených na stránku (1-200, výchozí: 100)"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dubbing projects to return per page",
+          "message": "Počet dabingových projektů vrácených na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
+          "source": "List dubbing projects",
+          "message": "Vypsat dabingové projekty"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.desc": {
+          "source": "List previously generated audio history items with optional pagination",
+          "message": "Vypsat položky historie dříve vygenerovaného zvuku s volitelným stránkováním"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
+          "source": "List History",
+          "message": "Vypsat historii"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The history item ID to start after for pagination",
+          "message": "ID položky historie, za kterou se má začít při stránkování"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "Start After History Item ID",
+          "message": "Začít za ID položky historie"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Stránkovací kurzor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of history items to return per page",
+          "message": "Počet položek historie vrácených na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of history items to return",
+          "message": "Počet položek historie k vrácení"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
+          "source": "List generated audio history items",
+          "message": "Vypsat položky historie vygenerovaného zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List available ElevenLabs AI models and their capabilities",
+          "message": "Vypsat dostupné modely ElevenLabs AI a jejich možnosti"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Seznam modelů"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List available AI models",
+          "message": "Vypsat dostupné modely AI"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.desc": {
+          "source": "List available pronunciation dictionaries with optional pagination",
+          "message": "Vypsat dostupné výslovnostní slovníky s volitelným stránkováním"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
+          "source": "List Pronunciation Dictionaries",
+          "message": "Vypsat výslovnostní slovníky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor to use for pagination to retrieve the next page of results",
+          "message": "Kurzor pro stránkování pro načtení další stránky výsledků"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor for pagination",
+          "message": "Kurzor pro stránkování"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of pronunciation dictionaries to return per page",
+          "message": "Počet výslovnostních slovníků vrácených na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Velikost stránky"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dictionaries to return per page",
+          "message": "Počet slovníků k vrácení na stránku"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
+          "source": "List available pronunciation dictionaries",
+          "message": "Vypsat dostupné výslovnostní slovníky"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ElevenLabs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Proveďte vlastní volání HTTP / REST API do **ElevenLabs** pomocí ověření v nakonfigurovaném připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API daného připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci vystaveny jako prvotřídní akce."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ElevenLabs",
+          "message": "Provést vlastní volání API do ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.desc": {
+          "source": "Convert audio from one voice to another using ElevenLabs AI voice conversion",
+          "message": "Převést zvuk z jednoho hlasu do druhého pomocí převodu hlasu ElevenLabs AI"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
+          "source": "Speech to Speech",
+          "message": "Speech to Speech"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.desc": {
+          "source": "The source audio data to convert to the target voice",
+          "message": "Zdrojová zvuková data k převodu na cílový hlas"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.short_desc": {
+          "source": "The source audio data to convert",
+          "message": "Zdrojová zvuková data k převodu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "Automaticky rozpoznat formát zvuku (výchozí)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "Jiné (automatické rozpoznání)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16-bit, 16kHz mono, little-endian – nižší latence"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16-bit 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "Formát vstupního zvukového souboru. `pcm_s16le_16` vyžaduje 16bitové, 16kHz mono, little-endian PCM a nabízí nižší latenci"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formát souboru"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "Formát vstupního zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 64 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44,1 kHz 64 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 128 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44,1 kHz 128 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 192 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44,1 kHz 192 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44,1 kHz 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 22,05 kHz a datovým tokem 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22,05 kHz 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 44,1 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44,1 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 16 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 22,05 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22,05 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 24 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "Zvuk u-law se vzorkovací frekvencí 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the converted speech",
+          "message": "Výstupní formát zvuku pro převedenou řeč"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Výstupní formát"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "Výstupní formát zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.desc": {
+          "source": "Default speech-to-speech model for English voice conversion",
+          "message": "Výchozí model speech-to-speech pro převod anglického hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.display_name": {
+          "source": "Eleven English STS v2",
+          "message": "Eleven English STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.desc": {
+          "source": "Multilingual speech-to-speech model for voice conversion",
+          "message": "Vícejazyčný model speech-to-speech pro převod hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.display_name": {
+          "source": "Eleven Multilingual STS v2",
+          "message": "Eleven Multilingual STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-speech model to use for voice conversion",
+          "message": "Model speech-to-speech, který se má použít pro převod hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STS model to use",
+          "message": "Model STS, který se má použít"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "Pokud je zadáno, systém se pokusí vzorkovat deterministicky, takže opakované požadavky se stejným seedem a parametry by měly vrátit stejný výsledek. Determinismus není zaručen"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "Seed pro deterministické generování"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.desc": {
+          "source": "If `True`, background noise will be removed from the input audio before conversion",
+          "message": "Pokud je nastaveno na `True`, před převodem bude ze vstupního zvuku odstraněn šum na pozadí"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.display_name": {
+          "source": "Remove Background Noise",
+          "message": "Odstranit šum na pozadí"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.short_desc": {
+          "source": "Whether to remove background noise from the input audio",
+          "message": "Zda odstranit šum na pozadí ze vstupního zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "ID cílového hlasu pro převod"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "ID cílového hlasu pro převod"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "Nastavení hlasu přepisující uložená nastavení pro daný hlas. Použijí se pouze pro daný požadavek"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "Nastavení hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the conversion",
+          "message": "Nastavení hlasu pro převod"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
+          "source": "Convert audio from one voice to another",
+          "message": "Převést zvuk z jednoho hlasu do druhého"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.desc": {
+          "source": "Transcribe audio to text using ElevenLabs Scribe speech-to-text model. Supports 90+ languages with word-level timestamps and speaker diarization",
+          "message": "Přepisujte zvuk na text pomocí modelu pro převod řeči na text ElevenLabs Scribe. Podporuje více než 90 jazyků s časovými značkami na úrovni slov a diarizací mluvčích"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
+          "source": "Speech to Text",
+          "message": "Převod řeči na text"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.desc": {
+          "source": "The audio data to transcribe to text",
+          "message": "Zvuková data k přepisu na text"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Zvuk"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.short_desc": {
+          "source": "The audio data to transcribe",
+          "message": "Zvuková data k přepisu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.desc": {
+          "source": "If `True`, the transcription will include speaker diarization, annotating which speaker is talking in each segment",
+          "message": "Pokud je `True`, přepis bude obsahovat diarizaci mluvčích s vyznačením, který mluvčí mluví v jednotlivých segmentech"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "Diarizovat"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Whether to annotate who is speaking",
+          "message": "Zda označovat, kdo mluví"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "Automaticky rozpoznat formát zvuku (výchozí)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "Jiné (automatické rozpoznání)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16-bit, 16kHz mono, little-endian – nižší latence"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16-bit 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "Formát vstupního zvukového souboru. `pcm_s16le_16` vyžaduje 16bitové, 16kHz mono, little-endian PCM a nabízí nižší latenci"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formát souboru"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "Formát vstupního zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "An ISO 639-1 language code to specify the language of the audio. If not provided, the model will auto-detect the language",
+          "message": "Kód jazyka podle normy ISO 639-1 určující jazyk zvuku. Pokud není zadán, model jazyk rozpozná automaticky"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Kód jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the audio (ISO 639-1)",
+          "message": "Kód jazyka pro zvuk (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.desc": {
+          "source": "Speech-to-text model supporting 90+ languages with word-level timestamps and speaker diarization",
+          "message": "Model převodu řeči na text podporující více než 90 jazyků s časovými značkami na úrovni slov a diarizací mluvčích"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.display_name": {
+          "source": "Scribe v2",
+          "message": "Scribe v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-text model to use for transcription",
+          "message": "Model pro převod řeči na text, který se má použít pro přepis"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STT model to use",
+          "message": "Model STT k použití"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The maximum number of speakers expected in the audio. Maximum: `32`. Only used when `diarize` is `True`",
+          "message": "Maximální očekávaný počet mluvčích ve zvuku. Maximum: `32`. Použije se pouze tehdy, když je `diarize` nastaveno na `True`"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "Počet mluvčích"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Maximum number of speakers in the audio",
+          "message": "Maximální počet mluvčích ve zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.desc": {
+          "source": "If `True`, audio events such as music, laughter, and applause will be tagged in the transcription",
+          "message": "Pokud je `True`, v přepisu budou označeny zvukové události, jako je hudba, smích a potlesk"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.display_name": {
+          "source": "Tag Audio Events",
+          "message": "Označit zvukové události"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.short_desc": {
+          "source": "Whether to tag audio events like music or laughter",
+          "message": "Zda označovat zvukové události, jako je hudba nebo smích"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No timestamps in the response",
+          "message": "Žádné časové značky v odpovědi"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žádné"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.desc": {
+          "source": "Character-level timestamps",
+          "message": "Časové značky na úrovni znaků"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.display_name": {
+          "source": "Character",
+          "message": "Znak"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.desc": {
+          "source": "Word-level timestamps",
+          "message": "Časové značky na úrovni slov"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.display_name": {
+          "source": "Word",
+          "message": "Slovo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.desc": {
+          "source": "The granularity of timestamps in the transcription response",
+          "message": "Granularita časových značek v odpovědi s přepisem"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.display_name": {
+          "source": "Timestamps Granularity",
+          "message": "Granularita časových značek"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.short_desc": {
+          "source": "The granularity of timestamps in the response",
+          "message": "Granularita časových značek v odpovědi"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
+          "source": "Transcribe audio to text",
+          "message": "Přepsat zvuk na text"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.desc": {
+          "source": "Generate sound effects from a text description using ElevenLabs AI",
+          "message": "Generujte zvukové efekty z textového popisu pomocí ElevenLabs AI"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
+          "source": "Text to Sound Effects",
+          "message": "Převod textu na zvukové efekty"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.desc": {
+          "source": "The duration of the generated sound effect in seconds. Range: `0.5` to `22.0`",
+          "message": "Délka vygenerovaného zvukového efektu v sekundách. Rozsah: `0.5` až `22.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.display_name": {
+          "source": "Duration (Seconds)",
+          "message": "Délka (sekundy)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.short_desc": {
+          "source": "Duration of the sound effect in seconds",
+          "message": "Délka zvukového efektu v sekundách"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.desc": {
+          "source": "If `True`, creates a seamlessly looping sound effect",
+          "message": "Pokud je `True`, vytvoří plynule se opakující zvukový efekt ve smyčce"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.display_name": {
+          "source": "Loop",
+          "message": "Smyčka"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.short_desc": {
+          "source": "Whether to create a looping sound effect",
+          "message": "Zda vytvořit zvukový efekt ve smyčce"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.desc": {
+          "source": "How much the text prompt influences the generated sound effect. Range: `0.0` to `1.0`. Higher values make the output more closely match the prompt",
+          "message": "Míra, jakou textový prompt ovlivňuje vygenerovaný zvukový efekt. Rozsah: `0.0` až `1.0`. Vyšší hodnoty způsobí, že výstup přesněji odpovídá zadání"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.display_name": {
+          "source": "Prompt Influence",
+          "message": "Vliv promptu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.short_desc": {
+          "source": "How much the text prompt influences the output",
+          "message": "Míra, jakou textový prompt ovlivňuje výstup"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.desc": {
+          "source": "A text description of the sound effect to generate (e.g., `dog barking in a park`)",
+          "message": "Textový popis zvukového efektu, který se má vygenerovat (např. `dog barking in a park`)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.short_desc": {
+          "source": "Description of the sound effect to generate",
+          "message": "Popis zvukového efektu, který se má vygenerovat"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
+          "source": "Generate sound effects from a text description",
+          "message": "Generovat zvukové efekty z textového popisu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.desc": {
+          "source": "Convert text to speech audio using ElevenLabs AI voice synthesis. Supports multiple voices, models, and output formats",
+          "message": "Převeďte text na mluvené slovo pomocí hlasové syntézy ElevenLabs AI. Podporuje více hlasů, modelů a výstupních formátů"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
+          "source": "Text to Speech",
+          "message": "Převod textu na řeč"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.desc": {
+          "source": "Disable text normalization",
+          "message": "Zakázat normalizaci textu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Off",
+          "message": "Vypnuto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.desc": {
+          "source": "Always apply text normalization",
+          "message": "Vždy použít normalizaci textu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "On",
+          "message": "Zapnuto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically decide whether to normalize text (default)",
+          "message": "Automaticky rozhodnout, zda normalizovat text (výchozí)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.desc": {
+          "source": "Controls how text is normalized before synthesis",
+          "message": "Určuje, jak je text před syntézou normalizován"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.display_name": {
+          "source": "Text Normalization",
+          "message": "Normalizace textu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.short_desc": {
+          "source": "Controls text normalization behavior",
+          "message": "Řídí chování normalizace textu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 64 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44,1 kHz 64 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 128 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44,1 kHz 128 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 192 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44,1 kHz 192 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 44,1 kHz a datovým tokem 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44,1 kHz 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "Zvuk MP3 se vzorkovací frekvencí 22,05 kHz a datovým tokem 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22,05 kHz 32 kb/s"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 44,1 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44,1 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 16 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 22,05 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22,05 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "Zvuk PCM se vzorkovací frekvencí 24 kHz (16bitový se znaménkem, little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "Zvuk u-law se vzorkovací frekvencí 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the generated speech",
+          "message": "Výstupní zvukový formát pro generovanou řeč"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Výstupní formát"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "Výstupní formát zvuku"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (ISO 639-1) used to enforce a language for the model. Currently only supported by `eleven_turbo_v2_5`",
+          "message": "Kód jazyka (ISO 639-1) použitý k vynucení jazyka pro model. V současné době podporováno pouze modelem `eleven_turbo_v2_5`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Kód jazyka"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the speech (ISO 639-1)",
+          "message": "Kód jazyka pro řeč (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.desc": {
+          "source": "High-quality low-latency model for 32 languages",
+          "message": "Vysoce kvalitní model s nízkou latencí pro 32 jazyků"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.display_name": {
+          "source": "Eleven Turbo v2.5",
+          "message": "Eleven Turbo v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.desc": {
+          "source": "Speed-optimized model with ~75ms latency, 32 languages, 40,000 character limit, 50% lower cost",
+          "message": "Model optimalizovaný na rychlost s latencí ~75 ms, 32 jazyky, limitem 40 000 znaků a o 50 % nižšími náklady"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.display_name": {
+          "source": "Eleven Flash v2.5",
+          "message": "Eleven Flash v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.desc": {
+          "source": "English-only model optimized for English content",
+          "message": "Model pouze pro angličtinu optimalizovaný pro anglický obsah"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.display_name": {
+          "source": "Eleven Monolingual v1",
+          "message": "Eleven Monolingual v1"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.desc": {
+          "source": "Mature model supporting 29 languages with 10,000 character limit",
+          "message": "Osvědčený model podporující 29 jazyků s limitem 10 000 znaků"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.display_name": {
+          "source": "Eleven Multilingual v2",
+          "message": "Eleven Multilingual v2"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.desc": {
+          "source": "The TTS model to use for speech synthesis",
+          "message": "Model TTS, který se má použít pro syntézu řeči"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The TTS model to use",
+          "message": "Model TTS k použití"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.desc": {
+          "source": "Text that comes after the current text in a multi-part generation. Enhances continuity when concatenating audio from multiple requests",
+          "message": "Text, který následuje po aktuálním textu ve vícedílném generování. Zvyšuje kontinuitu při spojování zvuku z více požadavků"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.display_name": {
+          "source": "Next Text",
+          "message": "Následující text"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.short_desc": {
+          "source": "Text that comes after for continuity",
+          "message": "Následující text pro zachování kontinuity"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "Pokud je zadáno, systém se pokusí vzorkovat deterministicky, takže opakované požadavky se stejným seedem a parametry by měly vrátit stejný výsledek. Determinismus není zaručen"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "Seed pro deterministické generování"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.desc": {
+          "source": "Controls the speed of the generated speech. Range: `0.25` to `4.0`. Default: `1.0`",
+          "message": "Řídí rychlost generované řeči. Rozsah: `0.25` až `4.0`. Výchozí: `1.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.display_name": {
+          "source": "Speed",
+          "message": "Rychlost"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.short_desc": {
+          "source": "Speech speed multiplier",
+          "message": "Násobitel rychlosti řeči"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.desc": {
+          "source": "Text that came before the current text in a multi-part generation. Improves prosody and continuity when splitting long text across multiple requests",
+          "message": "Text, který předcházel aktuálnímu textu ve vícedílném generování. Zlepšuje prozódii a kontinuitu při rozdělení dlouhého textu do více požadavků"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.display_name": {
+          "source": "Previous Text",
+          "message": "Předchozí text"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.short_desc": {
+          "source": "Text that came before for continuity",
+          "message": "Předchozí text pro zachování kontinuity"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.desc": {
+          "source": "A list of pronunciation dictionary locators to apply during synthesis. Maximum of 3 dictionaries",
+          "message": "Seznam lokátorů výslovnostních slovníků, které se mají použít při syntéze. Maximálně 3 slovníky"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.display_name": {
+          "source": "Pronunciation Dictionaries",
+          "message": "Výslovnostní slovníky"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.short_desc": {
+          "source": "Pronunciation dictionaries to apply",
+          "message": "Výslovnostní slovníky k použití"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to convert to speech",
+          "message": "Text k převodu na řeč"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "The text to convert to speech",
+          "message": "Text k převodu na řeč"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "ID hlasu k použití pro syntézu řeči"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "ID hlasu k použití pro syntézu řeči"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "Nastavení hlasu přepisující uložená nastavení pro daný hlas. Použijí se pouze pro daný požadavek"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "Nastavení hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the synthesis",
+          "message": "Nastavení hlasu pro syntézu"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
+          "source": "Convert text to speech audio using AI voice synthesis",
+          "message": "Převod textu na zvukový záznam řeči pomocí syntézy hlasu AI"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.desc": {
+          "source": "Design a new voice from a text description of the desired voice characteristics",
+          "message": "Navrhněte nový hlas z textového popisu požadovaných hlasových charakteristik"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
+          "source": "Voice Design",
+          "message": "Návrh hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.desc": {
+          "source": "Sample text that will be spoken by the generated voice previews",
+          "message": "Ukázkový text, který bude přečten vygenerovanými náhledy hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.short_desc": {
+          "source": "Sample text to generate with the designed voice",
+          "message": "Ukázkový text pro vygenerování s navrženým hlasem"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the desired voice characteristics (e.g., `a warm friendly female voice with a slight British accent`)",
+          "message": "Textový popis požadovaných hlasových charakteristik (např. `a warm friendly female voice with a slight British accent`)"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.display_name": {
+          "source": "Voice Description",
+          "message": "Popis hlasu"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.short_desc": {
+          "source": "Text describing desired voice characteristics",
+          "message": "Text popisující požadované hlasové charakteristiky"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
+          "source": "Design a new voice from a text description",
+          "message": "Navrhněte nový hlas z textového popisu"
+        },
+        "app.RWxldmVuTGFicw.desc": {
+          "source": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice synthesis and audio processing services.\n\nSupported operations:\n- **Speech synthesis**: text-to-speech, speech-to-speech, voice design\n- **Audio processing**: audio isolation, text-to-sound-effects\n- **Transcription**: speech-to-text with speaker diarization\n- **Voice management**: create, edit, delete, and list voices\n- **Dubbing**: create and manage dubbing projects\n- **Pronunciation**: manage pronunciation dictionaries",
+          "message": "Poskytuje integraci se službami AI syntézy hlasu a zpracování zvuku [ElevenLabs](https://elevenlabs.io).\n\nPodporované operace:\n- **Syntéza řeči**: převod textu na řeč, převod řeči na řeč, návrh hlasu\n- **Zpracování zvuku**: izolace zvuku, převod textu na zvukové efekty\n- **Transkripce**: převod řeči na text s diarizací mluvčích\n- **Správa hlasů**: vytváření, úprava, mazání a výpis hlasů\n- **Dabing**: vytváření a správa projektů dabingu\n- **Výslovnost**: správa výslovnostních slovníků"
+        },
+        "app.RWxldmVuTGFicw.display_name": {
+          "source": "ElevenLabs",
+          "message": "ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.short_desc": {
+          "source": "ElevenLabs AI voice synthesis services",
+          "message": "Služby AI syntézy hlasu ElevenLabs"
+        }
+      }
+    }
+  }
+}

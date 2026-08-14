@@ -1,0 +1,2477 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.desc": {
+          "source": "Create or index a document in OpenSearch. Use optional pipeline and refresh controls when ingested data must be transformed or made immediately visible to search.",
+          "message": "OpenSearchでドキュメントを作成またはインデックス登録します。取り込まれたデータを変換する必要がある場合や、検索ですぐに表示できるようにする必要がある場合は、オプションのパイプラインおよびリフレッシュ制御を使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
+          "source": "Add Document",
+          "message": "ドキュメントを追加"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.desc": {
+          "source": "The name of the index to use",
+          "message": "使用するインデックスの名前"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.short_desc": {
+          "source": "Target index name",
+          "message": "ターゲットインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.desc": {
+          "source": "Only perform the operation if the document has this sequence number",
+          "message": "ドキュメントにこのシーケンス番号がある場合のみ操作を実行"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.display_name": {
+          "source": "If Seq No",
+          "message": "If Seq No"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.short_desc": {
+          "source": "Required sequence number",
+          "message": "必須シーケンス番号"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.desc": {
+          "source": "Only perform the operation if the document has this primary term",
+          "message": "ドキュメントにこのプライマリタームがある場合のみ操作を実行"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.display_name": {
+          "source": "If Primary Term",
+          "message": "If Primary Term"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.short_desc": {
+          "source": "Required primary term",
+          "message": "必須プライマリターム"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.desc": {
+          "source": "Set to create to only index the document if it does not already exist (put if absent). If a document with the specified `_id` already exists, the indexing operation will fail. Same as using the `<index>/_create` endpoint. Valid values: `index`, `create`. If document id is specified, it defaults to `index`. Otherwise, it defaults to `create`",
+          "message": "ドキュメントがまだ存在しない場合にのみインデックス登録するには create に設定します（put if absent）。指定された `_id` を持つドキュメントが既に存在する場合、インデックス登録操作は失敗します。`<index>/_create` エンドポイントを使用するのと同じです。有効な値: `index`、`create`。ドキュメントIDが指定されている場合のデフォルトは `index` です。それ以外の場合のデフォルトは `create` です。"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.display_name": {
+          "source": "Operation Type",
+          "message": "操作タイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.short_desc": {
+          "source": "Index or create operation",
+          "message": "インデックスまたは作成操作"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.desc": {
+          "source": "ID of the pipeline to use to preprocess incoming documents. If the index has a default ingest pipeline specified, then setting the value to _none disables the default ingest pipeline for this request. If a final pipeline is configured it will always run, regardless of the value of this parameter",
+          "message": "受信ドキュメントの前処理に使用するパイプラインのID。インデックスにデフォルトのインジェストパイプラインが指定されている場合、値を _none に設定すると、このリクエストのデフォルトのインジェストパイプラインが無効になります。最終パイプラインが構成されている場合、このパラメータの値に関係なく常に実行されます"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.short_desc": {
+          "source": "Ingest pipeline ID",
+          "message": "インジェストパイプラインID"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.desc": {
+          "source": "Custom value used to route operations to a specific shard",
+          "message": "操作を特定のシャードにルーティングするために使用されるカスタム値"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.desc": {
+          "source": "If `true` (default: `false`), OpenSearch refreshes the affected shards to make this operation visible to search, if `wait_for` then wait for a refresh to make this operation visible to search, if `false` do nothing with refreshes. Valid values: `true`, `false`, `wait_for`",
+          "message": "`true` の場合（デフォルト: `false`）、OpenSearch は影響を受けるシャードをリフレッシュしてこの操作を検索で表示できるようにします。`wait_for` の場合はリフレッシュを待ってこの操作を検索で表示できるようにし、`false` の場合はリフレッシュに対して何も行いません。有効な値: `true`、`false`、`wait_for`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "リフレッシュ"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "リフレッシュ設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If `true` (default `false`), the destination must be an index alias",
+          "message": "`true` の場合（デフォルト: `false`）、宛先はインデックスエイリアスである必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "エイリアスを要求しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "宛先はエイリアスである必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation (default `1`). Set to `all` or any positive integer up to the total number of shards in the index (number_of_replicas+1)",
+          "message": "操作を続行する前にアクティブである必要があるシャードコピーの数（デフォルト: `1`）。`all` またはインデックス内のシャードの総数（number_of_replicas+1）までの正の整数に設定します"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "アクティブシャード待機"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必須アクティブシャード数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: `1m`). If no response is received before the timeout expires, the request fails and returns an error",
+          "message": "応答を待機する期間（デフォルト: `1m`）。タイムアウトが切れる前に応答を受信しなかった場合、リクエストは失敗しエラーを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "応答待機期間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.desc": {
+          "source": "Explicit version number for concurrency control. The specified version must match the current version of the document for the request to succeed",
+          "message": "同時実行制御用の明示的なバージョン番号。リクエストが成功するには、指定されたバージョンがドキュメントの現在のバージョンと一致している必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "バージョン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.short_desc": {
+          "source": "Document version for concurrency",
+          "message": "同時実行用ドキュメントバージョン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.desc": {
+          "source": "Specific version type: `external`, `external_gte`",
+          "message": "特定のバージョンタイプ: `external`、`external_gte`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.display_name": {
+          "source": "Version Type",
+          "message": "バージョンタイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.short_desc": {
+          "source": "Version type",
+          "message": "バージョンタイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
+          "source": "Add a document to OpenSearch",
+          "message": "OpenSearchにドキュメントを追加"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.desc": {
+          "source": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add optional text and keyword metadata fields for combined lexical, structured, and vector search.",
+          "message": "`index.knn` を有効にし、`knn_vector` フィールドマッピングを持つOpenSearchインデックスを作成します。字句検索、構造化検索、ベクトル検索を組み合わせるためのオプションのテキストおよびキーワードメタデータフィールドを追加します。"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
+          "source": "Create Vector Index",
+          "message": "ベクトルインデックスの作成"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.desc": {
+          "source": "Number of dimensions in the vector field",
+          "message": "ベクトルフィールドの次元数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.display_name": {
+          "source": "Dimension",
+          "message": "次元"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.short_desc": {
+          "source": "Vector dimensions",
+          "message": "ベクトル次元数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOm5tc2xpYg.display_name": {
+          "source": "NMSLIB",
+          "message": "NMSLIB"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmZhaXNz.display_name": {
+          "source": "Faiss",
+          "message": "Faiss"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmx1Y2VuZQ.display_name": {
+          "source": "Lucene",
+          "message": "Lucene"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.desc": {
+          "source": "Optional approximate nearest-neighbor engine, such as `lucene`, `faiss`, or `nmslib`",
+          "message": "`lucene`、`faiss`、`nmslib` などのオプションの近似最近傍（ANN）エンジン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.display_name": {
+          "source": "Engine",
+          "message": "エンジン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.short_desc": {
+          "source": "ANN engine",
+          "message": "ANNエンジン"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.desc": {
+          "source": "Optional method parameter controlling HNSW construction search depth",
+          "message": "HNSW構築検索の深さを制御するオプションのメソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.display_name": {
+          "source": "EF Construction",
+          "message": "EF Construction"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.short_desc": {
+          "source": "HNSW construction depth",
+          "message": "HNSW構築深度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.desc": {
+          "source": "Optional default `knn.algo_param.ef_search` index setting",
+          "message": "オプションのデフォルト`knn.algo_param.ef_search`インデックス設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.display_name": {
+          "source": "EF Search",
+          "message": "EF Search"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.short_desc": {
+          "source": "Default search depth",
+          "message": "デフォルトの検索深度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.desc": {
+          "source": "The name of the vector index to create",
+          "message": "作成するベクターインデックスの名前"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.short_desc": {
+          "source": "Index name to create",
+          "message": "作成するインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.desc": {
+          "source": "Optional method parameter controlling HNSW graph degree",
+          "message": "HNSWグラフの次数を制御するオプションのメソッドパラメーター"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.display_name": {
+          "source": "M",
+          "message": "M"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.short_desc": {
+          "source": "HNSW graph degree",
+          "message": "HNSWグラフの次数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.desc": {
+          "source": "Optional additional mappings; the vector field mapping is added automatically",
+          "message": "オプションの追加マッピング。ベクターフィールドマッピングは自動的に追加されます"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "マッピング"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.short_desc": {
+          "source": "Additional mappings",
+          "message": "追加のマッピング"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.desc": {
+          "source": "Period to wait for a connection to the master node",
+          "message": "マスターノードへの接続を待機する期間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.display_name": {
+          "source": "Master Timeout",
+          "message": "マスタータイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.short_desc": {
+          "source": "Master node timeout",
+          "message": "マスターノードのタイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.desc": {
+          "source": "Optional list of keyword metadata fields to add to the index mapping",
+          "message": "インデックスマッピングに追加するオプションのキーワードメタデータフィールドのリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.display_name": {
+          "source": "Metadata Fields",
+          "message": "メタデータフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.short_desc": {
+          "source": "Keyword metadata fields",
+          "message": "キーワードメタデータフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmZsYXQ.display_name": {
+          "source": "Flat",
+          "message": "フラット"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmhuc3c.display_name": {
+          "source": "HNSW",
+          "message": "HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOml2Zg.display_name": {
+          "source": "IVF",
+          "message": "IVF"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.desc": {
+          "source": "Optional approximate nearest-neighbor method name, such as `hnsw`, `ivf`, or `flat`",
+          "message": "オプションの近似最近傍法（ANN）メソッド名（`hnsw`、`ivf`、`flat`など）"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.display_name": {
+          "source": "Method Name",
+          "message": "メソッド名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.short_desc": {
+          "source": "ANN method",
+          "message": "ANNメソッド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.desc": {
+          "source": "Optional additional index settings; `index.knn` is set automatically",
+          "message": "オプションの追加インデックス設定。`index.knn`は自動的に設定されます"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.short_desc": {
+          "source": "Additional index settings",
+          "message": "追加のインデックス設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvc2luZXNpbWls.display_name": {
+          "source": "Cosine Similarity",
+          "message": "コサイン類似度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmlubmVycHJvZHVjdA.display_name": {
+          "source": "Inner Product",
+          "message": "内積"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwx.display_name": {
+          "source": "L1",
+          "message": "L1"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwy.display_name": {
+          "source": "L2",
+          "message": "L2"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmxpbmY.display_name": {
+          "source": "L-Infinity",
+          "message": "L-Infinity"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "Vector space type, such as `l2`, `cosinesimil`, or `innerproduct`",
+          "message": "ベクター空間タイプ（`l2`、`cosinesimil`、`innerproduct`など）"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "スペースの種類"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Vector distance space",
+          "message": "ベクター距離空間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation",
+          "message": "操作を続行する前にアクティブである必要があるシャードコピーの数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "アクティブシャード待機"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必須アクティブシャード数"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.desc": {
+          "source": "Optional list of text fields to add to the index mapping",
+          "message": "インデックスマッピングに追加するオプションのテキストフィールドのリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.display_name": {
+          "source": "Text Fields",
+          "message": "テキストフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.short_desc": {
+          "source": "Text fields to add",
+          "message": "追加するテキストフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response",
+          "message": "応答を待機する期間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.short_desc": {
+          "source": "Response timeout",
+          "message": "応答タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.desc": {
+          "source": "The `knn_vector` field to create in the index mapping",
+          "message": "インデックスマッピングで作成する`knn_vector`フィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.display_name": {
+          "source": "Vector Field",
+          "message": "ベクトルフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.short_desc": {
+          "source": "Vector field name",
+          "message": "ベクターフィールド名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
+          "source": "Create an OpenSearch vector index",
+          "message": "OpenSearchベクターインデックスを作成します"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.desc": {
+          "source": "Compute analytics and aggregations over OpenSearch search results, including terms, histogram, and metric aggregations. Use this action when the output is grouped or summarized data rather than individual hits.",
+          "message": "用語、ヒストグラム、メトリクス集計を含む、OpenSearch検索結果に対する分析と集計を計算します。個々のヒットではなくグループ化または要約されたデータを出力する場合にこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregations",
+          "message": "集計"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.desc": {
+          "source": "Alias for 'aggs' - the aggregations to compute",
+          "message": "'aggs' のエイリアス - 計算する集計"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.display_name": {
+          "source": "Aggregations (Alias)",
+          "message": "集計（エイリアス）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.short_desc": {
+          "source": "Alias for aggs field",
+          "message": "aggsフィールドのエイリアス"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.desc": {
+          "source": "The aggregations to compute. Each key is the aggregation name, value is the aggregation definition. Example:\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```",
+          "message": "計算する集計。各キーは集計名で、値は集計定義です。例:\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.display_name": {
+          "source": "Aggregations",
+          "message": "集計"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.short_desc": {
+          "source": "Aggregation definitions",
+          "message": "集計定義"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "Whether to allow wildcards that match no indices",
+          "message": "インデックスに一致しないワイルドカードを許可するかどうか"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "インデックスなしを許可しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "一致するインデックスがないことを許可"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "How to expand wildcards: 'open', 'closed', 'hidden', 'none', 'all'",
+          "message": "ワイルドカードの展開方法: 'open'、'closed'、'hidden'、'none'、'all'"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "ワイルドカードの展開"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "ワイルドカード展開モード"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (can include wildcards or comma-separated list)",
+          "message": "検索するインデックス名（ワイルドカードまたはカンマ区切りリストを含むことができます）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.display_name": {
+          "source": "Index Name",
+          "message": "インデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.short_desc": {
+          "source": "Target index for aggregation",
+          "message": "集計対象のインデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "Whether to ignore unavailable indices",
+          "message": "利用できないインデックスを無視するかどうか"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "利用不可を無視しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore unavailable indices",
+          "message": "利用できないインデックスを無視"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.desc": {
+          "source": "Number of hits to return. Default: 0 (aggregation-only, no documents returned)",
+          "message": "返されるヒット数。デフォルト: 0（集計のみ、ドキュメントは返されません）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果サイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "返されるヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "検索を実行するシャードレプリカ"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "シャードレプリカの優先設定"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.desc": {
+          "source": "Optional query to filter documents before aggregation (OpenSearch Query DSL)",
+          "message": "集約前にドキュメントをフィルタリングするオプションのクエリ (OpenSearch Query DSL)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.display_name": {
+          "source": "Query Filter",
+          "message": "クエリフィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.short_desc": {
+          "source": "Filter documents before aggregation",
+          "message": "集約前にドキュメントをフィルタリング"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "検索を特定のシャードに制限するためのカスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request",
+          "message": "リクエストをキャッシュするかどうか"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "リクエストキャッシュ?"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "リクエストをキャッシュ"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.desc": {
+          "source": "Search timeout (e.g., '10s' for 10 seconds)",
+          "message": "検索タイムアウト (例: 10秒の場合は '10s')"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "検索タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.short_desc": {
+          "source": "Compute aggregations over search results",
+          "message": "検索結果の集計を計算"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.desc": {
+          "source": "Perform bulk `index`, `create`, `update`, and `delete` operations with OpenSearch's NDJSON bulk API. Use this action for high-throughput ingestion and batch maintenance workloads.",
+          "message": "OpenSearch の NDJSON バルク API を使用して、バルク `index`、`create`、`update`、および `delete` 操作を実行します。高スループットの取り込みやバッチメンテナンスタスクにこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
+          "source": "Bulk Operations",
+          "message": "一括操作"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.desc": {
+          "source": "List of bulk operations to perform",
+          "message": "実行するバルク操作のリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.display_name": {
+          "source": "Operations",
+          "message": "操作"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.short_desc": {
+          "source": "List of bulk operations",
+          "message": "バルク操作のリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.desc": {
+          "source": "The default ingest pipeline to use for all operations",
+          "message": "すべての操作に使用するデフォルトの取り込みパイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.short_desc": {
+          "source": "Default ingest pipeline",
+          "message": "デフォルトの取り込みパイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.desc": {
+          "source": "Default routing value for all operations",
+          "message": "すべての操作のデフォルトのルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.short_desc": {
+          "source": "Default routing value",
+          "message": "デフォルトのルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.desc": {
+          "source": "Refresh setting: 'true', 'false', or 'wait_for'",
+          "message": "リフレッシュ設定: 'true'、'false'、または 'wait_for'"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "リフレッシュ"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "リフレッシュ設定"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If true, the destination must be an index alias",
+          "message": "true の場合、宛先はインデックスエイリアスである必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "エイリアスを要求しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "宛先はエイリアスである必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "Number of shard copies that must be active before proceeding",
+          "message": "処理を続行する前にアクティブである必要があるシャードコピーの数"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "アクティブシャード待機"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必須アクティブシャード数"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: 1m)",
+          "message": "レスポンスを待機する期間 (デフォルト: 1m)"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "応答待機期間"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
+          "source": "Perform bulk document operations",
+          "message": "ドキュメントの一括操作を実行"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a raw query vector against a `knn_vector` field. Use optional filters, method parameters, or radial-search thresholds when supported by the target index and OpenSearch version.",
+          "message": "`knn_vector` フィールドに対して生のクエリベクトルを使用して OpenSearch インデックスを検索します。ターゲットインデックスおよび OpenSearch のバージョンでサポートされている場合は、オプションのフィルター、メソッドパラメータ、またはラディアル検索のしきい値を使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
+          "source": "k-NN Search",
+          "message": "k-NN 検索"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "返されるドキュメントのオプションの `_source` 選択。OpenSearch と互換性のあるブール値、文字列、リスト、またはハッシュ値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "ソースフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "ソースフィールドの選択"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The `knn_vector` field to search",
+          "message": "検索対象の `knn_vector` フィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "ベクトルフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector field to search",
+          "message": "検索対象のベクトルフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "候補ドキュメントに適用されるオプションの OpenSearch クエリ DSL フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "オプションのクエリフィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "検索結果のドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "ドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "検索対象の OpenSearch インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "検索対象のインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "取得する最近傍の数"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "最近傍数"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "近傍数"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "オプションの最大ベクトル距離のしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "最大距離"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "最大ベクトル距離"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "近似最近傍検索用の `ef_search` などのオプションのメソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "メソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "k-NN メソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "オプションの最小スコアしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最小スコア"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "最小スコアしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "検索実行時に使用するオプションの検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "検索パイプライン名"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "返される検索ヒットの数"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果サイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "返されるヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "検索を実行するシャードレプリカ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "シャードレプリカの優先設定"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "検索を特定のシャードに制限するためのカスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "オプションの総ヒット数追跡制御。OpenSearch 互換のブール値または整数値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.desc": {
+          "source": "The query vector to compare against vectors stored in `field`",
+          "message": "`field` に格納されているベクトルと比較するクエリベクトル"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.display_name": {
+          "source": "Query Vector",
+          "message": "クエリベクトル"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.short_desc": {
+          "source": "Vector to compare",
+          "message": "比較するベクトル"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with a query vector",
+          "message": "クエリベクトルを使用して OpenSearch インデックスを検索"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a hybrid query that combines keyword, vector, neural, or other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is needed.",
+          "message": "キーワード、ベクトル、ニューラル、またはその他の OpenSearch クエリ句を組み合わせたハイブリッドクエリを使用して OpenSearch インデックスを検索します。スコアの正規化やランクフュージョンが必要な場合は、検索パイプラインを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
+          "source": "Hybrid Search",
+          "message": "ハイブリッド検索"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "返されるドキュメントのオプションの `_source` 選択。OpenSearch と互換性のあるブール値、文字列、リスト、またはハッシュ値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "ソースフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "ソースフィールドの選択"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to all hybrid subqueries",
+          "message": "すべてのハイブリッドサブクエリに適用されるオプションの OpenSearch クエリ DSL フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "オプションのクエリフィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "検索結果のドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "ドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "検索対象の OpenSearch インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "検索対象のインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "検索実行時に使用するオプションの検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "検索パイプライン名"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "返される検索ヒットの数"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果サイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "返されるヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.desc": {
+          "source": "Maximum number of search results to retrieve from each shard for each hybrid subquery",
+          "message": "各ハイブリッドサブクエリに対して各シャードから取得する検索結果の最大数"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.display_name": {
+          "source": "Pagination Depth",
+          "message": "ページネーションの深さ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.short_desc": {
+          "source": "Hybrid pagination depth",
+          "message": "ハイブリッドページネーションの深さ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "検索を実行するシャードレプリカ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "シャードレプリカの優先設定"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.desc": {
+          "source": "A list of OpenSearch query clauses to combine in a hybrid query",
+          "message": "ハイブリッドクエリで組み合わせる OpenSearch クエリ句のリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.short_desc": {
+          "source": "Query clauses to combine",
+          "message": "組み合わせるクエリ句"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "検索を特定のシャードに制限するためのカスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "オプションの総ヒット数追跡制御。OpenSearch 互換のブール値または整数値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
+          "source": "Combine multiple OpenSearch query clauses",
+          "message": "複数のOpenSearchクエリ句を組み合わせる"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **OpenSearch Server** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**OpenSearch Server**へのカスタムHTTP / REST APIコールを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエストボディを指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンスボディを含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to OpenSearch Server",
+          "message": "OpenSearch ServerへのカスタムAPIコールを実行"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch vector or semantic field with OpenSearch neural search. Use this action when the cluster is configured with the required model, semantic field, or neural-search plugin support.",
+          "message": "OpenSearch neural searchを使用してOpenSearchのベクトルフィールドまたはセマンティックフィールドを検索します。クラスタに必要なモデル、セマンティックフィールド、またはneural-searchプラグインのサポートが構成されている場合にこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
+          "source": "Neural Search",
+          "message": "ニューラル検索"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "返されるドキュメントのオプションの `_source` 選択。OpenSearch と互換性のあるブール値、文字列、リスト、またはハッシュ値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "ソースフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "ソースフィールドの選択"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.desc": {
+          "source": "When true, retrieves scores for nested field documents within each parent document",
+          "message": "trueの場合、各親ドキュメント内のネストされたフィールドドキュメントのスコアを取得します"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.display_name": {
+          "source": "Expand Nested Docs?",
+          "message": "ネストされたドキュメントを展開しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.short_desc": {
+          "source": "Return nested scores",
+          "message": "ネストされたスコアを返す"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The vector or semantic field to search",
+          "message": "検索対象のベクトルフィールドまたはセマンティックフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "ベクトルフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector or semantic field",
+          "message": "ベクトルまたはセマンティックフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "候補ドキュメントに適用されるオプションの OpenSearch クエリ DSL フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "オプションのクエリフィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "検索結果のドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "ドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "検索対象の OpenSearch インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "検索対象のインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "取得する最近傍の数"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "最近傍数"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "近傍数"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The OpenSearch model ID used to generate query embeddings; optional for semantic fields",
+          "message": "クエリ埋め込みの生成に使用されるOpenSearchモデルID（セマンティックフィールドの場合はオプション）"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Embedding model ID",
+          "message": "埋め込みモデルID"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "オプションの最大ベクトル距離のしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "最大距離"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "最大ベクトル距離"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "近似最近傍検索用の `ef_search` などのオプションのメソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "メソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "k-NN メソッドパラメータ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "オプションの最小スコアしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最小スコア"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "最小スコアしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "検索実行時に使用するオプションの検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "検索パイプライン"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "検索パイプライン名"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.desc": {
+          "source": "Analyzer for tokenizing `query_text` when using a sparse encoding model",
+          "message": "スパースエンコーディングモデル使用時に`query_text`をトークン化するためのアナライザー"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.display_name": {
+          "source": "Semantic Field Analyzer",
+          "message": "セマンティックフィールドアナライザー"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.short_desc": {
+          "source": "Semantic field analyzer",
+          "message": "セマンティックフィールドアナライザー"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "返される検索ヒットの数"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果サイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "返されるヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "検索を実行するシャードレプリカ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "シャードレプリカの優先設定"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.desc": {
+          "source": "Base64-encoded image data used by OpenSearch to generate query embeddings",
+          "message": "OpenSearchがクエリ埋め込みを生成するために使用するBase64エンコード画像データ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.display_name": {
+          "source": "Query Image",
+          "message": "クエリ画像"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.short_desc": {
+          "source": "Base64 image data",
+          "message": "Base64画像データ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.desc": {
+          "source": "Sparse-vector query tokens and weights",
+          "message": "スパースベクトルクエリートークンと重み"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.display_name": {
+          "source": "Query Tokens",
+          "message": "クエリートークン"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.short_desc": {
+          "source": "Sparse query tokens",
+          "message": "スパースクエリートークン"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.desc": {
+          "source": "Text used by OpenSearch to generate query embeddings",
+          "message": "OpenSearchがクエリ埋め込みを生成するために使用するテキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.display_name": {
+          "source": "Query Text",
+          "message": "クエリテキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.short_desc": {
+          "source": "Text to embed",
+          "message": "埋め込むテキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "検索を特定のシャードに制限するためのカスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.desc": {
+          "source": "Optional OpenSearch-compatible rescore setting for neural search",
+          "message": "ニューラル検索用のオプションのOpenSearch互換リコア設定"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.display_name": {
+          "source": "Rescore",
+          "message": "リコア"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.short_desc": {
+          "source": "Vector rescore control",
+          "message": "ベクトルリコア制御"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "オプションの総ヒット数追跡制御。OpenSearch 互換のブール値または整数値を受け入れます"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with text or sparse tokens",
+          "message": "テキストまたはスパースクエリートークンでOpenSearchインデックスを検索"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. Use this action when ordinary `from` and `size` pagination is not appropriate.",
+          "message": "Scroll APIを使用してOpenSearchインデックスを検索し、大規模な結果セットを効率的に反復処理します。通常の`from`および`size`ページネーションが適切でない場合にこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
+          "source": "Scroll Search",
+          "message": "スクロール検索"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.desc": {
+          "source": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling to free up resources.",
+          "message": "trueの場合、スクロールコンテキストをクリアします（scroll_idが必要）。スクロールが完了してリソースを解放する際に使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.display_name": {
+          "source": "Clear Scroll?",
+          "message": "スクロールをクリアしますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.short_desc": {
+          "source": "Clear scroll context",
+          "message": "スクロールコンテキストをクリア"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (required for initial scroll, not needed for continue/clear)",
+          "message": "検索対象のインデックス名（初回スクロール時は必須、継続/クリア時は不要）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index to search",
+          "message": "検索対象インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.desc": {
+          "source": "How long to keep the scroll context alive (e.g., '1m' for 1 minute, '5m' for 5 minutes). Default: '1m'",
+          "message": "スクロールコンテキストを維持する時間（例: 1分の場合は「1m」、5分の場合は「5m」）。デフォルト: '1m'"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.display_name": {
+          "source": "Scroll Timeout",
+          "message": "スクロールタイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context lifetime",
+          "message": "スクロールコンテキストの有効期間"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.desc": {
+          "source": "The scroll ID from a previous scroll response. If provided, continues the scroll. If not provided, starts a new scroll.",
+          "message": "前回のスクロールレスポンスのスクロールID。指定された場合はスクロールを継続します。指定されない場合は新規スクロールを開始します。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.display_name": {
+          "source": "Scroll ID",
+          "message": "スクロールID"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.short_desc": {
+          "source": "Previous scroll ID",
+          "message": "前回のスクロールID"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return per scroll page. Default: 1000",
+          "message": "スクロールページごとに返すヒット数。デフォルト: 1000"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Hits per scroll page",
+          "message": "スクロールページあたりのヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Specifies which shard replicas to execute the search request on (for initial scroll only)",
+          "message": "検索リクエストを実行するシャードレプリカを指定します（初回スクロール時のみ）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "シャード優先度"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.desc": {
+          "source": "The query to execute using OpenSearch Query DSL (for initial scroll only)",
+          "message": "OpenSearch Query DSLを使用して実行するクエリ（初回スクロール時のみ）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.short_desc": {
+          "source": "Search query DSL",
+          "message": "検索クエリDSL"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value (for initial scroll only)",
+          "message": "カスタムルーティング値（初回スクロール時のみ）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "カスタムルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request (for initial scroll only)",
+          "message": "リクエストをキャッシュするかどうか（初回スクロール時のみ）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "リクエストキャッシュ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "リクエストをキャッシュ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {
+          "source": "Search with scroll API for large result sets",
+          "message": "大規模な結果セット向けに Scroll API で検索"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.desc": {
+          "source": "Search an OpenSearch index with the query DSL and optional query-string parameters. Use this action for precise document lookup, log search, analytics inputs, and pagination through ordinary search results.",
+          "message": "クエリDSLと任意のクエリ文字列パラメータを使用してOpenSearchインデックスを検索します。正確なドキュメント検索、ログ検索、分析入力、および通常の検索結果のページネーションにこのアクションを使用します。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
+          "source": "Search Index",
+          "message": "インデックスを検索"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response.\n\nValid values for `_source`:\n- `true`: (Boolean - the default) The entire document source is returned\n- `false`: (Boolean) The document source is not returned\n- `<wildcard_pattern>`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n- `<object>`: (object) Object containing a list of source fields to include or exclude\n  Properties for `<object>`:\n  - `excludes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to exclude from the response\n\n    You can also use this property to exclude fields from the subset specified in the `includes` property\n  - `includes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n\n    If this property is specified, only these source fields are returned. You can exclude fields from this subset using the `excludes` property",
+          "message": "一致するドキュメントに対して返されるソースフィールドを指定します。これらのフィールドは検索レスポンスの`hits._source`プロパティで返されます。\n\n`_source`の有効な値:\n- `true`: (Boolean - デフォルト) ドキュメントソース全体が返されます\n- `false`: (Boolean) ドキュメントソースは返されません\n- `<wildcard_pattern>`: (文字列または文字列の配列) 返すソースフィールドを含むワイルドカード (*) パターンまたはパターンの配列\n- `<object>`: (オブジェクト) 含めるか除外するソースフィールドのリストを含むオブジェクト\n  `<object>`のプロパティ:\n  - `excludes`: (文字列または文字列の配列) レスポンスから除外するソースフィールドを含むワイルドカード (*) パターンまたはパターンの配列\n\n    このプロパティを使用して、`includes`プロパティで指定されたサブセットからフィールドを除外することもできます\n  - `includes`: (文字列または文字列の配列) 返すソースフィールドを含むワイルドカード (*) パターンまたはパターンの配列\n\n    このプロパティが指定されている場合、これらのソースフィールドのみが返されます。`excludes`プロパティを使用して、このサブセットからフィールドを除外できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.display_name": {
+          "source": "Source",
+          "message": "ソース"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field control",
+          "message": "ソースフィールド制御"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to exclude from the response.\n\nYou can also use this parameter to exclude fields from the subset specified in `_source_includes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "レスポンスから除外するソースフィールドのカンマ区切りリスト。\n\nこのパラメータを使用して、`_source_includes`クエリパラメータで指定されたサブセットからフィールドを除外することもできます。\n\n`_source`パラメータが`false`の場合、このパラメータは無視されます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.display_name": {
+          "source": "Source Excludes",
+          "message": "除外ソース"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.short_desc": {
+          "source": "Fields to exclude",
+          "message": "除外するフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to include in the response.\n\nIf this parameter is specified, only these source fields are returned. You can exclude fields from this subset using the `_source_excludes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "レスポンスに含めるソースフィールドのカンマ区切りリスト。\n\nこのパラメータが指定されている場合、これらのソースフィールドのみが返されます。`_source_excludes`クエリパラメータを使用して、このサブセットからフィールドを除外できます。\n\n`_source`パラメータが`false`の場合、このパラメータは無視されます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.display_name": {
+          "source": "Source Includes",
+          "message": "対象ソース"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.short_desc": {
+          "source": "Fields to include",
+          "message": "含めるフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response. Defaults to `true`.\n\nValid values for `_source`:\n- `true`: The entire document source is returned\n- `false`: The document source is not returned\n- `<string>`: Comma-separated list of source fields to return. Wildcard (*) patterns are supported",
+          "message": "一致するドキュメントに対して返されるソースフィールドを指定します。これらのフィールドは検索レスポンスの`hits._source`プロパティで返されます。デフォルトは`true`です。\n\n`_source`の有効な値:\n- `true`: ドキュメントソース全体が返されます\n- `false`: ドキュメントソースは返されません\n- `<string>`: 返すソースフィールドのカンマ区切りリスト。ワイルドカード (*) パターンがサポートされています"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.display_name": {
+          "source": "Source Query",
+          "message": "ソースクエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.short_desc": {
+          "source": "Source fields to return",
+          "message": "返すソースフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.desc": {
+          "source": "If `true` (the default), network round-trips between the coordinating node and the remote clusters are minimized when executing cross-cluster search (CCS) requests",
+          "message": "`true`（デフォルト）の場合、クロス集約検索（CCS）リクエストの実行時にコーディネーティングノードとリモートクラスタ間のネットワークラウンドトリップが最小限に抑えられます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.display_name": {
+          "source": "CCS Minimize Roundtrips?",
+          "message": "CCSラウンドトリップを最小化しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.short_desc": {
+          "source": "Minimize CCS roundtrips",
+          "message": "CCSラウンドトリップを最小化"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.desc": {
+          "source": "If `true` (default `false`), wildcard and prefix queries are analyzed.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "`true`（デフォルト`false`）の場合、ワイルドカードクエリおよびプレフィックスクエリが分析されます。\n\nこのパラメータは、`q`クエリ文字列パラメータが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.display_name": {
+          "source": "Analyze Wildcard?",
+          "message": "ワイルドカードを分析しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.short_desc": {
+          "source": "Analyze wildcards",
+          "message": "ワイルドカードの分析"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.desc": {
+          "source": "Analyzer to use for the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "クエリ文字列に使用するアナライザー。\n\nこのパラメーターは、`q` クエリ文字列パラメーターが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.display_name": {
+          "source": "Analyzer",
+          "message": "アナライザー"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.short_desc": {
+          "source": "Query string analyzer",
+          "message": "クエリ文字列アナライザー"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "If `false` (default `true`), the request returns an error if any wildcard expression, index alias, or `_all` value targets only missing or closed indices. This behavior applies even if the request targets other open indices. For example, a request targeting `foo*,bar*` returns an error if an index starts with `foo` but no index starts with `bar`",
+          "message": "`false`（デフォルトは `true`）の場合、ワイルドカード式、インデックスエイリアス、または `_all` の値が存在しないインデックスまたはクローズされたインデックスのみを対象としていると、リクエストはエラーを返します。この動作は、リクエストが他のオープンなインデックスを対象としている場合でも適用されます。たとえば、`foo*,bar*` を対象とするリクエストは、インデックスが `foo` で始まっていても `bar` で始まるインデックスが存在しない場合にエラーを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "インデックスなしを許可しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "一致するインデックスがないことを許可"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.desc": {
+          "source": "If `true`, returns partial results if there are shard request timeouts or shard failures. If `false`, returns an error with no partial results.\n\nTo override the default for this field, set the `search.default_allow_partial_results` cluster setting to `false`",
+          "message": "`true` の場合、シャードリクエストのタイムアウトやシャード障害が発生したときに部分的な結果を返します。`false` の場合、部分的な結果を返さずにエラーを返します。\n\nこのフィールドのデフォルトを上書きするには、`search.default_allow_partial_results` クラスター設定を `false` に設定します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.display_name": {
+          "source": "Allow Partial Results?",
+          "message": "部分的な結果を許可しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.short_desc": {
+          "source": "Return partial results",
+          "message": "部分的な結果を返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.desc": {
+          "source": "The number of shard results (default `512`) that should be reduced at once on the coordinating node. This value should be used as a protection mechanism to reduce the memory overhead per search request if the potential number of shards in the request can be large",
+          "message": "コーディネートノード上で一度にリデュースされるシャード結果の数（デフォルトは `512`）。この値は、リクエストに含まれる可能性のあるシャード数が多い場合に、検索リクエストごとのメモリオーバーヘッドを削減する保護メカニズムとして使用する必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.display_name": {
+          "source": "Batched Reduce Size",
+          "message": "バッチリデュースサイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.short_desc": {
+          "source": "Shard results batch size",
+          "message": "シャード結果のバッチサイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of docvalue_fields objects:\n- `field`: (Required, string) Wildcard pattern. The request returns doc values for field names matching this pattern.\n- `format`: (Optional, string) Format in which the doc values are returned.\n\nFor date fields, you can specify a date date format. For numeric fields fields, you can specify a DecimalFormat pattern.\n\nFor other field data types, this parameter is not supported",
+          "message": "フィールドパターンの配列。リクエストは、レスポンスの `hits.fields` プロパティでこれらのパターンに一致するフィールド名の値を返します。\n\n配列内のアイテムは文字列またはオブジェクトとして指定できます。\n\ndocvalue_fields オブジェクトのプロパティ:\n- `field`: (必須、文字列) ワイルドカードパターン。リクエストはこのパターンに一致するフィールド名の doc values を返します。\n- `format`: (オプション、文字列) doc values が返される形式。\n\n日付フィールドの場合、日付形式を指定できます。数値フィールドの場合、DecimalFormat パターンを指定できます。\n\n他のフィールドデータ型では、このパラメーターはサポートされていません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.display_name": {
+          "source": "Doc Value Fields",
+          "message": "Doc Value フィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.short_desc": {
+          "source": "Doc value fields array",
+          "message": "Doc value フィールド配列"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.desc": {
+          "source": "A comma-separated list of fields to return as the docvalue representation of a field for each hit",
+          "message": "各ヒットのフィールドの docvalue 表現として返すフィールドのカンマ区切りリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.display_name": {
+          "source": "Doc Value Fields Query",
+          "message": "Doc Value フィールドクエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.short_desc": {
+          "source": "Doc value fields list",
+          "message": "Doc value フィールドリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.desc": {
+          "source": "The default operator for query string query: `AND` or `OR`\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "クエリ文字列クエリのデフォルト演算子: `AND` または `OR`\n\nこのパラメーターは、`q` クエリ文字列パラメーターが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.display_name": {
+          "source": "Default Operator",
+          "message": "デフォルト演算子"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.short_desc": {
+          "source": "Query string operator",
+          "message": "クエリ文字列演算子"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.desc": {
+          "source": "Field to use as default where no field prefix is given in the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "クエリ文字列にフィールドプレフィックスが指定されていない場合にデフォルトとして使用するフィールド。\n\nこのパラメーターは、`q` クエリ文字列パラメーターが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.display_name": {
+          "source": "Default Field",
+          "message": "デフォルトフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.short_desc": {
+          "source": "Default query field",
+          "message": "デフォルトクエリフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "Type of index that wildcard patterns can match. If the request can target data streams, this argument determines whether wildcard expressions match hidden data streams. Supports comma-separated values, such as open,hidden. Valid values are:\n- `all`: Match any data stream or index, including hidden ones\n- `open`: (default) Match open, non-hidden indices. Also matches any non-hidden data stream\n- `closed`: Match closed, non-hidden indices. Also matches any non-hidden data stream. Data streams cannot be closed\n- `hidden`: Match hidden data streams and hidden indices. Must be combined with `open`, `closed`, or both\n- `none`: Wildcard patterns are not accepted",
+          "message": "ワイルドカードパターンが一致できるインデックスのタイプ。リクエストがデータストリームを対象にできる場合、この引数はワイルドカード式が非表示データストリームに一致するかどうかを決定します。open,hidden などのカンマ区切り値をサポートします。有効な値:\n- `all`: 非表示のものを含む任意のデータストリームまたはインデックスに一致\n- `open`: (デフォルト) オープンで非表示でないインデックスに一致。非表示でない任意のデータストリームにも一致\n- `closed`: クローズされた非表示でないインデックスに一致。非表示でない任意のデータストリームにも一致。データストリームはクローズできません\n- `hidden`: 非表示のデータストリームおよび非表示のインデックスに一致。`open`、`closed`、またはその両方と組み合わせる必要があります\n- `none`: ワイルドカードパターンは受け入れられません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "ワイルドカードの展開"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "ワイルドカード展開モード"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "`true`（デフォルトは `false`）の場合、ヒットの一部としてスコア計算に関する詳細情報を返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.display_name": {
+          "source": "Explain?",
+          "message": "Explain を実行しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.short_desc": {
+          "source": "Explain scoring",
+          "message": "スコアリングの詳細"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "`true`（デフォルトは `false`）の場合、ヒットの一部としてスコア計算に関する詳細情報を返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.display_name": {
+          "source": "Explain Query?",
+          "message": "クエリの Explain を実行しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.short_desc": {
+          "source": "Return score details",
+          "message": "スコアの詳細を返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of fields objects:\n- `field`: (Required, string) Field to return. Supports wildcards (*)\n- `format`: (Optional, string) Format for date and geospatial fields. Other field data types do not support this parameter.\n\n  `date` and `date_nanos` fields accept a date format.\n\n  `geo_point` and `geo_shape` fields accept:\n  - `geojson (default)`: GeoJSON\n  - `wkt`: Well Known Text\n  - `mvt(<spec>)`: Binary Mapbox vector tile. The API returns the tile as a base64-encoded     string. `<spec>` has the format `<zoom>/<x>/<y>` with two optional suffixes:     `@<extent>` and/or `:<buffer>`. For example, `2/0/1` or `2/0/1@4096:5`.\n\n    mvt parameters:\n    - `<zoom>`: (Required, integer) Zoom level for the tile. Accepts `0-29`\n    - `<x>`: (Required, integer) X coordinate for the tile\n    - `<y>`: (Required, integer) Y coordinate for the tile\n    - `<extent>`: (Optional, integer) Size, in pixels, of a side of the tile. Vector tiles are       square with equal sides. Defaults to `4096`\n    - `<buffer>`: (Optional, integer) Size, in pixels, of a clipping buffer outside the tile.       This allows renderers to avoid outline artifacts from geometries that extend past the       extent of the tile. Defaults to `5`",
+          "message": "フィールドパターンの配列。リクエストは、レスポンスの `hits.fields` プロパティでこれらのパターンに一致するフィールド名の値を返します。\n\n配列内のアイテムは文字列またはオブジェクトとして指定できます。\n\nfields オブジェクトのプロパティ:\n- `field`: (必須、文字列) 返すフィールド。ワイルドカード (*) をサポート\n- `format`: (オプション、文字列) 日付および地理空間フィールドの形式。他のフィールドデータ型ではこのパラメーターはサポートされていません。\n\n  `date` および `date_nanos` フィールドは日付形式を受け入れます。\n\n  `geo_point` および `geo_shape` フィールドは以下を受け入れます:\n  - `geojson (default)`: GeoJSON\n  - `wkt`: Well Known Text\n  - `mvt(<spec>)`: バイナリ Mapbox ベクタータイル。API はタイルを Base64 エンコードされた文字列として返します。`<spec>` は `<zoom>/<x>/<y>` の形式を持ち、2つのオプションのサフィックス `@<extent>` や `:<buffer>` を持つことができます（例: `2/0/1` や `2/0/1@4096:5`）。\n\n    mvt パラメーター:\n    - `<zoom>`: (必須、整数) タイルのズームレベル。`0-29` を受け入れます\n    - `<x>`: (必須、整数) タイルの X 座標\n    - `<y>`: (必須、整数) タイルの Y 座標\n    - `<extent>`: (オプション、整数) タイルの一辺のサイズ（ピクセル単位）。ベクタータイルは正方形です。デフォルトは `4096`\n    - `<buffer>`: (オプション、整数) タイル外側のクリッピングバッファのサイズ（ピクセル単位）。これにより、レンダラーはタイルの範囲を超えて広がるジオメトリからのアウトラインアーティファクトを回避できます。デフォルトは `5`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "フィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.short_desc": {
+          "source": "Fields to return",
+          "message": "返すフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.desc": {
+          "source": "Starting document offset (default `0`). Needs to be non-negative and defaults to `0`.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "開始ドキュメントオフセット（デフォルトは `0`）。負以外の値である必要があり、デフォルトは `0` です。\n\nデフォルトでは、from および size パラメーターを使用して 10,000 件を超えるヒットをページングすることはできません。より多くのヒットをページングするには、`search_after` パラメーターを使用します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.short_desc": {
+          "source": "Starting offset",
+          "message": "開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.desc": {
+          "source": "Starting document offset. Needs to be non-negative and defaults to 0.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "開始ドキュメントオフセット。負以外の値である必要があり、デフォルトは 0 です。\n\nデフォルトでは、from および size パラメーターを使用して 10,000 件を超えるヒットをページングすることはできません。より多くのヒットをページングするには、`search_after` パラメーターを使用します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.display_name": {
+          "source": "From Query",
+          "message": "From クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "ドキュメントの開始オフセット"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.desc": {
+          "source": "Defines the kNN query to run.\n\nProperties of `knn` object:\n- `field`: (Required, string) The name of the vector field to search against. Must be a `dense_vector` field with indexing enabled\n- `filter`: (Optional, Query DSL object) Query to filter the documents that can match. The kNN search will return the top k documents that also match this filter. The value can be a single query or a list of queries. If filter is not provided, all documents are allowed to match.\n- `k`: (Required, integer) Number of nearest neighbors to return as top hits. This value must be less than `num_candidates`\n- `num_candidates`: (Required, integer) The number of nearest neighbor candidates to consider per shard. Cannot exceed 10,000. OpenSearch collects `num_candidates` results from each shard, then merges them to find the top k results. Increasing `num_candidates` tends to improve the accuracy of the final k results\n- `query_vector`: (Optional, array of floats) Query vector. Must have the same number of dimensions as the vector field you are searching against\n- `query_vector_builder`: (Optional, object) A configuration object indicating how to build a `query_vector` before executing the request. You must provide a `query_vector_builder` or `query_vector`, but not both\n- `similarity`: (Optional, float) The minimum similarity required for a document to be considered a match. The similarity value calculated relates to the raw similarity used. Not the document score. The matched documents are then scored according to similarity and the provided boost is applied\n\n  The similarity parameter is the direct vector similarity calculation.\n\n  - `l2_norm`: also known as Euclidean, will include documents where the vector is within the     dims dimensional hypersphere with radius similarity with origin at query_vector\n  - `cosine` & `dot_product`: Only return vectors where the cosine similarity or dot-product     are at least the provided similarity",
+          "message": "実行する kNN クエリを定義します。\n\n`knn` オブジェクトのプロパティ:\n- `field`: (必須、文字列) 検索対象のベクターフィールド名。インデックスが有効な `dense_vector` フィールドである必要があります\n- `filter`: (オプション、Query DSL オブジェクト) 一致可能なドキュメントをフィルター処理するクエリ。kNN 検索は、このフィルターにも一致する上位 k 個のドキュメントを返します。値には単一のクエリまたはクエリのリストを指定できます。フィルターが提供されない場合、すべてのドキュメントが一致対象となります。\n- `k`: (必須、整数) 上位ヒットとして返す最近傍の数。この値は `num_candidates` 未満である必要があります\n- `num_candidates`: (必須、整数) シャードごとに考慮する最近傍候補の数。10,000 を超えることはできません。OpenSearch は各シャードから `num_candidates` 個の結果を収集し、それらをマージして上位 k 個の結果を見つけます。`num_candidates` を増やすと、最終的な k 個の結果の精度が向上する傾向があります\n- `query_vector`: (オプション、浮動小数点数の配列) クエリベクター。検索対象のベクターフィールドと同じ次元数を持つ必要があります\n- `query_vector_builder`: (オプション、オブジェクト) リクエストを実行する前に `query_vector` を構築する方法を示す構成オブジェクト。`query_vector_builder` または `query_vector` のいずれか一方のみを指定する必要があります\n- `similarity`: (オプション、浮動小数点数) ドキュメントが一致と見なされるために必要な最小類似度。計算される類似度の値は、ドキュメントのスコアではなく、使用される生の類似度に関連します。一致したドキュメントは類似度に応じてスコアリングされ、指定されたブーストが適用されます\n\n  similarity パラメーターは直接のベクター類似度計算です。\n\n  - `l2_norm`: ユークリッド距離としても知られ、ベクターが query_vector を原点とし類似度を半径とする dims 次元の超球内にあるドキュメントを含めます\n  - `cosine` および `dot_product`: コサイン類似度または内積が少なくとも指定された類似度以上であるベクターのみを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.display_name": {
+          "source": "kNN Query",
+          "message": "kNN クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.short_desc": {
+          "source": "k-Nearest neighbors",
+          "message": "k 最近傍"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.desc": {
+          "source": "The name of the index to search",
+          "message": "検索するインデックスの名前"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "インデックス"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "検索対象のインデックス名"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.desc": {
+          "source": "Boosts the `_score` of documents from specified indices.\n\nProperties of `indices_boost` objects:\n- `<index>: <boost-value>`: (Required, float)\n  - `<index>` is the name of the index or index alias. Wildcard (*) expressions are supported\n  - `<boost-value>` is the factor by which scores are multiplied. A boost value greater than     `1.0` increases the score. A boost value between `0` and `1.0` decreases the score",
+          "message": "指定されたインデックスからのドキュメントの `_score` をブーストします。\n\n`indices_boost` オブジェクトのプロパティ:\n- `<index>: <boost-value>`: (必須、float)\n  - `<index>` はインデックスまたはインデックスエイリアスの名前です。ワイルドカード (*) 式がサポートされています\n  - `<boost-value>` はスコアに乗算される係数です。`1.0` より大きいブースト値はスコアを増加させます。`0` と `1.0` の間のブースト値はスコアを減少させます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.display_name": {
+          "source": "Indices Boost",
+          "message": "インデックスのブースト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.short_desc": {
+          "source": "Index score boost",
+          "message": "インデックススコアブースト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.desc": {
+          "source": "If `true` (the default), concrete, expanded or aliased indices will be ignored when frozen",
+          "message": "`true`（デフォルト）の場合、フリーズされた具体的なインデックス、展開されたインデックス、またはエイリアス化されたインデックスは無視されます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.display_name": {
+          "source": "Ignore Throttled?",
+          "message": "スロットルされたインデックスを無視しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.short_desc": {
+          "source": "Ignore frozen indices",
+          "message": "フリーズされたインデックスを無視"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "If `false` (the default), the request returns an error if it targets a missing or closed index",
+          "message": "`false`（デフォルト）の場合、存在しないインデックスまたはクローズされたインデックスを対象とすると、リクエストはエラーを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "利用不可を無視しますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore missing indices",
+          "message": "存在しないインデックスを無視"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.desc": {
+          "source": "If `true` (default `false`), format-based query failures (such as providing text to a numeric field) in the query string will be ignored.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "`true`（デフォルトは `false`）の場合、クエリ文字列内のフォーマットベースのクエリ失敗（数値フィールドへのテキストの指定など）は無視されます。\n\nこのパラメーターは、`q` クエリ文字列パラメーターが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.display_name": {
+          "source": "Lenient?",
+          "message": "寛容（Lenient）にしますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.short_desc": {
+          "source": "Ignore format errors",
+          "message": "フォーマットエラーを無視"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.desc": {
+          "source": "Defines the number of concurrent shard requests per node this search executes concurrently (default `5`). This value should be used to limit the impact of the search on the cluster in order to limit the number of concurrent shard requests",
+          "message": "この検索がノードごとに同時に実行する同時シャードリクエスト数を定義します（デフォルトは `5`）。この値は、同時シャードリクエスト数を制限してクラスターへの検索の影響を抑えるために使用する必要があります"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.display_name": {
+          "source": "Max Concurrent Shards",
+          "message": "最大同時シャード数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.short_desc": {
+          "source": "Max concurrent requests",
+          "message": "最大同時リクエスト数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.desc": {
+          "source": "Minimum `_score` for matching documents. Documents with a lower `_score` are not included in the search results",
+          "message": "一致するドキュメントの最小 `_score`。これより低い `_score` を持つドキュメントは検索結果に含まれません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最小スコア"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score filter",
+          "message": "最小スコアフィルター"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.desc": {
+          "source": "A comma-separated list of `<field>:<direction>` pairs",
+          "message": "`<field>:<direction>` ペアのカンマ区切りリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.desc": {
+          "source": "Period to retain the search context for scrolling.\n\nBy default, this value cannot exceed `1d` (24 hours). You can change this limit using the `search.max_keep_alive` cluster-level setting",
+          "message": "スクロール用に検索コンテキストを保持する期間。\n\nデフォルトでは、この値は `1d`（24時間）を超えることはできません。この制限は `search.max_keep_alive` クラスターレベル設定を使用して変更できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.display_name": {
+          "source": "Scroll",
+          "message": "Scroll"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context timeout",
+          "message": "スクロールコンテキストのタイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.desc": {
+          "source": "How distributed term frequencies are calculated for relevance scoring.\n\nValid values for search_type:\n- `query_then_fetch`: (Default) Distributed term frequencies are calculated locally for each shard running the search. We recommend this option for faster searches with potentially less accurate scoring\n- `dfs_query_then_fetch`: Distributed term frequencies are calculated globally, using information gathered from all shards running the search. While this option increases the accuracy of scoring, it adds a round-trip to each shard, which can result in slower searches",
+          "message": "関連性スコアリングのために分散用語頻度を計算する方法。\n\nsearch_type の有効な値:\n- `query_then_fetch`: (デフォルト) 分散用語頻度は、検索を実行しているシャードごとにローカルで計算されます。スコアリングの精度が多少低下する可能性がありますが、より高速な検索のためにこのオプションを推奨します\n- `dfs_query_then_fetch`: 分散用語頻度は、検索を実行しているすべてのシャードから収集された情報を使用してグローバルに計算されます。このオプションはスコアリングの精度を向上させますが、各シャードへのラウンドトリップが追加されるため、検索が遅くなる可能性があります"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.display_name": {
+          "source": "Search Type",
+          "message": "検索タイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.short_desc": {
+          "source": "Search type",
+          "message": "検索タイプ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "`true` の場合、各ヒットの最終変更のシーケンス番号とプライマリタームを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "シーケンス番号とプライマリタームを含めますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "seq_no/primary_term を返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "`true` の場合、各ヒットの最終変更のシーケンス番号とプライマリタームを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "シーケンス番号とプライマリタームを含めますか？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "seq_no/primary_term を返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return. Needs to be non-negative and defaults to `10`.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "返されるヒット数。負でない値にする必要があり、デフォルトは `10` です。\n\nデフォルトでは、`from` パラメータと `size` パラメータを使用して 10,000 件を超えるヒットをページングすることはできません。さらにヒットをページングするには、`search_after` パラメータを使用してください"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "サイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits",
+          "message": "ヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.desc": {
+          "source": "Defines the number of hits to return.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "返されるヒット数を定義します。\n\nデフォルトでは、`from` パラメータと `size` パラメータを使用して 10,000 件を超えるヒットをページングすることはできません。さらにヒットをページングするには、`search_after` パラメータを使用してください"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.display_name": {
+          "source": "Size Query",
+          "message": "サイズクエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.short_desc": {
+          "source": "Number of hits",
+          "message": "ヒット数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.desc": {
+          "source": "Stats groups to associate with the search. Each group maintains a statistics aggregation for its associated searches",
+          "message": "検索に関連付ける統計グループ。各グループは、関連付けられた検索の統計集計を維持します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.display_name": {
+          "source": "Stats",
+          "message": "統計情報"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.short_desc": {
+          "source": "Stats groups",
+          "message": "統計グループ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.desc": {
+          "source": "Specific tag of the request for logging and statistical purposes",
+          "message": "ログ記録および統計目的のリクエストの固有タグ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.display_name": {
+          "source": "Stats Query",
+          "message": "統計クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.short_desc": {
+          "source": "Stats tag",
+          "message": "統計タグ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this field is specified, the `_source` parameter defaults to `false`. You can pass `_source=true` to return both source fields and stored fields in the search response",
+          "message": "ヒットの一部として返される格納済みフィールドのカンマ区切りリスト。フィールドが指定されていない場合、レスポンスに格納済みフィールドは含まれません。\n\nこのフィールドが指定されている場合、`_source` パラメータのデフォルトは `false` になります。`_source=true` を渡すと、検索レスポンスにソースフィールドと格納済みフィールドの両方を返すことができます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.display_name": {
+          "source": "Stored Fields Query",
+          "message": "格納済みフィールドクエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.short_desc": {
+          "source": "Stored fields to return",
+          "message": "返される格納済みフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this option is specified, the `_source` parameter defaults to `false`. You can pass `_source: true` to return both source fields and stored fields in the search response",
+          "message": "ヒットの一部として返される格納済みフィールドのカンマ区切りリスト。フィールドが指定されていない場合、レスポンスに格納済みフィールドは含まれません。\n\nこのオプションが指定されている場合、`_source` パラメータのデフォルトは `false` になります。`_source: true` を渡すと、検索レスポンスにソースフィールドと格納済みフィールドの両方を返すことができます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.display_name": {
+          "source": "Stored Fields",
+          "message": "格納済みフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.short_desc": {
+          "source": "Stored fields list",
+          "message": "格納済みフィールドリスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.desc": {
+          "source": "The source text for which the suggestions should be returned.\n\nThis parameter can only be used when the `suggest_field` query string parameter is specified",
+          "message": "候補を返すべきソーステキスト。\n\nこのパラメータは、`suggest_field` クエリ文字列パラメータが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.display_name": {
+          "source": "Suggest Text",
+          "message": "サジェストテキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.short_desc": {
+          "source": "Text for suggestions",
+          "message": "サジェスト用テキスト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.desc": {
+          "source": "Specifies which field to use for suggestions",
+          "message": "サジェストに使用するフィールドを指定します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.display_name": {
+          "source": "Suggest Field",
+          "message": "サジェストフィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.short_desc": {
+          "source": "Field for suggestions",
+          "message": "サジェスト用フィールド"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.desc": {
+          "source": "Specifies the suggest mode. Available options:\n- `always`\n- `missing`\n- `popular`\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "サジェストモードを指定します。利用可能なオプション:\n- `always`\n- `missing`\n- `popular`\n\nこのパラメータは、`suggest_field` および `suggest_text` クエリ文字列パラメータが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.display_name": {
+          "source": "Suggest Mode",
+          "message": "サジェストモード"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.short_desc": {
+          "source": "Suggestion mode",
+          "message": "サジェストモード"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.desc": {
+          "source": "Number of suggestions to return.\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "返されるサジェストの数。\n\nこのパラメータは、`suggest_field` および `suggest_text` クエリ文字列パラメータが指定されている場合にのみ使用できます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.display_name": {
+          "source": "Suggest Size",
+          "message": "サジェストサイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.short_desc": {
+          "source": "Number of suggestions",
+          "message": "サジェスト数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.desc": {
+          "source": "Limits the search to a point in time (PIT). If you provide a `pit`, you cannot specify a `<target>` in the request path.\n\nProperties of `pit`:\n- `id`: (Required*, string) ID for the PIT to search. If you provide a `pit` object, this   parameter is required\n- `keep_alive`: (Optional, time value) Period of time used to extend the life of the PIT",
+          "message": "検索をポイントインタイム (PIT) に制限します。`pit` を指定した場合、リクエストパスに `<target>` を指定することはできません。\n\n`pit` のプロパティ:\n- `id`: (必須*、文字列) 検索する PIT の ID。`pit` オブジェクトを指定する場合、このパラメータは必須です\n- `keep_alive`: (オプション、時間値) PIT の有効期間を延長するために使用される期間"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.display_name": {
+          "source": "Point in Time",
+          "message": "ポイントインタイム"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.short_desc": {
+          "source": "PIT for search",
+          "message": "検索用 PIT"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.desc": {
+          "source": "Defines a threshold that enforces a pre-filter roundtrip to prefilter search shards based on query rewriting if the number of shards the search request expands to exceeds the threshold. This filter roundtrip can limit the number of shards significantly if for instance a shard can not match any documents based on its rewrite method ie. if date filters are mandatory to match but the shard bounds and the query are disjoint. When unspecified, the pre-filter phase is executed if any of these conditions is met:\n- The request targets more than 128 shards\n- The request targets one or more read-only index\n- The primary sort of the query targets an indexed field",
+          "message": "検索リクエストが展開されるシャード数がしきい値を超えた場合に、クエリの書き換えに基づいて検索シャードを事前フィルタリングする事前フィルタラウンドトリップを強制するしきい値を定義します。このフィルタラウンドトリップは、たとえばシャードがその書き換え方法に基づいてどのドキュメントにも一致しない場合 (例: 日付フィルタの一致が必須であるのにシャードの境界とクエリが互いに素である場合など)、シャード数を大幅に制限できます。指定されていない場合、次のいずれかの条件を満たすと事前フィルタフェーズが実行されます:\n- リクエストが 128 個を超えるシャードを対象としている\n- リクエストが 1 つ以上の読み取り専用インデックスを対象としている\n- クエリのプライマリソートがインデックス付きフィールドを対象としている"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.display_name": {
+          "source": "Pre-filter Shard Size",
+          "message": "事前フィルタシャードサイズ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.short_desc": {
+          "source": "Pre-filter threshold",
+          "message": "事前フィルタしきい値"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Nodes and shards used for the search. By default, OpenSearch selects from eligible nodes and shards using adaptive replica selection, accounting for allocation awareness.\n\nValid values for preference:\n- `_only_local`: Run the search only on shards on the local node\n- `_local`: If possible, run the search on shards on the local node. If not, select shards using the default method\n- `_only_nodes:<node-id>,<node-id>`: Run the search on only the specified nodes IDs. If suitable shards exist on more than one selected node, use shards on those nodes using the default method. If none of the specified nodes are available, select shards from any available node using the default method\n- `_prefer_nodes:<node-id>,<node-id>`: If possible, run the search on the specified nodes IDs. If not, select shards using the default method.\n- `_shards:<shard>,<shard>`: Run the search only on the specified shards. You can combine this value with other preference values. However, the `_shards` value must come first. For example: `_shards:2,3|_local`\n- `<custom-string>`: Any string that does not start with `_`. If the cluster state and selected shards do not change, searches using the same `<custom-string>` value are routed to the same shards in the same order",
+          "message": "検索に使用されるノードおよびシャード。デフォルトでは、OpenSearch は割り当て認識を考慮し、適応型レプリカ選択を使用して適切なノードおよびシャードから選択します。\n\npreference の有効な値:\n- `_only_local`: ローカルノード上のシャードでのみ検索を実行します\n- `_local`: 可能な場合は、ローカルノード上のシャードで検索を実行します。不可能な場合は、デフォルトの方法を使用してシャードを選択します\n- `_only_nodes:<node-id>,<node-id>`: 指定されたノード ID でのみ検索を実行します。複数の選択されたノードに適したシャードが存在する場合、デフォルトの方法を使用してそれらのノード上のシャードを使用します。指定されたノードがどれも利用できない場合は、デフォルトの方法を使用して利用可能なノードからシャードを選択します\n- `_prefer_nodes:<node-id>,<node-id>`: 可能な場合は、指定されたノード ID で検索を実行します。不可能な場合は、デフォルトの方法を使用してシャードを選択します。\n- `_shards:<shard>,<shard>`: 指定されたシャードでのみ検索を実行します。この値は他の preference 値と組み合わせることができます。ただし、`_shards` 値が最初に来る必要があります。例: `_shards:2,3|_local`\n- `<custom-string>`: `_` で始まらない任意の文字列。クラスタの状態と選択されたシャードが変わらない場合、同じ `<custom-string>` 値を使用した検索は同じ順序で同じシャードにルーティングされます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "プレファレンス"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "シャード優先度"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.desc": {
+          "source": "Query in the Lucene query string syntax.\n\nYou can use the `q` parameter to run a query parameter search. Query parameter searches do not support the full OpenSearch Query DSL but are handy for testing.\n\nThe `q` parameter overrides the query parameter in the request body",
+          "message": "Lucene クエリ文字列構文のクエリ。\n\n`q` パラメータを使用してクエリパラメータ検索を実行できます。クエリパラメータ検索は完全な OpenSearch Query DSL をサポートしていませんが、テストに便利です。\n\n`q` パラメータは、リクエスト本文の query パラメータをオーバーライドします"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.display_name": {
+          "source": "Query String",
+          "message": "クエリ文字列"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.short_desc": {
+          "source": "Lucene query string",
+          "message": "Lucene クエリ文字列"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.desc": {
+          "source": "Specifies the search using the Query DSL",
+          "message": "Query DSL を使用して検索を指定します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.short_desc": {
+          "source": "Query DSL object",
+          "message": "Query DSL オブジェクト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.desc": {
+          "source": "Value used to route indexing and search operations to a specific shard",
+          "message": "インデックス作成および検索操作を特定のシャードにルーティングするために使用される値"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "ルーティング"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.short_desc": {
+          "source": "Routing value",
+          "message": "ルーティング値"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.desc": {
+          "source": "Defines a method for combining and ranking result sets from either:\n- 1 query and 1 or more kNN searches\n- 2 or more kNN searches\n\nRanking methods:\n- `rrf`: (Optional, object) Sets the ranking method to reciprocal rank fusion (RRF)",
+          "message": "次のいずれかからの結果セットを結合およびランク付けする方法を定義します:\n- 1 つのクエリと 1 つ以上の kNN 検索\n- 2 つ以上の kNN 検索\n\nランキング方法:\n- `rrf`: (オプション、オブジェクト) ランキング方法を相互ランク融合 (RRF) に設定します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.display_name": {
+          "source": "Rank",
+          "message": "ランク"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.short_desc": {
+          "source": "Ranking method",
+          "message": "ランキング方法"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "If `true`, the caching of search results is enabled for requests where size is `0`. Defaults to index level settings",
+          "message": "`true` の場合、サイズが `0` のリクエストに対して検索結果のキャッシュが有効になります。デフォルトはインデックスレベルの設定です"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "リクエストキャッシュ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Enable result caching",
+          "message": "結果キャッシュの有効化"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.desc": {
+          "source": "Indicates whether `hits.total` should be rendered as an integer or an object in the rest search response (default `false`)",
+          "message": "REST 検索レスポンスで `hits.total` を整数またはオブジェクトとしてレンダリングするかどうかを示します (デフォルトは `false`)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.display_name": {
+          "source": "Total Hits as Int?",
+          "message": "合計ヒット数を整数で表示しますか?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.short_desc": {
+          "source": "Return total as integer",
+          "message": "合計を整数で返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.desc": {
+          "source": "Defines one or more runtime fields in the search request. These fields take precedence over mapped fields with the same name.\n\nProperties of `runtime_mappings` objects:\n- `<field-name>`: (Required, object) Configuration for the runtime field. The key is the field name.\n\n  Properties of <field-name>:\n  - `type`: (Required, string) Field type, which can be any of the following:\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script`: (Optional, string) Painless script executed at query time. The script has access to the entire context of a document, including the original `_source` and any mapped fields plus their values.\n\n    This script must include emit to return calculated values. For example:\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`",
+          "message": "検索リクエストで 1 つ以上のランタイムフィールドを定義します。これらのフィールドは、同じ名前を持つマッピングされたフィールドよりも優先されます。\n\n`runtime_mappings` オブジェクトのプロパティ:\n- `<field-name>`: (必須、オブジェクト) ランタイムフィールドの設定。キーはフィールド名です。\n\n  <field-name> のプロパティ:\n  - `type`: (必須、文字列) フィールドタイプ。次のいずれかになります:\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script`: (オプション、文字列) クエリ時に実行される Painless スクリプト。スクリプトは、元の `_source` および任意のマッピングされたフィールドとその値を含む、ドキュメントのコンテキスト全体にアクセスできます。\n\n    計算された値を返すには、このスクリプトに emit を含める必要があります。例:\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.display_name": {
+          "source": "Runtime Mappings",
+          "message": "ランタイムマッピング"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.short_desc": {
+          "source": "Runtime field mappings",
+          "message": "ランタイムフィールドマッピング"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "各シャードで収集するドキュメントの最大数。クエリがこの制限に達すると、OpenSearch はクエリを早期に終了します。OpenSearch はソート前にドキュメントを収集します。\n\n注意して使用してください。OpenSearch はリクエストを処理する各シャードにこのパラメータを適用します。可能な場合は、OpenSearch に早期終了を自動的に実行させてください。複数のデータ層にまたがるバッキングインデックスを持つデータストリームを対象とするリクエストには、このパラメータの指定を避けてください。\n\nデフォルトは `0` で、クエリの実行を早期終了しません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.display_name": {
+          "source": "Terminate After",
+          "message": "早期終了"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.short_desc": {
+          "source": "Max docs to collect",
+          "message": "収集する最大ドキュメント数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "各シャードで収集するドキュメントの最大数。クエリがこの制限に達すると、OpenSearch はクエリを早期に終了します。OpenSearch はソート前にドキュメントを収集します。\n\n注意して使用してください。OpenSearch はリクエストを処理する各シャードにこのパラメータを適用します。可能な場合は、OpenSearch に早期終了を自動的に実行させてください。複数のデータ層にまたがるバッキングインデックスを持つデータストリームを対象とするリクエストには、このパラメータの指定を避けてください。\n\nデフォルトは `0` で、クエリの実行を早期終了しません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.display_name": {
+          "source": "Terminate After Query",
+          "message": "早期終了クエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.short_desc": {
+          "source": "Max docs per shard",
+          "message": "シャードごとの最大ドキュメント数"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "各シャードからの応答を待機する期間を指定します。タイムアウトが切れる前に応答を受信しなかった場合、リクエストは失敗し、エラーを返します。デフォルトはタイムアウトなしです"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "検索タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "各シャードからの応答を待機する期間を指定します。タイムアウトが切れる前に応答を受信しなかった場合、リクエストは失敗し、エラーを返します。デフォルトはタイムアウトなしです"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.display_name": {
+          "source": "Timeout Query",
+          "message": "タイムアウトクエリ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.short_desc": {
+          "source": "Shard response timeout",
+          "message": "シャード応答タイムアウト"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.desc": {
+          "source": "If `true` (default `false`), calculate and return document scores, even if the scores are not used for sorting",
+          "message": "`true` の場合 (デフォルトは `false`)、スコアがソートに使用されない場合でも、ドキュメントのスコアを計算して返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.display_name": {
+          "source": "Track Scores?",
+          "message": "スコアを追跡しますか?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.short_desc": {
+          "source": "Calculate scores",
+          "message": "スコアを計算"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Number of hits matching the query to count accurately (default `\"10000\"`).\n\nIf `true`, the exact number of hits is returned at the cost of some performance. If `false`, the response does not include the total number of hits matching the query",
+          "message": "正確にカウントするクエリに一致するヒット数 (デフォルトは `\"10000\"`)。\n\n`true` の場合、ある程度のパフォーマンスを犠牲にして正確なヒット数が返されます。`false` の場合、レスポンスにはクエリに一致する合計ヒット数は含まれません"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "総ヒット数の追跡"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Count matching docs",
+          "message": "一致するドキュメント数をカウント"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.desc": {
+          "source": "If `true` (the default), aggregation and suggester names are be prefixed by their respective types in the response",
+          "message": "`true`（デフォルト）の場合、レスポンス内のアグリゲーション名およびサジェスター名にそれぞれのタイプがプレフィックスとして付加されます"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.display_name": {
+          "source": "Typed Keys?",
+          "message": "キーのタイプ付加?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.short_desc": {
+          "source": "Prefix agg names",
+          "message": "アグリゲーション名にプレフィックスを付加"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.desc": {
+          "source": "If `true` (default `false`), returns document version as part of a hit",
+          "message": "`true`（デフォルトは`false`）の場合、ヒットの一部としてドキュメントバージョンを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.display_name": {
+          "source": "Version?",
+          "message": "バージョン?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.short_desc": {
+          "source": "Return doc version",
+          "message": "ドキュメントバージョンを返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.desc": {
+          "source": "If `true`, returns document version as part of a hit",
+          "message": "`true`の場合、ヒットの一部としてドキュメントバージョンを返します"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.display_name": {
+          "source": "Version Query?",
+          "message": "バージョンクエリ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.short_desc": {
+          "source": "Return doc version",
+          "message": "ドキュメントバージョンを返す"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
+          "source": "Search for data in an OpenSearch index",
+          "message": "OpenSearchインデックス内のデータを検索"
+        },
+        "app.T3BlblNlYXJjaA.desc": {
+          "source": "OpenSearch is an Apache 2.0-licensed search, analytics, and observability platform.\n\nUse this app to work with:\n- **Document indexes** for search and analytics workloads\n- **Bulk ingestion** for high-volume document writes\n- **Pipelines** for document ingestion and search result processing\n- **Vector, neural, and hybrid search** when the OpenSearch cluster is configured with the required plugins and models",
+          "message": "OpenSearchは、Apache 2.0ライセンスの検索、分析、およびオブザーバビリティプラットフォームです。\n\nこのアプリを使用して以下を操作します:\n- 検索および分析ワークロード向けの**ドキュメントインデックス**\n- 大量ドキュメント書き込み用の**一括取り込み（Bulk ingestion）**\n- ドキュメント取り込みおよび検索結果処理用の**パイプライン**\n- OpenSearchクラスターに必要なプラグインとモデルが構成されている場合の**ベクトル、ニューラル、およびハイブリッド検索**"
+        },
+        "app.T3BlblNlYXJjaA.display_name": {
+          "source": "OpenSearch Server",
+          "message": "OpenSearch Server"
+        },
+        "app.T3BlblNlYXJjaA.short_desc": {
+          "source": "OpenSearch search and analytics server",
+          "message": "OpenSearch検索および分析サーバー"
+        }
+      }
+    }
+  }
+}

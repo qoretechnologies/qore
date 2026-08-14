@@ -1,0 +1,1773 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file, optionally renaming it or placing the copy in a different folder.",
+          "message": "Copia un file, facoltativamente rinominandolo o inserendo la copia in una cartella diversa."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File",
+          "message": "Copia file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to place the copy in; if not set, the copy is placed beside the original",
+          "message": "La cartella in cui inserire la copia; se non impostata, la copia viene posizionata accanto all'originale"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to place the copy in",
+          "message": "La cartella in cui inserire la copia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to copy",
+          "message": "L'identificatore Drive del file da copiare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.desc": {
+          "source": "The name for the copy; if not set, Drive names it `Copy of <name>`",
+          "message": "Il nome della copia; se non impostato, Drive la denomina `Copy of <name>`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nuovo nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.short_desc": {
+          "source": "The name for the copy",
+          "message": "Il nome della copia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file",
+          "message": "Copia un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, optionally inside another folder.",
+          "message": "Crea una cartella, facoltativamente all'interno di un'altra cartella."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Crea cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name for the new folder",
+          "message": "Il nome della nuova cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name for the new folder",
+          "message": "Il nome della nuova cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.desc": {
+          "source": "The folder to create the new folder in; if not set, the user's `My Drive` root is used",
+          "message": "La cartella in cui creare la nuova cartella; se non impostata, viene utilizzata la radice `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.display_name": {
+          "source": "Parent Folder ID",
+          "message": "ID cartella principale"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.short_desc": {
+          "source": "The folder to create the new folder in",
+          "message": "La cartella in cui creare la nuova cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "Crea una cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.desc": {
+          "source": "Creates a shortcut pointing at a file or folder.\n\nA shortcut lets one file appear in several places without being copied, so the content stays in one place and every route to it stays current.  Deleting a shortcut does not affect the file it points at.",
+          "message": "Crea una scorciatoia che punta a un file o a una cartella.\n\nUna scorciatoia consente a un file di apparire in più posizioni senza essere copiato, in modo che il contenuto rimanga in un'unica posizione e ogni percorso verso di esso resti aggiornato. L'eliminazione di una scorciatoia non influisce sul file a cui punta."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
+          "source": "Create Shortcut",
+          "message": "Crea scorciatoia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used",
+          "message": "La cartella in cui creare la scorciatoia; se non impostata, viene utilizzata la radice `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the shortcut in",
+          "message": "La cartella in cui creare la scorciatoia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.desc": {
+          "source": "The name for the shortcut; it need not match the name of the file it points at",
+          "message": "Il nome della scorciatoia; non deve necessariamente corrispondere al nome del file a cui punta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.short_desc": {
+          "source": "The name for the shortcut",
+          "message": "Il nome della scorciatoia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.desc": {
+          "source": "The Drive identifier of the file or folder the shortcut points at",
+          "message": "L'identificatore Drive del file o della cartella a cui punta la scorciatoia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.display_name": {
+          "source": "Target File ID",
+          "message": "ID file di destinazione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.short_desc": {
+          "source": "The file or folder the shortcut points at",
+          "message": "Il file o la cartella a cui punta la scorciatoia"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
+          "source": "Create a shortcut pointing at a file or folder",
+          "message": "Crea una scorciatoia che punta a un file o a una cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "Crea un file direttamente da contenuto di testo, senza dover disporre di un file.\n\nUtile per scrivere report generati, manifest e note."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "Crea file di testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "Il contenuto di testo per il nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Contenuto"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "Il contenuto di testo per il nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.desc": {
+          "source": "The Drive identifier of the folder; if not set, the user's `My Drive` root is used",
+          "message": "L'identificatore Drive della cartella; se non impostato, viene utilizzata la radice `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the file in",
+          "message": "La cartella in cui creare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.desc": {
+          "source": "The MIME type to store with the new file",
+          "message": "Il tipo MIME da memorizzare con il nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type for the new file",
+          "message": "Il tipo MIME per il nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.desc": {
+          "source": "The name for the new file",
+          "message": "Il nome del nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.short_desc": {
+          "source": "The name for the new file",
+          "message": "Il nome del nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "Crea un file da contenuto di testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "Recupera i metadati di un file: nome, tipo, dimensione, timestamp, elementi padre e collegamenti.\n\nUsa `download-file` per recuperare il contenuto vero e proprio."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File Info",
+          "message": "Ottieni informazioni sul file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "L'identificatore Drive del file; Drive indirizza i file tramite un ID immutabile anziché per percorso, quindi due file nella stessa cartella possono condividere lo stesso nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file's metadata",
+          "message": "Ottieni i metadati di un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.desc": {
+          "source": "Returns the details of one revision of a file: when it was made, how large it is, and whether Drive will keep it indefinitely.",
+          "message": "Restituisce i dettagli di una revisione di un file: quando è stata creata, quanto è grande e se Drive la conserverà a tempo indeterminato."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
+          "source": "Get File Revision",
+          "message": "Ottieni revisione del file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "L'identificatore Drive del file a cui appartiene la revisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "L'identificatore della revisione, come restituito da `list-revisions`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "ID revisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "La revisione da indirizzare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
+          "source": "Get the details of one revision of a file",
+          "message": "Ottieni i dettagli di una revisione di un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Drive rejects one that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.  Files in the trash still count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
+          "message": "Restituisce la quantità di spazio di archiviazione dell'account in uso e quella disponibile.\n\nUtile prima di un caricamento di grandi dimensioni: Drive rifiuta i caricamenti che supererebbero la quota, segnalandoli come un normale errore di scrittura anziché come un problema di capacità. I file nel cestino vengono comunque conteggiati nella quota, quindi `usage_in_drive_trash` indica quanto verrebbe recuperato svuotandolo."
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
+          "source": "Get Storage Quota",
+          "message": "Ottieni quota di archiviazione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "Ottieni lo spazio di archiviazione utilizzato dall'account"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nGoogle-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be downloaded; use `export-file` to convert one to a concrete format instead.",
+          "message": "Scarica il contenuto di un file.\n\nI documenti nativi di Google (Documenti, Fogli, Presentazioni) non hanno un contenuto in byte proprio e non possono essere scaricati; usa invece `export-file` per convertirne uno in un formato concreto."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Scarica file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "L'identificatore Drive del file; Drive indirizza i file tramite un ID immutabile anziché per percorso, quindi due file nella stessa cartella possono condividere lo stesso nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "Scarica il contenuto di un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Moves a file to the trash, where it can still be recovered.\n\nSet `permanently_delete` to remove it outright instead; **that cannot be undone**.",
+          "message": "Sposta un file nel cestino, da cui può ancora essere recuperato.\n\nImposta `permanently_delete` per rimuoverlo direttamente; **l'operazione non può essere annullata**."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Elimina file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to delete",
+          "message": "L'identificatore Drive del file da eliminare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.desc": {
+          "source": "Delete the file outright rather than moving it to the trash. **This cannot be undone**; leave it cleared to move the file to the trash, where it can still be recovered",
+          "message": "Elimina definitivamente il file anziché spostarlo nel cestino. **Questa operazione non può essere annullata**; lascia deselezionato per spostare il file nel cestino, da dove può ancora essere recuperato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "Elimina definitivamente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.short_desc": {
+          "source": "Delete the file outright rather than moving it to the trash",
+          "message": "Elimina definitivamente il file anziché spostarlo nel cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or move it to the trash",
+          "message": "Elimina un file o spostalo nel cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.desc": {
+          "source": "Removes one revision of a file, freeing the storage it occupied.\n\n**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to remove the only remaining revision.",
+          "message": "Rimuove una revisione di un file, liberando lo spazio di archiviazione occupato.\n\n**Questa operazione non può essere annullata** e il contenuto corrente del file rimane invariato. Drive rifiuta di rimuovere l'unica revisione rimasta."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
+          "source": "Delete File Revision",
+          "message": "Elimina revisione del file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "L'identificatore Drive del file a cui appartiene la revisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "L'identificatore della revisione, come restituito da `list-revisions`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "ID revisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "La revisione da indirizzare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
+          "source": "Remove one earlier version of a file",
+          "message": "Rimuovi una versione precedente di un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.desc": {
+          "source": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF or a Microsoft Office format.\n\nThe formats available depend on the document type; exporting a Sheet to `text/csv` returns the first sheet only.",
+          "message": "Esporta un documento nativo di Google (Documenti, Fogli, Presentazioni) in un formato concreto come PDF o un formato Microsoft Office.\n\nI formati disponibili dipendono dal tipo di documento; l'esportazione di un foglio in `text/csv` restituisce solo il primo foglio."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
+          "source": "Export Document",
+          "message": "Esporta documento"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the Google-native document to export",
+          "message": "L'identificatore Drive del documento nativo di Google da esportare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "Portable Document Format; available for Docs, Sheets, and Slides",
+          "message": "Portable Document Format; disponibile per Documenti, Fogli e Presentazioni"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "Portable Document Format",
+          "message": "Portable Document Format"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "Microsoft Word `docx` document; available for Docs",
+          "message": "Documento Microsoft Word `docx`; disponibile per Documenti"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "Word Document (docx)",
+          "message": "Documento Word (docx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "Microsoft Word document",
+          "message": "Documento Microsoft Word"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "Microsoft PowerPoint `pptx` presentation; available for Slides",
+          "message": "Presentazione Microsoft PowerPoint `pptx`; disponibile per Presentazioni"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "PowerPoint Presentation (pptx)",
+          "message": "Presentazione PowerPoint (pptx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "Microsoft PowerPoint presentation",
+          "message": "Presentazione Microsoft PowerPoint"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "Microsoft Excel `xlsx` workbook; available for Sheets",
+          "message": "Cartella di lavoro Microsoft Excel `xlsx`; disponibile per Fogli"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "Excel Workbook (xlsx)",
+          "message": "Cartella di lavoro Excel (xlsx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "Microsoft Excel workbook",
+          "message": "Cartella di lavoro Microsoft Excel"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.desc": {
+          "source": "Comma-separated values; available for Sheets, and exports the first sheet only",
+          "message": "Valori separati da virgola; disponibile per Fogli, esporta solo il primo foglio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.short_desc": {
+          "source": "Comma-separated values",
+          "message": "Valori separati da virgola"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text; available for Docs",
+          "message": "Testo normale; disponibile per Documenti"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Testo normale"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.desc": {
+          "source": "The format to export the document to; the formats available depend on the document type",
+          "message": "Il formato in cui esportare il documento; i formati disponibili dipendono dal tipo di documento"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.display_name": {
+          "source": "Export Format",
+          "message": "Formato di esportazione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.short_desc": {
+          "source": "The format to export the document to",
+          "message": "Il formato in cui esportare il documento"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
+          "source": "Export a Google-native document to a concrete format",
+          "message": "Esporta un documento nativo di Google in un formato concreto"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.desc": {
+          "source": "Searches Drive and reads the results as a stream of records.\n\nUnlike `list-files`, which answers one page and leaves the page token to the caller, this walks the whole result: pages are fetched as they are reached, so a drive holding more files than fit in one page is read without the caller knowing how Drive paginates.\n\nNarrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so they reduce what is transferred rather than only what is examined.  Use `custom_query` for anything the other options cannot express.",
+          "message": "Cerca in Drive e legge i risultati come un flusso di record.\n\nA differenza di `list-files`, che restituisce una pagina e lascia il token di pagina al chiamante, questo scorre l'intero risultato: le pagine vengono recuperate man mano che vengono raggiunte, quindi un'unità contenente più file di quanti ne possano entrare in una pagina viene letta senza che il chiamante debba conoscere il meccanismo di paginazione di Drive.\n\nRistringi la ricerca con `folder_id`, `name` o `mime_type`; Drive applica questi filtri autonomamente, riducendo ciò che viene trasferito anziché solo ciò che viene esaminato. Usa `custom_query` per qualsiasi elemento che le altre opzioni non possono esprimere."
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files",
+          "message": "Trova file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "File nel `My Drive` dell'utente e su ogni drive condiviso di cui l'utente è membro.\n\n**Questa è l'opzione più lenta**; Google consiglia di restringere a `user` o `drive` ogni volta che la raccolta da cercare è nota"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "Il mio Drive e tutti i drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "File ne Il mio Drive e su ogni drive condiviso accessibile dall'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "File condivisi con l'intero dominio dell'utente; richiede un account Google Workspace"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "File condivisi con l'intero dominio dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "File contenuti nel drive condiviso specificato in `drive_id`, che deve essere impostato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "Un drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "File sul drive condiviso specificato in drive_id"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "File di proprietà dell'utente o condivisi direttamente con esso, nel proprio `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "Il mio Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "File ne Il mio Drive dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search; if not set, `drive` is used when `drive_id` is set",
+          "message": "La raccolta di file da cercare; se non impostata, viene utilizzato `drive` quando `drive_id` è impostato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "Raccolta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "La raccolta di file da cercare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "Un'espressione di query non elaborata di Drive, utilizzata al posto delle altre opzioni di corrispondenza quando impostata; consulta la documentazione di `files.list` dell'API di Drive per la sintassi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "Query personalizzata"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "Un'espressione di query Drive non elaborata"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "Read this shared drive (formerly a \"Team Drive\") rather than the user's own `My Drive`",
+          "message": "Legge questo drive condiviso (precedentemente \"Team Drive\") anziché il `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive",
+          "message": "Drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Read this shared drive rather than My Drive",
+          "message": "Legge questo drive condiviso anziché Il mio Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "Read only files held directly in this folder; if not set, files anywhere the connection can see are read",
+          "message": "Legge solo i file contenuti direttamente in questa cartella; se non impostato, vengono letti i file ovunque visibili dalla connessione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Read only files held in this folder",
+          "message": "Legge solo i file contenuti in questa cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "Include i file nel cestino; escluso per impostazione predefinita"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "Includi cestinati"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files that are in the trash",
+          "message": "Include i file nel cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "Include nei risultati i file contenuti nei drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "Includi drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives",
+          "message": "Include i file contenuti nei drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "L'ordinamento dei risultati, come espressione `orderBy` di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordina per"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "L'ordinamento dei risultati"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to read folders",
+          "message": "Trova solo i file di questo tipo MIME; usa `application/vnd.google-apps.folder` per leggere le cartelle"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match only files of this MIME type",
+          "message": "Trova solo file di questo tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Trova i file il cui nome contiene questo testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Trova i file il cui nome contiene questo testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many files to fetch per request; Drive caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "Numero di file da recuperare per richiesta; Drive limita questo valore a `1000`.\n\nCiò influisce su come l'iterazione viene suddivisa in richieste, non sul numero di record restituiti: l'iteratore recupera ulteriori pagine man mano che sono necessarie"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many files to fetch per request",
+          "message": "Numero di file da recuperare per richiesta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Search Drive and read the results as records",
+          "message": "Cerca in Drive e legge i risultati come record"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.desc": {
+          "source": "Lists or searches files and folders.\n\nSet `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw Drive query expression when the other options are not enough.\n\nResults are paginated; when `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Elenca o cerca file e cartelle.\n\nImposta `folder_id` per elencare una cartella, `name` per cercare per nome o `custom_query` per utilizzare un'espressione di query Drive non elaborata quando le altre opzioni non sono sufficienti.\n\nI risultati sono impaginati; quando viene restituito `next_page_token`, passalo di nuovo in `page_token` per recuperare la pagina successiva."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "Elenca file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "File nel `My Drive` dell'utente e su ogni drive condiviso di cui l'utente è membro.\n\n**Questa è l'opzione più lenta**; Google consiglia di restringere a `user` o `drive` ogni volta che la raccolta da cercare è nota"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "Il mio Drive e tutti i drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "File ne Il mio Drive e su ogni drive condiviso accessibile dall'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "File condivisi con l'intero dominio dell'utente; richiede un account Google Workspace"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "File condivisi con l'intero dominio dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "File contenuti nel drive condiviso specificato in `drive_id`, che deve essere impostato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "Un drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "File sul drive condiviso specificato in drive_id"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "File di proprietà dell'utente o condivisi direttamente con esso, nel proprio `My Drive`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "Il mio Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "File ne Il mio Drive dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search.\n\nIf not set, `drive` is used when `drive_id` is set, and otherwise the collection Drive selects by default for the request",
+          "message": "La raccolta di file da cercare.\n\nSe non impostata, viene utilizzato `drive` quando `drive_id` è impostato, altrimenti la raccolta selezionata per impostazione predefinita da Drive per la richiesta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "Raccolta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "La raccolta di file da cercare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "Un'espressione di query non elaborata di Drive, utilizzata al posto delle altre opzioni di corrispondenza quando impostata; consulta la documentazione di `files.list` dell'API di Drive per la sintassi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "Query personalizzata"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "Un'espressione di query Drive non elaborata"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "List only files held on this shared drive (formerly a \"Team Drive\").\n\nSetting this selects the `drive` collection unless `corpora` says otherwise, so the listing covers that shared drive rather than the user's own `My Drive`",
+          "message": "Elenca solo i file contenuti in questo drive condiviso (precedentemente \"Team Drive\").\n\nL'impostazione di questa opzione seleziona la raccolta `drive` a meno che `corpora` non indichi diversamente, pertanto l'elenco copre quel drive condiviso anziché il `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "ID drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "List only files held on this shared drive",
+          "message": "Elenca solo i file contenuti in questo drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "List only files held in this folder; if not set, files anywhere in the Drive are listed",
+          "message": "Elenca solo i file contenuti in questa cartella; se non impostato, vengono elencati i file ovunque in Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "List only files in this folder",
+          "message": "Elenca solo i file in questa cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "Include i file nel cestino; escluso per impostazione predefinita"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "Includi cestinati"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files in the trash",
+          "message": "Include i file nel cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives (formerly \"Team Drives\") in the results.\n\nWithout this a listing covers only the user's own `My Drive`, so shared-drive content is invisible even to an account that has access to it",
+          "message": "Include nei risultati i file contenuti nei drive condivisi (precedentemente \"Team Drive\").\n\nSenza questa opzione, l'elenco copre solo il `My Drive` dell'utente, rendendo il contenuto dei drive condivisi invisibile anche a un account che vi ha accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "Includi drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "Include nei risultati i file contenuti nei drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "L'ordinamento dei risultati, come espressione `orderBy` di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordina per"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "L'ordinamento dei risultati"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to list folders",
+          "message": "Trova solo i file di questo tipo MIME; usa `application/vnd.google-apps.folder` per elencare le cartelle"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "Tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match files of this MIME type",
+          "message": "Trova i file di questo tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Trova i file il cui nome contiene questo testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "Trova i file il cui nome contiene questo testo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing, used to retrieve the following page",
+          "message": "Il valore `next_page_token` restituito da un elenco precedente, utilizzato per recuperare la pagina successiva"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "Il token restituito da un precedente elenco troncato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of files to return per page; the Drive API caps this at `1000`",
+          "message": "Il numero massimo di file da restituire per pagina; l'API di Drive limita questo valore a `1000`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of files to return per page",
+          "message": "Il numero massimo di file da restituire per pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List or search files and folders",
+          "message": "Elenca o cerca file e cartelle"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.desc": {
+          "source": "Lists the permissions granted on a file: who has access, and at what level.\n\nEach permission carries the `id` needed to withdraw it with `remove-permission`.",
+          "message": "Elenca i permessi concessi su un file: chi ha accesso e a quale livello.\n\nOgni permesso include il `id` necessario per revocarlo con `remove-permission`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
+          "source": "List Permissions",
+          "message": "Elenca permessi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose permissions are to be listed",
+          "message": "L'identificatore Drive del file di cui elencare i permessi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
+          "source": "List who has access to a file",
+          "message": "Elenca chi ha accesso a un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.desc": {
+          "source": "Lists the revisions Drive holds for a file.\n\nDrive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  **Drive removes older revisions on its own** unless they are marked `keep_forever`, so a revision listed here is not guaranteed to remain indefinitely.",
+          "message": "Elenca le revisioni conservate da Drive per un file.\n\nDrive mantiene le versioni precedenti, quindi un documento sostituito da `replace-file` è recuperabile. **Drive rimuove autonomamente le revisioni meno recenti** a meno che non siano contrassegnate come `keep_forever`, quindi non è garantito che una revisione qui elencata rimanga a tempo indefinito."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
+          "source": "List File Revisions",
+          "message": "Elenca revisioni del file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose revisions are to be listed",
+          "message": "L'identificatore Drive del file di cui elencare le revisioni"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
+          "source": "List the earlier versions Drive holds for a file",
+          "message": "Elenca le versioni precedenti conservate da Drive per un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.desc": {
+          "source": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\nA business account keeps most of its content on shared drives rather than in any one person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` as `drive_id` to `list-files` to work within it.",
+          "message": "Elenca i drive condivisi (precedentemente \"Team Drive\") di cui l'account è membro.\n\nUn account aziendale conserva la maggior parte dei suoi contenuti nei drive condivisi anziché nel `My Drive` di una singola persona, quindi questo è il modo in cui viene individuato il drive in cui operare. Passa il `id` di un drive come `drive_id` a `list-files` per operarvi all'interno."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
+          "source": "List Shared Drives",
+          "message": "Elenca drive condivisi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing",
+          "message": "Il valore `next_page_token` restituito da un elenco precedente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "Il token restituito da un precedente elenco troncato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of shared drives to return per page; the Drive API caps this at `100`",
+          "message": "Il numero massimo di drive condivisi da restituire per pagina; l'API di Drive limita questo valore a `100`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of shared drives to return per page",
+          "message": "Il numero massimo di drive condivisi da restituire per pagina"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
+          "source": "List the shared drives the account can reach",
+          "message": "Elenca i drive condivisi accessibili dall'account"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file to a different folder, removing it from the folders it is currently in.",
+          "message": "Sposta un file in una cartella diversa, rimuovendolo dalle cartelle in cui si trova attualmente."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
+          "source": "Move File",
+          "message": "Sposta file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to move the file into",
+          "message": "La cartella in cui spostare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to move the file into",
+          "message": "La cartella in cui spostare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to move",
+          "message": "L'identificatore Drive del file da spostare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move a file to a different folder",
+          "message": "Sposta un file in una cartella diversa"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Drive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Google Drive** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine su questa app."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Drive",
+          "message": "Esegui una chiamata API personalizzata a Google Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA file that already existed and has merely been edited is **not** reported, and neither is a folder; use `new-folder` for those.  Set `folder_id` to report only files created directly in one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "Si attiva quando viene creato un file nell'unità monitorata.\n\nUtilizza il feed delle modifiche nativo di Drive, quindi il costo di un poll non aumenta con le dimensioni dell'unità.\n\nUn file già esistente che è stato semplicemente modificato **non** viene segnalato, e lo stesso vale per una cartella; usa `new-folder` per quelli. Imposta `folder_id` per segnalare solo i file creati direttamente in una cartella, oppure `drive_id` per monitorare un'unità condivisa invece di `My Drive`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "Nuovo file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "Monitora questa unità condivisa (in precedenza \"Drive del team\") invece del `My Drive` dell'utente.\n\nUn'unità condivisa mantiene il proprio feed delle modifiche, quindi il monitoraggio copre l'una o l'altra anziché entrambe"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "ID drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "Monitora questa unità condivisa invece de Il mio Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "Segnala solo gli elementi contenuti direttamente in questa cartella.\n\nIl feed delle modifiche di Drive copre l'intera unità e non può essere limitato sul server, pertanto questo filtra ciò che arriva anziché ciò che viene recuperato. Lascialo non impostato per monitorare tutto ciò che la connessione può vedere"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "Segnala solo gli elementi in questa cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Frequenza di controllo delle modifiche, in secondi (minimo `30`, valore predefinito `60`)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Frequenza di controllo delle modifiche, in secondi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in Drive",
+          "message": "Reagisci alla creazione di un file in Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA folder that already existed and has merely been renamed or moved is **not** reported.  Set `folder_id` to report only folders created directly inside one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "Si attiva quando viene creata una cartella nell'unità monitorata.\n\nUtilizza il feed delle modifiche nativo di Drive, quindi il costo di un poll non aumenta con le dimensioni dell'unità.\n\nUna cartella già esistente che è stata semplicemente rinominata o spostata **non** viene segnalata. Imposta `folder_id` per segnalare solo le cartelle create direttamente all'interno di una cartella, oppure `drive_id` per monitorare un'unità condivisa invece di `My Drive`."
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "Nuova cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "Monitora questa unità condivisa (in precedenza \"Drive del team\") invece del `My Drive` dell'utente.\n\nUn'unità condivisa mantiene il proprio feed delle modifiche, quindi il monitoraggio copre l'una o l'altra anziché entrambe"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "ID drive condiviso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "Monitora questa unità condivisa invece de Il mio Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "Segnala solo gli elementi contenuti direttamente in questa cartella.\n\nIl feed delle modifiche di Drive copre l'intera unità e non può essere limitato sul server, pertanto questo filtra ciò che arriva anziché ciò che viene recuperato. Lascialo non impostato per monitorare tutto ciò che la connessione può vedere"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "Cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "Segnala solo gli elementi in questa cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Frequenza di controllo delle modifiche, in secondi (minimo `30`, valore predefinito `60`)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Frequenza di controllo delle modifiche, in secondi"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created in Drive",
+          "message": "Reagisci alla creazione di una cartella in Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.desc": {
+          "source": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the link.\n\n**Granting access to `anyone` makes the file reachable without signing in**; use the narrowest grantee type that serves the purpose.",
+          "message": "Concede l'accesso a un file a un utente, a un gruppo, a tutti gli utenti di un dominio o a chiunque abbia il link.\n\n**Concedere l'accesso a `anyone` rende il file accessibile senza eseguire l'accesso**; utilizza il tipo di destinatario più restrittivo adatto allo scopo."
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
+          "source": "Share File",
+          "message": "Condividi file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.desc": {
+          "source": "The domain to grant access to; required when `type` is `domain`",
+          "message": "Il dominio a cui concedere l'accesso; obbligatorio quando `type` è `domain`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.short_desc": {
+          "source": "The domain to grant access to",
+          "message": "Il dominio a cui concedere l'accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the user or group; required when `type` is `user` or `group`",
+          "message": "L'indirizzo email dell'utente o del gruppo; obbligatorio quando `type` è `user` o `group`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Indirizzo email"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The email address of the user or group",
+          "message": "L'indirizzo email dell'utente o del gruppo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to grant access to",
+          "message": "L'identificatore Drive del file a cui concedere l'accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "Invia un'email di notifica al destinatario"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.display_name": {
+          "source": "Send Notification",
+          "message": "Invia notifica"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.short_desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "Invia un'email di notifica al destinatario"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.desc": {
+          "source": "Can view and comment on the file but not change its content",
+          "message": "Può visualizzare e commentare il file, ma non modificarne i contenuti"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.display_name": {
+          "source": "Commenter",
+          "message": "Commentatore"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "Può visualizzare e commentare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.desc": {
+          "source": "Can view the file but not change it",
+          "message": "Può visualizzare il file ma non modificarlo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.display_name": {
+          "source": "Reader",
+          "message": "Visualizzatore"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.short_desc": {
+          "source": "Can view the file",
+          "message": "Può visualizzare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.desc": {
+          "source": "Can view and change the file",
+          "message": "Può visualizzare e modificare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.display_name": {
+          "source": "Writer",
+          "message": "Editor"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "Può visualizzare e modificare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.desc": {
+          "source": "The level of access to grant",
+          "message": "Il livello di accesso da concedere"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Ruolo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.short_desc": {
+          "source": "The level of access to grant",
+          "message": "Il livello di accesso da concedere"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.desc": {
+          "source": "Anyone with the link, without signing in; **this makes the file publicly reachable**",
+          "message": "Chiunque abbia il link, senza eseguire l'accesso; **questo rende il file accessibile pubblicamente**"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.display_name": {
+          "source": "Anyone",
+          "message": "Chiunque"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.short_desc": {
+          "source": "Anyone with the link",
+          "message": "Chiunque abbia il link"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Everyone in the domain named in `domain`",
+          "message": "Tutti gli utenti nel dominio specificato in `domain`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Everyone in a domain",
+          "message": "Tutti gli utenti in un dominio"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.desc": {
+          "source": "A Google group, identified by email address in `email_address`",
+          "message": "Un gruppo Google, identificato dall'indirizzo email in `email_address`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.display_name": {
+          "source": "Group",
+          "message": "Gruppo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.short_desc": {
+          "source": "A group, identified by email address",
+          "message": "Un gruppo, identificato tramite indirizzo email"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A single user, identified by email address in `email_address`",
+          "message": "Un singolo utente, identificato dall'indirizzo email in `email_address`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "A single user, identified by email address",
+          "message": "Un singolo utente, identificato tramite indirizzo email"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.desc": {
+          "source": "Who the access is granted to",
+          "message": "Soggetto a cui viene concesso l'accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.display_name": {
+          "source": "Grantee Type",
+          "message": "Tipo di destinatario"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.short_desc": {
+          "source": "Who the access is granted to",
+          "message": "Soggetto a cui viene concesso l'accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
+          "source": "Grant access to a file",
+          "message": "Concedi l'accesso a un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.desc": {
+          "source": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\nUse `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is how a file that was made public is made private again.",
+          "message": "Revoca un'autorizzazione, in modo che chi la possedeva non possa più accedere al file.\n\nUsa `list-permissions` per trovare `permission_id`. La revoca dell'autorizzazione `anyone` consente di rendere nuovamente privato un file reso pubblico."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
+          "source": "Remove Permission",
+          "message": "Rimuovi autorizzazione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to withdraw access to",
+          "message": "L'identificatore Drive del file per cui revocare l'accesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.desc": {
+          "source": "The identifier of the permission to withdraw, as returned by `list-permissions` or `share-file`",
+          "message": "L'identificatore dell'autorizzazione da revocare, come restituito da `list-permissions` o `share-file`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.display_name": {
+          "source": "Permission ID",
+          "message": "ID autorizzazione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.short_desc": {
+          "source": "The permission to withdraw",
+          "message": "L'autorizzazione da revocare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
+          "source": "Withdraw someone's access to a file",
+          "message": "Revoca l'accesso di qualcuno a un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.desc": {
+          "source": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\nDrive addresses files by an immutable ID rather than by path, so renaming a file leaves every link to it working.  Drive does not require names to be unique either, so a name already used in the same folder is accepted.",
+          "message": "Modifica il nome di un file, mantenendone l'ID, la posizione e le impostazioni di condivisione.\n\nDrive fa riferimento ai file tramite un ID non modificabile anziché per percorso, quindi la ridenominazione di un file mantiene funzionante qualsiasi link a esso associato. Inoltre, Drive non richiede che i nomi siano univoci, pertanto un nome già utilizzato nella stessa cartella viene accettato."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
+          "source": "Rename File",
+          "message": "Rinomina file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A new description to store with the file; the existing description is left unchanged when this is not set",
+          "message": "Una nuova descrizione da memorizzare con il file; la descrizione esistente viene lasciata invariata se questo campo non è impostato"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A new description to store with the file",
+          "message": "Una nuova descrizione da memorizzare con il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to rename; the file keeps its ID, its location, and its sharing settings",
+          "message": "L'identificatore Drive del file da rinominare; il file mantiene il proprio ID, la propria posizione e le proprie impostazioni di condivisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The new name for the file.\n\nDrive does not require names to be unique, so renaming a file to a name already used in the same folder succeeds and leaves two files sharing a name",
+          "message": "Il nuovo nome per il file.\n\nDrive non richiede che i nomi siano univoci, pertanto la ridenominazione di un file con un nome già utilizzato nella stessa cartella riesce e lascia due file che condividono lo stesso nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nuovo nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The new name for the file",
+          "message": "Il nuovo nome per il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
+          "source": "Change a file's name",
+          "message": "Modifica il nome di un file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.desc": {
+          "source": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\nUse this rather than uploading again when consumers hold a link to the file, since a new upload creates a new file with a new ID.",
+          "message": "Sostituisce i contenuti di un file esistente mantenendone l'ID, il nome e le impostazioni di condivisione.\n\nUsa questa azione anziché caricare nuovamente quando gli utenti possiedono un link al file, poiché un nuovo caricamento crea un nuovo file con un nuovo ID."
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
+          "source": "Replace File Content",
+          "message": "Sostituisci contenuto del file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.desc": {
+          "source": "The replacement content",
+          "message": "Il contenuto sostitutivo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.short_desc": {
+          "source": "The replacement content",
+          "message": "Il contenuto sostitutivo"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose content is to be replaced; the file keeps its ID, name, and sharing settings",
+          "message": "L'identificatore Drive del file il cui contenuto deve essere sostituito; il file mantiene il proprio ID, il proprio nome e le proprie impostazioni di condivisione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
+          "source": "Replace an existing file's content",
+          "message": "Sostituisci il contenuto di un file esistente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.desc": {
+          "source": "Restores a file from the trash, putting it back where it was.\n\n`delete-file` moves a file to the trash by default precisely so that it can be recovered; this is what recovers it.  A file removed with `permanently_delete` cannot be restored.",
+          "message": "Ripristina un file dal cestino, ricollocandolo nella posizione originale.\n\n`delete-file` sposta un file nel cestino per impostazione predefinita proprio affinché possa essere recuperato; questa azione serve a recuperarlo. Un file rimosso con `permanently_delete` non può essere ripristinato."
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
+          "source": "Restore from Trash",
+          "message": "Ripristina dal cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to restore from the trash",
+          "message": "L'identificatore Drive del file da ripristinare dal cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "L'ID del file di Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
+          "source": "Restore a file from the trash",
+          "message": "Ripristina un file dal cestino"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Drive.\n\nIf `name` is not set, the file's own name is used.  Drive does not require names to be unique, so uploading twice creates two files; use `replace-file` to update an existing one instead.",
+          "message": "Carica un file su Drive.\n\nSe `name` non è impostato, viene utilizzato il nome del file stesso. Drive non richiede nomi univoci, quindi caricando due volte si creano due file; usa `replace-file` per aggiornarne uno esistente."
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Carica file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description to store with the file",
+          "message": "Una descrizione da memorizzare con il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A description to store with the file",
+          "message": "Una descrizione da memorizzare con il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to upload the file into; if not set, the user's `My Drive` root is used",
+          "message": "La cartella in cui caricare il file; se non impostata, viene utilizzata la radice `My Drive` dell'utente"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "ID cartella"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to upload the file into",
+          "message": "La cartella in cui caricare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name, content, and MIME type",
+          "message": "Il file da caricare, inclusi nome, contenuto e tipo MIME"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Il file da caricare"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The name to store the file under; if not set, the file's own name is used",
+          "message": "Il nome con cui memorizzare il file; se non impostato, viene utilizzato il nome del file stesso"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The name to store the file under",
+          "message": "Il nome con cui memorizzare il file"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Drive",
+          "message": "Carica un file su Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.desc": {
+          "source": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage and sharing.\n\nDrive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name and renaming a file does not change how it is addressed.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Document automation**: create, replace, and share reports and records\n- **Content extraction**: export Google Docs, Sheets, and Slides to PDF or Office formats for downstream processing\n- **Organization**: create folders, and copy, move, and remove files\n\nGoogle and Google Drive are trademarks of Google LLC",
+          "message": "Fornisce l'accesso a [Google Drive](https://www.google.com/drive/) per l'archiviazione e la condivisione di file nel cloud.\n\nDrive indirizza i file tramite un ID immutabile anziché per percorso, pertanto due file nella stessa cartella possono condividere un nome e la ridenominazione di un file non modifica il modo in cui viene indirizzato.\n\n**Casi d'uso comuni**:\n- **Scambio di file**: deposita i documenti generati per i colleghi o raccogli i file che caricano\n- **Automazione dei documenti**: crea, sostituisci e condividi report e record\n- **Estrazione di contenuti**: esporta Google Documenti, Fogli e Presentazioni in formati PDF o Office per l'elaborazione a valle\n- **Organizzazione**: crea cartelle e copia, sposta ed elimina file\n\nGoogle e Google Drive sono marchi di Google LLC"
+        },
+        "app.R29vZ2xlRHJpdmU.display_name": {
+          "source": "Google Drive",
+          "message": "Google Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.short_desc": {
+          "source": "Google Drive cloud file storage",
+          "message": "Archiviazione file cloud di Google Drive"
+        }
+      }
+    }
+  }
+}

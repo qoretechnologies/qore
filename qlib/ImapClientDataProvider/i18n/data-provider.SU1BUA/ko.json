@@ -1,0 +1,609 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.desc": {
+          "source": "Store a complete RFC 822 message in a mailbox.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "메일함에 완전한 RFC 822 메시지를 저장합니다.\n\n다른 수단으로 전송된 메시지의 사본을 보관하거나 다른 시스템에서 메일을 가져올 때 사용합니다"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.display_name": {
+          "source": "Store a Message",
+          "message": "메시지 저장"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.desc": {
+          "source": "Flags to set on the stored message (ex: `\\Seen`)",
+          "message": "저장된 메시지에 설정할 플래그(예: `\\Seen`)"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "플래그"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.ZmxhZ3M.short_desc": {
+          "source": "Flags to set on the stored message",
+          "message": "저장된 메시지에 설정할 플래그"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.desc": {
+          "source": "The arrival time to record for the message; defaults to the time the server stores it",
+          "message": "메시지에 기록할 수신 시간(기본값은 서버가 저장한 시간)"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.display_name": {
+          "source": "Internal Date",
+          "message": "내부 날짜"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.aW50ZXJuYWxfZGF0ZQ.short_desc": {
+          "source": "The arrival time to record for the message",
+          "message": "메시지에 기록할 수신 시간"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to append the message to; it must already exist",
+          "message": "메시지를 추가할 메일함(이미 존재해야 함)"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to append the message to",
+          "message": "메시지를 추가할 메일함"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.desc": {
+          "source": "The complete message to store, in RFC 822 form.\n\nUse this to file a copy of a message that was sent by other means, or to import mail from another system",
+          "message": "저장할 RFC 822 형식의 전체 메시지입니다.\n\n다른 수단으로 전송된 메시지의 사본을 보관하거나 다른 시스템에서 메일을 가져올 때 사용합니다"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.display_name": {
+          "source": "Message",
+          "message": "메시지"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.option.bWVzc2FnZQ.short_desc": {
+          "source": "The complete RFC 822 message to store",
+          "message": "저장할 전체 RFC 822 메시지"
+        },
+        "app.SU1BUA.action.YXBwZW5kLW1lc3NhZ2U.short_desc": {
+          "source": "Store a message in a mailbox",
+          "message": "메일함에 메시지 저장"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a complete message by UID, including its headers, decoded body text, and a summary of its attachments.\n\nRetrieval does not change any flags unless `mark_seen` is set, so a message can be inspected without the account showing it as read",
+          "message": "UID로 헤더, 디코딩된 본문 텍스트, 첨부 파일 요약을 포함한 전체 메시지를 가져옵니다.\n\n`mark_seen`이(가) 설정되지 않은 한 메시지를 가져와도 플래그가 변경되지 않으므로 계정에서 읽음으로 표시되지 않고 메시지를 검사할 수 있습니다"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Retrieve a Message",
+          "message": "메시지 가져오기"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "메시지가 있는 메일함"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "메시지가 있는 메일함"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on the message after retrieving it.\n\nRetrieval itself never changes flags, so leave this `False` to inspect a message without the sender's mail client showing it as read",
+          "message": "메시지를 가져온 후 `\\Seen` 플래그를 설정합니다.\n\n가져오기 자체는 플래그를 변경하지 않으므로, 보낸 사람의 메일 클라이언트에 읽음으로 표시되지 않고 메시지를 검사하려면 이 항목을 `False`(으)로 두십시오"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "읽음으로 표시하시겠습니까?"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag after retrieving?",
+          "message": "가져온 후 \\Seen 플래그를 설정하시겠습니까?"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.desc": {
+          "source": "The UID of the message to retrieve, as returned by a search",
+          "message": "검색에서 반환된 가져올 메시지의 UID"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "메시지 UID"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.option.dWlk.short_desc": {
+          "source": "The UID of the message to retrieve",
+          "message": "가져올 메시지의 UID"
+        },
+        "app.SU1BUA.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Retrieve a message by UID",
+          "message": "UID로 메시지 가져오기"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve a single MIME part of a message without transferring the whole message.\n\nThis matters when one attachment is needed from a message carrying several large ones; use the `attachments` list returned by `Retrieve a Message` to find the part specifier",
+          "message": "전체 메시지를 전송하지 않고 메시지의 단일 MIME 파트만 가져옵니다.\n\n여러 개의 대용량 첨부 파일이 포함된 메시지에서 하나의 첨부 파일만 필요할 때 유용합니다. 파트 지정자를 찾으려면 `Retrieve a Message`에서 반환한 `attachments` 목록을 사용하십시오"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "첨부 파일 가져오기"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the message",
+          "message": "메시지가 있는 메일함"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the message",
+          "message": "메시지가 있는 메일함"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.desc": {
+          "source": "The MIME part specifier to retrieve (ex: `1`, `2.1`, `HEADER`, `TEXT`).\n\nRetrieving a single part avoids transferring the whole message, which matters when one attachment is needed from a message with several large ones",
+          "message": "가져올 MIME 파트 지정자(예: `1`, `2.1`, `HEADER`, `TEXT`).\n\n단일 파트만 가져오면 전체 메시지를 전송하지 않아도 되므로 대용량 첨부 파일이 여러 개 있는 메시지에서 첨부 파일 하나만 필요할 때 유용합니다"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.display_name": {
+          "source": "MIME Part",
+          "message": "MIME 파트"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.cGFydA.short_desc": {
+          "source": "The MIME part specifier to retrieve",
+          "message": "가져올 MIME 파트 지정자"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.desc": {
+          "source": "The UID of the message holding the part",
+          "message": "해당 파트가 포함된 메시지의 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.display_name": {
+          "source": "Message UID",
+          "message": "메시지 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.option.dWlk.short_desc": {
+          "source": "The UID of the message holding the part",
+          "message": "해당 파트가 포함된 메시지의 UID"
+        },
+        "app.SU1BUA.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve a single MIME part of a message",
+          "message": "메시지의 단일 MIME 파트 가져오기"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.desc": {
+          "source": "List the mailboxes in the account, optionally restricted to those the account is subscribed to.\n\nA mailbox carrying the `\\Noselect` flag is a hierarchy node that cannot hold messages",
+          "message": "계정의 메일함 목록을 조회하며, 선택적으로 계정이 구독한 메일함으로 제한할 수 있습니다.\n\n`\\Noselect` 플래그가 있는 메일함은 메시지를 보관할 수 없는 계층 노드입니다"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.display_name": {
+          "source": "List Mailboxes",
+          "message": "사서함 목록 조회"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.desc": {
+          "source": "List only mailboxes the account is subscribed to, using `LSUB` instead of `LIST`",
+          "message": "`LIST` 대신 `LSUB`을(를) 사용하여 계정이 구독한 사서함만 나열합니다"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.display_name": {
+          "source": "Subscribed Only?",
+          "message": "구독한 사서함만?"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.c3Vic2NyaWJlZF9vbmx5.short_desc": {
+          "source": "List only subscribed mailboxes?",
+          "message": "구독한 사서함만 나열하시겠습니까?"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.desc": {
+          "source": "The mailbox name pattern to match; `*` matches at any depth and `%` matches within a single hierarchy level",
+          "message": "일치시킬 사서함 이름 패턴입니다. `*`은(는) 모든 깊이에서 일치하고 `%`은(는) 단일 계층 수준 내에서 일치합니다"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.display_name": {
+          "source": "Pattern",
+          "message": "패턴"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cGF0dGVybg.short_desc": {
+          "source": "The mailbox name pattern to match",
+          "message": "일치시킬 사서함 이름 패턴"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.desc": {
+          "source": "The reference name; normally left empty",
+          "message": "참조 이름입니다. 일반적으로 비워 둡니다"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.option.cmVmZXJlbmNl.short_desc": {
+          "source": "The reference name",
+          "message": "참조 이름"
+        },
+        "app.SU1BUA.action.bGlzdC1tYWlsYm94ZXM.short_desc": {
+          "source": "List the mailboxes in the account",
+          "message": "계정의 사서함 목록을 조회합니다"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.desc": {
+          "source": "Move or copy messages to another mailbox.\n\nMoving processed mail into an archive mailbox keeps the working mailbox small and makes it obvious what has already been handled. Servers without the `MOVE` capability are handled with the equivalent copy-and-delete sequence",
+          "message": "메시지를 다른 사서함으로 이동하거나 복사합니다.\n\n처리된 메일을 보관 사서함으로 이동하면 작업 사서함의 크기를 작게 유지하고 이미 처리된 항목을 명확히 파악할 수 있습니다. `MOVE` 기능이 없는 서버는 동등한 복사 후 삭제 시퀀스로 처리됩니다"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.display_name": {
+          "source": "Move Messages",
+          "message": "메시지 이동"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.desc": {
+          "source": "Copy the messages instead of moving them, leaving the originals in place",
+          "message": "메시지를 이동하는 대신 복사하여 원본을 그대로 유지합니다"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.display_name": {
+          "source": "Copy Only?",
+          "message": "복사만 수행?"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.Y29weV9vbmx5.short_desc": {
+          "source": "Copy the messages instead of moving them?",
+          "message": "메시지를 이동하는 대신 복사하시겠습니까?"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages to move",
+          "message": "이동할 메시지가 포함된 사서함"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.display_name": {
+          "source": "Source Mailbox",
+          "message": "소스 사서함"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "메시지가 포함된 사서함"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.desc": {
+          "source": "The mailbox to move the messages to; it must already exist",
+          "message": "메시지를 이동할 사서함입니다. 이미 존재해야 합니다"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.display_name": {
+          "source": "Target Mailbox",
+          "message": "대상 사서함"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dGFyZ2V0.short_desc": {
+          "source": "The mailbox to move the messages to",
+          "message": "메시지를 이동할 사서함"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "이동할 메시지의 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "메시지 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to move",
+          "message": "이동할 메시지의 UID"
+        },
+        "app.SU1BUA.action.bW92ZS1tZXNzYWdlcw.short_desc": {
+          "source": "Move or copy messages to another mailbox",
+          "message": "메시지를 다른 사서함으로 이동하거나 복사합니다"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.desc": {
+          "source": "Add, remove, or replace the flags on a set of messages.\n\nFlags are how IMAP records state such as read (`\\Seen`), flagged (`\\Flagged`), and pending deletion (`\\Deleted`); setting them is the usual way to record that an integration has handled a message",
+          "message": "메시지 집합의 플래그를 추가, 제거 또는 교체합니다.\n\n플래그는 IMAP에서 읽음(`\\Seen`), 표시됨(`\\Flagged`), 삭제 대기 중(`\\Deleted`)과 같은 상태를 기록하는 방식이며, 이를 설정하는 것은 통합에서 메시지를 처리했음을 기록하는 일반적인 방법입니다"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.display_name": {
+          "source": "Change Message Flags",
+          "message": "메시지 플래그 변경"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.desc": {
+          "source": "The flags to apply (ex: `\\Seen`, `\\Flagged`, `\\Answered`, `\\Deleted`)",
+          "message": "적용할 플래그 (예: `\\Seen`, `\\Flagged`, `\\Answered`, `\\Deleted`)"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.display_name": {
+          "source": "Flags",
+          "message": "플래그"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.ZmxhZ3M.short_desc": {
+          "source": "The flags to apply",
+          "message": "적용할 플래그"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Add the given flags, leaving any others in place",
+          "message": "다른 플래그는 그대로 두고 지정된 플래그를 추가합니다"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "추가"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.desc": {
+          "source": "Remove the given flags, leaving any others in place",
+          "message": "다른 플래그는 그대로 두고 지정된 플래그를 제거합니다"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlbW92ZQ.display_name": {
+          "source": "Remove",
+          "message": "제거"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace all flags on the messages with the given flags",
+          "message": "메시지의 모든 플래그를 지정된 플래그로 교체합니다"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.desc": {
+          "source": "How the flags should be applied to the messages",
+          "message": "메시지에 플래그를 적용하는 방법"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "모드"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bW9kZQ.short_desc": {
+          "source": "How the flags should be applied",
+          "message": "플래그 적용 방법"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.desc": {
+          "source": "The mailbox holding the messages",
+          "message": "메시지가 포함된 사서함"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox holding the messages",
+          "message": "메시지가 포함된 사서함"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.desc": {
+          "source": "The UIDs of the messages whose flags should change",
+          "message": "플래그를 변경할 메시지의 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.display_name": {
+          "source": "Message UIDs",
+          "message": "메시지 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.option.dWlkcw.short_desc": {
+          "source": "The UIDs of the messages to change",
+          "message": "변경할 메시지의 UID"
+        },
+        "app.SU1BUA.action.c2V0LWZsYWdz.short_desc": {
+          "source": "Add, remove, or replace message flags",
+          "message": "메시지 플래그 추가, 제거 또는 교체"
+        },
+        "app.SU1BUA.action.c2VhcmNo.desc": {
+          "source": "Search a mailbox with server-side IMAP criteria and return the UIDs of the matching messages.\n\nSearching on the server means a mailbox with thousands of messages can be narrowed to the handful that matter without transferring the rest",
+          "message": "서버 측 IMAP 기준을 사용하여 사서함을 검색하고 일치하는 메시지의 UID를 반환합니다.\n\n서버에서 검색하면 수천 개의 메시지가 있는 사서함에서 나머지를 전송하지 않고도 중요한 몇 개로 좁힐 수 있습니다"
+        },
+        "app.SU1BUA.action.c2VhcmNo.display_name": {
+          "source": "Search for Messages",
+          "message": "메시지 검색"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.desc": {
+          "source": "An optional charset for the search criteria; needed only when the criteria contain non-ASCII text",
+          "message": "검색 기준에 사용할 선택적 문자셋입니다. 기준에 비 ASCII 텍스트가 포함된 경우에만 필요합니다"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.display_name": {
+          "source": "Charset",
+          "message": "문자셋"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y2hhcnNldA.short_desc": {
+          "source": "An optional charset for the search criteria",
+          "message": "검색 기준에 사용할 선택적 문자셋"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria as defined by [RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4).\n\nSearching happens on the server, so only matching messages are transferred. Criteria can be combined freely, for example `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`",
+          "message": "[RFC 3501 §6.4.4](https://datatracker.ietf.org/doc/html/rfc3501#section-6.4.4)에 정의된 IMAP 검색 기준입니다.\n\n검색은 서버에서 수행되므로 일치하는 메시지만 전송됩니다. 기준은 자유롭게 조합할 수 있습니다(예: `UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`)"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria",
+          "message": "IMAP 검색 기준"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to search; the mailbox is selected before the search runs",
+          "message": "검색할 사서함입니다. 검색이 실행되기 전에 사서함이 선택됩니다"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to search",
+          "message": "검색할 사서함"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.desc": {
+          "source": "Open the mailbox with `EXAMINE` instead of `SELECT`, so that retrieving messages cannot change any flags",
+          "message": "메시지를 가져올 때 플래그가 변경되지 않도록 `SELECT` 대신 `EXAMINE`으(로) 사서함을 엽니다"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.display_name": {
+          "source": "Read Only?",
+          "message": "읽기 전용?"
+        },
+        "app.SU1BUA.action.c2VhcmNo.option.cmVhZF9vbmx5.short_desc": {
+          "source": "Open the mailbox read-only?",
+          "message": "사서함을 읽기 전용으로 여시겠습니까?"
+        },
+        "app.SU1BUA.action.c2VhcmNo.short_desc": {
+          "source": "Search a mailbox for messages",
+          "message": "사서함에서 메시지 검색"
+        },
+        "app.SU1BUA.action.d2F0Y2g.desc": {
+          "source": "React to new emails arriving in a mailbox.\n\nWhen a message matching the search criteria arrives, the whole message — headers, body text, and a summary of its attachments — is returned as output data. On servers that support `IDLE` the message is reported as soon as it arrives rather than on the next poll interval",
+          "message": "사서함에 도착하는 새 이메일에 반응합니다.\n\n검색 기준과 일치하는 메시지가 도착하면 전체 메시지(헤더, 본문 텍스트 및 첨부 파일 요약)가 출력 데이터로 반환됩니다. `IDLE`을(를) 지원하는 서버에서는 다음 폴링 주기가 아닌 메시지가 도착하는 즉시 보고됩니다"
+        },
+        "app.SU1BUA.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "새 이메일"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "보고할 새 메시지를 결정하는 IMAP 검색 기준입니다.\n\n일치 여부는 서버에서 확인하므로 일치하지 않는 메시지는 전송되지 않습니다. 예를 들어 `UNSEEN FROM \"orders@example.com\"`은(는) 한 발신자의 읽지 않은 메일에만 반응합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "메시지 매칭을 위한 IMAP 검색 기준"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "보고된 각 메시지에 `\\Deleted` 플래그를 지정하고 해당 이벤트가 발생하면 영구 삭제(expunge)합니다.\n\n**이렇게 하면 서버에서 메일이 영구적으로 제거됩니다.** 사서함이 비워지도록 설계된 대기열이 아니라면 `mark_seen` 또는 다른 사서함으로의 이동을 사용하는 것이 좋습니다.\n\n메시지는 이벤트가 **발생**하는 즉시 영구 삭제되며, 이는 소비자가 메시지를 **처리**한 것과는 다릅니다. 이벤트 발생 시 예외가 발생하면 다음 검사를 위해 메시지가 그대로 유지되지만, 이벤트를 수신한 후 실패하거나 시간 초과되거나 처리 도중 재시작된 소비자는 이미 유일한 사본을 잃어버린 상태입니다. 원본 메시지를 잃어버려서는 안 되는 워크로드의 경우 이 옵션을 설정하지 않고 처리가 성공한 후 소비자에서 작업을 수행하십시오. 모든 이벤트에는 `uid`이(가) 포함되며, `set-flags` 및 `move-messages` 액션이 이를 수신합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "메시지를 삭제하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "이벤트가 발생한 보고된 메시지를 삭제하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "새 메시지를 모니터링할 사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "모니터링할 사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "보고된 각 메시지에 `\\Seen` 플래그를 설정합니다.\n\n메시지가 처리된 후 다시 고려되지 않도록 `UNSEEN` 기준과 함께 사용하면 유용합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "읽음으로 표시하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "보고된 메시지에 \\Seen 플래그를 설정하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "새 메시지를 확인하는 주기(초 단위)입니다.\n\n`IDLE`을(를) 지원하는 서버에서는 이 설정이 다시 확인하기 전 연결 대기 시간의 상한만 지정할 뿐이며, 새 메일은 서버가 푸시하는 즉시 보고됩니다"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.SU1BUA.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "새 메시지를 확인하는 주기(초 단위)"
+        },
+        "app.SU1BUA.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "새 이메일에 반응"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to attachments on new emails arriving in a mailbox.\n\nOne event is raised per matching attachment, so a message carrying several files produces several events. Set `attachment_glob` to narrow a mixed mailbox to just the files of interest, and leave `retrieve_attachments` off to receive metadata only when attachments are large",
+          "message": "사서함에 도착하는 새 이메일의 첨부 파일에 반응합니다.\n\n일치하는 첨부 파일마다 하나의 이벤트가 발생하므로 여러 파일이 포함된 메시지는 여러 이벤트를 생성합니다. 다양한 파일이 혼합된 사서함에서 관심 있는 파일만 좁히려면 `attachment_glob`을(를) 설정하고, 첨부 파일이 클 때 메타데이터만 받으려면 `retrieve_attachments`을(를) 비활성화 상태로 두십시오"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "새 이메일 첨부 파일"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.desc": {
+          "source": "The IMAP search criteria that decide which new messages are reported.\n\nMatching happens on the server, so messages that do not match are never transferred; for example `UNSEEN FROM \"orders@example.com\"` reacts only to unread mail from one sender",
+          "message": "보고할 새 메시지를 결정하는 IMAP 검색 기준입니다.\n\n일치 여부는 서버에서 확인하므로 일치하지 않는 메시지는 전송되지 않습니다. 예를 들어 `UNSEEN FROM \"orders@example.com\"`은(는) 한 발신자의 읽지 않은 메일에만 반응합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.Y3JpdGVyaWE.short_desc": {
+          "source": "The IMAP search criteria for matching messages",
+          "message": "메시지 매칭을 위한 IMAP 검색 기준"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments.\n\nWhen unset, every attachment is reported; when set, only attachments whose filename matches are reported, so a mailbox carrying mixed content can be narrowed to just the files of interest (ex: `*.csv`)",
+          "message": "첨부 파일과 일치시킬 선택적 파일 이름 패턴(glob)입니다.\n\n설정하지 않으면 모든 첨부 파일이 보고됩니다. 설정하면 파일 이름이 일치하는 첨부 파일만 보고되므로 다양한 콘텐츠가 포함된 사서함에서 관심 있는 파일만 좁힐 수 있습니다(예: `*.csv`)"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "첨부 파일 패턴"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern for matching attachments",
+          "message": "첨부 파일 매칭을 위한 선택적 파일 이름 패턴"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Flag each reported message `\\Deleted` and expunge it once its event has been raised.\n\n**This removes mail from the server permanently**; prefer `mark_seen` or a move to another mailbox unless the mailbox is a queue that is meant to be drained.\n\nThe message is expunged as soon as its event has been **raised**, which is not the same as the consumer having **processed** it. Raising the event throwing an exception leaves the message in place for the next sweep, but a consumer that receives the event and then fails, times out, or is restarted mid-processing has already lost the only copy. For a workload that must not lose the source message, leave this option unset and act from the consumer once processing has succeeded: every event carries its `uid`, and the `set-flags` and `move-messages` actions take it",
+          "message": "보고된 각 메시지에 `\\Deleted` 플래그를 지정하고 해당 이벤트가 발생하면 영구 삭제(expunge)합니다.\n\n**이렇게 하면 서버에서 메일이 영구적으로 제거됩니다.** 사서함이 비워지도록 설계된 대기열이 아니라면 `mark_seen` 또는 다른 사서함으로의 이동을 사용하는 것이 좋습니다.\n\n메시지는 이벤트가 **발생**하는 즉시 영구 삭제되며, 이는 소비자가 메시지를 **처리**한 것과는 다릅니다. 이벤트 발생 시 예외가 발생하면 다음 검사를 위해 메시지가 그대로 유지되지만, 이벤트를 수신한 후 실패하거나 시간 초과되거나 처리 도중 재시작된 소비자는 이미 유일한 사본을 잃어버린 상태입니다. 원본 메시지를 잃어버려서는 안 되는 워크로드의 경우 이 옵션을 설정하지 않고 처리가 성공한 후 소비자에서 작업을 수행하십시오. 모든 이벤트에는 `uid`이(가) 포함되며, `set-flags` 및 `move-messages` 액션이 이를 수신합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "메시지를 삭제하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Delete reported messages once their event has been raised?",
+          "message": "이벤트가 발생한 보고된 메시지를 삭제하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Match the filename pattern case-insensitively; ignored when `attachment_glob` is not set",
+          "message": "파일 이름 패턴을 대소문자 구분 없이 일치시킵니다. `attachment_glob`이(가) 설정되지 않은 경우 무시됩니다"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Pattern Case?",
+          "message": "패턴 대소문자 무시?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Match the filename pattern case-insensitively?",
+          "message": "파일 이름 패턴을 대소문자 구분 없이 일치시키시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.desc": {
+          "source": "The mailbox to watch for new messages",
+          "message": "새 메시지를 모니터링할 사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.display_name": {
+          "source": "Mailbox",
+          "message": "사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.short_desc": {
+          "source": "The mailbox to watch",
+          "message": "모니터링할 사서함"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.desc": {
+          "source": "Set the `\\Seen` flag on each reported message.\n\nUseful with an `UNSEEN` criterion so that a message is not considered again after it has been handled",
+          "message": "보고된 각 메시지에 `\\Seen` 플래그를 설정합니다.\n\n메시지가 처리된 후 다시 고려되지 않도록 `UNSEEN` 기준과 함께 사용하면 유용합니다"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.display_name": {
+          "source": "Mark as Seen?",
+          "message": "읽음으로 표시하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFya19zZWVu.short_desc": {
+          "source": "Set the \\Seen flag on reported messages?",
+          "message": "보고된 메시지에 \\Seen 플래그를 설정하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new messages, in seconds.\n\nOn servers that support `IDLE` this only bounds how long the connection waits before checking again; new mail is still reported as soon as the server pushes it",
+          "message": "새 메시지를 확인하는 주기(초 단위)입니다.\n\n`IDLE`을(를) 지원하는 서버에서는 이 설정이 다시 확인하기 전 연결 대기 시간의 상한만 지정할 뿐이며, 새 메일은 서버가 푸시하는 즉시 보고됩니다"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new messages in seconds",
+          "message": "새 메시지를 확인하는 주기(초 단위)"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Include the decoded attachment content in the event.\n\nLeave this `False` to receive only the attachment metadata, which keeps events small when attachments are large; the content can then be retrieved on demand with the `get-attachment` action",
+          "message": "디코딩된 첨부 파일 내용을 이벤트에 포함합니다.\n\n첨부 파일 용량이 클 때 이벤트를 작게 유지하려면 이 설정을 `False`(으)로 두어 첨부 파일 메타데이터만 수신하세요. 내용은 나중에 `get-attachment` 작업을 통해 필요할 때 가져올 수 있습니다."
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachment Data?",
+          "message": "첨부 파일 데이터를 가져오시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Include the attachment content in the event?",
+          "message": "첨부 파일 내용을 이벤트에 포함하시겠습니까?"
+        },
+        "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "새 이메일 첨부 파일에 반응"
+        },
+        "app.SU1BUA.desc": {
+          "source": "Read and manage email on any IMAP server.\n\n- search a mailbox with server-side criteria, so only matching messages are transferred\n- retrieve a whole message, or a single MIME part when only one attachment is needed\n- react to new mail as it arrives, using server push where the server supports it\n- change flags, move messages between mailboxes, and file messages with `APPEND`\n\nIMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) is the standard mailbox protocol, and for many email providers it is the only programmatic access they offer. Because messages stay on the server, an integration can watch a mailbox and act on what arrives without taking over the account's mail.\n\nBoth password and OAuth2 bearer-token authentication are supported; the mechanism is chosen from what the server advertises",
+          "message": "모든 IMAP 서버에서 이메일을 읽고 관리합니다.\n\n- 일치하는 메시지만 전송되도록 서버 측 기준을 사용하여 사서함 검색\n- 전체 메시지를 가져오거나 첨부 파일이 하나만 필요한 경우 단일 MIME 파트 검색\n- 서버에서 지원하는 경우 서버 푸시를 사용하여 새 메일이 도착할 때 실시간 반응\n- `APPEND`(으)로 플래그 변경, 사서함 간 메시지 이동 및 메시지 정리\n\nIMAP([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501))은 표준 사서함 프로토콜이며, 많은 이메일 제공업체에서 유일하게 제공하는 프로그래밍 방식의 액세스 수단입니다. 메시지가 서버에 유지되므로 통합 서비스는 계정의 메일을 탈취하지 않고도 사서함을 모니터링하고 도착하는 메일에 대응할 수 있습니다.\n\n비밀번호 및 OAuth2 베어러 토큰 인증이 모두 지원되며 메커니즘은 서버가 알리는 방식에 따라 선택됩니다."
+        },
+        "app.SU1BUA.display_name": {
+          "source": "IMAP",
+          "message": "IMAP"
+        },
+        "app.SU1BUA.short_desc": {
+          "source": "IMAP email services",
+          "message": "IMAP 이메일 서비스"
+        }
+      }
+    }
+  }
+}

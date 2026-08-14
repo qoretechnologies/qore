@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.Q3N2.action.cmVhZA.desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Odczytaj dane pliku CSV z określonej lokalizacji pliku"
+        },
+        "app.Q3N2.action.cmVhZA.display_name": {
+          "source": "Read CSV File",
+          "message": "Odczytaj plik CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Domyślny format daty do parsowania pól `date`; zobacz [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask), aby uzyskać więcej informacji na temat tej opcji (np.: `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Format daty"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Domyślna maska do parsowania wejściowych wartości daty"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Kodowanie znaków dla pliku wejściowego (oraz danych wyjściowych; dane wyjściowe tylko wtedy, gdy użyto opcji `data`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Kodowanie znaków wejściowych"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Kodowanie znaków dla pliku wejściowego"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Znak(i) końca linii; jeśli nie określono, znaki końca linii zostaną wykryte automatycznie"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaki końca linii"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(i) końca linii / rekordu"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Hash opisujący pola CSV na wejściu. Klucze to nazwy pól określone przez opcje `header_names` lub `headers` (jeśli żadna z nich nie jest użyta, nazwy pól to liczby zaczynające się od `0`). Wartości to [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) lub hash z następującymi kluczami:\n- `type`: [ciąg typu pola](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: dla typów `date`, [format daty](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); dla typów `int`, `float` lub `number`, ciąg formatu liczby: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (np. `\".,3\"` = tysiące `.`, część dziesiętna `,`, 3 miejsca po przecinku)\n- `timezone`: tylko dla typów `date`; przekazywane do [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) w celu parsowania dat (zastępuje dowolną domyślną strefę czasową; używaj, gdy różne kolumny mają różne strefy czasowe)\n\n**Uwaga**: ustawienie tej wartości ustawia również `headers`, jeśli nie zostało ustawione automatycznie za pomocą `header_names`. Jeśli typ pola nie został podany, wartością domyślną jest `*string`. Nieprawidłowe nazwy pól w tej opcji są ignorowane."
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Opisy pól"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Hash opisujący pola CSV na wejściu"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "jeśli `true`, obiekt sparsuje nazwy nagłówków z pierwszego wiersza nagłówka; w takim przypadku, jeśli opcja `header_lines` nie jest ustawiona jawnie, zostanie przyjęta wartość `1`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Automatycznie wykrywaj nagłówki"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Jeśli wartość to true, nagłówki zostaną automatycznie wykryte z pierwszego wiersza nagłówka"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Liczba wierszy nagłówka w pliku"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Liczba wierszy nagłówka"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Liczba wierszy nagłówka w pliku"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Jeśli `true` (domyślnie), a podano `headers`, pola danych zostaną uporządkowane zgodnie z nagłówkami"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Jeśli wartość to true, dane wejściowe zostaną uporządkowane w kolejności `headers`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Lista nazw nagłówków / kolumn dla iterowanych danych; jeśli jest obecna, to `header_names` musi mieć wartość `false`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Nazwy nagłówków"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Lista nazw nagłówków / kolumn dla iterowanych danych"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Jeśli `true`, puste linie będą ignorowane"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ignoruj puste linie"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Jeśli wartość to true, puste linie będą ignorowane"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Jeśli `true`, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ignoruj początkowe i końcowe białe znaki"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Jeśli wartość to true, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Domyślny format dla pól `int`, `float` i `number` jako ciąg znaków określający znak separatora tysięcy, a po nim znak separatora dziesiętnego (np. `.,` dla liczb w stylu kontynentalno-europejskim)"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Format liczb"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Domyślny format liczb do parsowania pól typu int, float i number"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "ciąg rozdzielający pola w pliku (domyślnie: `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Separator pól"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(i) separatora pól"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the CSV data; conflicts with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Lokalizacja danych CSV; powoduje konflikt z `stream` i `data`; rozwiązywana za pomocą wywołania [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "Lokalizacja wejściowa CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "Lokalizacja pliku wejściowego"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Znak cudzysłowu pola (domyślnie: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Jeśli `true` (domyślnie `false`), wszystkie nazwy nagłówków zostaną przekonwertowane na małe litery"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Konwertuj nagłówki na małe litery"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Konwertuj wszystkie nazwy nagłówków na małe litery"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Region strefy czasowej używany podczas parsowania dat (np.: `Europe/Prague`); zobacz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), aby uzyskać prawidłowe wartości"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Region strefy czasowej"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Region strefy czasowej używany podczas analizowania dat"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "jeśli `true` (domyślnie `false`), w przypadku sparsowania wiersza z inną liczbą kolumn lub pól niż w innych wierszach, zgłaszany jest wyjątek `CSVFILEITERATOR-DATA-ERROR`\n\nPamiętaj, że włączenie tej opcji wpłynie negatywnie na wydajność"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Weryfikuj kolumny"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Weryfikuje dane wejściowe, aby upewnić się, że mają oczekiwaną strukturę"
+        },
+        "app.Q3N2.action.cmVhZA.short_desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Odczytaj dane pliku CSV z określonej lokalizacji pliku"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.desc": {
+          "source": "Read CSV inline data",
+          "message": "Odczytaj dane wbudowane CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read CSV Inline Data",
+          "message": "Odczytaj dane wbudowane CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "CSV data to process; conflicts with `stream` and `path`",
+          "message": "Dane CSV do przetworzenia; powoduje konflikt z `stream` i `path`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Dane wejściowe"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "CSV data to process",
+          "message": "Dane CSV do przetworzenia"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Domyślny format daty do parsowania pól `date`; zobacz [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask), aby uzyskać więcej informacji na temat tej opcji (np.: `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Format daty"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Domyślna maska do parsowania wejściowych wartości daty"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Kodowanie znaków dla pliku wejściowego (oraz danych wyjściowych; dane wyjściowe tylko wtedy, gdy użyto opcji `data`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Kodowanie znaków wejściowych"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Kodowanie znaków dla pliku wejściowego"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Znak(i) końca linii; jeśli nie określono, znaki końca linii zostaną wykryte automatycznie"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaki końca linii"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(i) końca linii / rekordu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Hash opisujący pola CSV na wejściu. Klucze to nazwy pól określone przez opcje `header_names` lub `headers` (jeśli żadna z nich nie jest użyta, nazwy pól to liczby zaczynające się od `0`). Wartości to [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) lub hash z następującymi kluczami:\n- `type`: [ciąg typu pola](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: dla typów `date`, [format daty](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); dla typów `int`, `float` lub `number`, ciąg formatu liczby: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (np. `\".,3\"` = tysiące `.`, część dziesiętna `,`, 3 miejsca po przecinku)\n- `timezone`: tylko dla typów `date`; przekazywane do [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) w celu parsowania dat (zastępuje dowolną domyślną strefę czasową; używaj, gdy różne kolumny mają różne strefy czasowe)\n\n**Uwaga**: ustawienie tej wartości ustawia również `headers`, jeśli nie zostało ustawione automatycznie za pomocą `header_names`. Jeśli typ pola nie został podany, wartością domyślną jest `*string`. Nieprawidłowe nazwy pól w tej opcji są ignorowane."
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Opisy pól"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Hash opisujący pola CSV na wejściu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "jeśli `true`, obiekt sparsuje nazwy nagłówków z pierwszego wiersza nagłówka; w takim przypadku, jeśli opcja `header_lines` nie jest ustawiona jawnie, zostanie przyjęta wartość `1`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Automatycznie wykrywaj nagłówki"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Jeśli wartość to true, nagłówki zostaną automatycznie wykryte z pierwszego wiersza nagłówka"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Liczba wierszy nagłówka w pliku"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Liczba wierszy nagłówka"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Liczba wierszy nagłówka w pliku"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Jeśli `true` (domyślnie), a podano `headers`, pola danych zostaną uporządkowane zgodnie z nagłówkami"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Jeśli wartość to true, dane wejściowe zostaną uporządkowane w kolejności `headers`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Lista nazw nagłówków / kolumn dla iterowanych danych; jeśli jest obecna, to `header_names` musi mieć wartość `false`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Nazwy nagłówków"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Lista nazw nagłówków / kolumn dla iterowanych danych"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Jeśli `true`, puste linie będą ignorowane"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ignoruj puste linie"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Jeśli wartość to true, puste linie będą ignorowane"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Jeśli `true`, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ignoruj początkowe i końcowe białe znaki"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Jeśli wartość to true, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Domyślny format dla pól `int`, `float` i `number` jako ciąg znaków określający znak separatora tysięcy, a po nim znak separatora dziesiętnego (np. `.,` dla liczb w stylu kontynentalno-europejskim)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Format liczb"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Domyślny format liczb do parsowania pól typu int, float i number"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "ciąg rozdzielający pola w pliku (domyślnie: `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Separator pól"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(i) separatora pól"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
+          "source": "An input stream for CSV data; conflicts with `path` and `data`",
+          "message": "Strumień wejściowy dla danych CSV; powoduje konflikt z `path` i `data`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "Strumień wejściowy"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for CSV data",
+          "message": "Obiekt strumienia wejściowego dla danych CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Znak cudzysłowu pola (domyślnie: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Jeśli `true` (domyślnie `false`), wszystkie nazwy nagłówków zostaną przekonwertowane na małe litery"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Konwertuj nagłówki na małe litery"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Konwertuj wszystkie nazwy nagłówków na małe litery"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Region strefy czasowej używany podczas parsowania dat (np.: `Europe/Prague`); zobacz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), aby uzyskać prawidłowe wartości"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Region strefy czasowej"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Region strefy czasowej używany podczas analizowania dat"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "jeśli `true` (domyślnie `false`), w przypadku sparsowania wiersza z inną liczbą kolumn lub pól niż w innych wierszach, zgłaszany jest wyjątek `CSVFILEITERATOR-DATA-ERROR`\n\nPamiętaj, że włączenie tej opcji wpłynie negatywnie na wydajność"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Weryfikuj kolumny"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Weryfikuje dane wejściowe, aby upewnić się, że mają oczekiwaną strukturę"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read CSV inline data",
+          "message": "Odczytaj dane wbudowane CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Zapisz dane pliku CSV w określonej lokalizacji pliku"
+        },
+        "app.Q3N2.action.d3JpdGU.display_name": {
+          "source": "Write CSV Data",
+          "message": "Zapisz dane CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Rozmiar bloku podczas generowania danych wyjściowych zbiorczo"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.display_name": {
+          "source": "Block Size",
+          "message": "Rozmiar bloku"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.short_desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Rozmiar bloku podczas generowania danych wyjściowych zbiorczo"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.desc": {
+          "source": "Sets a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1",
+          "message": "Ustawia hash mapujący rzeczywiste nazwy kluczy danych na nazwy pól wyjściowych, do użycia w przypadku, gdy nazwy pól danych różnią się; nie musi zawierać każdego klucza danych lub wyjściowego; przyjmuje się, że nieobecne klucze są mapowane 1:1"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.display_name": {
+          "source": "Output Field Name Map",
+          "message": "Mapa nazw pól wyjściowych"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.short_desc": {
+          "source": "Maps data key names to output field names",
+          "message": "Mapuje nazwy kluczy danych na nazwy pól wyjściowych"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for date value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Domyślna maska do formatowania wyjściowych wartości daty; zobacz [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting), aby uzyskać więcej informacji"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Format daty"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Domyślna maska formatowania wyjściowych wartości daty"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Wyjściowe kodowanie znaków dla danych"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kodowanie znaków"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Wyjściowe kodowanie znaków"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Znak(i) końca linii / rekordu; jeśli nie podano, zostanie użyty standard bieżącej platformy"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaki końca linii"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(i) końca linii / rekordu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)",
+          "message": "Hash opisujący pola CSV do wygenerowania. Kluczami są nazwy pól, a wartościami [typy pól](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) lub hash z następującymi kluczami:\n- `type`: [ciąg typu pola](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: dla typów `date`, [format daty](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); dla typów `int`, `float` lub `number`, ciąg formatu liczb: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (np. `\".,3\"` = separator tysięcy `.`, separator dziesiętny `,`, 3 miejsca po przecinku)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Opisy pól"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields to output",
+          "message": "Hash opisujący pola CSV do wygenerowania"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Jeśli `true` (domyślnie), a podano `headers`, pola danych zostaną uporządkowane zgodnie z nagłówkami"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of `headers`",
+          "message": "Jeśli ma wartość true, dane wyjściowe zostaną uporządkowane według kolejności w `headers`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Lista nazw pól / nagłówków dla danych wyjściowych"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Nazwy nagłówków"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Lista nazw pól / nagłówków dla danych wyjściowych"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
+          "message": "Ustaw na `false`, aby wyłączyć optymalne ujmowanie w cudzysłowy; gdy optymalne cudzysłowy są wyłączone, wszystkie pola są ujmowane w cudzysłowy niezależnie od typu lub zawartości; gdy jest włączone, pola są ujmowane w cudzysłowy tylko wtedy, gdy tego wymagają (tj. zawierają znak cudzysłowu lub separatora); domyślnie: `true`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.display_name": {
+          "source": "Optimal Quotes",
+          "message": "Optymalne cudzysłowy"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.short_desc": {
+          "source": "Quote output fields only when necessary",
+          "message": "Ujmuj pola wyjściowe w cudzysłowy tylko wtedy, gdy to konieczne"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Domyślny format wyjściowy dla pól `int`, `float` i `number`; jest to ciąg formatu liczbowego z 1 do 3 pól w postaci: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; np.: `\".,3\"` (= `.` dla separatora tysięcy, `,` dla separatora dziesiętnego i 3 cyfry po przecinku)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Format wyjściowy liczb"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Domyślny format wyjściowy dla pól 'int', 'float' i 'number'"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.desc": {
+          "source": "The string separating fields in the output data (default: `,`)",
+          "message": "Ciąg rozdzielający pola w danych wyjściowych (domyślnie: `,`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Separator pól"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(i) separatora pól"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "An output stream for CSV data; mutually exclusive with \"path\"",
+          "message": "Strumień wyjściowy dla danych CSV; wyklucza się wzajemnie z \"path\""
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Strumień wyjściowy"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the CSV data",
+          "message": "Obiekt strumienia wyjściowego dla danych CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output CSV data file; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "Lokalizacja dla wyjściowego pliku danych CSV; wyklucza się wzajemnie ze \"stream\"; lokalizacja wyjściowa jest obsługiwana przez wywołanie [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "CSV Output Path",
+          "message": "Ścieżka wyjściowa CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the CSV output file",
+          "message": "Gdzie zapisać wyjściowy plik CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.desc": {
+          "source": "The quote character to quote fields (default: `\"`)",
+          "message": "Znak cudzysłowu do ujmowania pól w cudzysłowy (domyślnie: `\"`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(i) cudzysłowu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) used for `quote` (default: `\\`)",
+          "message": "Znak(i) ucieczki używane dla `quote` (domyślnie: `\\`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Znak(i) ucieczki cudzysłowu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "The escape character(s) for quotes in a field",
+          "message": "Znak(i) ucieczki dla cudzysłowów w polu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
+          "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
+          "message": "Ustaw na `false`, aby pominąć wypisywanie nagłówków; domyślnie: `true`, co oznacza wypisywanie nagłówków, jeśli są obecne"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Nagłówki wyjściowe"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.short_desc": {
+          "source": "Include headers as the first output record",
+          "message": "Dołącz nagłówki jako pierwszy rekord wyjściowy"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "If `true` (the default is `false`) then if a line is parsed with a different column count than other lines, a `CSVFILEWRITER-DATA-ERROR` exception is thrown.\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Jeśli `true` (domyślnie `false`), w przypadku przetworzenia wiersza z inną liczbą kolumn niż pozostałe wiersze zostanie zgłoszony wyjątek `CSVFILEWRITER-DATA-ERROR`.\n\nPamiętaj, że włączenie tej opcji wpłynie negatywnie na wydajność"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Weryfikuj kolumny"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Weryfikuje dane wejściowe, aby upewnić się, że mają oczekiwaną strukturę"
+        },
+        "app.Q3N2.action.d3JpdGU.short_desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Zapisz dane pliku CSV w określonej lokalizacji pliku"
+        },
+        "app.Q3N2.desc": {
+          "source": "Read and write CSV file data",
+          "message": "Odczyt i zapis danych z plików CSV"
+        },
+        "app.Q3N2.display_name": {
+          "source": "CSV Files",
+          "message": "Pliki CSV"
+        },
+        "app.Q3N2.short_desc": {
+          "source": "Read and write CSV file data",
+          "message": "Odczyt i zapis danych z plików CSV"
+        }
+      }
+    }
+  }
+}

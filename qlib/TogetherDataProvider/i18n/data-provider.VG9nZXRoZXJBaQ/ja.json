@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Together AI hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.",
+          "message": "OpenAI 互換の `/v1/chat/completions` エンドポイントを使用して、チャットメッセージのリストを Together AI でホストされたモデルに送信し、生成されたレスポンスを返します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "チャット補完"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens by frequency.  Range `-2.0` to `2.0`.",
+          "message": "頻度に応じてトークンにペナルティを課します。範囲は `-2.0` から `2.0` です。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "OpenAI-style frequency penalty",
+          "message": "OpenAI スタイルの頻度ペナルティ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Together model identifier, e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V3`.\n\nConsult the [Together AI models list](https://docs.together.ai/docs/inference-models) for the currently-served set.",
+          "message": "Together のモデル識別子（例: `meta-llama/Llama-3.3-70B-Instruct-Turbo`、`Qwen/Qwen2.5-72B-Instruct-Turbo`、`deepseek-ai/DeepSeek-V3`）。\n\n現在提供されているモデル一覧については、[Together AI モデルリスト](https://docs.together.ai/docs/inference-models) を参照してください。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted model to use",
+          "message": "使用する Together ホストのモデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "生成するトークンの最大数。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "補完で生成する最大トークン数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "メッセージオブジェクトのリストとしての会話履歴。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "会話を構成するチャットメッセージのリスト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "決定論的サンプリングのための整数シード値。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "決定論的サンプリングシード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.",
+          "message": "1 つ以上の停止シーケンス。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "文字列または文字列のリスト。出力されると生成が停止します"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "`True` の場合、サーバーは部分的な補完をSSEとしてストリーミングします。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "ストリーム"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as Server-Sent Events",
+          "message": "Server-Sent Eventsとして部分的な補完をストリーミング"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared.  Range `-2.0` to `2.0`.",
+          "message": "すでに出現したトークンにペナルティを課します。範囲は `-2.0` から `2.0` です。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "OpenAI-style presence penalty",
+          "message": "OpenAI スタイルの存在ペナルティ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.desc": {
+          "source": "Penalize repeated tokens.  Together-specific extension.  Values above `1.0` discourage repetition; values below `1.0` encourage it.",
+          "message": "繰り返されるトークンにペナルティを課します。Together 固有の拡張機能です。`1.0` より大きい値は重複を抑制し、`1.0` 未満の値は重複を促進します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.display_name": {
+          "source": "Repetition Penalty",
+          "message": "繰り返しペナルティ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.short_desc": {
+          "source": "Together's repetition penalty (separate from frequency_penalty)",
+          "message": "Together の繰り返しペナルティ（frequency_penalty とは別）"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`.",
+          "message": "構造化されたレスポンス形式を強制するハッシュ（例: `{type: \"json_object\"}` または `{type: \"json_schema\", schema: {...}}`）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "構造化出力（例: JSON）を強制"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - ツールを呼び出さない"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - モデルが決定"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required - ツールの呼び出しが必須"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "ツール呼び出しモード: `none`、`auto`、または `required`。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "モデルが呼び出す必要があるツールの有無およびツールの指定"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.",
+          "message": "モデルが呼び出す可能性のあるツール定義のリスト。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "モデルが呼び出し可能なOpenAIスタイルのツール定義"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  Together-specific extension to the OpenAI chat API.",
+          "message": "サンプリングを最も可能性の高い次の K 個のトークンに制限します。OpenAI Chat API に対する Together 固有の拡張機能です。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "最も可能性の高い上位 K 個の次のトークンからのみサンプリング"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff.  Range `0.0` to `1.0`.",
+          "message": "Nucleus サンプリングのカットオフ。範囲は `0.0` から `1.0`。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Nucleus サンプリングカットオフ (0-1)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.",
+          "message": "出力のランダム性を制御します。範囲は `0.0` から `2.0` です。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "温度"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "サンプリング温度（0〜2）"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Together AI hosted model",
+          "message": "Together AI でホストされたモデルからチャット補完を生成"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using a Together-hosted embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible `/v1/embeddings` endpoint.",
+          "message": "OpenAI 互換の `/v1/embeddings` エンドポイント経由で、Together でホストされた埋め込みモデル（例: `BAAI/bge-base-en-v1.5`）を使用して、テキスト入力を埋め込みベクトルに変換します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "埋め込みを作成"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded float32 buffer",
+          "message": "Base64 - エンコードされたfloat32バッファ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - JSON list of floats",
+          "message": "Float - 浮動小数点数のJSONリスト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) returns each vector as a JSON list of floats; `base64` returns base64-encoded little-endian float32 buffers (smaller wire size).",
+          "message": "`float`（デフォルト）は各ベクトルを浮動小数点数の JSON リストとして返します。`base64` は Base64 でエンコードされたリトルエンディアンの float32 バッファを返します（転送サイズが小さくなります）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "エンコード形式"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for the returned vectors",
+          "message": "返されるベクトルのワイヤ形式"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
+          "message": "埋め込みベクトルに変換するテキスト入力。単一の文字列、または一括埋め込み用の文字列リストを指定できます。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed — single string or list of strings",
+          "message": "埋め込むテキスト — 単一の文字列または文字列のリスト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`.",
+          "message": "Together の埋め込みモデル識別子（例: `BAAI/bge-base-en-v1.5`、`BAAI/bge-large-en-v1.5`、`togethercomputer/m2-bert-80M-32k-retrieval`）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted embedding model to use",
+          "message": "使用する Together ホストの埋め込みモデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Together AI hosted model",
+          "message": "Together AI でホストされたモデルから埋め込みベクトルを生成"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates one or more images from a text prompt using a Together-hosted diffusion model (`black-forest-labs/FLUX.1-schnell-Free`, `stabilityai/stable-diffusion-xl-base-1.0`, etc.) via the `/v1/images/generations` endpoint.\n\nReturns image URLs by default; set `response_format` to `b64_json` to receive base64-encoded image bytes inline.",
+          "message": "`/v1/images/generations` エンドポイント経由で、Together でホストされた拡散モデル（`black-forest-labs/FLUX.1-schnell-Free`、`stabilityai/stable-diffusion-xl-base-1.0` など）を使用して、テキストプロンプトから 1 つ以上の画像を生成します。\n\nデフォルトでは画像 URL を返します。Base64 でエンコードされた画像バイトをインラインで受け取るには、`response_format` を `b64_json` に設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "画像を生成"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.desc": {
+          "source": "Classifier-free guidance scale.  Higher values force the output to follow the prompt more closely at the cost of diversity.",
+          "message": "Classifier-Free Guidance（CFG）スケール。値を大きくすると、多様性が損なわれる代わりにプロンプトにより忠実な出力になります。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.display_name": {
+          "source": "Guidance Scale",
+          "message": "ガイダンススケール"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.short_desc": {
+          "source": "Prompt adherence (CFG scale)",
+          "message": "プロンプトへの忠実度 (CFG スケール)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Image height in pixels.  See `width` for resolution constraints.",
+          "message": "画像の高さ（ピクセル単位）。解像度の制約については `width` を参照してください。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "高さ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Image height in pixels",
+          "message": "画像の高さ（ピクセル単位）"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Together image model identifier.  Examples:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — fast FLUX.1 (free tier)\n- `black-forest-labs/FLUX.1-schnell` — fast FLUX.1\n- `black-forest-labs/FLUX.1-dev` — quality FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0",
+          "message": "Together 画像モデル識別子。例:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — 高速 FLUX.1（無料枠）\n- `black-forest-labs/FLUX.1-schnell` — 高速 FLUX.1\n- `black-forest-labs/FLUX.1-dev` — 高品質 FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted image-generation model",
+          "message": "Together がホストする画像生成モデル"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.desc": {
+          "source": "Number of images to generate from the prompt.",
+          "message": "プロンプトから生成する画像の数。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.display_name": {
+          "source": "Number of Images",
+          "message": "画像数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.short_desc": {
+          "source": "How many images to generate",
+          "message": "生成する画像の数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Optional negative prompt — features the model should suppress in the output (e.g. `\"blurry, low quality, watermark\"`).",
+          "message": "任意のネガティブプロンプト — 出力でモデルが抑制すべき特徴（例: `\"blurry, low quality, watermark\"`）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "ネガティブプロンプト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What the image should NOT contain",
+          "message": "画像に含めるべきではない内容"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Integer seed.  With a fixed seed, prompt, and model, generation is reproducible.",
+          "message": "整数のシード値。シード、プロンプト、モデルを固定することで、生成結果を再現できます。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Deterministic generation seed",
+          "message": "決定論的生成シード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.desc": {
+          "source": "Number of denoising steps.  Higher values improve quality at the cost of latency.  FLUX schnell is tuned for 1-4 steps; SDXL typically uses 20-50.",
+          "message": "ノイズ除去ステップ数。値が大きいほど品質が向上しますが、レイテンシが増加します。FLUX schnell は 1〜4 ステップ向けに調整されており、SDXL は通常 20〜50 を使用します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.display_name": {
+          "source": "Steps",
+          "message": "ステップ数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.short_desc": {
+          "source": "Number of diffusion steps",
+          "message": "拡散ステップ数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Free-form text describing the image to generate.  Diffusion models are sensitive to wording — be specific about subject, lighting, style, and composition for best results.",
+          "message": "生成する画像を説明する自由形式のテキスト。拡散モデルは表現に敏感です。最適な結果を得るには、被写体、照明、スタイル、構図を具体的に指定してください。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text description of the image to generate",
+          "message": "生成する画像の説明テキスト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmI2NF9qc29u.display_name": {
+          "source": "Base64 - inline image bytes",
+          "message": "Base64 - インライン画像バイト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnVybA.display_name": {
+          "source": "URL - hosted image URL",
+          "message": "URL - ホストされた画像 URL"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "`url` (default) returns hosted image URLs.  `b64_json` returns the image bytes inline as base64-encoded JSON.",
+          "message": "`url`（デフォルト）はホストされた画像 URL を返します。`b64_json` は Base64 でエンコードされた JSON として画像バイトをインラインで返します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Whether to return URLs or base64-encoded image bytes",
+          "message": "URL を返すか、Base64 エンコードされた画像バイトを返すか"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Image width in pixels.  Must match a resolution the chosen model supports — typically multiples of 64 in the 256-1792 range.",
+          "message": "画像の幅（ピクセル単位）。選択したモデルがサポートする解像度（通常は 256〜1792 の範囲で 64 の倍数）と一致している必要があります。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "幅"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Image width in pixels",
+          "message": "画像の幅（ピクセル単位）"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt using FLUX or Stable Diffusion",
+          "message": "FLUX または Stable Diffusion を使用してテキストプロンプトから画像を生成"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Together AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Together AI** に対するカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス（接続の API ベース URL に対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用してください。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Together AI",
+          "message": "Together AI へのカスタム API 呼び出しを実行"
+        },
+        "app.VG9nZXRoZXJBaQ.desc": {
+          "source": "Provides access to [Together AI](https://www.together.ai) — a managed inference platform for open-weight LLMs (Llama, Qwen, DeepSeek, Mixtral), embedding models (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image generation (FLUX, Stable Diffusion XL).\n\nTogether exposes an OpenAI-compatible chat-completions API plus its own `/v1/images/generations` endpoint for text-to-image diffusion.\n\n**Common use cases**:\n- **OSS chat at production scale** without owning GPU infrastructure\n- **RAG embeddings** with open-weight embedders for cost control\n- **Text-to-image generation** via FLUX.1 (schnell + dev) and SDXL\n- **Tool-calling and structured output** via the OpenAI-compatible surface",
+          "message": "[Together AI](https://www.together.ai) へのアクセスを提供します。オープンウェイト LLM（Llama、Qwen、DeepSeek、Mixtral）、埋め込みモデル（`BAAI/bge-*`、`togethercomputer/m2-bert-*`）、および画像生成（FLUX、Stable Diffusion XL）向けのマネージド推論プラットフォームです。\n\nTogether は、OpenAI 互換の chat-completions API に加えて、テキストから画像への拡散用の独自の `/v1/images/generations` エンドポイントを公開しています。\n\n**一般的なユースケース**:\n- GPU インフラを所有せずに**本番規模での OSS チャット**\n- コスト抑制のためのオープンウェイト埋め込みモデルによる **RAG 埋め込み**\n- FLUX.1（schnell + dev）および SDXL による**テキストから画像への生成**\n- OpenAI 互換インターフェース経由の**ツール呼び出しと構造化出力**"
+        },
+        "app.VG9nZXRoZXJBaQ.display_name": {
+          "source": "Together AI",
+          "message": "Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.short_desc": {
+          "source": "Together AI hosted open-weight LLMs, embeddings, and image generation",
+          "message": "Together AI がホストするオープンウェイト LLM、埋め込み、および画像生成"
+        }
+      }
+    }
+  }
+}

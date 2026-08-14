@@ -1,0 +1,2577 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "지정된 테이블에 새 레코드를 생성합니다"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "레코드 생성"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "작업할 테이블: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` 또는 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "지정된 테이블에 새 레코드 생성"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.desc": {
+          "source": "Lists deployments, newest first, with the environment each went to, the state it reached and the commit it deployed.",
+          "message": "최신순으로 배포 목록을 조회하며, 각 배포가 전달된 환경, 도달한 상태 및 배포된 커밋을 함께 표시합니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
+          "source": "List Deployments",
+          "message": "배포 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
+          "source": "List a repository's deployments",
+          "message": "리포지토리 배포 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.desc": {
+          "source": "Lists the Code Insights reports attached to a commit - the results a linter, a test run or a security scan posted against it.",
+          "message": "커밋에 연결된 Code Insights 보고서(린터, 테스트 실행 또는 보안 검사 결과) 목록을 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
+          "source": "List Commit Reports",
+          "message": "커밋 보고서 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
+          "source": "List the code insights reports on a commit",
+          "message": "커밋의 코드 인사이트 보고서 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "지정된 테이블에서 검색 조건과 일치하는 모든 레코드를 삭제합니다"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "레코드 삭제"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "작업할 테이블: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` 또는 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "검색 조건과 일치하는 레코드 삭제"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Bitbucket** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Bitbucket**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Bitbucket",
+          "message": "Bitbucket에 커스텀 API 호출 수행"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.desc": {
+          "source": "Fires for each new commit in the watched repository, across every branch.\n\nThe event carries the commit record Bitbucket returns, including its hash, message, author and date.",
+          "message": "모니터링 중인 리포지토리의 모든 브랜치에서 새 커밋이 발생할 때마다 실행됩니다.\n\n이 이벤트는 해시, 메시지, 작성자 및 날짜를 포함하여 Bitbucket이 반환하는 커밋 레코드를 전달합니다."
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
+          "source": "New Commit",
+          "message": "새 커밋"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
+          "source": "Fires when a commit is pushed to the watched repository",
+          "message": "감시 중인 저장소에 커밋이 푸시될 때 트리거됩니다"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.desc": {
+          "source": "Fires for each new deployment in the watched repository.\n\nThe event carries the deployment record Bitbucket returns, including the environment it went to, the state it reached and the release it deployed.",
+          "message": "감시 중인 저장소에 새 배포가 있을 때마다 트리거됩니다.\n\n이 이벤트는 배포된 환경, 도달한 상태 및 배포된 릴리스를 포함하여 Bitbucket이 반환하는 배포 레코드를 전달합니다."
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
+          "source": "New Deployment",
+          "message": "새 배포"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
+          "source": "Fires when a deployment is created for the watched repository",
+          "message": "감시 중인 저장소에 대해 배포가 생성될 때 트리거됩니다"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.desc": {
+          "source": "Fires for each new pull request in the watched repository.\n\n`state` restricts which pull requests are watched, and defaults to `OPEN`. The event carries the pull request record Bitbucket returns, including its source and destination branches, author and reviewers.",
+          "message": "감시 중인 저장소에 새 풀 요청이 있을 때마다 트리거됩니다.\n\n`state`은(는) 감시할 풀 요청을 제한하며 기본값은 `OPEN`입니다. 이 이벤트는 소스 및 대상 브랜치, 작성자, 검토자를 포함하여 Bitbucket이 반환하는 풀 요청 레코드를 전달합니다."
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
+          "source": "New Pull Request",
+          "message": "새 풀 요청"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
+          "source": "Fires when a pull request is opened in the watched repository",
+          "message": "감시 중인 저장소에서 풀 요청이 열릴 때 트리거됩니다"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "검색 기준과 일치하는 지정된 테이블의 모든 레코드를 반환합니다"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "레코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "작업할 테이블: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` 또는 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "지정된 테이블에서 일치하는 레코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "검색 기준과 일치하는 지정된 테이블의 단일 레코드를 반환합니다. 둘 이상이 일치하면 오류가 발생합니다"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "단일 레코드 찾기"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "작업할 테이블: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` 또는 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "지정된 테이블에서 일치하는 단일 레코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.desc": {
+          "source": "Searches the code in the repositories of one user account.",
+          "message": "한 사용자 계정의 저장소에 있는 코드를 검색합니다."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
+          "source": "Search Code in a User's Repositories",
+          "message": "사용자 저장소의 코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.desc": {
+          "source": "Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.",
+          "message": "중괄호로 둘러싸인 계정의 UUID(예: `{account UUID}`) 또는 Atlassian 계정 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.short_desc": {
+          "source": "The account UUID in braces, or the account ID",
+          "message": "중괄호로 묶인 계정 UUID 또는 계정 ID"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "검색 결과 중 가져올 페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
+          "source": "Search the code in one user's repositories",
+          "message": "한 사용자의 저장소에 있는 코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.desc": {
+          "source": "Searches the code in every repository of a workspace.\n\n`search_query` takes Bitbucket's code search syntax, ex: `foo lang:python` or `\"exact phrase\" repo:my-repo`.",
+          "message": "워크스페이스의 모든 저장소에서 코드를 검색합니다.\n\n`search_query`은(는) Bitbucket의 코드 검색 구문(예: `foo lang:python` 또는 `\"exact phrase\" repo:my-repo`)을 사용합니다."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
+          "source": "Search Code in a Workspace",
+          "message": "워크스페이스의 코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Bitbucket code search syntax, ex: \"foo lang:python\"",
+          "message": "Bitbucket 코드 검색 구문(예: \"foo lang:python\")"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "검색 결과 중 가져올 페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
+          "source": "Search the code in a workspace's repositories",
+          "message": "워크스페이스 저장소의 코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.desc": {
+          "source": "Searches the code in a team's repositories.\n\n**Bitbucket has replaced teams with workspaces**, and this endpoint is deprecated; use **Search Code in a Workspace** instead. It is exported because the application this module replaces exported it, and removing an action silently breaks whatever still calls it.",
+          "message": "팀 저장소의 코드를 검색합니다.\n\n**Bitbucket에서 팀을 워크스페이스로 대체**했으므로 이 엔드포인트는 더 이상 사용되지 않습니다. 대신 **워크스페이스의 코드 검색**을 사용하세요. 이 모듈이 대체하는 애플리케이션에서 내보냈던 기능이며, 작업을 제거하면 해당 작업을 여전히 호출하는 항목이 예기치 않게 손상될 수 있으므로 내보내기 상태를 유지합니다."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
+          "source": "Search Code in a Team's Repositories",
+          "message": "팀 저장소의 코드 검색"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "검색 쿼리"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "검색 결과 중 가져올 페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.desc": {
+          "source": "The account to search in; either the username or the UUID in curly braces",
+          "message": "검색할 계정입니다. 사용자 이름 또는 중괄호로 묶인 UUID입니다"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.short_desc": {
+          "source": "The team name; teams are Bitbucket's superseded name for workspaces",
+          "message": "팀 이름입니다. 팀은 Bitbucket에서 워크스페이스의 이전 명칭입니다"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
+          "source": "Search the code in a team's repositories (deprecated by Bitbucket)",
+          "message": "팀 저장소의 코드 검색(Bitbucket에서 지원 중단됨)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.desc": {
+          "source": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept to what the user actually works on.",
+          "message": "워크스페이스의 저장소 목록을 조회합니다.\n\n`role`은(는) 자격 증명과 지정된 관계(`member`, `contributor`, `admin` 또는 `owner`)가 있는 저장소로 목록을 제한하여 사용자가 실제로 작업하는 저장소만 유지합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
+          "source": "List Workspace Repositories",
+          "message": "워크스페이스 저장소 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[필터링 및 정렬](/cloud/bitbucket/rest/intro/#filtering)에 따라 결과를 정렬할 기준 필드입니다.\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "정렬 기준"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "정렬 기준 필드입니다. 역순으로 정렬하려면 앞에 \"-\"를 붙입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [필터 표현식](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)입니다(예: `state = \"OPEN\"` 또는 `updated_on > 2026-01-01`).\n\n필터에서 지정할 수 있는 필드는 컬렉션마다 다르며 엔드포인트에 설명되어 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 필터 표현식(예: 'state = \"OPEN\"')"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm1lbWJlcg.display_name": {
+          "source": "member",
+          "message": "member"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "owner",
+          "message": "owner"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFkbWlu.display_name": {
+          "source": "admin",
+          "message": "admin"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbnRyaWJ1dG9y.display_name": {
+          "source": "contributor",
+          "message": "contributor"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.desc": {
+          "source": "\nFilters the result based on the authenticated user's role on each repository.\n\n* **member**: returns repositories to which the user has explicit read access\n* **contributor**: returns repositories to which the user has explicit write access\n* **admin**: returns repositories to which the user has explicit administrator access\n* **owner**: returns all repositories owned by the current user\n",
+          "message": "\n각 저장소에 대한 인증된 사용자의 역할을 기반으로 결과를 필터링합니다.\n\n* **member**: 사용자가 명시적 읽기 권한을 가진 저장소를 반환합니다\n* **contributor**: 사용자가 명시적 쓰기 권한을 가진 저장소를 반환합니다\n* **admin**: 사용자가 명시적 관리자 권한을 가진 저장소를 반환합니다\n* **owner**: 현재 사용자가 소유한 모든 저장소를 반환합니다\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "역할"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
+          "source": "List the repositories in a workspace",
+          "message": "워크스페이스의 저장소 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.desc": {
+          "source": "Withdraws the authenticated user's approval of a commit. Another user's approval is untouched.",
+          "message": "커밋에 대한 인증된 사용자의 승인을 취소합니다. 다른 사용자의 승인은 유지됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
+          "source": "Unapprove Commit",
+          "message": "커밋 승인 취소"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
+          "source": "Withdraw the authenticated user's approval of a commit",
+          "message": "커밋에 대한 인증된 사용자의 승인 취소"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.desc": {
+          "source": "Records the authenticated user's approval of a commit.",
+          "message": "커밋에 대한 인증된 사용자의 승인을 기록합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
+          "source": "Approve Commit",
+          "message": "커밋 승인"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
+          "source": "Approve a commit as the authenticated user",
+          "message": "인증된 사용자로서 커밋 승인"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments made on a commit, both standalone notes and those attached to a line of a diff.",
+          "message": "독립형 메모 및 diff 줄에 첨부된 댓글을 포함하여 커밋에 작성된 댓글을 나열합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Commit Comments",
+          "message": "커밋 댓글 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[필터링 및 정렬](/cloud/bitbucket/rest/intro/#filtering)에 따라 결과를 정렬할 기준 필드입니다.\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "정렬 기준"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "정렬 기준 필드입니다. 역순으로 정렬하려면 앞에 \"-\"를 붙입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [필터 표현식](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)입니다(예: `state = \"OPEN\"` 또는 `updated_on > 2026-01-01`).\n\n필터에서 지정할 수 있는 필드는 컬렉션마다 다르며 엔드포인트에 설명되어 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 필터 표현식(예: 'state = \"OPEN\"')"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a commit",
+          "message": "커밋의 댓글 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a commit.\n\n`content.raw` is the comment text in Bitbucket-flavored Markdown. Supplying `inline` attaches the comment to a line of the diff instead of the commit as a whole.",
+          "message": "커밋에 댓글을 추가합니다.\n\n`content.raw`은(는) Bitbucket 특화 Markdown 형식의 댓글 텍스트입니다. `inline`을(를) 제공하면 커밋 전체 대신 diff의 특정 줄에 댓글이 첨부됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Commit",
+          "message": "커밋에 댓글 작성"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "댓글 내용입니다. 텍스트를 \"raw\"에 입력하세요"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "인라인"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1pdF9jb21tZW50.display_name": {
+          "source": "commit_comment",
+          "message": "commit_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"commit_comment\"",
+          "message": "Bitbucket의 객체 구분자입니다. 항상 \"commit_comment\"입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a commit",
+          "message": "커밋에 댓글 추가"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.desc": {
+          "source": "Retrieves a commit by hash, with its message, author, parents and participants.",
+          "message": "해시로 커밋을 조회하며 메시지, 작성자, 부모 커밋 및 참여자 정보를 함께 가져옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
+          "source": "Get Commit",
+          "message": "커밋 가져오기"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "커밋의 SHA1입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "커밋"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "커밋 해시, 브랜치 이름 또는 태그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
+          "source": "Retrieve one commit",
+          "message": "단일 커밋 가져오기"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.desc": {
+          "source": "Lists commits, newest first, across every branch of the repository.",
+          "message": "저장소의 모든 브랜치에 걸쳐 최신순으로 커밋 목록을 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
+          "source": "List Commits",
+          "message": "커밋 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
+          "source": "List a repository's commits",
+          "message": "저장소의 커밋 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.desc": {
+          "source": "Retrieves a repository, including its main branch, project, size and visibility.",
+          "message": "기본 브랜치, 프로젝트, 크기 및 공개 범위를 포함하여 저장소를 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
+          "source": "Get Repository",
+          "message": "저장소 가져오기"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
+          "source": "Retrieve one repository",
+          "message": "단일 저장소 가져오기"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.desc": {
+          "source": "Deletes a repository, its pull requests and its issues.\n\n**This is immediate and permanent**; Bitbucket has no retention window for a deleted repository. `redirect_to` names a repository to redirect the old URL to.",
+          "message": "저장소와 해당 풀 리퀘스트 및 이슈를 삭제합니다.\n\n**이 작업은 즉시 적용되며 영구적입니다.** Bitbucket은 삭제된 저장소에 대한 보존 기간을 두지 않습니다. `redirect_to`은(는) 이전 URL을 리디렉션할 저장소를 지정합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
+          "source": "Delete Repository",
+          "message": "저장소 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to\nshow users a friendly message in the Bitbucket UI that the repository\nhas moved to a new location. However, a GET to this endpoint will still\nreturn a 404.\n",
+          "message": "저장소가 새 위치로 이동된 경우, 이 매개변수를 사용하여 Bitbucket UI에서 사용자에게 저장소가 새 위치로 이동되었다는 친절한 메시지를 표시하십시오. 단, 이 엔드포인트에 대한 GET 요청은 여전히 404를 반환합니다.\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
+          "source": "Redirect To",
+          "message": "리디렉션 대상"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to",
+          "message": "저장소가 새 위치로 이동된 경우 이 매개변수를 사용하여"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
+          "source": "Delete a repository permanently",
+          "message": "저장소 영구 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.desc": {
+          "source": "Creates a repository at the given workspace and slug.\n\nUnusually, the **URL decides the name**: the repository is created at the slug in the path, so there is no name to supply in the body. It is private unless `is_private` says otherwise.",
+          "message": "지정된 워크스페이스 및 슬러그에 저장소를 생성합니다.\n\n특이하게도 **URL이 이름을 결정합니다**. 저장소는 경로의 슬러그 위치에 생성되므로 본문에 입력할 이름이 없습니다. `is_private`에 달리 지정되지 않는 한 비공개입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
+          "source": "Create Repository",
+          "message": "저장소 생성"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\n이 저장소의 포크 규칙을 제어합니다.\n\n* **allow_forks**: 제한 없는 포크 허용\n* **no_public_forks**: 비공개 포크로만 포크 제한(포크를 나중에 공개로 전환할 수 없음)\n* **no_forks**: 모든 포크 거부\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "포크 정책"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 이슈 트래커가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 이슈 트래커 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "이슈 사용"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 위키가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 위키 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "위키 사용"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "비공개"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.desc": {
+          "source": "The slug the repository is created at, which also decides its name",
+          "message": "저장소가 생성될 슬러그이며, 저장소의 이름도 결정합니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository Slug",
+          "message": "저장소 슬러그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The slug to create the repository at",
+          "message": "저장소를 생성할 슬러그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucket의 객체 식별자이며, 항상 \"repository\"입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
+          "source": "Create a repository",
+          "message": "저장소 생성"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.desc": {
+          "source": "Updates a repository's description, visibility, fork policy, language and the features it has enabled.\n\nOnly the fields supplied are changed.",
+          "message": "저장소의 설명, 공개 여부, 포크 정책, 언어 및 활성화된 기능을 업데이트합니다.\n\n제공된 필드만 변경됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
+          "source": "Update Repository",
+          "message": "저장소 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\n이 저장소의 포크 규칙을 제어합니다.\n\n* **allow_forks**: 제한 없는 포크 허용\n* **no_public_forks**: 비공개 포크로만 포크 제한(포크를 나중에 공개로 전환할 수 없음)\n* **no_forks**: 모든 포크 거부\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "포크 정책"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 이슈 트래커가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 이슈 트래커 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "이슈 사용"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n이 저장소의 위키가 활성화되어 있습니다. admin.atlassian.com을 통해 관리되는 워크스페이스의 저장소에는 위키 기능이 지원되지 않습니다.\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "위키 사용"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "비공개 여부"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "기본 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucket의 객체 식별자이며, 항상 \"repository\"입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
+          "source": "Update a repository's settings",
+          "message": "저장소 설정 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.desc": {
+          "source": "Lists pull requests.\n\n`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults to `OPEN`. It may be given more than once to include several states.",
+          "message": "풀 리퀘스트 목록을 조회합니다.\n\n`state`은(는) 조회할 상태(`OPEN`, `MERGED`, `DECLINED` 또는 `SUPERSEDED`)를 선택하며 기본값은 `OPEN`입니다. 여러 상태를 포함하기 위해 여러 번 지정할 수 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
+          "source": "List Pull Requests",
+          "message": "풀 리퀘스트 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk1FUkdFRA.display_name": {
+          "source": "MERGED",
+          "message": "MERGED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.display_name": {
+          "source": "OPEN",
+          "message": "OPEN"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOkRFQ0xJTkVE.display_name": {
+          "source": "DECLINED",
+          "message": "DECLINED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOlNVUEVSU0VERUQ.display_name": {
+          "source": "SUPERSEDED",
+          "message": "SUPERSEDED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.desc": {
+          "source": "Only return pull requests that are in this state. This parameter can be repeated.",
+          "message": "이 상태인 풀 리퀘스트만 반환합니다. 이 매개변수는 반복 지정할 수 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.short_desc": {
+          "source": "Only return pull requests that are in this state",
+          "message": "이 상태인 풀 리퀘스트만 반환"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
+          "source": "List a repository's pull requests",
+          "message": "저장소의 풀 리퀘스트 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.desc": {
+          "source": "Deletes a comment. Bitbucket keeps the comment and marks it deleted rather than removing it, so it still appears in a listing with `deleted` set.",
+          "message": "댓글을 삭제합니다. Bitbucket은 댓글을 완전히 제거하지 않고 삭제됨으로 표시하여 유지하므로, `deleted`이(가) 설정된 목록에 여전히 표시됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
+          "source": "Delete Pull Request Comment",
+          "message": "풀 리퀘스트 댓글 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "댓글의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "댓글의 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
+          "source": "Delete a comment on a pull request",
+          "message": "풀 리퀘스트의 댓글 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.desc": {
+          "source": "Retrieves a single comment on a pull request.",
+          "message": "풀 리퀘스트의 단일 댓글을 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
+          "source": "Get Pull Request Comment",
+          "message": "풀 리퀘스트 댓글 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "댓글의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "댓글의 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
+          "source": "Retrieve one comment on a pull request",
+          "message": "풀 리퀘스트의 댓글 1개 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.desc": {
+          "source": "Replaces the text of a comment. Only the comment's author may change it.",
+          "message": "댓글의 본문을 바꿉니다. 댓글 작성자만 수정할 수 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
+          "source": "Update Pull Request Comment",
+          "message": "풀 리퀘스트 댓글 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "댓글의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "댓글의 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.short_desc": {
+          "source": "The replacement comment; put the text in \"raw\"",
+          "message": "대체할 댓글 내용이며, 텍스트는 \"raw\"에 입력하십시오"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "인라인"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucket의 객체 식별자이며, 항상 \"pullrequest_comment\"입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
+          "source": "Update a comment on a pull request",
+          "message": "풀 리퀘스트의 댓글 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments on a pull request, including the ones attached to a line of the diff and the ones Bitbucket marks as deleted.",
+          "message": "diff의 특정 줄에 첨부된 댓글과 Bitbucket에서 삭제됨으로 표시된 댓글을 포함하여 풀 리퀘스트의 댓글 목록을 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Pull Request Comments",
+          "message": "풀 리퀘스트 댓글 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a pull request",
+          "message": "풀 리퀘스트의 댓글 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a pull request.\n\n`content.raw` is the comment text. Supplying `inline` with a `path` and a line number attaches it to that line of the diff; supplying `parent` makes it a reply.",
+          "message": "풀 리퀘스트에 댓글을 추가합니다.\n\n`content.raw`은(는) 댓글 내용입니다. `inline`을(를) `path` 및 줄 번호와 함께 제공하면 diff의 해당 줄에 첨부되며, `parent`을(를) 제공하면 답글로 작성됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Pull Request",
+          "message": "풀 리퀘스트에 댓글 작성"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "댓글"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "댓글 내용입니다. 텍스트를 \"raw\"에 입력하세요"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "인라인"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "부모"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucket의 객체 식별자이며, 항상 \"pullrequest_comment\"입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a pull request",
+          "message": "풀 리퀘스트에 댓글 추가"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.desc": {
+          "source": "Retrieves a pull request with its state, participants and merge commit.",
+          "message": "풀 리퀘스트의 상태, 참여자 및 병합 커밋 정보와 함께 풀 리퀘스트를 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
+          "source": "Get Pull Request",
+          "message": "풀 리퀘스트 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
+          "source": "Retrieve one pull request",
+          "message": "풀 리퀘스트 1개 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.desc": {
+          "source": "Updates a pull request's title, description, destination branch or reviewers.\n\nOnly the fields supplied are changed. This does not merge, decline or approve the pull request; those are separate operations.",
+          "message": "풀 리퀘스트의 제목, 설명, 대상 브랜치 또는 리뷰어를 업데이트합니다.\n\n제공된 필드만 변경됩니다. 풀 리퀘스트를 병합, 거절 또는 승인하지 않으며, 이들은 별도의 작업입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
+          "source": "Update Pull Request",
+          "message": "풀 리퀘스트 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "풀 리퀘스트 병합 시 소스 브랜치를 삭제할지 여부를 나타내는 불리언 플래그입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "소스 브랜치 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "풀 리퀘스트 병합 시 소스 브랜치를 삭제할지 여부를 나타내는 불리언 플래그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "변경 사항이 병합될 브랜치입니다. 설정하지 않으면 리포지토리의 기본 브랜치가 사용됩니다.\n\nBitbucket에서는 이를 중첩 객체로 선언하지만, 여기서는 브랜치 이름 단독으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 중첩 브랜치 참조인 `{\"branch\": {\"name\": …}}`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "대상 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "변경 사항이 병합될 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "풀 리퀘스트가 초안(Draft)인지 여부를 나타내는 불리언 플래그입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "임시 저장"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "풀 리퀘스트가 초안(Draft)인지 여부를 나타내는 불리언 플래그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "병합할 변경 사항이 있는 브랜치입니다.\n\nBitbucket에서는 이를 중첩 객체로 선언하지만, 여기서는 브랜치 이름 단독으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 중첩 브랜치 참조인 `{\"branch\": {\"name\": …}}`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "소스 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "변경 사항이 있는 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "풀 리퀘스트의 ID입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "풀 리퀘스트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "웹 UI에 표시되는 풀 리퀘스트 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "리뷰를 요청할 멤버들의 계정 UUID입니다.\n\nBitbucket에서는 이를 사용자 객체 목록으로 선언하지만, 여기서는 ID 목록으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 사용자 객체 목록인 `[{\"type\": \"user\", \"uuid\": …}]`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "리뷰어"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "리뷰를 요청할 워크스페이스 멤버"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "풀 리퀘스트의 제목입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "풀 리퀘스트의 제목"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucket의 객체 판별자입니다. 항상 \"pullrequest\"입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
+          "source": "Update a pull request",
+          "message": "풀 리퀘스트 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.desc": {
+          "source": "Opens a pull request from one branch into another.\n\nThe repository in the URL is the **destination**. `destination` defaults to the repository's main branch when unset. Setting `close_source_branch` deletes the source branch when the pull request is merged.",
+          "message": "한 브랜치에서 다른 브랜치로 풀 리퀘스트를 엽니다.\n\nURL의 리포지토리는 **대상(destination)**입니다. 설정하지 않으면 `destination`의 기본값은 리포지토리의 기본 브랜치입니다. `close_source_branch`을(를) 설정하면 풀 리퀘스트가 병합될 때 소스 브랜치가 삭제됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
+          "source": "Create Pull Request",
+          "message": "풀 리퀘스트 생성"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "풀 리퀘스트 병합 시 소스 브랜치를 삭제할지 여부를 나타내는 불리언 플래그입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "소스 브랜치 삭제"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "풀 리퀘스트 병합 시 소스 브랜치를 삭제할지 여부를 나타내는 불리언 플래그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "변경 사항이 병합될 브랜치입니다. 설정하지 않으면 리포지토리의 기본 브랜치가 사용됩니다.\n\nBitbucket에서는 이를 중첩 객체로 선언하지만, 여기서는 브랜치 이름 단독으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 중첩 브랜치 참조인 `{\"branch\": {\"name\": …}}`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "대상 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "변경 사항이 병합될 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "풀 리퀘스트가 초안(Draft)인지 여부를 나타내는 불리언 플래그입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "임시 저장"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "풀 리퀘스트가 초안(Draft)인지 여부를 나타내는 불리언 플래그"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "병합할 변경 사항이 있는 브랜치입니다.\n\nBitbucket에서는 이를 중첩 객체로 선언하지만, 여기서는 브랜치 이름 단독으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 중첩 브랜치 참조인 `{\"branch\": {\"name\": …}}`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "소스 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "변경 사항이 있는 브랜치"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "리뷰를 요청할 멤버들의 계정 UUID입니다.\n\nBitbucket에서는 이를 사용자 객체 목록으로 선언하지만, 여기서는 ID 목록으로 표시되며 API가 기대하는 형식으로 전송됩니다.\n\n이 값은 Bitbucket의 사용자 객체 목록인 `[{\"type\": \"user\", \"uuid\": …}]`(으)로 전송됩니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "리뷰어"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "리뷰를 요청할 워크스페이스 멤버"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "풀 리퀘스트의 제목입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "풀 리퀘스트의 제목"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucket의 객체 판별자입니다. 항상 \"pullrequest\"입니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
+          "source": "Open a pull request",
+          "message": "풀 리퀘스트 열기"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.desc": {
+          "source": "Lists the branches of a repository with the commit each one points at.\n\nThis is what backs the branch dropdowns on the pull request actions; the application this module replaces offered those dropdowns without exporting the endpoint that fills them.",
+          "message": "각 브랜치가 가리키는 커밋과 함께 리포지토리의 브랜치 목록을 조회합니다.\n\n이는 풀 리퀘스트 작업의 브랜치 드롭다운을 지원하는 항목입니다. 이 모듈이 대체하는 애플리케이션은 이를 채우는 엔드포인트를 내보내지 않고도 해당 드롭다운을 제공했습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
+          "source": "List Branches",
+          "message": "브랜치 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[필터링 및 정렬](/cloud/bitbucket/rest/intro/#filtering)에 따라 결과를 정렬할 기준 필드입니다.\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "정렬 기준"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "정렬 기준 필드입니다. 역순으로 정렬하려면 앞에 \"-\"를 붙입니다"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [필터 표현식](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)입니다(예: `state = \"OPEN\"` 또는 `updated_on > 2026-01-01`).\n\n필터에서 지정할 수 있는 필드는 컬렉션마다 다르며 엔드포인트에 설명되어 있습니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 필터 표현식(예: 'state = \"OPEN\"')"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "작업할 리포지토리(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n리포지토리 범위에 속하는 다른 모든 항목(커밋, 브랜치, 풀 리퀘스트)은 이 리포지토리에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "작업할 리포지토리"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
+          "source": "List a repository's branches",
+          "message": "리포지토리의 브랜치 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.desc": {
+          "source": "Retrieves a workspace with its slug, name and whether it is private.",
+          "message": "슬러그, 이름 및 비공개 여부와 함께 워크스페이스를 조회합니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
+          "source": "Get Workspace",
+          "message": "워크스페이스 가져오기"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
+          "source": "Retrieve one workspace",
+          "message": "단일 워크스페이스 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.desc": {
+          "source": "Lists the members of a workspace.\n\nEach record is a **membership**, so the member is under `user` rather than at the top level: the account UUID is `user.uuid`.",
+          "message": "워크스페이스의 멤버 목록을 조회합니다.\n\n각 레코드는 **membership**이므로 멤버는 최상위 레벨이 아닌 `user` 아래에 있습니다. 계정 UUID는 `user.uuid`입니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
+          "source": "List Workspace Members",
+          "message": "워크스페이스 멤버 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
+          "source": "List the members of a workspace",
+          "message": "워크스페이스의 멤버 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.desc": {
+          "source": "Lists the projects in a workspace. A project groups repositories; it is not a Jira project.",
+          "message": "워크스페이스의 프로젝트 목록을 조회합니다. 프로젝트는 리포지토리를 그룹화하며, Jira 프로젝트가 아닙니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
+          "source": "List Workspace Projects",
+          "message": "워크스페이스 프로젝트 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Bitbucket 최대치인 `100`개까지).\n\n응답의 `next`은(는) 다음 페이지의 URL입니다. Bitbucket이 모든 컬렉션에 대해 보고하지 않는 `size` 대신 이 값의 유무를 기준으로 페이징하세요."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "페이지 길이"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "작업할 워크스페이스(슬러그 또는 중괄호로 묶인 UUID로 지정).\n\n워크스페이스 범위에 속하는 다른 모든 항목(리포지토리, 멤버)은 이 워크스페이스에서 나열되므로, 변경 시 다시 읽어옵니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "작업할 워크스페이스"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
+          "source": "List the projects in a workspace",
+          "message": "워크스페이스의 프로젝트 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.desc": {
+          "source": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries no display name, so a workspace is identified by its slug.",
+          "message": "인증된 사용자가 접근할 수 있는 워크스페이스 목록을 조회합니다.\n\n`administrator`(은)는 관리하는 워크스페이스로 목록을 좁힙니다.\n\n이는 Bitbucket이 워크스페이스 전반에 걸쳐 여전히 제공하는 **유일한** 목록이며, 다른 모든 Bitbucket 드롭다운의 범위가 지정되는 워크스페이스 드롭다운을 채우는 항목입니다. 레코드는 워크스페이스를 감싸고 있으며(`{administrator, workspace: {slug, uuid, links}}`) 표시 이름이 없으므로 워크스페이스는 슬러그로 식별됩니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
+          "source": "List Workspaces",
+          "message": "워크스페이스 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.desc": {
+          "source": "Filter workspaces based on which ones the caller has admin permissions or not.",
+          "message": "호출자에게 관리자 권한이 있는지 여부에 따라 워크스페이스를 필터링합니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.display_name": {
+          "source": "Administrator Only",
+          "message": "관리자 전용"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.short_desc": {
+          "source": "Return only workspaces the credential administers",
+          "message": "자격 증명이 관리하는 워크스페이스만 반환"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[필터링 및 정렬](/cloud/bitbucket/rest/intro/#filtering)에 따라 결과를 정렬할 기준 필드입니다.\n        "
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "정렬 기준"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "정렬 기준 필드입니다. 역순으로 정렬하려면 앞에 \"-\"를 붙입니다"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "반환할 결과 페이지(1부터 시작). Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "페이지"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "반환할 결과 페이지(1부터 시작)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "한 페이지에 반환할 레코드 수(최대 100개)입니다. Bitbucket은 모든 컬렉션에 대해 이를 문서화하지만 실제로는 거의 선언하지 않습니다."
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Pagelen",
+          "message": "Pagelen"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return in one page, up to 100",
+          "message": "한 페이지에 반환할 레코드 수(최대 100개)"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
+          "source": "List the workspaces the credential can see",
+          "message": "자격 증명으로 볼 수 있는 워크스페이스 목록 조회"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "검색 기준과 일치하는 지정된 테이블의 모든 레코드를 업데이트합니다"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "레코드 업데이트"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "작업할 테이블: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` 또는 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "검색 기준과 일치하는 레코드 업데이트"
+        },
+        "app.Qml0YnVja2V0.desc": {
+          "source": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow - the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "Atlassian의 Git 리포지토리 호스팅 서비스인 [Bitbucket Cloud](https://bitbucket.org)에 대한 액세스를 제공합니다.\n\n**주요 사용 사례**:\n- **리포지토리**: 리포지토리 생성, 조회, 업데이트, 삭제 및 브랜치 목록 조회\n- **풀 리퀘스트**: 풀 리퀘스트 생성, 업데이트 및 댓글 작성\n- **커밋**: 커밋 조회, 승인 및 댓글 작성\n- **배포**: 무엇이 어디에 어떤 상태로 배포되었는지 조회\n- **워크스페이스**: 워크스페이스, 멤버 및 프로젝트 조회\n- **검색**: 워크스페이스의 리포지토리 전체에서 코드 검색\n\n**인증** 방식으로는 리포지토리, 프로젝트 또는 워크스페이스 액세스 토큰, 앱 비밀번호 또는 OAuth2 인증 코드 흐름이 지원되며, 처음 두 방식은 OAuth 컨슈머가 필요 없으므로 워크스페이스 관리자 권한이 필요하지 않습니다.\n\n이 애플리케이션은 Bitbucket **Cloud**를 대상으로 하며, Bitbucket Data Center는 API가 다른 별개의 제품입니다.\n\nBitbucket은 Atlassian Pty Ltd.의 상표입니다."
+        },
+        "app.Qml0YnVja2V0.display_name": {
+          "source": "Bitbucket",
+          "message": "Bitbucket"
+        },
+        "app.Qml0YnVja2V0.short_desc": {
+          "source": "Work with Bitbucket Cloud repositories, pull requests and deployments",
+          "message": "Bitbucket Cloud 리포지토리, 풀 리퀘스트 및 배포 작업 수행"
+        }
+      }
+    }
+  }
+}

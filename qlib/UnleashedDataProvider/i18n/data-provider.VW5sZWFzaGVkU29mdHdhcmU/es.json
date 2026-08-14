@@ -1,0 +1,1725 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.desc": {
+          "source": "Mark a credit note as completed in Unleashed.",
+          "message": "Marcar una nota de crédito como completada en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.display_name": {
+          "source": "Complete Credit Note",
+          "message": "Completar nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to complete",
+          "message": "El identificador único (GUID) de la nota de crédito a completar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtY3JlZGl0LW5vdGU.short_desc": {
+          "source": "Complete a credit note",
+          "message": "Completar una nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.desc": {
+          "source": "Mark a sales order as completed in Unleashed.",
+          "message": "Marcar un pedido de venta como completado en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.display_name": {
+          "source": "Complete Sales Order",
+          "message": "Completar pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to complete",
+          "message": "El identificador único (GUID) del pedido de venta a completar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "El GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y29tcGxldGUtc2FsZXMtb3JkZXI.short_desc": {
+          "source": "Complete a sales order",
+          "message": "Completar un pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Unleashed with contact information and settings.",
+          "message": "Crear un nuevo cliente en Unleashed con información de contacto y configuración."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Crear cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.desc": {
+          "source": "First name of the primary contact",
+          "message": "Nombre del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.display_name": {
+          "source": "Contact First Name",
+          "message": "Nombre del contacto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.short_desc": {
+          "source": "Primary contact first name",
+          "message": "Nombre del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.desc": {
+          "source": "Last name of the primary contact",
+          "message": "Apellido del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.display_name": {
+          "source": "Contact Last Name",
+          "message": "Apellido del contacto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.short_desc": {
+          "source": "Primary contact last name",
+          "message": "Apellido del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "El límite de crédito del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Límite de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Customer credit limit",
+          "message": "Límite de crédito del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The currency for this customer",
+          "message": "La moneda para este cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Moneda"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Customer currency",
+          "message": "Moneda del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.desc": {
+          "source": "The unique customer code (required, cannot be modified after creation)",
+          "message": "El código único de cliente (obligatorio, no se puede modificar después de la creación)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.display_name": {
+          "source": "Customer Code",
+          "message": "Código de cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.short_desc": {
+          "source": "Unique customer code",
+          "message": "Código único de cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.desc": {
+          "source": "The customer's display name (required)",
+          "message": "El nombre para mostrar del cliente (obligatorio)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.display_name": {
+          "source": "Customer Name",
+          "message": "Nombre del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.short_desc": {
+          "source": "Customer name",
+          "message": "Nombre del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "Lista de direcciones para este cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Direcciones"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Customer addresses",
+          "message": "Direcciones del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.desc": {
+          "source": "The customer's default discount rate",
+          "message": "La tasa de descuento predeterminada del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.display_name": {
+          "source": "Discount Rate",
+          "message": "Tasa de descuento"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.short_desc": {
+          "source": "Default discount rate",
+          "message": "Tasa de descuento predeterminada"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.desc": {
+          "source": "Primary email address for the customer",
+          "message": "Dirección de correo electrónico principal del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Dirección de correo electrónico principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.desc": {
+          "source": "Customer's mobile phone number",
+          "message": "Número de teléfono móvil del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.display_name": {
+          "source": "Mobile Number",
+          "message": "Número de móvil"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Número de teléfono móvil"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.desc": {
+          "source": "Customer's phone number",
+          "message": "Número de teléfono del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Número de teléfono"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Número de teléfono"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.desc": {
+          "source": "Whether the customer is taxable",
+          "message": "Indica si el cliente está sujeto a impuestos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Sujeto a impuestos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.short_desc": {
+          "source": "Is customer taxable",
+          "message": "¿El cliente está sujeto a impuestos?"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Crear un nuevo cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Create a new free credit note in Unleashed.",
+          "message": "Crear una nueva nota de crédito libre en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Create Credit Note",
+          "message": "Crear nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this credit note",
+          "message": "Comentarios o notas para esta nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Comentarios"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.short_desc": {
+          "source": "Credit note comments",
+          "message": "Comentarios de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
+          "source": "The credit note number",
+          "message": "El número de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
+          "source": "Credit Note Number",
+          "message": "Número de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Credit note number",
+          "message": "Número de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.desc": {
+          "source": "The credit note date",
+          "message": "La fecha de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.display_name": {
+          "source": "Credit Note Date",
+          "message": "Fecha de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZURhdGU.short_desc": {
+          "source": "Credit note date",
+          "message": "Fecha de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.desc": {
+          "source": "List of line items for this credit note",
+          "message": "Lista de líneas para esta nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.display_name": {
+          "source": "Credit Note Lines",
+          "message": "Líneas de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.short_desc": {
+          "source": "Credit note line items",
+          "message": "Líneas de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer for this credit note. Must include `Guid` (the customer GUID)",
+          "message": "El cliente para esta nota de crédito. Debe incluir `Guid` (el GUID del cliente)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer information",
+          "message": "Información del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Create a new credit note",
+          "message": "Crear una nueva nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Create a new line item on an existing credit note.",
+          "message": "Crear una nueva línea en una nota de crédito existente."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Create Credit Note Line",
+          "message": "Crear línea de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.desc": {
+          "source": "The product for this line. Must include `Guid` (the product GUID)",
+          "message": "El producto para esta línea. Debe incluir `Guid` (el GUID del producto)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.display_name": {
+          "source": "Product",
+          "message": "Producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UHJvZHVjdA.short_desc": {
+          "source": "Product information",
+          "message": "Información del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.desc": {
+          "source": "The quantity for this line",
+          "message": "La cantidad para esta línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.display_name": {
+          "source": "Quantity",
+          "message": "Cantidad"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.short_desc": {
+          "source": "Line quantity",
+          "message": "Cantidad de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.desc": {
+          "source": "The unit price for this line",
+          "message": "El precio unitario para esta línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Precio unitario"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.short_desc": {
+          "source": "Unit price",
+          "message": "Precio unitario"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "El identificador único (GUID) de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Add a line item to a credit note",
+          "message": "Agregar una línea a una nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in Unleashed with product code, description, and pricing.",
+          "message": "Crear un nuevo producto en Unleashed con código de producto, descripción y precios."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "Crear producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.desc": {
+          "source": "The product barcode",
+          "message": "El código de barras del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.display_name": {
+          "source": "Barcode",
+          "message": "Código de barras"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.short_desc": {
+          "source": "Product barcode",
+          "message": "Código de barras del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.desc": {
+          "source": "The default purchase price",
+          "message": "El precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.display_name": {
+          "source": "Default Purchase Price",
+          "message": "Precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.short_desc": {
+          "source": "Default purchase price",
+          "message": "Precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.desc": {
+          "source": "The default sell price",
+          "message": "El precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.display_name": {
+          "source": "Default Sell Price",
+          "message": "Precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.short_desc": {
+          "source": "Default sell price",
+          "message": "Precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.desc": {
+          "source": "Whether this is an assembled product (made from components)",
+          "message": "Indica si este es un producto ensamblado (fabricado a partir de componentes)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.display_name": {
+          "source": "Is Assembled Product",
+          "message": "Es producto ensamblado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNBc3NlbWJsZWRQcm9kdWN0.short_desc": {
+          "source": "Is this an assembled product",
+          "message": "Si este es un producto ensamblado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.desc": {
+          "source": "Whether the product can be purchased",
+          "message": "Indica si el producto se puede comprar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.display_name": {
+          "source": "Is Purchasable",
+          "message": "Es comprable"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.short_desc": {
+          "source": "Can product be purchased",
+          "message": "Si el producto se puede comprar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.desc": {
+          "source": "Whether the product can be sold",
+          "message": "Indica si el producto se puede vender"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.display_name": {
+          "source": "Is Sellable",
+          "message": "Es vendible"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.short_desc": {
+          "source": "Can product be sold",
+          "message": "Si el producto se puede vender"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.desc": {
+          "source": "The unique product code (required, cannot be modified after creation)",
+          "message": "El código de producto único (obligatorio, no se puede modificar tras su creación)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.display_name": {
+          "source": "Product Code",
+          "message": "Código de producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdENvZGU.short_desc": {
+          "source": "Unique product code",
+          "message": "Código de producto único"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.desc": {
+          "source": "The product description (required)",
+          "message": "La descripción del producto (obligatoria)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.display_name": {
+          "source": "Product Description",
+          "message": "Descripción del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.short_desc": {
+          "source": "Product description",
+          "message": "Descripción del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.desc": {
+          "source": "The unit of measure (e.g., 'Each', 'Box', 'Kg')",
+          "message": "La unidad de medida (p. ej., 'Each', 'Box', 'Kg')"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.display_name": {
+          "source": "Unit of Measure",
+          "message": "Unidad de medida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.option.VW5pdE9mTWVhc3VyZQ.short_desc": {
+          "source": "Unit of measure",
+          "message": "Unidad de medida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Crear un nuevo producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Unleashed with customer, line items, and delivery information.",
+          "message": "Crear un nuevo pedido de venta en Unleashed con información del cliente, líneas de pedido y entrega."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "Crear pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this order",
+          "message": "Comentarios o notas para este pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Comentarios"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Order comments",
+          "message": "Comentarios del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer for this sales order. Must include `Guid` (the customer GUID)",
+          "message": "El cliente para este pedido de venta. Debe incluir `Guid` (el GUID del cliente)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer information",
+          "message": "Información del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.desc": {
+          "source": "City for delivery",
+          "message": "Ciudad de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.display_name": {
+          "source": "Delivery City",
+          "message": "Ciudad de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDaXR5.short_desc": {
+          "source": "Delivery city",
+          "message": "Ciudad de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.desc": {
+          "source": "Country for delivery",
+          "message": "País de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.display_name": {
+          "source": "Delivery Country",
+          "message": "País de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlDb3VudHJ5.short_desc": {
+          "source": "Delivery country",
+          "message": "País de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.desc": {
+          "source": "Name of the delivery recipient",
+          "message": "Nombre del destinatario de la entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.display_name": {
+          "source": "Delivery Name",
+          "message": "Nombre de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlOYW1l.short_desc": {
+          "source": "Delivery recipient name",
+          "message": "Nombre del destinatario de la entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.desc": {
+          "source": "Postal code for delivery",
+          "message": "Código postal de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.display_name": {
+          "source": "Delivery Post Code",
+          "message": "Código postal de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlQb3N0Q29kZQ.short_desc": {
+          "source": "Delivery postal code",
+          "message": "Código postal de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.desc": {
+          "source": "Region or state for delivery",
+          "message": "Región o estado de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.display_name": {
+          "source": "Delivery Region",
+          "message": "Región de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlSZWdpb24.short_desc": {
+          "source": "Delivery region/state",
+          "message": "Región/estado de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.desc": {
+          "source": "Street address for delivery",
+          "message": "Dirección de la calle de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.display_name": {
+          "source": "Delivery Street Address",
+          "message": "Dirección de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdHJlZXRBZGRyZXNz.short_desc": {
+          "source": "Delivery street address",
+          "message": "Dirección de la calle de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.desc": {
+          "source": "Suburb for delivery",
+          "message": "Suburbio de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.display_name": {
+          "source": "Delivery Suburb",
+          "message": "Suburbio de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.RGVsaXZlcnlTdWJ1cmI.short_desc": {
+          "source": "Delivery suburb",
+          "message": "Suburbio de entrega"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.desc": {
+          "source": "The order date",
+          "message": "La fecha del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.display_name": {
+          "source": "Order Date",
+          "message": "Fecha del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJEYXRl.short_desc": {
+          "source": "Order date",
+          "message": "Fecha del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.desc": {
+          "source": "The sales order number",
+          "message": "El número de pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.display_name": {
+          "source": "Order Number",
+          "message": "Número de pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJOdW1iZXI.short_desc": {
+          "source": "Order number",
+          "message": "Número de pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkJhY2tvcmRlcmVk.desc": {
+          "source": "Backordered order",
+          "message": "Pedido pendiente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBhcmtlZA.desc": {
+          "source": "Draft/parked order",
+          "message": "Pedido en borrador/aparcado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBsYWNlZA.desc": {
+          "source": "Placed order",
+          "message": "Pedido realizado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.desc": {
+          "source": "The order status",
+          "message": "El estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.short_desc": {
+          "source": "Order status",
+          "message": "Estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.desc": {
+          "source": "List of line items for this sales order",
+          "message": "Lista de líneas de pedido para este pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.display_name": {
+          "source": "Sales Order Lines",
+          "message": "Líneas de pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.short_desc": {
+          "source": "Order line items",
+          "message": "Elementos de línea del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.desc": {
+          "source": "The required delivery date",
+          "message": "La fecha de entrega requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.display_name": {
+          "source": "Required Date",
+          "message": "Fecha requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.short_desc": {
+          "source": "Required delivery date",
+          "message": "Fecha de entrega requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Crear un nuevo pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier (GUID).",
+          "message": "Recuperar información detallada sobre un cliente específico mediante su identificador único (GUID)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Obtener cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "El identificador único (GUID) del cliente a recuperar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.display_name": {
+          "source": "Customer GUID",
+          "message": "GUID del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.option.Z3VpZA.short_desc": {
+          "source": "The customer GUID",
+          "message": "El GUID del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by GUID",
+          "message": "Obtener un cliente por GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.desc": {
+          "source": "Retrieve detailed information about a specific credit note.",
+          "message": "Recuperar información detallada sobre una nota de crédito específica."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Get Credit Note",
+          "message": "Obtener nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to retrieve",
+          "message": "El identificador único (GUID) de la nota de crédito a recuperar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Get a credit note by GUID",
+          "message": "Obtener una nota de crédito por GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "Recuperar información detallada sobre un producto específico."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Obtener producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "El identificador único (GUID) del producto a recuperar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "El GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by GUID",
+          "message": "Obtener un producto por GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific sales order.",
+          "message": "Recuperar información detallada sobre un pedido de venta específico."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "Obtener pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to retrieve",
+          "message": "El identificador único (GUID) del pedido de venta a recuperar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "El GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get a sales order by GUID",
+          "message": "Obtener una orden de venta por GUID"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Delete a credit note from Unleashed.",
+          "message": "Eliminar una nota de crédito de Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Delete Credit Note",
+          "message": "Eliminar nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to delete",
+          "message": "El identificador único (GUID) de la nota de crédito a eliminar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Delete a credit note",
+          "message": "Eliminar una nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Remove a line item from a credit note.",
+          "message": "Eliminar una línea de una nota de crédito."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Delete Credit Note Line",
+          "message": "Eliminar línea de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "El identificador único (GUID) de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.desc": {
+          "source": "The unique identifier (GUID) of the line to delete",
+          "message": "El identificador único (GUID) de la línea a eliminar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.display_name": {
+          "source": "Line GUID",
+          "message": "GUID de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.short_desc": {
+          "source": "The line item GUID",
+          "message": "El GUID de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Delete a credit note line item",
+          "message": "Eliminar una línea de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Unleashed.",
+          "message": "Eliminar una orden de venta de Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Eliminar pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to delete",
+          "message": "El identificador único (GUID) de la orden de venta a eliminar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "El GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Eliminar una orden de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.desc": {
+          "source": "Mark a product as obsolete in Unleashed, removing it from active use.",
+          "message": "Marcar un producto como obsoleto en Unleashed, retirándolo del uso activo."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.display_name": {
+          "source": "Obsolete Product",
+          "message": "Marcar producto como obsoleto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to mark as obsolete",
+          "message": "El identificador único (GUID) del producto a marcar como obsoleto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "El GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.b2Jzb2xldGUtcHJvZHVjdA.short_desc": {
+          "source": "Mark a product as obsolete",
+          "message": "Marcar un producto como obsoleto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unleashed Software** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada personalizada a la API HTTP / REST a **Unleashed Software** utilizando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtilice esta acción para extremos que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unleashed Software",
+          "message": "Realizar una llamada personalizada a la API de Unleashed Software"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.desc": {
+          "source": "Fires when a new customer is detected or an existing customer is modified via polling.",
+          "message": "Se activa cuando se detecta un nuevo cliente o se modifica un cliente existente mediante sondeo."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.display_name": {
+          "source": "New Customer",
+          "message": "Nuevo cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LWN1c3RvbWVy.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "Se activa cuando se crea o actualiza un cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is detected or an existing sales order is modified via polling.",
+          "message": "Se activa cuando se detecta una nueva orden de venta o se modifica una orden de venta existente mediante sondeo."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "Nueva orden de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a sales order is created or updated",
+          "message": "Se activa cuando se crea o actualiza una orden de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Unleashed with optional filtering by customer code, name, email, customer type, or modification date.",
+          "message": "Recupere una lista de clientes de Unleashed con filtrado opcional por código de cliente, nombre, correo electrónico, tipo de cliente o fecha de modificación."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Buscar clientes"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "Listar y buscar clientes"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.desc": {
+          "source": "Retrieve a list of credit notes from Unleashed with optional filtering.",
+          "message": "Recupere una lista de notas de crédito de Unleashed con filtrado opcional."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.display_name": {
+          "source": "Search Credit Notes",
+          "message": "Buscar notas de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLWNyZWRpdC1ub3Rlcw.short_desc": {
+          "source": "List and search credit notes",
+          "message": "Listar y buscar notas de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Unleashed with optional filtering by product code, description, or barcode.",
+          "message": "Recupere una lista de productos de Unleashed con filtrado opcional por código de producto, descripción o código de barras."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Buscar productos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "Listar y buscar productos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.desc": {
+          "source": "Retrieve a list of sales orders from Unleashed with optional filtering.",
+          "message": "Recupere una lista de órdenes de venta de Unleashed con filtrado opcional."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.display_name": {
+          "source": "Search Sales Orders",
+          "message": "Buscar órdenes de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.c2VhcmNoLXNhbGVzLW9yZGVycw.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Listar y buscar pedidos de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Unleashed.",
+          "message": "Actualizar la información de un cliente existente en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Actualizar cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.desc": {
+          "source": "First name of the primary contact",
+          "message": "Nombre del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.display_name": {
+          "source": "Contact First Name",
+          "message": "Nombre del contacto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdEZpcnN0TmFtZQ.short_desc": {
+          "source": "Primary contact first name",
+          "message": "Nombre del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.desc": {
+          "source": "Last name of the primary contact",
+          "message": "Apellido del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.display_name": {
+          "source": "Contact Last Name",
+          "message": "Apellido del contacto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdExhc3ROYW1l.short_desc": {
+          "source": "Primary contact last name",
+          "message": "Apellido del contacto principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "El límite de crédito del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Límite de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Customer credit limit",
+          "message": "Límite de crédito del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.desc": {
+          "source": "The customer code (must match the existing code)",
+          "message": "El código de cliente (debe coincidir con el código existente)"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.display_name": {
+          "source": "Customer Code",
+          "message": "Código de cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJDb2Rl.short_desc": {
+          "source": "Customer code",
+          "message": "Código de cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.desc": {
+          "source": "The customer's display name",
+          "message": "El nombre para mostrar del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.display_name": {
+          "source": "Customer Name",
+          "message": "Nombre del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VzdG9tZXJOYW1l.short_desc": {
+          "source": "Customer name",
+          "message": "Nombre del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.desc": {
+          "source": "The customer's default discount rate",
+          "message": "La tasa de descuento predeterminada del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.display_name": {
+          "source": "Discount Rate",
+          "message": "Tasa de descuento"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnRSYXRl.short_desc": {
+          "source": "Default discount rate",
+          "message": "Tasa de descuento predeterminada"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.desc": {
+          "source": "Primary email address for the customer",
+          "message": "Dirección de correo electrónico principal del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "Dirección de correo electrónico principal"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.desc": {
+          "source": "Customer's mobile phone number",
+          "message": "Número de teléfono móvil del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.display_name": {
+          "source": "Mobile Number",
+          "message": "Número de móvil"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TW9iaWxlTnVtYmVy.short_desc": {
+          "source": "Mobile phone number",
+          "message": "Número de teléfono móvil"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.desc": {
+          "source": "Whether credit is stopped for this customer",
+          "message": "Indica si el crédito está suspendido para este cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.display_name": {
+          "source": "Stop Credit",
+          "message": "Suspender crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RvcENyZWRpdA.short_desc": {
+          "source": "Credit stop status",
+          "message": "Estado de suspensión de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.desc": {
+          "source": "Customer's phone number",
+          "message": "Número de teléfono del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Número de teléfono"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Número de teléfono"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.desc": {
+          "source": "Whether the customer is taxable",
+          "message": "Indica si el cliente está sujeto a impuestos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Sujeto a impuestos"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4YWJsZQ.short_desc": {
+          "source": "Is customer taxable",
+          "message": "¿El cliente está sujeto a impuestos?"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the customer to update",
+          "message": "El identificador único (GUID) del cliente a actualizar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.display_name": {
+          "source": "Customer GUID",
+          "message": "GUID del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Z3VpZA.short_desc": {
+          "source": "The customer GUID",
+          "message": "El GUID del cliente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Actualizar un cliente existente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Update an existing credit note in Unleashed.",
+          "message": "Actualizar una nota de crédito existente en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Update Credit Note",
+          "message": "Actualizar nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this credit note",
+          "message": "Comentarios o notas para esta nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Comentarios"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q29tbWVudHM.short_desc": {
+          "source": "Credit note comments",
+          "message": "Comentarios de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.desc": {
+          "source": "List of line items for this credit note",
+          "message": "Lista de líneas para esta nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.display_name": {
+          "source": "Credit Note Lines",
+          "message": "Líneas de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Q3JlZGl0Tm90ZUxpbmVz.short_desc": {
+          "source": "Credit note line items",
+          "message": "Líneas de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note to update",
+          "message": "El identificador único (GUID) de la nota de crédito a actualizar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Update an existing credit note",
+          "message": "Actualizar una nota de crédito existente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.desc": {
+          "source": "Update an existing line item on a credit note.",
+          "message": "Actualizar una línea existente en una nota de crédito."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.display_name": {
+          "source": "Update Credit Note Line",
+          "message": "Actualizar línea de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.desc": {
+          "source": "The quantity for this line",
+          "message": "La cantidad para esta línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.display_name": {
+          "source": "Quantity",
+          "message": "Cantidad"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.UXR5.short_desc": {
+          "source": "Line quantity",
+          "message": "Cantidad de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.desc": {
+          "source": "The unit price for this line",
+          "message": "El precio unitario para esta línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Precio unitario"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.VW5pdFByaWNl.short_desc": {
+          "source": "Unit price",
+          "message": "Precio unitario"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the credit note",
+          "message": "El identificador único (GUID) de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.display_name": {
+          "source": "Credit Note GUID",
+          "message": "GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.Z3VpZA.short_desc": {
+          "source": "The credit note GUID",
+          "message": "El GUID de la nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.desc": {
+          "source": "The unique identifier (GUID) of the line to update",
+          "message": "El identificador único (GUID) de la línea a actualizar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.display_name": {
+          "source": "Line GUID",
+          "message": "GUID de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.option.bGluZUd1aWQ.short_desc": {
+          "source": "The line item GUID",
+          "message": "El GUID de la línea"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLWNyZWRpdC1ub3RlLWxpbmU.short_desc": {
+          "source": "Update a credit note line item",
+          "message": "Actualizar una línea de nota de crédito"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product's information in Unleashed.",
+          "message": "Actualizar la información de un producto existente en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "Actualizar producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.desc": {
+          "source": "The product barcode",
+          "message": "El código de barras del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.display_name": {
+          "source": "Barcode",
+          "message": "Código de barras"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.QmFyY29kZQ.short_desc": {
+          "source": "Product barcode",
+          "message": "Código de barras del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.desc": {
+          "source": "The default purchase price",
+          "message": "El precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.display_name": {
+          "source": "Default Purchase Price",
+          "message": "Precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFB1cmNoYXNlUHJpY2U.short_desc": {
+          "source": "Default purchase price",
+          "message": "Precio de compra predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.desc": {
+          "source": "The default sell price",
+          "message": "El precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.display_name": {
+          "source": "Default Sell Price",
+          "message": "Precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.RGVmYXVsdFNlbGxQcmljZQ.short_desc": {
+          "source": "Default sell price",
+          "message": "Precio de venta predeterminado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.desc": {
+          "source": "Whether the product can be purchased",
+          "message": "Indica si el producto se puede comprar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.display_name": {
+          "source": "Is Purchasable",
+          "message": "Es comprable"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNQdXJjaGFzYWJsZQ.short_desc": {
+          "source": "Can product be purchased",
+          "message": "Si el producto se puede comprar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.desc": {
+          "source": "Whether the product can be sold",
+          "message": "Indica si el producto se puede vender"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.display_name": {
+          "source": "Is Sellable",
+          "message": "Es vendible"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.SXNTZWxsYWJsZQ.short_desc": {
+          "source": "Can product be sold",
+          "message": "Si el producto se puede vender"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.desc": {
+          "source": "The product description",
+          "message": "La descripción del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.display_name": {
+          "source": "Product Description",
+          "message": "Descripción del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.UHJvZHVjdERlc2NyaXB0aW9u.short_desc": {
+          "source": "Product description",
+          "message": "Descripción del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the product to update",
+          "message": "El identificador único (GUID) del producto a actualizar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.display_name": {
+          "source": "Product GUID",
+          "message": "GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.option.Z3VpZA.short_desc": {
+          "source": "The product GUID",
+          "message": "El GUID del producto"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Actualizar un producto existente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Unleashed.",
+          "message": "Actualizar una orden de venta existente en Unleashed."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "Actualizar pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.desc": {
+          "source": "Comments or notes for this order",
+          "message": "Comentarios o notas para este pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Comentarios"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Order comments",
+          "message": "Comentarios del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOk9wZW4.desc": {
+          "source": "Open order",
+          "message": "Orden abierta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkJhY2tvcmRlcmVk.desc": {
+          "source": "Backordered order",
+          "message": "Pedido pendiente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkNvbXBsZXRlZA.desc": {
+          "source": "Completed order",
+          "message": "Orden completada"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOkRlbGV0ZWQ.desc": {
+          "source": "Deleted order",
+          "message": "Orden eliminada"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBhcmtlZA.desc": {
+          "source": "Draft/parked order",
+          "message": "Pedido en borrador/aparcado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.allowed-value.c3RyaW5nOlBsYWNlZA.desc": {
+          "source": "Placed order",
+          "message": "Pedido realizado"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.desc": {
+          "source": "The order status",
+          "message": "El estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.display_name": {
+          "source": "Order Status",
+          "message": "Estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.T3JkZXJTdGF0dXM.short_desc": {
+          "source": "Order status",
+          "message": "Estado del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.desc": {
+          "source": "List of line items for this sales order",
+          "message": "Lista de líneas de pedido para este pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.display_name": {
+          "source": "Sales Order Lines",
+          "message": "Líneas de pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.U2FsZXNPcmRlckxpbmVz.short_desc": {
+          "source": "Order line items",
+          "message": "Elementos de línea del pedido"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.desc": {
+          "source": "The required delivery date",
+          "message": "La fecha de entrega requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.display_name": {
+          "source": "Required Date",
+          "message": "Fecha requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.UmVxdWlyZWREYXRl.short_desc": {
+          "source": "Required delivery date",
+          "message": "Fecha de entrega requerida"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.desc": {
+          "source": "The unique identifier (GUID) of the sales order to update",
+          "message": "El identificador único (GUID) de la orden de venta a actualizar"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.display_name": {
+          "source": "Sales Order GUID",
+          "message": "GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Z3VpZA.short_desc": {
+          "source": "The sales order GUID",
+          "message": "El GUID del pedido de venta"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Actualizar un pedido de venta existente"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.desc": {
+          "source": "Unleashed is a comprehensive cloud-based inventory management system that enables you to manage products, customers, sales orders, purchase orders, stock levels, and more.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Manage product catalog and inventory\n- Process credit notes and refunds\n- Track stock levels across warehouses\n- Handle assemblies and manufacturing\n\n**Authentication:**\nUnleashed uses API ID and API Key authentication via HMAC signature. Both credentials are required and can be obtained from your Unleashed account settings under Integration > API Access.",
+          "message": "Unleashed es un completo sistema de gestión de inventario basado en la nube que le permite administrar productos, clientes, órdenes de venta, órdenes de compra, niveles de existencias y más.\n\n**Características:**\n- Gestionar clientes y proveedores\n- Crear y realizar seguimiento de órdenes de venta\n- Gestionar catálogo de productos e inventario\n- Procesar notas de crédito y reembolsos\n- Realizar seguimiento de niveles de existencias en almacenes\n- Gestionar ensamblajes y fabricación\n\n**Autenticación:**\nUnleashed utiliza autenticación por API ID y API Key mediante firma HMAC. Ambas credenciales son obligatorias y se pueden obtener en la configuración de su cuenta de Unleashed en Integration > API Access."
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.display_name": {
+          "source": "Unleashed Software",
+          "message": "Unleashed Software"
+        },
+        "app.VW5sZWFzaGVkU29mdHdhcmU.short_desc": {
+          "source": "Unleashed inventory and sales management platform",
+          "message": "Plataforma de gestión de inventario y ventas de Unleashed"
+        }
+      }
+    }
+  }
+}

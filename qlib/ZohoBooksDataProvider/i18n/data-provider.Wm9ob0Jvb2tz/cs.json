@@ -1,0 +1,3181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.desc": {
+          "source": "Create a new bill from a vendor in Zoho Books",
+          "message": "Vytvořit novou přijatou fakturu od dodavatele v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.display_name": {
+          "source": "Create Bill",
+          "message": "Vytvořit přijatý účet"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.desc": {
+          "source": "A unique sequential identifier for the bill",
+          "message": "Jedinečný sekvenční identifikátor přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Číslo přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Jedinečný identifikátor přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Datum vystavení přijaté faktury ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Datum přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Datum vystavení přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Datum splatnosti platby ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Seznam řádkových položek s poli: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Řádkové položky přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Další poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Vendor's reference number for this bill",
+          "message": "Referenční číslo dodavatele pro tuto přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Externí reference dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Platební a dodací podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Dodavatel pro přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.short_desc": {
+          "source": "Create a new bill",
+          "message": "Vytvořit novou přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new customer or vendor contact in Zoho Books",
+          "message": "Vytvořit nový kontakt zákazníka nebo dodavatele v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Legal name of the company (max 200 characters)",
+          "message": "Právní název společnosti (max. 200 znaků)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Právní název společnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kontakt zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Kontakt dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Seznam kontaktních osob s poli: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Kontaktní osoby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Seznam kontaktních osob"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "Currency ID for transactions with this contact",
+          "message": "ID měny pro transakce s tímto kontaktem"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Měna pro transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Fakturační adresa s poli: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Fakturační adresa"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Podrobnosti fakturační adresy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Další poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Dodací adresa s poli: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Doručovací adresa"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Podrobnosti dodací adresy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "Number of days within which payment must be made",
+          "message": "Počet dní, do kterých musí být platba provedena"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL webu kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Record a new expense in Zoho Books",
+          "message": "Zaznamenat nový výdaj v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "Vytvořit výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Customer to bill if the expense is billable",
+          "message": "Zákazník k fakturaci, pokud je výdaj zúčtovatelný"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Zákazník k fakturaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Částka výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Nákladový účet"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Datum výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Popis výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Fakturovatelné"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Zda je tento výdaj zúčtovatelný"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Dodavatel pro tento výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "Vytvořit nový výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new quote/estimate for a customer",
+          "message": "Vytvořit novou cenovou nabídku / odhad pro zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "Vytvořit cenovou nabídku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Zákazník pro odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Datum odhadu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Datum vypršení platnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Datum vypršení platnosti cenové nabídky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Seznam řádkových položek s poli: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Řádkové položky odhadu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Poznámky k zákazníkovi"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "Vytvořit nový odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in Zoho Books",
+          "message": "Vytvořit novou položku produktu nebo služby v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Vytvořit položku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Popis položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Zdanitelné"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.short_desc": {
+          "source": "Whether the item is taxable",
+          "message": "Zda položka podléhá dani"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Item Name",
+          "message": "Název položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Name of the item",
+          "message": "Název položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit code",
+          "message": "Kód skladové jednotky (SKU)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOmdvb2Rz.desc": {
+          "source": "Physical goods",
+          "message": "Fyzické zboží"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOnNlcnZpY2U.desc": {
+          "source": "Services",
+          "message": "Služby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.display_name": {
+          "source": "Product Type",
+          "message": "Typ produktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.short_desc": {
+          "source": "Type of product",
+          "message": "Typ produktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Sazba"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Price/rate of the item",
+          "message": "Cena / sazba položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.display_name": {
+          "source": "Tax",
+          "message": "Daň"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.short_desc": {
+          "source": "Tax to apply",
+          "message": "Daň k uplatnění"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.desc": {
+          "source": "Unit of measurement (e.g., `pcs`, `kg`, `hrs`)",
+          "message": "Měrná jednotka (např. `pcs`, `kg`, `hrs`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Jednotka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Měrná jednotka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Vytvořit novou položku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Books for a customer",
+          "message": "Vytvořit novou fakturu v Zoho Books pro zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Vytvořit fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Hodnoty vlastních polí pro fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastních polí"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Identifikátor zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Jakákoli úprava celkové částky faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Úprava"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Částka úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "Datum faktury (formát `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Částka slevy nebo procento"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Sleva uplatněná na úrovni faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Sleva uplatněná na úrovni položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Zda se sleva uplatňuje na úrovni entity nebo na úrovni položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Typ slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "Datum splatnosti (formát `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number (auto-generated if not provided)",
+          "message": "Vlastní číslo faktury (automaticky vygenerováno, pokud není zadáno)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Číslo faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Vlastní číslo faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Zda uplatnit slevu před výpočtem daně"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Sleva před daní"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Uplatnit slevu před daní"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice",
+          "message": "Položky faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Řádkové položky faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Poznámky k zobrazení na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Poznámky k faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Jméno prodejce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Obchodník"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Jméno prodejce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Poplatky za dopravu na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Poplatek za dopravu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Poplatky za dopravu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Platební podmínky ve dnech (např. 30 pro Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Volitelné referenční číslo (např. číslo objednávky)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Obchodní podmínky k zobrazení na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Vytvořit novou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a payment received from a customer",
+          "message": "Zaznamenat platbu přijatou od zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "Vytvořit platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Zákazník provádějící platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Částka platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "ID of the account where the payment will be deposited",
+          "message": "ID účtu, na který bude platba připsána"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Deposit Account",
+          "message": "Účet pro vklad"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Account to deposit payment",
+          "message": "Účet pro uložení platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Datum platby ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Datum platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Datum platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Popis platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Seznam faktur s poli: `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Faktury, na které se má platba použít"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmF1dG90cmFuc2FjdGlvbg.desc": {
+          "source": "Auto transaction",
+          "message": "Automatická transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmt0cmFuc2Zlcg.desc": {
+          "source": "Bank transfer",
+          "message": "Bankovní převod"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmtyZW1pdHRhbmNl.desc": {
+          "source": "Bank remittance",
+          "message": "Bankovní úhrada"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "Platba v hotovosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "Platba šekem"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNyZWRpdGNhcmQ.desc": {
+          "source": "Credit card payment",
+          "message": "Platba platební kartou"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.desc": {
+          "source": "The mode of payment used",
+          "message": "Použitý způsob platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Způsob platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Způsob platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Reference number for the payment transaction",
+          "message": "Referenční číslo platební transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Reference transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Vytvořit novou platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Create a new sales order for a customer",
+          "message": "Vytvořit novou prodejní objednávku pro zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Create Sales Order",
+          "message": "Vytvořit prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Zákazník pro prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Způsob čerpání"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Seznam řádkových položek s poli: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Položky prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Poznámky k zákazníkovi"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Očekávané datum odeslání"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Vytvořit novou prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.desc": {
+          "source": "Retrieve details of a specific bill",
+          "message": "Získat podrobnosti o konkrétním účtu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.display_name": {
+          "source": "Get Bill",
+          "message": "Získat fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to retrieve",
+          "message": "Účet k načtení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.short_desc": {
+          "source": "Get bill details",
+          "message": "Získat podrobnosti o účtu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact",
+          "message": "Získat podrobnosti o konkrétním kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získat kontakt"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Kontakt k načtení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by ID",
+          "message": "Získat kontakt podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve details of a specific expense",
+          "message": "Získat podrobnosti o konkrétním výdaji"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "Získat výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "ID výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to retrieve",
+          "message": "Výdaj k načtení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get an expense by ID",
+          "message": "Získat výdaj podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve details of a specific estimate",
+          "message": "Získat podrobnosti o konkrétním odhadu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "Získat cenovou nabídku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID cenové nabídky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to retrieve",
+          "message": "Odhad, který se má načíst"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get an estimate by ID",
+          "message": "Získat odhad podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item",
+          "message": "Získat podrobnosti o konkrétní položce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Získat položku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item ID",
+          "message": "ID položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "Položka k načtení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get an item by ID",
+          "message": "Získat položku podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice",
+          "message": "Získat podrobnosti o konkrétní faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Získat fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Faktura k načtení"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Získat podrobnosti o faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Retrieve details of a specific purchase order",
+          "message": "Získat podrobnosti o konkrétní nákupní objednávce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Získat nákupní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order ID",
+          "message": "ID objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Nákupní objednávka, která se má načíst"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Get a purchase order by ID",
+          "message": "Získat nákupní objednávku podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve details of a specific payment",
+          "message": "Získat podrobnosti o konkrétní platbě"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "Získat platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to retrieve",
+          "message": "Platba, která se má načíst"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get payment details",
+          "message": "Získat podrobnosti o platbě"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.desc": {
+          "source": "Retrieve details of a specific sales order",
+          "message": "Získat podrobnosti o konkrétní prodejní objednávce"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.display_name": {
+          "source": "Get Sales Order",
+          "message": "Získat prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Prodejní objednávka, která se má načíst"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Get a sales order by ID",
+          "message": "Získat prodejní objednávku podle ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.desc": {
+          "source": "Delete a bill from Zoho Books",
+          "message": "Odstranit přijatou fakturu ze Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.display_name": {
+          "source": "Delete Bill",
+          "message": "Smazat přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to delete",
+          "message": "Přijatá faktura k odstranění"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.short_desc": {
+          "source": "Delete a bill",
+          "message": "Odstranit přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Books",
+          "message": "Odstranit fakturu ze Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Faktura ke smazání"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Delete a payment record from Zoho Books",
+          "message": "Odstranit záznam o platbě ze Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "Smazat platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to delete",
+          "message": "Platba ke smazání"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "Smazat platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Delete a sales order from Zoho Books",
+          "message": "Odstranit prodejní objednávku ze Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Odstranit prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Prodejní objednávka k odstranění"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Odstranit prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.desc": {
+          "source": "Send an invoice to the customer via email",
+          "message": "Odeslat fakturu zákazníkovi e-mailem"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.display_name": {
+          "source": "Email Invoice",
+          "message": "Odeslat fakturu e-mailem"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.short_desc": {
+          "source": "Email body",
+          "message": "Tělo e-mailu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to email",
+          "message": "Faktura k odeslání e-mailem"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Předmět"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Předmět e-mailu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.desc": {
+          "source": "Email addresses to send the invoice to",
+          "message": "E-mailové adresy, na které se má faktura odeslat"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.short_desc": {
+          "source": "Recipient email addresses",
+          "message": "E-mailové adresy příjemců"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.short_desc": {
+          "source": "Send an invoice by email",
+          "message": "Odeslat fakturu e-mailem"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.desc": {
+          "source": "Retrieve a list of bills with optional filtering",
+          "message": "Získat seznam přijatých faktur s volitelným filtrováním"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.display_name": {
+          "source": "List Bills",
+          "message": "Zobrazit seznam přijatých faktur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue bills",
+          "message": "Přijaté faktury po splatnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open bills",
+          "message": "Otevřené přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid bills",
+          "message": "Uhrazené přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid bills",
+          "message": "Částečně uhrazené přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided bills",
+          "message": "Stornované přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by bill status",
+          "message": "Filtrovat podle stavu přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Filtrovat podle dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.short_desc": {
+          "source": "List all bills",
+          "message": "Zobrazit všechny přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of contacts (customers and vendors)",
+          "message": "Získat seznam kontaktů (zákazníků a dodavatelů)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Seznam kontaktů"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contacts only",
+          "message": "Pouze kontakty zákazníků"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contacts only",
+          "message": "Pouze kontakty dodavatelů"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Filtrovat podle typu kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Zobrazit seznam všech kontaktů"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.desc": {
+          "source": "Retrieve a list of estimates/quotes",
+          "message": "Získat seznam odhadů/nabídek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
+          "source": "List Estimates",
+          "message": "Seznam cenových nabídek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
+          "source": "List all estimates",
+          "message": "Zobrazit všechny odhady"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.desc": {
+          "source": "Retrieve a list of expenses",
+          "message": "Získat seznam výdajů"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.display_name": {
+          "source": "List Expenses",
+          "message": "Zobrazit výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.short_desc": {
+          "source": "List all expenses",
+          "message": "Zobrazit všechny výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices with optional filtering",
+          "message": "Získat seznam faktur s volitelným filtrováním"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Vypsat faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovat podle zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Faktury po splatnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Koncepty faktur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Uhrazené faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Částečně zaplacené faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Odeslané faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Nezaplacené faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided invoices",
+          "message": "Stornované faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtrovat podle stavu faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List all invoices",
+          "message": "Zobrazit všechny faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items (products and services)",
+          "message": "Získat seznam položek (produktů a služeb)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Zobrazit položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List all items",
+          "message": "Zobrazit všechny položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "Retrieve a list of customer payments",
+          "message": "Získat seznam plateb zákazníků"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Zobrazit platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List all payments",
+          "message": "Zobrazit všechny platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.desc": {
+          "source": "Retrieve a list of purchase orders",
+          "message": "Získat seznam nákupních objednávek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Zobrazit nákupní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.short_desc": {
+          "source": "List all purchase orders",
+          "message": "Zobrazit všechny nákupní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.desc": {
+          "source": "Retrieve a list of sales orders",
+          "message": "Získat seznam prodejních objednávek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.display_name": {
+          "source": "List Sales Orders",
+          "message": "Zobrazit prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.short_desc": {
+          "source": "List all sales orders",
+          "message": "Zobrazit všechny prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Books** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Zoho Books** s využitím ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď se vrátí jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci zatím nejsou k dispozici jako samostatné akce."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Books",
+          "message": "Provést vlastní volání API do Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.desc": {
+          "source": "Fires when a new bill is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové přijaté faktury v Zoho Books. K detekci nových záznamů používá dotazování (polling)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.display_name": {
+          "source": "New Bill",
+          "message": "Nová přijatá faktura"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new bills (seconds)",
+          "message": "Jak často kontrolovat nové přijaté faktury (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.short_desc": {
+          "source": "Trigger when a new bill is created",
+          "message": "Spustit při vytvoření nové přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.desc": {
+          "source": "Fires when a new customer contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nového kontaktu zákazníka v Zoho Books. K detekci nových záznamů používá dotazování (polling)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.display_name": {
+          "source": "New Customer",
+          "message": "Nový zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new customers (seconds)",
+          "message": "Jak často kontrolovat nové zákazníky (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Spustit při vytvoření nového zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.desc": {
+          "source": "Fires when a new expense is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při zaevidování nového výdaje v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.display_name": {
+          "source": "New Expense",
+          "message": "Nový výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new expenses (seconds)",
+          "message": "Jak často kontrolovat nové výdaje (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "Spustit při vytvoření nového výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.desc": {
+          "source": "Fires when a new estimate/quote is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové cenové nabídky / odhadu v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.display_name": {
+          "source": "New Estimate",
+          "message": "Nová cenová nabídka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new estimates (seconds)",
+          "message": "Jak často kontrolovat nové cenové nabídky (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "Spustit při vytvoření nové cenové nabídky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new product/service item is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové položky produktu/služby v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Nová položka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Jak často kontrolovat nové položky (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Spustit při vytvoření nové položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové faktury v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Nová faktura"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Jak často kontrolovat nové faktury (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Spustit při vytvoření nové faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové nákupní objednávky v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "New Purchase Order",
+          "message": "Nová objednávka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Jak často kontrolovat nové nákupní objednávky (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Spustit při vytvoření nové nákupní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při zaevidování nové platby v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nová platba"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new payments (seconds)",
+          "message": "Jak často kontrolovat nové platby (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Spustit při přijetí nové platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.desc": {
+          "source": "Fires when a new sales order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové prodejní objednávky v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.display_name": {
+          "source": "New Sales Order",
+          "message": "Nová prodejní objednávka"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Jak často kontrolovat nové prodejní objednávky (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Spustit při vytvoření nové prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.desc": {
+          "source": "Fires when a new vendor contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nového kontaktu dodavatele v Zoho Books. K detekci nových záznamů využívá dotazování."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.display_name": {
+          "source": "New Vendor",
+          "message": "Nový dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new vendors (seconds)",
+          "message": "Jak často kontrolovat nové dodavatele (v sekundách)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.short_desc": {
+          "source": "Trigger when a new vendor is created",
+          "message": "Spustit při vytvoření nového dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.desc": {
+          "source": "Update an existing bill in Zoho Books",
+          "message": "Aktualizovat existující přijatou fakturu v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.display_name": {
+          "source": "Update Bill",
+          "message": "Aktualizovat přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to update",
+          "message": "Přijatá faktura k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Číslo přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Jedinečný identifikátor přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Datum vystavení přijaté faktury ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Datum přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Datum vystavení přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Datum splatnosti platby ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Seznam řádkových položek s poli: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Řádkové položky přijaté faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Další poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Externí reference dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Platební a dodací podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Dodavatel pro přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.short_desc": {
+          "source": "Update an existing bill",
+          "message": "Aktualizovat existující přijatou fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact's information",
+          "message": "Aktualizovat informace o existujícím kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Právní název společnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Kontakt zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Kontakt dodavatele"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Typ kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Seznam kontaktních osob s poli: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Kontaktní osoby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Seznam kontaktních osob"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Měna pro transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Fakturační adresa s poli: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Fakturační adresa"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Podrobnosti fakturační adresy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Další poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Dodací adresa s poli: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Doručovací adresa"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Podrobnosti dodací adresy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL webu kontaktu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense record",
+          "message": "Aktualizovat existující záznam výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "Aktualizovat výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Zákazník k fakturaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Částka výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Nákladový účet"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Datum výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Popis výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "ID výdaje"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to update",
+          "message": "Výdaj k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Fakturovatelné"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Zda je tento výdaj zúčtovatelný"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Dodavatel"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Dodavatel pro tento výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "Aktualizovat existující výdaj"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing quote/estimate",
+          "message": "Aktualizovat existující cenovou nabídku / odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "Aktualizovat odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Zákazník pro odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Datum odhadu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID cenové nabídky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "Odhad k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Datum vypršení platnosti"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Datum vypršení platnosti cenové nabídky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Seznam řádkových položek"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Řádkové položky odhadu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Poznámky k zákazníkovi"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "Aktualizovat existující odhad"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Books",
+          "message": "Aktualizovat existující fakturu v Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Aktualizovat fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Hodnoty vlastních polí pro fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastních polí"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer for this invoice",
+          "message": "ID zákazníka pro tuto fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Identifikátor zákazníka"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Jakákoli úprava celkové částky faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Úprava"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Částka úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Popis úpravy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "Datum faktury (formát `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Datum faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Částka slevy nebo procento"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Sleva uplatněná na úrovni faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Sleva uplatněná na úrovni položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Zda se sleva uplatňuje na úrovni entity nebo na úrovni položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Typ slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "Datum splatnosti (formát `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Datum splatnosti platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The ID of the invoice to update",
+          "message": "ID faktury k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Invoice to update",
+          "message": "Faktura k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number",
+          "message": "Vlastní číslo faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Číslo faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Vlastní číslo faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Zda uplatnit slevu před výpočtem daně"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Sleva před daní"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Uplatnit slevu před daní"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice (replaces existing line items if provided)",
+          "message": "Řádkové položky na faktuře (jsou-li zadány, nahradí stávající řádkové položky)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Řádkové položky faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Poznámky k zobrazení na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Poznámky k faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Jméno prodejce"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Obchodník"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Jméno prodejce"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Poplatky za dopravu na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Poplatek za dopravu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Poplatky za dopravu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Platební podmínky ve dnech (např. 30 pro Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Platební podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Platební podmínky ve dnech"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Volitelné referenční číslo (např. číslo objednávky)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Obchodní podmínky k zobrazení na faktuře"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Aktualizovat existující fakturu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment record",
+          "message": "Aktualizovat existující záznam platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "Aktualizovat platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Zákazník provádějící platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Částka platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Datum platby ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Datum platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Datum platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Popis platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Seznam faktur s poli: `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Faktury"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Faktury, na které se má platba použít"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to update",
+          "message": "Platba k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Způsob platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Způsob platby"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Reference transakce"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Aktualizovat existující platbu"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Update an existing sales order",
+          "message": "Aktualizovat existující prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Update Sales Order",
+          "message": "Aktualizovat prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Zákazník pro prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Způsob čerpání"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Výše slevy"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organizace"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organizace Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Seznam řádkových položek"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Položky prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Poznámky k zákazníkovi"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID prodejní objednávky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Prodejní objednávka k aktualizaci"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Datum ve formátu `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Datum odeslání"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Očekávané datum odeslání"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Referenční číslo"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Obchodní podmínky"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Aktualizovat existující prodejní objednávku"
+        },
+        "app.Wm9ob0Jvb2tz.desc": {
+          "source": "Zoho Books is online accounting software that manages your finances, automates business workflows, and helps you work collectively across departments.\n\nThis integration supports invoices, bills, payments, contacts, expenses, estimates, sales orders, purchase orders, and items.",
+          "message": "Zoho Books je online účetní software, který spravuje vaše finance, automatizuje firemní pracovní postupy a pomáhá vám spolupracovat napříč odděleními.\n\nTato integrace podporuje faktury, přijaté faktury, platby, kontakty, výdaje, cenové nabídky, prodejní objednávky, nákupní objednávky a položky."
+        },
+        "app.Wm9ob0Jvb2tz.display_name": {
+          "source": "Zoho Books",
+          "message": "Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.short_desc": {
+          "source": "Zoho Books online accounting software",
+          "message": "Online účetní software Zoho Books"
+        }
+      }
+    }
+  }
+}

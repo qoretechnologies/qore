@@ -1,0 +1,2201 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.desc": {
+          "source": "Cancels an in-progress agent job by its ID.",
+          "message": "Zruší probíhající úlohu agenta podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
+          "source": "Cancel an Agent Job",
+          "message": "Zrušit úlohu agenta"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to cancel",
+          "message": "Jedinečný identifikátor úlohy agenta ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.short_desc": {
+          "source": "The agent job ID to cancel",
+          "message": "ID úlohy agenta ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
+          "source": "Cancel an in-progress agent job",
+          "message": "Zrušit probíhající úlohu agenta"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.desc": {
+          "source": "Cancels an in-progress batch scrape job by its ID.",
+          "message": "Zruší probíhající úlohu hromadného scrapování podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
+          "source": "Cancel a Batch Scrape",
+          "message": "Zrušit hromadné scrapování"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to cancel",
+          "message": "Jedinečný identifikátor úlohy hromadného scrapování ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID to cancel",
+          "message": "ID úlohy hromadného scrapování ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
+          "source": "Cancel an in-progress batch scrape job",
+          "message": "Zrušit probíhající úlohu hromadného scrapování"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.desc": {
+          "source": "Cancels an in-progress crawl job by its ID.",
+          "message": "Zruší probíhající úlohu procházení webu podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
+          "source": "Cancel a Crawl",
+          "message": "Zrušit procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to cancel",
+          "message": "Jedinečný identifikátor úlohy procházení ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.short_desc": {
+          "source": "The crawl job ID to cancel",
+          "message": "ID úlohy procházení ke zrušení"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
+          "source": "Cancel an in-progress crawl job",
+          "message": "Zrušit probíhající úlohu procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.desc": {
+          "source": "Crawls a website starting from the given URL and returns scraped data for all discovered pages.\n\nThe operation runs asynchronously and automatically polls until the crawl completes. Supports path filtering, depth control, sitemap handling, and webhook notifications.",
+          "message": "Prochází web od zadané adresy URL a vrací scrapovaná data pro všechny nalezené stránky.\n\nOperace běží asynchronně a automaticky se dotazuje na stav, dokud procházení neskončí. Podporuje filtrování cest, řízení hloubky, zpracování sitemap a webhooková oznámení."
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
+          "source": "Crawl a Website",
+          "message": "Procházet web"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.desc": {
+          "source": "If `True`, the entire domain is crawled, including all subdomains",
+          "message": "Pokud je `True`, prochází se celá doména včetně všech subdomén"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.display_name": {
+          "source": "Crawl Entire Domain",
+          "message": "Procházet celou doménu"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.short_desc": {
+          "source": "Crawl the entire domain",
+          "message": "Procházet celou doménu"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.desc": {
+          "source": "If `True`, links to external domains are followed",
+          "message": "Pokud je `True`, následují se odkazy na externí domény"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.display_name": {
+          "source": "Allow External Links",
+          "message": "Povolit externí odkazy"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.short_desc": {
+          "source": "Follow external links",
+          "message": "Následovat externí odkazy"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.desc": {
+          "source": "If `True`, subdomains of the starting URL are included in crawling",
+          "message": "Pokud je `True`, subdomény počáteční adresy URL jsou zahrnuty do procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.display_name": {
+          "source": "Allow Subdomains",
+          "message": "Povolit subdomény"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.short_desc": {
+          "source": "Allow subdomain crawling",
+          "message": "Povolit procházení subdomén"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.desc": {
+          "source": "If `True`, URL variants (`www.`/non-`www.`, `http`/`https`, trailing slashes, `index.html`) are normalized and treated as duplicates. Defaults to `True`",
+          "message": "Pokud je `True`, varianty adres URL (`www.`/bez `www.`, `http`/`https`, koncová lomítka, `index.html`) jsou normalizovány a považovány za duplicity. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.display_name": {
+          "source": "Deduplicate Similar URLs",
+          "message": "Deduplikovat podobné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.short_desc": {
+          "source": "Treat URL variants as duplicates",
+          "message": "Považovat varianty adres URL za duplicity"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.desc": {
+          "source": "Delay in seconds between each request during crawling",
+          "message": "Zpoždění v sekundách mezi jednotlivými požadavky během procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.display_name": {
+          "source": "Delay",
+          "message": "Zpoždění"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.short_desc": {
+          "source": "Delay between requests in seconds",
+          "message": "Zpoždění mezi požadavky v sekundách"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; matching URLs are excluded from the crawl (e.g., `^/admin/.*`, `\\.pdf$`)",
+          "message": "Seznam regulárních výrazů pro cesty URL; odpovídající adresy URL jsou z procházení vyloučeny (např. `^/admin/.*`, `\\.pdf$`)"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.display_name": {
+          "source": "Exclude Paths",
+          "message": "Vyloučit cesty"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to exclude",
+          "message": "Regulární výrazy cest URL k vyloučení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; only matching URLs are crawled (e.g., `^/blog/.*`, `^/docs/.*`)",
+          "message": "Seznam regulárních výrazů pro cesty URL; procházejí se pouze odpovídající adresy URL (např. `^/blog/.*`, `^/docs/.*`)"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.display_name": {
+          "source": "Include Paths",
+          "message": "Zahrnout cesty"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to include",
+          "message": "Regulární výrazy cest URL k zahrnutí"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "Pokud je `True`, adresy URL s různými parametry dotazu jsou považovány za stejnou stránku"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "Ignorovat parametry dotazu"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "Ignorovat parametry dotazu v URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.desc": {
+          "source": "If `True`, the crawl ignores `robots.txt` directives. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Pokud je `True`, procházení ignoruje direktivy `robots.txt`. Enterprise funkce — pro povolení kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.display_name": {
+          "source": "Ignore robots.txt",
+          "message": "Ignorovat robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.short_desc": {
+          "source": "Bypass robots.txt directives",
+          "message": "Obejít direktivy robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum number of pages to crawl. Defaults to `10000`",
+          "message": "Maximální počet stránek k procházení. Výchozí hodnota je `10000`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of pages to crawl",
+          "message": "Maximální počet stránek k procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent requests during crawling",
+          "message": "Maximální počet souběžných požadavků během procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "Maximální souběžnost"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "Maximální počet souběžných požadavků"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.desc": {
+          "source": "Maximum depth of links to follow from the starting URL",
+          "message": "Maximální hloubka odkazů, které se mají následovat od počáteční adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.display_name": {
+          "source": "Max Discovery Depth",
+          "message": "Maximální hloubka zjišťování"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.short_desc": {
+          "source": "Maximum link depth to follow",
+          "message": "Maximální hloubka odkazů ke sledování"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each crawled page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Možnosti použité při scrapování každé procházené stránky, například `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Možnosti scrapování"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping each page",
+          "message": "Možnosti pro scrapování každé stránky"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "Pouze"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Zahrnout"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "Přeskočit"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when crawling",
+          "message": "Jak nakládat se souborem sitemap při procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "Sitemap"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "Režim zpracování sitemap"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.desc": {
+          "source": "An optional AI prompt for filtering or processing crawl results",
+          "message": "Volitelný prompt pro AI k filtrování nebo zpracování výsledků procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.short_desc": {
+          "source": "AI prompt for filtering results",
+          "message": "Prompt pro AI k filtrování výsledků"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.desc": {
+          "source": "User-agent string used when evaluating `robots.txt` rules. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Řetězec user-agent použitý při vyhodnocování pravidel `robots.txt`. Funkce Enterprise – pro aktivaci kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.display_name": {
+          "source": "robots.txt User Agent",
+          "message": "User Agent pro robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.short_desc": {
+          "source": "User-agent for robots.txt evaluation",
+          "message": "User-agent pro vyhodnocování robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.desc": {
+          "source": "If `True`, `includePaths` and `excludePaths` patterns are matched against the full URL including query parameters. If `False` (default), patterns are matched against the pathname only",
+          "message": "Pokud je nastaveno `True`, vzory `includePaths` a `excludePaths` se porovnávají s celou URL včetně parametrů dotazu. Pokud je nastaveno `False` (výchozí), vzory se porovnávají pouze s cestou (pathname)"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.display_name": {
+          "source": "Regex on Full URL",
+          "message": "Regulární výraz na celou URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.short_desc": {
+          "source": "Match patterns against full URL",
+          "message": "Porovnávat vzory s celou URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the crawl",
+          "message": "Konfigurace webhooku pro příjem oznámení během procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "Konfigurace webhooku pro oznámení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "The starting URL of the website to crawl",
+          "message": "Počáteční URL webu k procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "The starting URL to crawl",
+          "message": "Počáteční URL k procházení"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any crawl data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Pokud je nastaveno `True`, Firecrawl po odeslání odpovědi neuchovává na svých serverech žádná data z procházení. Funkce Enterprise – pro aktivaci kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Nulové uchovávání dat"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Zakázat uchovávání dat na straně Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a website and return scraped data for all pages",
+          "message": "Procházet web a vrátit scrapovaná data pro všechny stránky"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.desc": {
+          "source": "Uses an AI agent to find and extract data from the web based on a natural language prompt.\n\nThe agent autonomously browses web pages, follows links, and extracts data matching the prompt. The operation runs asynchronously and automatically polls until the agent completes.",
+          "message": "Použije AI agenta k vyhledání a extrakci dat z webu na základě promptu v přirozeném jazyce.\n\nAgent autonomně prochází webové stránky, sleduje odkazy a extrahuje data odpovídající promptu. Operace běží asynchronně a automaticky dotazuje stav, dokud agent nedokončí činnost."
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
+          "source": "Run AI Agent",
+          "message": "Spustit AI agenta"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtbWluaQ.display_name": {
+          "source": "Spark 1 Mini",
+          "message": "Spark 1 Mini"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtcHJv.display_name": {
+          "source": "Spark 1 Pro",
+          "message": "Spark 1 Pro"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.desc": {
+          "source": "The agent model to use for the task",
+          "message": "Model agenta, který se má pro úlohu použít"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.short_desc": {
+          "source": "Agent model to use",
+          "message": "Model agenta k použití"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.desc": {
+          "source": "Maximum number of API credits to use for this agent task. Defaults to `2500`",
+          "message": "Maximální počet kreditů API k použití pro tuto úlohu agenta. Výchozí hodnota je `2500`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.display_name": {
+          "source": "Max Credits",
+          "message": "Maximální počet kreditů"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.short_desc": {
+          "source": "Maximum credits to use",
+          "message": "Maximální počet kreditů k použití"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the output data. Used to guide the agent and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "Objekt JSON Schema definující strukturu výstupních dat. Používá se k navádění agenta a ověření formátu výstupu.\n\n**Příklad**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "Schéma"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for output",
+          "message": "JSON Schema pro výstup"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.desc": {
+          "source": "If `True`, the agent is strictly limited to searching only the provided URLs and does not follow links to other pages",
+          "message": "Pokud je nastaveno `True`, agent je striktně omezen pouze na vyhledávání v zadaných URL a nesleduje odkazy na jiné stránky"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.display_name": {
+          "source": "Strict Constrain to URLs",
+          "message": "Striktně omezit na URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.short_desc": {
+          "source": "Strictly limit to provided URLs",
+          "message": "Striktně omezit na zadané URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to find and extract (maximum 10000 characters)",
+          "message": "Prompt v přirozeném jazyce popisující, jaká data najít a extrahovat (maximálně 10000 znaků)"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "The agent prompt",
+          "message": "Prompt pro agenta"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.desc": {
+          "source": "Optional list of URLs to constrain the agent's search scope",
+          "message": "Volitelný seznam URL pro omezení rozsahu vyhledávání agenta"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL adresy"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.short_desc": {
+          "source": "URLs to search",
+          "message": "URL k prohledání"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
+          "source": "Use an AI agent to find and extract data from the web",
+          "message": "Použít AI agenta k vyhledání a extrakci dat z webu"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.desc": {
+          "source": "Scrapes multiple web pages in batch and returns their content. Supports the same scrape options as the single scrape action.\n\nThe operation runs asynchronously and automatically polls until all pages are scraped.",
+          "message": "Hromadně scrapuje více webových stránek a vrací jejich obsah. Podporuje stejné možnosti scrapování jako akce jednotlivého scrapování.\n\nOperace běží asynchronně a automaticky dotazuje stav, dokud nejsou scrapovány všechny stránky."
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
+          "source": "Batch Scrape Web Pages",
+          "message": "Hromadně scrapovat webové stránky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping each page. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "Seznam akcí prohlížeče, které se mají provést před scrapováním každé stránky. Každá akce je hash s klíčem `type` a parametry specifickými pro danou akci.\n\n**Dostupné akce**:\n- `wait` — čekat po dobu (`milliseconds`) nebo na prvek (`selector`)\n- `click` — kliknout na prvek (`selector`, `all`)\n- `write` — psát text do aktivního prvku (`text`)\n- `press` — stisknout klávesu na klávesnici (`key`)\n- `scroll` — posunout stránku (`direction`: `up`/`down`; volitelně `selector`)\n- `screenshot` — pořídit snímek obrazovky (`fullPage`, `quality`, `viewport`)\n- `scrape` — zachytit obsah stránky v jejím aktuálním stavu\n- `executeJavascript` — spustit kód JavaScript (`script`)\n- `pdf` — vygenerovat PDF (`format`, `landscape`, `scale`)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "Akce"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "Akce prohlížeče k provedení"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "Pokud je nastaveno `True`, reklamy jsou během scrapování blokovány"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Seznam značek HTML, které se mají vyloučit z výstupu (např. `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Vyloučit značky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Značky HTML k vyloučení"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "Zvuk"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "Branding"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "Sledování změn"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Obrázky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Odkazy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "Nezpracované HTML"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Shrnutí"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "Snímek obrazovky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from each scrape",
+          "message": "Seznam výstupních formátů k vrácení z každého scrapování"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formáty"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Výstupní formáty k vrácení"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with each scrape request",
+          "message": "Vlastní hlavičky HTTP, které se mají odeslat s každým požadavkem na scrapování"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Seznam HTML značek, které mají být zahrnuty do výstupu (např. `article`, `main`). Vrácen je pouze obsah uvnitř těchto značek"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Zahrnout značky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "HTML značky k zahrnutí"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "Pokud je nastaveno na `True`, neplatné adresy URL v seznamu jsou přeskočeny, místo aby způsobily chybu"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of each page is returned",
+          "message": "Pokud je nastaveno na `True`, je vrácen pouze hlavní obsah každé stránky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extrahovat pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to each page to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "Pokud je nastaveno na `True`, na každou stránku se aplikuje vyčištění pomocí LLM pro odstranění navigace, reklam a šablonovitého textu. Výchozí hodnota je `False`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "Pouze vyčištěný obsah"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "Použít vyčištění obsahu pomocí LLM"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape requests",
+          "message": "Nastavení geolokace pro požadavky na scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Nastavení geolokace"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, pages are scraped using a mobile user agent",
+          "message": "Pokud je nastaveno na `True`, stránky jsou scrapovány pomocí mobilního user agenta"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "Mobil"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "Použít mobilního user agenta"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent scrape requests",
+          "message": "Maximální počet souběžných požadavků na scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "Maximální souběžnost"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "Maximální počet souběžných požadavků"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "Maximální stáří obsahu v mezipaměti v milisekundách. Pokud existuje verze stránky v mezipaměti a je novější než tato hodnota, je vrácena namísto nového scrapování. Výchozí hodnota je `172800000` (48 hodin)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "Maximální stáří"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "Prahová hodnota čerstvosti mezipaměti v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "Minimální stáří v milisekundách pro vyhledávání pouze v mezipaměti. Pokud je nastaveno, vrací se pouze obsah v mezipaměti starší než tato hodnota; pokud položka v mezipaměti neexistuje, nespustí se žádné nové scrapování"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "Minimální stáří"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "Minimální stáří mezipaměti v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "Pokud je nastaveno na `True`, ověřování certifikátu TLS se přeskočí"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Přeskočit ověření TLS"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Přeskočit ověření certifikátu TLS"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "Pokud je nastaveno na `True`, scrapovaný obsah se uloží do mezipaměti Firecrawl, takže jej následné scrapingy v rámci `maxAge` mohou znovu použít. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "Uložit do mezipaměti"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "Uložit scrapovaný obsah do mezipaměti"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Seznam konfigurací parseru pro zpracování PDF. Každá položka určuje typ parseru a možnosti zpracování"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Parsery"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Konfigurace parseru PDF"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "Pojmenovaný profil prohlížeče pro opětovné použití stavu relace (soubory cookie, místní úložiště) napříč požadavky na scraping. Nastavte `saveChanges` na `True` pro uložení změn zpět do profilu"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "Trvalý profil prohlížeče"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Základní"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Rozšířený"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for scrape requests",
+          "message": "Konfigurace proxy pro požadavky na scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Konfigurace proxy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "Pokud je nastaveno na `True`, obrázky kódované v base64 se z výstupu odstraní"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Odstranit obrázky Base64"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Odstranit obrázky kódované v base64"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for each page to load before scraping. Useful for pages with dynamic content",
+          "message": "Doba čekání v milisekundách na načtení každé stránky před scrapingem. Užitečné pro stránky s dynamickým obsahem"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "Počkat na"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "Doba čekání v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the batch scrape",
+          "message": "Konfigurace webhooku pro příjem oznámení během dávkového scrapingu"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "Konfigurace webhooku pro oznámení"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for each scrape to complete. Range: `1000`-`300000`",
+          "message": "Maximální doba v milisekundách pro dokončení každého scrapingu. Rozsah: `1000`–`300000`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Časový limit v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.desc": {
+          "source": "List of URLs to scrape in batch",
+          "message": "Seznam adres URL pro dávkový scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL adresy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.short_desc": {
+          "source": "List of URLs to scrape",
+          "message": "Seznam adres URL ke scrapování"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Pokud je nastaveno na `True`, Firecrawl po vrácení odpovědi neuchovává žádná scrapovaná data na svých serverech. Užitečné pro úlohy citlivé na soukromí a dodržování předpisů. Funkce pro podniky – pro aktivaci kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Nulové uchovávání dat"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Zakázat uchovávání dat na straně Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
+          "source": "Scrape multiple web pages in batch",
+          "message": "Scrapovat více webových stránek v dávce"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of an agent job by its ID.",
+          "message": "Získá aktuální stav a výsledky úlohy agenta podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
+          "source": "Get Agent Status",
+          "message": "Získat stav agenta"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to check",
+          "message": "Jedinečný identifikátor úlohy agenta ke kontrole"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The agent job ID",
+          "message": "ID úlohy agenta"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of an agent job",
+          "message": "Získat stav a výsledky úlohy agenta"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.desc": {
+          "source": "Gets the current status and results of a batch scrape job by its ID.",
+          "message": "Získá aktuální stav a výsledky úlohy dávkového scrapingu podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
+          "source": "Get Batch Scrape Status",
+          "message": "Získat stav dávkového scrapingu"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to check",
+          "message": "Jedinečný identifikátor úlohy dávkového scrapingu ke kontrole"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID",
+          "message": "ID úlohy dávkového scrapingu"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
+          "source": "Get the status and results of a batch scrape job",
+          "message": "Získat stav a výsledky úlohy dávkového scrapingu"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of a crawl job by its ID.",
+          "message": "Získá aktuální stav a výsledky úlohy procházení podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
+          "source": "Get Crawl Status",
+          "message": "Získat stav procházení"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to check",
+          "message": "Jedinečný identifikátor úlohy procházení ke kontrole"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The crawl job ID",
+          "message": "ID úlohy procházení"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of a crawl job",
+          "message": "Získat stav a výsledky úlohy procházení"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.desc": {
+          "source": "Gets the current status and results of an extraction job by its ID.",
+          "message": "Získá aktuální stav a výsledky úlohy extrakce podle jejího ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
+          "source": "Get Extraction Status",
+          "message": "Získat stav extrakce"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.desc": {
+          "source": "The unique identifier of the extraction job to check",
+          "message": "Jedinečný identifikátor úlohy extrakce ke kontrole"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID úlohy"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.short_desc": {
+          "source": "The extraction job ID",
+          "message": "ID úlohy extrakce"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
+          "source": "Get the status and results of an extraction job",
+          "message": "Získat stav a výsledky úlohy extrakce"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts structured data from one or more web pages using AI.\n\nProvide a natural language prompt and/or a JSON Schema to guide the extraction. The operation runs asynchronously and automatically polls until the extraction completes.",
+          "message": "Extrahuje strukturovaná data z jedné nebo více webových stránek pomocí AI.\n\nZadejte prompt v přirozeném jazyce a/nebo JSON Schema pro řízení extrakce. Operace běží asynchronně a automaticky se dotazuje na stav, dokud se extrakce nedokončí."
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract Structured Data",
+          "message": "Extrahovat strukturovaná data"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.desc": {
+          "source": "If `True`, web search is enabled to supplement extraction with additional data from search results",
+          "message": "Pokud je `True`, je povoleno vyhledávání na webu pro doplnění extrakce o další data z výsledků vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.display_name": {
+          "source": "Enable Web Search",
+          "message": "Povolit vyhledávání na webu"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.short_desc": {
+          "source": "Enable web search",
+          "message": "Povolit vyhledávání na webu"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the extraction",
+          "message": "Pokud je `True`, jsou do extrakce zahrnuty i adresy URL subdomén"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "Zahrnout subdomény"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "Zahrnout adresy URL subdomén"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "Pokud je nastaveno na `True`, neplatné adresy URL v seznamu jsou přeskočeny, místo aby způsobily chybu"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.desc": {
+          "source": "If `True`, the sitemap is ignored when discovering pages to extract from",
+          "message": "Pokud je `True`, mapa stránek (sitemap) je při vyhledávání stránek k extrakci ignorována"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.display_name": {
+          "source": "Ignore Sitemap",
+          "message": "Ignorovat sitemapu"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.short_desc": {
+          "source": "Ignore the sitemap",
+          "message": "Ignorovat sitemapu"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the data to extract. Used to guide the extraction and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "Objekt JSON Schema definující strukturu dat k extrakci. Používá se k řízení extrakce a validaci formátu výstupu.\n\n**Příklad**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "Schéma"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for extraction",
+          "message": "JSON Schema pro extrakci"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each page during extraction, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Možnosti použité při scrapování jednotlivých stránek během extrakce, jako například `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Možnosti scrapování"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping pages",
+          "message": "Možnosti pro scrapování stránek"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.desc": {
+          "source": "If `True`, the source URLs used for extraction are included in the response",
+          "message": "Pokud je `True`, zdrojové adresy URL použité pro extrakci jsou zahrnuty v odpovědi"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.display_name": {
+          "source": "Show Sources",
+          "message": "Zobrazit zdroje"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.short_desc": {
+          "source": "Include source URLs",
+          "message": "Zahrnout zdrojové adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to extract from the pages",
+          "message": "Prompt v přirozeném jazyce popisující, jaká data se mají ze stránek extrahovat"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.short_desc": {
+          "source": "Extraction prompt",
+          "message": "Prompt pro extrakci"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "List of URLs to extract data from (supports glob patterns like `https://example.com/blog/*`)",
+          "message": "Seznam adres URL, ze kterých se mají data extrahovat (podporuje maskovací vzory jako `https://example.com/blog/*`)"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL adresy"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "URLs to extract from",
+          "message": "Adresy URL k extrakci"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract structured data from web pages using AI",
+          "message": "Extrahovat strukturovaná data z webových stránek pomocí AI"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Firecrawl** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Firecrawl** s využitím autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese API připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci zatím nejsou k dispozici jako samostatné akce."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Firecrawl",
+          "message": "Provést vlastní volání API do Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.desc": {
+          "source": "Maps a website to discover all URLs without scraping page content. Returns a list of discovered links.\n\nSupports search filtering, subdomain inclusion, sitemap usage, and geolocation settings.",
+          "message": "Zmapuje web za účelem zjištění všech adres URL bez scrapování obsahu stránek. Vrací seznam zjištěných odkazů.\n\nPodporuje filtrování vyhledáváním, zahrnutí subdomén, použití sitemapy a nastavení geolokace."
+        },
+        "app.RmlyZWNyYXds.action.bWFw.display_name": {
+          "source": "Map a Website",
+          "message": "Zmapovat web"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the results",
+          "message": "Pokud je `True`, adresy URL subdomén jsou zahrnuty do výsledků"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "Zahrnout subdomény"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "Zahrnout adresy URL subdomén"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.desc": {
+          "source": "If `True`, cached results are ignored and a fresh map is generated",
+          "message": "Pokud je `True`, výsledky z mezipaměti jsou ignorovány a vygeneruje se nová mapa"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.display_name": {
+          "source": "Ignore Cache",
+          "message": "Ignorovat mezipaměť"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.short_desc": {
+          "source": "Ignore cached results",
+          "message": "Ignorovat výsledky v mezipaměti"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "Pokud je `True`, adresy URL s různými parametry dotazu jsou považovány za stejnou stránku"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "Ignorovat parametry dotazu"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "Ignorovat parametry dotazu v URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the map request",
+          "message": "Nastavení geolokace pro požadavek mapování"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Nastavení geolokace"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum number of links to return. Defaults to `5000`",
+          "message": "Maximální počet odkazů k vrácení. Výchozí hodnota je `5000`"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of links to return",
+          "message": "Maximální počet odkazů k vrácení"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.desc": {
+          "source": "An optional search query to filter the discovered URLs",
+          "message": "Volitelný vyhledávací dotaz pro filtrování zjištěných adres URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Hledat"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.short_desc": {
+          "source": "Search query to filter URLs",
+          "message": "Vyhledávací dotaz pro filtrování adres URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "Pouze"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Zahrnout"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "Přeskočit"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when mapping URLs",
+          "message": "Jak naložit se sitemapou při mapování adres URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "Sitemap"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "Režim zpracování sitemap"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the map operation to complete",
+          "message": "Maximální doba v milisekundách pro čekání na dokončení operace mapování"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Časový limit v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.desc": {
+          "source": "The starting URL of the website to map",
+          "message": "Výchozí adresa URL webu k mapování"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.short_desc": {
+          "source": "The URL to map",
+          "message": "Adresa URL k mapování"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.short_desc": {
+          "source": "Discover all URLs on a website without scraping content",
+          "message": "Získat všechny adresy URL na webu bez scrapování obsahu"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.desc": {
+          "source": "Scrapes a single web page at the given URL and returns its content in the requested formats (markdown, HTML, links, images, etc.).\n\nSupports browser actions, geolocation, proxy configuration, and content filtering via include/exclude tags.",
+          "message": "Scrapuje jednotlivou webovou stránku na zadané adrese URL a vrátí její obsah v požadovaných formátech (markdown, HTML, odkazy, obrázky atd.).\n\nPodporuje akce prohlížeče, geolokaci, konfiguraci proxy a filtrování obsahu pomocí značek pro zahrnutí/vyloučení."
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
+          "source": "Scrape a Web Page",
+          "message": "Scrapovat webovou stránku"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "Seznam akcí prohlížeče, které se mají provést před scrapováním. Každá akce je hash s klíčem `type` a specifickými parametry akce.\n\n**Dostupné akce**:\n- `wait` — počkat po dobu (`milliseconds`) nebo na prvek (`selector`)\n- `click` — kliknout na prvek (`selector`, `all`)\n- `write` — napsat text do zaměřeného prvku (`text`)\n- `press` — stisknout klávesu na klávesnici (`key`)\n- `scroll` — posunout stránku (`direction`: `up`/`down`; volitelné `selector`)\n- `screenshot` — pořídit snímek obrazovky (`fullPage`, `quality`, `viewport`)\n- `scrape` — zachytit obsah stránky v jejím aktuálním stavu\n- `executeJavascript` — spustit JavaScriptový kód (`script`)\n- `pdf` — vygenerovat PDF (`format`, `landscape`, `scale`)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "Akce"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "Akce prohlížeče k provedení"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "Pokud je nastaveno `True`, reklamy jsou během scrapování blokovány"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Seznam značek HTML, které se mají vyloučit z výstupu (např. `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Vyloučit značky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Značky HTML k vyloučení"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "Zvuk"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "Branding"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "Sledování změn"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Obrázky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Odkazy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "Nezpracované HTML"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Shrnutí"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "Snímek obrazovky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the scrape",
+          "message": "Seznam výstupních formátů, které se mají vrátit ze scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formáty"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Výstupní formáty k vrácení"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the scrape request",
+          "message": "Vlastní HTTP hlavičky, které se mají odeslat s požadavkem na scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Seznam HTML značek, které mají být zahrnuty do výstupu (např. `article`, `main`). Vrácen je pouze obsah uvnitř těchto značek"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Zahrnout značky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "HTML značky k zahrnutí"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the page is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "Pokud je `True`, vrátí se pouze hlavní obsah stránky s vyloučením záhlaví, navigace, zápatí atd. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extrahovat pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "Pokud je `True`, použije se vyčištění pomocí LLM k odstranění navigace, reklam a šablonovitého textu. Výchozí hodnota je `False`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "Pouze vyčištěný obsah"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "Použít vyčištění obsahu pomocí LLM"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape request",
+          "message": "Nastavení geolokace pro požadavek na scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Nastavení geolokace"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, the page is scraped using a mobile user agent",
+          "message": "Pokud je `True`, stránka je scrapována s použitím mobilního user agenta"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "Mobil"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "Použít mobilního user agenta"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "Maximální stáří obsahu v mezipaměti v milisekundách. Pokud existuje verze stránky v mezipaměti a je novější než tato hodnota, je vrácena namísto nového scrapování. Výchozí hodnota je `172800000` (48 hodin)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "Maximální stáří"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "Prahová hodnota čerstvosti mezipaměti v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "Minimální stáří v milisekundách pro vyhledávání pouze v mezipaměti. Pokud je nastaveno, vrací se pouze obsah v mezipaměti starší než tato hodnota; pokud položka v mezipaměti neexistuje, nespustí se žádné nové scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "Minimální stáří"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "Minimální stáří mezipaměti v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "Pokud je nastaveno na `True`, ověřování certifikátu TLS se přeskočí"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Přeskočit ověření TLS"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Přeskočit ověření certifikátu TLS"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "Pokud je nastaveno na `True`, scrapovaný obsah se uloží do mezipaměti Firecrawl, takže jej následné scrapingy v rámci `maxAge` mohou znovu použít. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "Uložit do mezipaměti"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "Uložit scrapovaný obsah do mezipaměti"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Seznam konfigurací parseru pro zpracování PDF. Každá položka určuje typ parseru a možnosti zpracování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Parsery"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Konfigurace parseru PDF"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "Pojmenovaný profil prohlížeče pro opětovné použití stavu relace (soubory cookie, místní úložiště) napříč požadavky na scraping. Nastavte `saveChanges` na `True` pro uložení změn zpět do profilu"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "Trvalý profil prohlížeče"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Základní"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Rozšířený"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for the scrape request",
+          "message": "Konfigurace proxy, která se má použít pro požadavek na scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Konfigurace proxy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "Pokud je nastaveno na `True`, obrázky kódované v base64 se z výstupu odstraní"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Odstranit obrázky Base64"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Odstranit obrázky kódované v base64"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for the page to load before scraping. Useful for pages with dynamic content",
+          "message": "Doba čekání v milisekundách na načtení stránky před scrapováním. Užitečné pro stránky s dynamickým obsahem"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "Počkat na"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "Doba čekání v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the scrape to complete",
+          "message": "Maximální doba v milisekundách pro čekání na dokončení scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Časový limit v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.desc": {
+          "source": "The URL of the web page to scrape",
+          "message": "Adresa URL webové stránky ke scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.short_desc": {
+          "source": "The URL to scrape",
+          "message": "Adresa URL ke scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Pokud je nastaveno na `True`, Firecrawl po vrácení odpovědi neuchovává žádná scrapovaná data na svých serverech. Užitečné pro úlohy citlivé na soukromí a dodržování předpisů. Funkce pro podniky – pro aktivaci kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Nulové uchovávání dat"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Zakázat uchovávání dat na straně Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
+          "source": "Scrape a single web page and return its content",
+          "message": "Scrapovat jednu webovou stránku a vrátit její obsah"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.desc": {
+          "source": "Searches the web for the given query and returns scraped results for matching pages.\n\nSupports time filtering, geographic location, country codes, and scrape options for result pages.",
+          "message": "Vyhledá na webu zadaný dotaz a vrátí scrapované výsledky pro odpovídající stránky.\n\nPodporuje filtrování podle času, geografickou polohu, kódy zemí a možnosti scrapování pro výsledné stránky."
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
+          "source": "Search the Web",
+          "message": "Hledat na webu"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "Country code for the search (e.g., `us`, `gb`, `de`)",
+          "message": "Kód země pro vyhledávání (např. `us`, `gb`, `de`)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "Country code",
+          "message": "Kód země"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOmdpdGh1Yg.display_name": {
+          "source": "GitHub",
+          "message": "GitHub"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnJlc2VhcmNo.display_name": {
+          "source": "Research",
+          "message": "Výzkum"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "List of content categories to filter search results",
+          "message": "Seznam kategorií obsahu pro filtrování výsledků vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "Kategorie"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Filter results by content category",
+          "message": "Filtrovat výsledky podle kategorie obsahu"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOmFub24.display_name": {
+          "source": "Anonymized Zero Data Retention",
+          "message": "Anonymized Zero Data Retention"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOnpkcg.display_name": {
+          "source": "End-to-End Zero Data Retention",
+          "message": "End-to-End Zero Data Retention"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.desc": {
+          "source": "Enterprise search options for Zero Data Retention (ZDR). Must be enabled for your team",
+          "message": "Podnikové možnosti vyhledávání pro Zero Data Retention (ZDR). Musí být povoleno pro váš tým"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.display_name": {
+          "source": "Enterprise",
+          "message": "Enterprise"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.short_desc": {
+          "source": "Enterprise search options",
+          "message": "Možnosti podnikového vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in results are skipped instead of causing an error",
+          "message": "Pokud je `True`, neplatné adresy URL ve výsledcích jsou přeskočeny namísto vyvolání chyby"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorovat neplatné adresy URL"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.desc": {
+          "source": "Geographic location for the search query (e.g., `United States`)",
+          "message": "Zeměpisná poloha pro vyhledávací dotaz (např. `United States`)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.short_desc": {
+          "source": "Search location",
+          "message": "Poloha vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Defaults to `5`, maximum `100`",
+          "message": "Maximální počet výsledků k vrácení. Výchozí hodnota je `5`, maximum `100`"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Zprávy"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Obrázky"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.desc": {
+          "source": "List of source types to include in search results. Defaults to `web` only if not specified",
+          "message": "Seznam typů zdrojů, které mají být zahrnuty do výsledků vyhledávání. Pokud není zadáno, výchozí hodnota je pouze `web`"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.display_name": {
+          "source": "Sources",
+          "message": "Zdroje"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.short_desc": {
+          "source": "Filter results by source type",
+          "message": "Filtrovat výsledky podle typu zdroje"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each search result page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Možnosti použité při scrapování každé stránky s výsledky vyhledávání, jako například `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Možnosti scrapování"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping search results",
+          "message": "Možnosti scrapování výsledků vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string (maximum 500 characters)",
+          "message": "Řetězec vyhledávacího dotazu (maximálně 500 znaků)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dotaz"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "Vyhledávací dotaz"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.desc": {
+          "source": "Time-based search filter string (e.g., `qdr:d` for past day, `qdr:w` for past week, `qdr:m` for past month)",
+          "message": "Řetězec časového filtru vyhledávání (např. `qdr:d` pro minulý den, `qdr:w` pro minulý týden, `qdr:m` pro minulý měsíc)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.display_name": {
+          "source": "Time Filter",
+          "message": "Časový filtr"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.short_desc": {
+          "source": "Time-based search filter",
+          "message": "Časový filtr vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the search to complete",
+          "message": "Maximální doba v milisekundách pro čekání na dokončení vyhledávání"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Časový limit v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
+          "source": "Search the web and return scraped results",
+          "message": "Prohledat web a vrátit scrapované výsledky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.desc": {
+          "source": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) up to 50 MB and converts it to clean, LLM-ready content in the requested formats.\n\nThe request is sent as `multipart/form-data` with the file binary in a `file` part and the parse options as a JSON-encoded `options` part. Supported file extensions: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`.",
+          "message": "Nahraje místní nebo neveřejný dokument (PDF, DOCX, XLSX, HTML atd.) do velikosti 50 MB a převede jej na čistý obsah připravený pro LLM v požadovaných formátech.\n\nPožadavek je odeslán jako `multipart/form-data` s binárním souborem v části `file` a možnostmi parsování jako JSON kódovaná část `options`. Podporované přípony souborů: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`."
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
+          "source": "Parse a Document",
+          "message": "Parsovat dokument"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements and popups are blocked. Defaults to `True`",
+          "message": "Pokud je `True`, reklamy a vyskakovací okna jsou blokovány. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Blokovat reklamy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Seznam značek HTML, které se mají vyloučit z výstupu (např. `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Vyloučit značky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Značky HTML k vyloučení"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Obrázky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Odkazy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "Nezpracované HTML"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Shrnutí"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the parse. Defaults to `markdown`",
+          "message": "Seznam výstupních formátů, které mají být vráceny z parsování. Výchozí hodnota je `markdown`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formáty"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Výstupní formáty k vrácení"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.desc": {
+          "source": "The document to upload and parse. Supported file types: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`. Maximum size: 50 MB",
+          "message": "Dokument k nahrání a parsování. Podporované typy souborů: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`. Maximální velikost: 50 MB"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Soubor"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.short_desc": {
+          "source": "The document to parse",
+          "message": "Dokument k parsování"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to use for any embedded resource fetches performed during parsing",
+          "message": "Vlastní HTTP hlavičky pro načítání vložených prostředků prováděné během parsování"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "Hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Seznam HTML značek, které mají být zahrnuty do výstupu (např. `article`, `main`). Vrácen je pouze obsah uvnitř těchto značek"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Zahrnout značky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "HTML značky k zahrnutí"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the document is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "Pokud je `True`, vrátí se pouze hlavní obsah dokumentu s vyloučením záhlaví, navigace, zápatí atd. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extrahovat pouze hlavní obsah"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped for any embedded resource fetches performed during parsing. Defaults to `True`",
+          "message": "Pokud je `True`, ověření TLS certifikátu je přeskočeno pro jakékoli načítání vložených prostředků prováděné během parsování. Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Přeskočit ověření TLS"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Přeskočit ověření certifikátu TLS"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Seznam konfigurací parseru pro zpracování PDF. Každá položka určuje typ parseru a možnosti zpracování"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Parsery"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Konfigurace parseru PDF"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Základní"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for any embedded resource fetches performed during parsing",
+          "message": "Konfigurace proxy pro jakékoli načítání vložených prostředků prováděné během parsování"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Konfigurace proxy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are stripped from the output (alt text is preserved). Defaults to `True`",
+          "message": "Pokud je `True`, obrázky kódované v base64 jsou z výstupu odstraněny (alternativní text je zachován). Výchozí hodnota je `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Odstranit obrázky Base64"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Odstranit obrázky kódované v base64"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the parse to complete. Defaults to `30000` (30 seconds); maximum `300000` (5 minutes)",
+          "message": "Maximální doba v milisekundách pro čekání na dokončení parsování. Výchozí hodnota je `30000` (30 sekund); maximum `300000` (5 minut)"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Časový limit"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Časový limit v milisekundách"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any parsed data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Pokud je `True`, Firecrawl po vrácení odpovědi neuchovává žádná parsovaná data na svých serverech. Funkce Enterprise – pro aktivaci kontaktujte podporu Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Nulové uchovávání dat"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Zakázat uchovávání dat na straně Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {
+          "source": "Upload a document and convert it to LLM-ready data",
+          "message": "Nahrát dokument a převést jej na data připravená pro LLM"
+        },
+        "app.RmlyZWNyYXds.desc": {
+          "source": "Firecrawl provides APIs for web scraping, crawling, URL mapping, web search, structured data extraction, and AI agent tasks.\n\nThis integration supports 15 actions covering single-page scraping, multi-page crawling, batch scraping, URL discovery, web search, AI-powered extraction, document parsing, and autonomous agent tasks.",
+          "message": "Firecrawl poskytuje API pro web scraping, crawling, mapování URL, vyhledávání na webu, extrakci strukturovaných dat a úlohy pro agenty AI.\n\nTato integrace podporuje 15 akcí pokrývajících scrapování jednotlivých stránek, vícestránkový crawling, dávkové scrapování, objevování URL, vyhledávání na webu, extrakci pomocí AI, parsování dokumentů a úlohy autonomních agentů."
+        },
+        "app.RmlyZWNyYXds.display_name": {
+          "source": "Firecrawl",
+          "message": "Firecrawl"
+        },
+        "app.RmlyZWNyYXds.short_desc": {
+          "source": "Firecrawl web scraping and crawling platform",
+          "message": "Platforma Firecrawl pro web scraping a crawling"
+        }
+      }
+    }
+  }
+}

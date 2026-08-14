@@ -1,0 +1,633 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Mistral AI model via the OpenAI-compatible `/v1/chat/completions` endpoint.",
+          "message": "Odošle zoznam chatových správ do modelu Mistral AI prostredníctvom koncového bodu `/v1/chat/completions` kompatibilného s OpenAI."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Dopĺňanie chatu"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Mistral model identifier, e.g. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`.",
+          "message": "Identifikátor modelu Mistral, napr. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Mistral model name",
+          "message": "Názov modelu Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Maximálny počet tokenov na vygenerovanie."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Maximálny počet tokenov na výstup"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history.",
+          "message": "História konverzácie."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Zoznam správ chatu tvoriacich konverzáciu"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.desc": {
+          "source": "When `True`, Mistral injects its safety preamble.",
+          "message": "Ak je `True`, Mistral vloží svoju bezpečnostnú preambulu."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.display_name": {
+          "source": "Safe Prompt",
+          "message": "Bezpečný prompt"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.short_desc": {
+          "source": "Inject Mistral's safety preamble",
+          "message": "Vložiť bezpečnostnú preambulu Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "Keď je `True`, server streamuje čiastočné dokončenia ako SSE."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as SSE",
+          "message": "Streamovať čiastočné dokončenia ako SSE"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Celočíselný seed pre deterministické vzorkovanie."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.display_name": {
+          "source": "Random Seed",
+          "message": "Náhodný seed"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed pre deterministické vzorkovanie"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}`.",
+          "message": "Hash, ktorý vynucuje štruktúrovaný tvar odpovede, napr. `{type: \"json_object\"}`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Vynútiť štruktúrovaný výstup (napr. JSON)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Žiadne – nikdy nevolať nástroj"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto – rozhoduje model"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmFueQ.display_name": {
+          "source": "Any - must call a tool",
+          "message": "Any - musí zavolať nástroj"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `any` (Mistral's equivalent of `required`).",
+          "message": "Režim vyvolania nástroja: `none`, `auto` alebo `any` (ekvivalent Mistral k `required`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Režim vyvolania nástroja"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.",
+          "message": "Zoznam definícií nástrojov."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definície nástrojov v štýle OpenAI, ktoré model môže volať"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff (0-1).",
+          "message": "Hranica vzorkovania nucleus (0-1)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff",
+          "message": "Hranica vzorkovania nucleus"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness.  Mistral recommends `0.3` as a default.",
+          "message": "Riadi náhodnosť.  Mistral odporúča ako predvolenú hodnotu `0.3`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1.5)",
+          "message": "Teplota vzorkovania (0-1.5)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Mistral AI model",
+          "message": "Generovať dokončenie chatu z modelu Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors via the OpenAI-compatible `/v1/embeddings` endpoint using `mistral-embed`.",
+          "message": "Konvertuje textové vstupy na vkladacie vektory prostredníctvom koncového bodu `/v1/embeddings` kompatibilného s OpenAI pomocou `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Vytvoriť embeddingy"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float` (predvolené) alebo `base64`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formát kódovania"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for vectors",
+          "message": "Formát prenosu pre vektory"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.",
+          "message": "Textový vstup (alebo vstupy) na konverziu na vkladacie vektory."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Vstup"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Text(y) na vloženie (embed)"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Mistral embedding model identifier, currently `mistral-embed`.",
+          "message": "Identifikátor embedding modelu Mistral, v súčasnosti `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Mistral embedding model",
+          "message": "Embedding model Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Mistral AI embedding model",
+          "message": "Generovať embedding vektory z embedding modelu Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.desc": {
+          "source": "Converts a PDF or image document into structured markdown using Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page markdown, layout-preserved tables, and inline image references.\n\nSupply a document URL via `document.document_url` (preferred for large PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) for small inputs.\n\n**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" engine abstraction is planned for a follow-up release; this action is the direct REST surface in the meantime.",
+          "message": "Konvertuje dokument PDF alebo obrázok na štruktúrovaný markdown pomocou modelu `mistral-ocr-latest` od Mistral prostredníctvom `/v1/ocr`.  Vracia markdown po stránkach, tabuľky so zachovaným rozložením a vložené referencie na obrázky.\n\nZadajte URL adresu dokumentu cez `document.document_url` (preferované pre veľké súbory PDF) alebo priame bajty kódované v base64 cez `document.image_url` (data: URI) pre malé vstupy.\n\n**Poznámka**: integrácia s abstrakciou enginu @ref qoreocrutilsintro \"QoreOcrUtils\" je plánovaná v nasledujúcom vydaní; táto akcia zatiaľ predstavuje priame rozhranie REST."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.display_name": {
+          "source": "Document OCR",
+          "message": "OCR dokumentu"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.desc": {
+          "source": "Hash describing the document.  One of:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — remote PDF URL (preferred for large documents)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — inline base64-encoded image (small inputs only)",
+          "message": "Hash popisujúci dokument.  Jeden z:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — vzdialená URL adresa PDF (preferované pre veľké dokumenty)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — vložený obrázok kódovaný v base64 (iba malé vstupy)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "Dokument"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.short_desc": {
+          "source": "Document to OCR (URL or base64 data URI)",
+          "message": "Dokument na OCR (URL alebo base64 data URI)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.desc": {
+          "source": "Cap on the number of images extracted from the document.",
+          "message": "Limit počtu obrázkov extrahovaných z dokumentu."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.display_name": {
+          "source": "Image Limit",
+          "message": "Limit obrázkov"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.short_desc": {
+          "source": "Maximum number of images to extract",
+          "message": "Maximálny počet obrázkov na extrakciu"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.desc": {
+          "source": "Skip images smaller than this size in pixels.",
+          "message": "Vynechať obrázky menšie ako táto veľkosť v pixeloch."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.display_name": {
+          "source": "Image Min Size",
+          "message": "Minimálna veľkosť obrázka"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.short_desc": {
+          "source": "Minimum image size (pixels) to extract",
+          "message": "Minimálna veľkosť obrázka (pixely) na extrakciu"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.desc": {
+          "source": "When `True`, embedded images are returned as base64 in the response.  When `False` (default), images are referenced by URL.",
+          "message": "Keď je `True`, vložené obrázky sa v odpovedi vrátia ako base64. Keď je `False` (predvolené), na obrázky sa odkazuje pomocou URL."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.display_name": {
+          "source": "Include Image Base64",
+          "message": "Zahrnúť obrázok ako Base64"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.short_desc": {
+          "source": "Embed images inline as base64 in the response",
+          "message": "Vložiť obrázky priamo ako base64 do odpovede"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.desc": {
+          "source": "Mistral OCR model identifier, e.g. `mistral-ocr-latest`.",
+          "message": "Identifikátor OCR modelu Mistral, napr. `mistral-ocr-latest`."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.short_desc": {
+          "source": "Mistral OCR model",
+          "message": "OCR model Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.desc": {
+          "source": "Optional list of 0-indexed page numbers to OCR.  Defaults to all pages.",
+          "message": "Voliteľný zoznam čísel strán indexovaných od 0 na OCR. Predvolene všetky strany."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.short_desc": {
+          "source": "Specific pages to OCR (0-indexed list)",
+          "message": "Konkrétne strany na OCR (zoznam indexovaný od 0)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.short_desc": {
+          "source": "Extract structured markdown from PDF or image documents",
+          "message": "Extrahovať štruktúrovaný markdown z dokumentov PDF alebo obrázkov"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mistral AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **Mistral AI** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú vystavené ako plnohodnotné akcie v tejto aplikácii."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mistral AI",
+          "message": "Vytvoriť vlastné volanie API do Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.desc": {
+          "source": "Provides access to [Mistral AI](https://mistral.ai) — frontier and open-weight chat models, embeddings, and best-in-class document OCR.\n\n**Common use cases**:\n- **Frontier chat** with mistral-large-latest, mistral-small-latest\n- **Code-tuned chat** with codestral-latest\n- **RAG embeddings** with mistral-embed\n- **Document OCR** — extract structured markdown from PDFs and images using `mistral-ocr-latest`",
+          "message": "Poskytuje prístup k [Mistral AI](https://mistral.ai) — špičkovým a open-weight četovacím modelom, embeddingom a najlepšiemu OCR dokumentov vo svojej triede.\n\n**Bežné prípady použitia**:\n- **Špičkový čet** s mistral-large-latest, mistral-small-latest\n- **Čet prispôsobený na kód** s codestral-latest\n- **RAG embeddingy** s mistral-embed\n- **OCR dokumentov** — extrakcia štruktúrovaného markdownu z PDF a obrázkov pomocou `mistral-ocr-latest`"
+        },
+        "app.TWlzdHJhbEFp.display_name": {
+          "source": "Mistral AI",
+          "message": "Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.short_desc": {
+          "source": "Mistral AI chat, embeddings, and document OCR",
+          "message": "Mistral AI čet, embeddingy a OCR dokumentov"
+        }
+      }
+    }
+  }
+}

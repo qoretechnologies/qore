@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.SnNvbkZpbGU.action.cmVhZA.desc": {
+          "source": "Read standard JSON file data from a specific file location.\n\nThe JSON file may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Читати стандартні дані файлу JSON із конкретного розташування файлу.\n\nФайл JSON може містити:\n- **Масив об'єктів**: кожен елемент ітерується як окремий запис\n- **Один об'єкт**: повертається як один запис\n- **Масив необ'єктних значень**: кожен елемент обгортається в `{\"value\": <element>}`\n\n### Основні параметри\n- `path`: розташування файлу для читання (обов'язково)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
+          "source": "Read JSON File",
+          "message": "Читати файл JSON"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Кодування US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "Кодування символів для використання під час читання вхідних даних (за замовчуванням: `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "Кодування символів для вхідних даних"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL of the JSON file to read; mutually exclusive with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Шлях у файловій системі або URL-адреса розташування файлу JSON для читання; взаємовиключно з `stream` та `data`; визначається за допомогою виклику [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON file to read",
+          "message": "Шлях до файлу JSON для читання"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
+          "source": "Read standard JSON file data from a file location",
+          "message": "Читати стандартні дані файлу JSON із розташування файлу"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.desc": {
+          "source": "Read standard JSON inline data provided directly as a string.\n\nThe JSON data may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `data`: the JSON string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Читати стандартні вбудовані дані JSON, надані безпосередньо у вигляді рядка.\n\nДані JSON можуть містити:\n- **Масив об'єктів**: кожен елемент ітерується як окремий запис\n- **Один об'єкт**: повертається як один запис\n- **Масив необ'єктних значень**: кожен елемент обгортається в `{\"value\": <element>}`\n\n### Основні параметри\n- `data`: рядок JSON для аналізу (обов'язково)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read JSON Inline Data",
+          "message": "Читати вбудовані дані JSON"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "JSON data provided directly as a string; mutually exclusive with `path` and `stream`",
+          "message": "Дані JSON, надані безпосередньо у вигляді рядка; взаємовиключно з `path` та `stream`"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Дані"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "JSON data as a string",
+          "message": "Дані JSON у вигляді рядка"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Кодування US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "Кодування символів для використання під час читання вхідних даних (за замовчуванням: `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "Кодування символів для вхідних даних"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read standard JSON inline data",
+          "message": "Читати стандартні вбудовані дані JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Записати записи як стандартний масив JSON у конкретне розташування файлу.\n\nЗаписи накопичуються та записуються як масив JSON під час виклику `commit()` або після знищення провайдера.\n\n### Основні параметри\n- `path`: розташування вихідного файлу (обов'язково)\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
+          "source": "Write JSON File",
+          "message": "Записати файл JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Кодування US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "Кодування символів для використання під час запису вихідних даних (за замовчуванням: `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Кодування символів для виводу"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL for the output JSON data file; mutually exclusive with `stream`; resolved with a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "Шлях у файловій системі або URL-адреса розташування для вихідного файлу даних JSON; взаємовиключно з `stream`; визначається за допомогою виклику [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output File Path",
+          "message": "Шлях до вихідного файлу"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON output file",
+          "message": "Шлях до вихідного файлу JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "Форматувати вихідний JSON із відступами для зручності читання"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "Так"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "Форматований вивід із відступами"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "Записати компактний JSON без зайвих пробілів"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "Ні"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "Компактний вивід"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "Якщо `True` (за замовчуванням), вихідний JSON форматується з відступами для зручності читання; якщо `False`, вивід буде компактним без зайвих пробілів"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "Форматований вивід"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "Форматувати JSON із відступами"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
+          "source": "Write standard JSON file data to a file location",
+          "message": "Записати стандартні дані файлу JSON у розташування файлу"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Записати записи як стандартний масив JSON у вихідний потік або отримати результат у вигляді бінарних даних.\n\nЗаписи накопичуються та записуються як масив JSON під час виклику `commit()` або після знищення провайдера.\n\n### Основні параметри\n- `stream`: вихідний потік для запису\n- `pretty_print`: форматувати вихідний JSON із відступами (за замовчуванням: `True`)\n- `encoding`: кодування символів (за замовчуванням: `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write JSON Data",
+          "message": "Записати дані JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Кодування Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Кодування US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Кодування UTF-8 (рекомендовано)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Кодування UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "Кодування символів для використання під час запису вихідних даних (за замовчуванням: `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Кодування символів для виводу"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
+          "message": "Вихідний потік для запису даних JSON; взаємовиключний з `path`"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Вихідний потік"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the JSON data",
+          "message": "Об'єкт вихідного потоку для даних JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "Форматувати вихідний JSON із відступами для зручності читання"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "Так"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "Форматований вивід із відступами"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "Записати компактний JSON без зайвих пробілів"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "Ні"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "Компактний вивід"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "Якщо `True` (за замовчуванням), вихідний JSON форматується з відступами для зручності читання; якщо `False`, вивід буде компактним без зайвих пробілів"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "Форматований вивід"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "Форматувати JSON із відступами"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write standard JSON data to an output stream",
+          "message": "Записати стандартні дані JSON у вихідний потік"
+        },
+        "app.SnNvbkZpbGU.desc": {
+          "source": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files containing an array of objects (iterated as individual records) or a single object (returned as one record). Provides configurable pretty-print output for writing.",
+          "message": "Читання та запис стандартних файлів JSON (не NDJSON/JSON Lines). Підтримує файли JSON, що містять масив об'єктів (ітеруються як окремі записи) або один об'єкт (повертається як один запис). Забезпечує налаштовуване форматування (pretty-print) при записі."
+        },
+        "app.SnNvbkZpbGU.display_name": {
+          "source": "JSON Files",
+          "message": "Файли JSON"
+        },
+        "app.SnNvbkZpbGU.short_desc": {
+          "source": "Read and write standard JSON files",
+          "message": "Читати та записувати стандартні файли JSON"
+        }
+      }
+    }
+  }
+}

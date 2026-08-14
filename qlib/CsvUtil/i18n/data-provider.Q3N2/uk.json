@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Q3N2.action.cmVhZA.desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Читати дані файлу CSV із зазначеного розташування"
+        },
+        "app.Q3N2.action.cmVhZA.display_name": {
+          "source": "Read CSV File",
+          "message": "Читати файл CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Формат дати за замовчуванням для розбору полів `date`; див. [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) для отримання додаткової інформації про цю опцію (напр.: `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Формат дати"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Маска за замовчуванням для розбору вхідних значень дати"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Кодування символів для вхідного файлу (та вихідних даних; вихідних даних лише у разі використання опції `data`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Кодування вхідних символів"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Кодування символів для вхідного файлу"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Символ(и) кінця рядка; якщо не вказано, символи кінця рядка визначатимуться автоматично"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Символи кінця рядка"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Символ(и) кінця рядка / запису"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Хеш, що описує вхідні поля CSV. Ключі — це імена полів, визначені параметрами `header_names` або `headers` (якщо жоден не використовується, іменами полів є числа, починаючи з `0`). Значення — це [типи полів](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) або хеш із такими ключами:\n- `type`: [рядок типу поля](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: для типів `date` — [формат дати](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); для типів `int`, `float` або `number` — рядок формату числа: *<розділювач_тисяч>*[*<десятковий_розділювач>*[*<кількість_знаків>*]] (наприклад, `\".,3\"` = `.` для тисяч, `,` для десяткових, 3 знаки після коми)\n- `timezone`: лише для типів `date`; передається в [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) для розбору дат (перевизначає будь-який часовий пояс за замовчуванням; використовуйте, коли різні стовпці мають різні часові пояси)\n\n**Примітка**: встановлення цього значення також встановлює `headers`, якщо його не було автоматично встановлено за допомогою `header_names`. Якщо тип поля не вказано, за замовчуванням використовується `*string`. Некоректні імена полів у цій опції ігноруються."
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Описи полів"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Хеш, що описує вхідні поля CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "якщо `true`, об'єкт виконуватиме розбір імен заголовків із першого рядка заголовків; у цьому випадку, якщо `header_lines` не встановлено явно, вважатиметься `1`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Автоматично визначати заголовки"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Якщо true, заголовки автоматично визначатимуться з першого рядка заголовків"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Кількість рядків заголовка у файлі"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Кількість рядків заголовка"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Кількість рядків заголовка у файлі"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Якщо `true` (за замовчуванням), і вказано `headers`, поля даних змінюють порядок відповідно до заголовків"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Застосовувати порядок заголовків"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Якщо true, вхідні дані будуть перевпорядковані в порядку `headers`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Список імен заголовків / стовпців для ітерованих даних; якщо він присутній, `header_names` має бути `false`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Імена заголовків"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Якщо `true`, порожні рядки ігноруватимуться"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ігнорувати порожні рядки"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Якщо true, порожні рядки ігноруватимуться"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Якщо `true`, початкові та кінцеві пробіли вилучатимуться з полів без лапок"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ігнорувати початкові та кінцеві пробіли"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Якщо true, початкові та кінцеві пробіли вилучатимуться з полів без лапок"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Формат за замовчуванням для полів `int`, `float` та `number` у вигляді рядка із зазначенням розділювача тисяч, за яким слідує десятковий розділювач (напр.: `.,` для чисел у континентально-європейському стилі)"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Формат чисел"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Формат чисел за замовчуванням для розбору полів int, float та number"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "рядок, що розділяє поля у файлі (за замовчуванням: `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Розділювач полів"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Символ(и) розділювача полів"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the CSV data; conflicts with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Розташування даних CSV; конфліктує з `stream` та `data`; визначається викликом [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "Розташування вхідних даних CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "Розташування вхідного файлу"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Символ лапок для полів (за замовчуванням: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Якщо `true` (за замовчуванням `false`), всі імена заголовків будуть перетворені на малі літери"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Регіон часового поясу для розбору дат (напр.: `Europe/Prague`); див. [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) щодо допустимих значень"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "якщо `true` (за замовчуванням `false`), якщо рядок розібрано з іншою кількістю стовпців чи полів, ніж інші рядки, генерується виняток `CSVFILEITERATOR-DATA-ERROR`\n\nЗверніть увагу, що ввімкнення цієї опції призведе до зниження продуктивності"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Перевіряти стовпці"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Перевіряє вхідні дані, щоб переконатися, що вони мають очікувану структуру"
+        },
+        "app.Q3N2.action.cmVhZA.short_desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Читати дані файлу CSV із зазначеного розташування"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.desc": {
+          "source": "Read CSV inline data",
+          "message": "Читати вбудовані дані CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read CSV Inline Data",
+          "message": "Читати вбудовані дані CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "CSV data to process; conflicts with `stream` and `path`",
+          "message": "Дані CSV для обробки; конфліктує з `stream` та `path`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Вхідні дані"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "CSV data to process",
+          "message": "Дані CSV для обробки"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Формат дати за замовчуванням для розбору полів `date`; див. [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) для отримання додаткової інформації про цю опцію (напр.: `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Формат дати"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Маска за замовчуванням для розбору вхідних значень дати"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Кодування символів для вхідного файлу (та вихідних даних; вихідних даних лише у разі використання опції `data`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Кодування вхідних символів"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Кодування символів для вхідного файлу"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Символ(и) кінця рядка; якщо не вказано, символи кінця рядка визначатимуться автоматично"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Символи кінця рядка"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Символ(и) кінця рядка / запису"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Хеш, що описує вхідні поля CSV. Ключі — це імена полів, визначені параметрами `header_names` або `headers` (якщо жоден не використовується, іменами полів є числа, починаючи з `0`). Значення — це [типи полів](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) або хеш із такими ключами:\n- `type`: [рядок типу поля](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: для типів `date` — [формат дати](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); для типів `int`, `float` або `number` — рядок формату числа: *<розділювач_тисяч>*[*<десятковий_розділювач>*[*<кількість_знаків>*]] (наприклад, `\".,3\"` = `.` для тисяч, `,` для десяткових, 3 знаки після коми)\n- `timezone`: лише для типів `date`; передається в [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) для розбору дат (перевизначає будь-який часовий пояс за замовчуванням; використовуйте, коли різні стовпці мають різні часові пояси)\n\n**Примітка**: встановлення цього значення також встановлює `headers`, якщо його не було автоматично встановлено за допомогою `header_names`. Якщо тип поля не вказано, за замовчуванням використовується `*string`. Некоректні імена полів у цій опції ігноруються."
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Описи полів"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Хеш, що описує вхідні поля CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "якщо `true`, об'єкт виконуватиме розбір імен заголовків із першого рядка заголовків; у цьому випадку, якщо `header_lines` не встановлено явно, вважатиметься `1`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Автоматично визначати заголовки"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Якщо true, заголовки автоматично визначатимуться з першого рядка заголовків"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Кількість рядків заголовка у файлі"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Кількість рядків заголовка"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Кількість рядків заголовка у файлі"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Якщо `true` (за замовчуванням), і вказано `headers`, поля даних змінюють порядок відповідно до заголовків"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Застосовувати порядок заголовків"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Якщо true, вхідні дані будуть перевпорядковані в порядку `headers`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Список імен заголовків / стовпців для ітерованих даних; якщо він присутній, `header_names` має бути `false`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Імена заголовків"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Список назв заголовків / стовпців для ітерованих даних"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Якщо `true`, порожні рядки ігноруватимуться"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ігнорувати порожні рядки"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Якщо true, порожні рядки ігноруватимуться"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Якщо `true`, початкові та кінцеві пробіли вилучатимуться з полів без лапок"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ігнорувати початкові та кінцеві пробіли"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Якщо true, початкові та кінцеві пробіли вилучатимуться з полів без лапок"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Формат за замовчуванням для полів `int`, `float` та `number` у вигляді рядка із зазначенням розділювача тисяч, за яким слідує десятковий розділювач (напр.: `.,` для чисел у континентально-європейському стилі)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Формат чисел"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Формат чисел за замовчуванням для розбору полів int, float та number"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "рядок, що розділяє поля у файлі (за замовчуванням: `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Розділювач полів"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Символ(и) розділювача полів"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
+          "source": "An input stream for CSV data; conflicts with `path` and `data`",
+          "message": "Вхідний потік для даних CSV; конфліктує з `path` та `data`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "Вхідний потік"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for CSV data",
+          "message": "Об'єкт вхідного потоку для даних CSV"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Символ лапок для полів (за замовчуванням: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Якщо `true` (за замовчуванням `false`), всі імена заголовків будуть перетворені на малі літери"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Перетворити заголовки на нижній регістр"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Перетворити всі назви заголовків на нижній регістр"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Регіон часового поясу для розбору дат (напр.: `Europe/Prague`); див. [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) щодо допустимих значень"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Регіон часового поясу"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Регіон часового поясу, який використовується під час аналізу дат"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "якщо `true` (за замовчуванням `false`), якщо рядок розібрано з іншою кількістю стовпців чи полів, ніж інші рядки, генерується виняток `CSVFILEITERATOR-DATA-ERROR`\n\nЗверніть увагу, що ввімкнення цієї опції призведе до зниження продуктивності"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Перевіряти стовпці"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Перевіряє вхідні дані, щоб переконатися, що вони мають очікувану структуру"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read CSV inline data",
+          "message": "Читати вбудовані дані CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Записати дані файлу CSV у зазначене розташування"
+        },
+        "app.Q3N2.action.d3JpdGU.display_name": {
+          "source": "Write CSV Data",
+          "message": "Записати дані CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Розмір блоку під час генерації масового виводу"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.display_name": {
+          "source": "Block Size",
+          "message": "Розмір блоку"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.short_desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Розмір блоку під час генерації масового виводу"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.desc": {
+          "source": "Sets a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1",
+          "message": "Встановлює хеш відповідності імен ключів фактичних даних іменам вихідних полів на випадок, якщо імена полів даних відрізняються; не обов'язково включати кожен ключ даних або виводу; відсутні ключі вважатимуться зіставленими 1:1"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.display_name": {
+          "source": "Output Field Name Map",
+          "message": "Зіставлення імен вихідних полів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.short_desc": {
+          "source": "Maps data key names to output field names",
+          "message": "Зіставляє імена ключів даних з іменами вихідних полів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for date value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Маска за замовчуванням для форматування вихідних значень дати; див. [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) для отримання додаткової інформації"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Формат дати"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Маска за замовчуванням для форматування вихідних значень дати"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Вихідне кодування символів для даних"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Кодування символів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Вихідне кодування символів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Символ(и) кінця рядка / запису; якщо не вказано, використовуватиметься поточний стандарт платформи"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Символи кінця рядка"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Символ(и) кінця рядка / запису"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)",
+          "message": "Хеш, що описує поля CSV для виводу. Ключі — це назви полів, значення — [типи полів](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) або хеш із такими ключами:\n- `type`: [рядок типу поля](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: для типів `date` — [формат дати](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); для типів `int`, `float` або `number` — рядок формату числа: *<розділювач_тисяч>*[*<десятковий_розділювач>*[*<десяткові_розряди>*]] (наприклад, `\".,3\"` = `.` тисячі, `,` десятковий розділювач, 3 знаки після коми)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Описи полів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields to output",
+          "message": "Хеш, що описує поля CSV для виводу"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Якщо `true` (за замовчуванням), і вказано `headers`, поля даних змінюють порядок відповідно до заголовків"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Застосовувати порядок заголовків"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of `headers`",
+          "message": "Якщо true, вихідні дані будуть упорядковані в порядку `headers`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Список назв полів / заголовків для виведення даних"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Імена заголовків"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Список назв полів / заголовків для виведення даних"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
+          "message": "Встановіть значення `false`, щоб вимкнути оптимальне взяття в лапки; коли оптимальне взяття в лапки вимкнено, усі поля беруться в лапки незалежно від типу чи вмісту, а коли ввімкнено, поля беруться в лапки, лише якщо вони цього потребують (тобто містять лапки або символ-розділювач); значення за замовчуванням — `true`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.display_name": {
+          "source": "Optimal Quotes",
+          "message": "Оптимальні лапки"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.short_desc": {
+          "source": "Quote output fields only when necessary",
+          "message": "Брати вихідні поля в лапки лише за потреби"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Вихідний формат за замовчуванням для полів `int`, `float` та `number`; це рядок числового формату з 1–3 полями такого вигляду: *<розділювач_тисяч>*[*<десятковий_розділювач>*[*<десяткові_розряди>*]]; наприклад: `\".,3\"` (= `.` для розділювача тисяч, `,` для десяткового розділювача та 3 цифри після коми)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Формат вихідних чисел"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Вихідний формат за замовчуванням для полів 'int', 'float' і 'number'"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.desc": {
+          "source": "The string separating fields in the output data (default: `,`)",
+          "message": "Рядок, що розділяє поля у вихідних даних (за замовчуванням: `,`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Розділювач полів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Символ(и) розділювача полів"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "An output stream for CSV data; mutually exclusive with \"path\"",
+          "message": "Вихідний потік для даних CSV; взаємовиключний із \"path\""
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Вихідний потік"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the CSV data",
+          "message": "Об'єкт вихідного потоку для даних CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output CSV data file; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "Розташування для вихідного файлу даних CSV; взаємовиключне з \"stream\"; вихідне розташування обробляється викликом [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "CSV Output Path",
+          "message": "Шлях виводу CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the CSV output file",
+          "message": "Куди записувати вихідний файл CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.desc": {
+          "source": "The quote character to quote fields (default: `\"`)",
+          "message": "Символ лапок для взяття полів у лапки (за замовчуванням: `\"`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Символ(и) лапок"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) used for `quote` (default: `\\`)",
+          "message": "Символ(и) екранування, що використовуються для `quote` (за замовчуванням: `\\`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Символ(и) екранування лапок"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "The escape character(s) for quotes in a field",
+          "message": "Символ(и) екранування для лапок у полі"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
+          "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
+          "message": "Встановіть значення `false`, щоб придушити виведення заголовків; значення за замовчуванням — `true`, що означає виведення заголовків, якщо вони присутні"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Вихідні заголовки"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.short_desc": {
+          "source": "Include headers as the first output record",
+          "message": "Включити заголовки як перший вихідний запис"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "If `true` (the default is `false`) then if a line is parsed with a different column count than other lines, a `CSVFILEWRITER-DATA-ERROR` exception is thrown.\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Якщо `true` (за замовчуванням `false`), то якщо рядок розібрано з іншою кількістю стовпців, ніж інші рядки, генерується виняток `CSVFILEWRITER-DATA-ERROR`.\n\nЗверніть увагу, що ввімкнення цього параметра призведе до зниження продуктивності"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Перевіряти стовпці"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Перевіряє вхідні дані, щоб переконатися, що вони мають очікувану структуру"
+        },
+        "app.Q3N2.action.d3JpdGU.short_desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Записати дані файлу CSV у зазначене розташування"
+        },
+        "app.Q3N2.desc": {
+          "source": "Read and write CSV file data",
+          "message": "Зчитування та запис даних файлів CSV"
+        },
+        "app.Q3N2.display_name": {
+          "source": "CSV Files",
+          "message": "Файли CSV"
+        },
+        "app.Q3N2.short_desc": {
+          "source": "Read and write CSV file data",
+          "message": "Зчитування та запис даних файлів CSV"
+        }
+      }
+    }
+  }
+}

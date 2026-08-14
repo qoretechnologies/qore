@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a Server Sent Event (SSE) message",
+          "message": "Ricevi un messaggio Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Server Sent Event (SSE) Message",
+          "message": "Messaggio Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout to use in milliseconds",
+          "message": "Timeout di connessione da utilizzare in millisecondi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Timeout connessione"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connect timeout in milliseconds",
+          "message": "Timeout di connessione in millisecondi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "URL dello schema AsyncAPI o percorso file utilizzato per convalidare i dati degli eventi SSE ricevuti"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Schema AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL dello schema AsyncAPI o percorso del file"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "Nome del canale AsyncAPI da utilizzare quando `asyncapi` è configurato"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Canale AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Canale AsyncAPI per la convalida"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; if serialization is set to 'json' and the body is not a string, it will be serialized to JSON automatically. Only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "Il corpo della richiesta da inviare con la richiesta di connessione SSE; se la serializzazione è impostata su 'json' e il corpo non è una stringa, verrà serializzato automaticamente in JSON. Valido solo con metodi diversi da GET. Il corpo viene reinviato a ogni tentativo di riconnessione"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "Corpo della richiesta"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "Corpo della richiesta per richieste SSE diverse da GET"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Use no data serialization",
+          "message": "Non utilizzare alcuna serializzazione dei dati"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Use JSON serialization",
+          "message": "Usa la serializzazione JSON"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.desc": {
+          "source": "data serialization to use:\n - `json`: JSON serialization (default)\n - `none`: no serialization; raw messages\n",
+          "message": "serializzazione dei dati da utilizzare:\n - `json`: serializzazione JSON (predefinita)\n - `none`: nessuna serializzazione; messaggi grezzi\n"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializzazione dati"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization for string messages",
+          "message": "Serializzazione dei dati per messaggi stringa"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.desc": {
+          "source": "HTTP headers to add in the initial connection request",
+          "message": "Intestazioni HTTP da aggiungere nella richiesta di connessione iniziale"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.display_name": {
+          "source": "Request Headers",
+          "message": "Intestazioni della richiesta"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.short_desc": {
+          "source": "HTTP headers to send in the request",
+          "message": "Intestazioni HTTP da inviare nella richiesta"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Solo HTTP/1.0"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Solo HTTP/1.1"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Richiede HTTP/2, genera errore se il server non lo supporta (TLS richiesto)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Richiede HTTP/3 (QUIC), genera errore se non disponibile (TLS richiesto)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Usa Happy Eyeballs con priorità a HTTP/3 per HTTPS; fallback a HTTP/2 se necessario (predefinito)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC",
+          "message": "La versione HTTP da utilizzare: `auto` (happy eyeballs basato prima su HTTP/3 per HTTPS, predefinito), `1.0`, `1.1`, `2.0` o `3.0`. HTTP/2 richiede TLS ed è negoziato tramite ALPN. HTTP/3 richiede TLS e utilizza QUIC"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Versione HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "HTTP version to use",
+          "message": "Versione HTTP da utilizzare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.desc": {
+          "source": "Any logger to use for information about data provider operations",
+          "message": "Eventuale logger da utilizzare per informazioni sulle operazioni del data provider"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.display_name": {
+          "source": "Logger",
+          "message": "Logger"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.short_desc": {
+          "source": "The logger to use",
+          "message": "Il logger da utilizzare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "Richiede che il server riavvii l'invio degli eventi a partire da questo ID. Verrà inviato nell'intestazione `Last-Event-ID` nella richiesta di connessione al server SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "ID dell'ultimo evento"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "Richiede al server di riavviare l'invio degli eventi a partire da questo ID"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Numero massimo di reindirizzamenti HTTP da supportare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max HTTP Redirects",
+          "message": "Reindirizzamenti HTTP massimi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Numero massimo di reindirizzamenti HTTP da supportare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "Il metodo HTTP da utilizzare per la richiesta di connessione SSE; predefinito: GET. Utilizzare POST per le API che richiedono un corpo della richiesta (es. API di streaming di OpenAI, Anthropic)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "Metodo HTTP per la richiesta di connessione SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.desc": {
+          "source": "A `ServerSentEventClient` for the connection; either this or the `url` option must be provided; if this option is provided, then all other options are ignored",
+          "message": "Un `ServerSentEventClient` per la connessione; è necessario fornire questa opzione o l'opzione `url`; se viene fornita questa opzione, tutte le altre opzioni vengono ignorate"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.display_name": {
+          "source": "ServerSentEvent Client",
+          "message": "Client ServerSentEvent"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.short_desc": {
+          "source": "The ServerSentEventClient object",
+          "message": "L'oggetto ServerSentEventClient"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "La password per l'autenticazione di base HTTP; utilizzata solo se non sono impostati nome utente o password nell'URL e se viene utilizzata anche l'opzione `username`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "La password per l'autenticazione di base HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.desc": {
+          "source": "The proxy URL to use",
+          "message": "L'URL proxy da utilizzare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "Proxy HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "Il proxy HTTP da utilizzare"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Riconnetti automaticamente quando la connessione viene chiusa o persa"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Riconnettere?"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.short_desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Riconnetti automaticamente quando la connessione viene chiusa o persa"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.desc": {
+          "source": "Any bearer token to use for the connection; will be passed as `Authorization: Bearer ...`  (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then OAuth2 options are ignored for login",
+          "message": "Eventuale bearer token da utilizzare per la connessione; verrà passato come `Authorization: Bearer ...` (presupponendo che `token_type` sia `Bearer`) nelle intestazioni della richiesta; questa opzione non può essere utilizzata insieme alle opzioni di nome utente e password o alle informazioni di autenticazione nell'URL; se questa opzione è impostata, le opzioni OAuth2 vengono ignorate per il login"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token di autorizzazione"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Imposta un token di autorizzazione da includere nelle richieste"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Il tipo di `token` da utilizzare per l'intestazione `Authorization`; ignorato se non è impostata alcuna opzione `token`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Tipo di token di autorizzazione"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Il tipo di token di autorizzazione"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Tempo massimo che può richiedere una singola operazione di I/O in millisecondi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Timeout di I/O"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.short_desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Tempo massimo che può richiedere una singola operazione di I/O in millisecondi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.desc": {
+          "source": "A URL for a ServerSentEvent connection; either this or the `sseclient` option must be provided",
+          "message": "Un URL per una connessione ServerSentEvent; è necessario fornire questa opzione o l'opzione `sseclient`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.short_desc": {
+          "source": "The URL to connect to",
+          "message": "L'URL a cui connettersi"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.desc": {
+          "source": "The username for HTTP basic authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Il nome utente per l'autenticazione di base HTTP; utilizzato solo se non sono impostati nome utente o password nell'URL e se viene utilizzata anche l'opzione `password`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nome utente"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Imposta il nome utente per l'autenticazione di base HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Server Sent Event (SSE) is received",
+          "message": "Viene ricevuto un Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Ricevi Server Sent Events"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.display_name": {
+          "source": "Server Sent Events (SSE)",
+          "message": "Server Sent Events (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.short_desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Ricevi Server Sent Events"
+        }
+      }
+    }
+  }
+}

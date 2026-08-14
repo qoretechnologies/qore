@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "ドキュメントを Document Intelligence モデルに送信し、解析が完了するのを待機します。ライフサイクルは内部的に @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" を介して `AsyncJobPoller` によって駆動されます: POST 送信 → `Operation-Location` URL のポーリング → 解析された `analyzeResult` の返却。\n\n次のいずれかでドキュメントを渡します:\n- `document_url` — パブリック URL (Azure がドキュメントを取得)\n- `document_bytes` — 生バイト (自動的に base64 エンコード)\n- `document_path` — ローカルファイルパス (読み込まれて base64 エンコード)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "ドキュメントの分析"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
+          "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
+          "message": "最大合計待機時間。デフォルトは `10m` です。超過した場合、アクションは `AZURE-DOCUMENT-INTELLIGENCE-ERROR` を発生させます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.display_name": {
+          "source": "Overall Analysis Timeout",
+          "message": "解析全体のタイムアウト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.short_desc": {
+          "source": "Maximum total wait time for the polling loop",
+          "message": "ポーリングループの最大合計待機時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "Document Intelligence API version (e.g. `2024-11-30`).",
+          "message": "Document Intelligence API バージョン (例: `2024-11-30`)。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Document Intelligence API version",
+          "message": "Document Intelligence API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw document bytes — sent as base64-encoded `base64Source`.",
+          "message": "ドキュメントの生バイト — base64 エンコードされた `base64Source` として送信されます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "ドキュメントバイト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw document bytes (base64-encoded automatically)",
+          "message": "ドキュメントの生バイト (自動的に base64 エンコード)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path to read.  Mutually exclusive with `document_url` and `document_bytes`.",
+          "message": "読み込むローカルファイルパス。`document_url` および `document_bytes` とは相互排他です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "ドキュメントパス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and base64-encode",
+          "message": "読み込んで base64 エンコードするローカルファイルパス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.desc": {
+          "source": "Public URL of the document to analyze.  Azure fetches the document from this URL.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "解析するドキュメントのパブリック URL。Azure はこの URL からドキュメントを取得します。`document_bytes` および `document_path` とは相互排他です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
+          "source": "Document URL",
+          "message": "ドキュメント URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.short_desc": {
+          "source": "Public URL of the document to analyze",
+          "message": "解析するドキュメントのパブリック URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
+          "source": "Business Card",
+          "message": "名刺"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWNvbnRyYWN0.display_name": {
+          "source": "Contract",
+          "message": "契約書"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
+          "source": "Document (general layout)",
+          "message": "ドキュメント (一般的なレイアウト)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
+          "source": "US Health Insurance Card",
+          "message": "米国健康保険証"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWlkRG9jdW1lbnQ.display_name": {
+          "source": "ID Document",
+          "message": "身分証明書"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWludm9pY2U.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
+          "source": "Layout (tables + lines)",
+          "message": "レイアウト (テーブル + 行)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlY2VpcHQ.display_name": {
+          "source": "Receipt",
+          "message": "領収書"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy4xMDk4.display_name": {
+          "source": "US 1098 Tax Form",
+          "message": "米国 1098 納税申告書"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
+          "source": "US W-2 Tax Form",
+          "message": "米国 W-2 納税申告書"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
+          "message": "Document Intelligence モデル識別子 — 事前構築済みまたはカスタム。ドロップダウンにはドキュメントに記載されている事前構築済みモデルが一覧表示されます。[Azure portal](https://portal.azure.com) でトレーニングされたカスタムモデルの GUID はフリーフォームテキスト (`allowed_values_creatable: True`) として入力できます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Document Intelligence model identifier",
+          "message": "Document Intelligence モデル識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Interval between job-status polls.  Defaults to `2s`.",
+          "message": "ジョブステータスポーリングの間隔。デフォルトは `2s` です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Polling Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Time between status polls",
+          "message": "ステータスポーリングの間隔"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Run a Document Intelligence model over a document (async)",
+          "message": "ドキュメントに対して Document Intelligence モデルを実行 (非同期)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Azure Document Intelligence** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Azure Document Intelligence** へのカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス (接続の API ベース URL に対する相対パス)、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Azure Document Intelligence",
+          "message": "Azure Document Intelligence へのカスタム API 呼び出しを実行"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
+          "message": "[Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (旧 Form Recognizer) — Microsoft のマネージドドキュメント抽出サービスへのアクセスを提供します。\n\n**事前構築済みモデル**:\n- `prebuilt-document` — 一般的なキー/値抽出\n- `prebuilt-layout` — レイアウト、テーブル、段落\n- `prebuilt-invoice` / `prebuilt-receipt` — 型指定された請求書 / 領収書エンティティ\n- `prebuilt-idDocument` — 運転免許証、パスポート、身分証明書\n- `prebuilt-businessCard` — 名刺抽出\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — 米国納税申告書\n- `prebuilt-contract` — 契約条項 + 当事者\n\nAzure portal でトレーニングされた**カスタムモデル**は、その GUID 識別子によって参照されます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.display_name": {
+          "source": "Azure Document Intelligence",
+          "message": "Azure Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.short_desc": {
+          "source": "Azure Document Intelligence (formerly Form Recognizer)",
+          "message": "Azure Document Intelligence (旧 Form Recognizer)"
+        }
+      }
+    }
+  }
+}

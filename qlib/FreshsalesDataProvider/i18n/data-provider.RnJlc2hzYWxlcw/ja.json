@@ -1,0 +1,2933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note attached to a contact, account, or deal",
+          "message": "連絡先、アカウント、または取引に添付する新しいノートを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create Note",
+          "message": "ノートを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The content/body of the note",
+          "message": "ノートのコンテンツ/本文"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "ノートのコンテンツ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "案件"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "関連付けるレコードのタイプ: `Contact`、`SalesAccount`、または `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "ターゲットタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "関連レコードタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "関連付ける連絡先、アカウント、または取引の ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ターゲット ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "関連レコード ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "新しいノートを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Freshsales CRM",
+          "message": "Freshsales CRM で新しいアカウントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "アカウントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "アカウントの国"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "国名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "アカウントの市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "アカウントの年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "アカウントの町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "住所"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "このアカウントの業種 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "業種 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "業種分類"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "アカウントのFacebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "このアカウントの業種タイプのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "業種タイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "業種カテゴリ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "アカウントのLinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "アカウント/会社名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "会社名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "アカウントの従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "アカウントの都道府県/州"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "親アカウント/親会社のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "親アカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "親会社ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "アカウントの電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "アカウントの Web サイト URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "会社のWebサイト"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "このアカウントが属するテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "アカウントのTwitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "アカウントの郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "新しいアカウントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Create a new appointment in Freshsales CRM",
+          "message": "Freshsales CRMに新しいアポイントメントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Create Appointment",
+          "message": "アポイントメントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "アポイントメントの詳細な説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "アポイントメントの説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "終了日時（形式: `YYYY-MM-DDTHH:MM:SSZ`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "終了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "終了日時"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "開始日時（形式: `YYYY-MM-DDTHH:MM:SSZ`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "開始日時"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "アポイントメントの場所"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "ミーティング場所"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "案件"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "関連付けるレコードのタイプ: `Contact`、`SalesAccount`、または `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "ターゲットタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "関連レコードタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "関連付ける連絡先、アカウント、または取引の ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ターゲット ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "関連レコード ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "アポイントメントのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "アポイントメントのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "アポイントメントのタイムゾーン（例: `America/New_York`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "タイムゾーン"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Create a new appointment",
+          "message": "新しいアポイントメントを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Freshsales CRM",
+          "message": "Freshsales CRMに新しい連絡先を作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "コンタクトを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "コンタクトの国"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "国名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "連絡先のステータス分類のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "連絡先ステータスID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "ステータス識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "この連絡先に関連付けられたキャンペーンのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "キャンペーン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "連絡先の市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "コンタクトの住所（番地など）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "住所"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "連絡先のプライマリメールアドレス。`email`、`mobile_number`、`twitter`のいずれか少なくとも1つを推奨"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "プライマリ メール アドレス"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "連絡先の外部参照識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "外部参照ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "連絡先のFacebookユーザー名またはプロフィールURL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "連絡先の名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "連絡先の役職または肩書"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "肩書"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "連絡先の姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "リードソースのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "リードソースID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "リードソース識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "連絡先のライフサイクルステージのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ライフサイクルステージID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "ライフサイクルステージ識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "連絡先のLinkedInプロフィールのURL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "連絡先の携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "連絡先の州または都道府県"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "連絡先の勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "この連絡先が属するテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "連絡先のTwitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "連絡先の郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal in Freshsales CRM",
+          "message": "Freshsales CRMで新規商談を作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create Deal",
+          "message": "案件を作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "この商談に関連付けられているキャンペーンのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "キャンペーン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "商談が完了した実際の日付（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "完了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "実際の完了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "この商談の通貨のID。指定しない場合、アカウントのデフォルト通貨が使用されます"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "通貨ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "商談の通貨"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "案件の金銭的価値"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "商談金額"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "商談タイプ/カテゴリのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "商談タイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "商談カテゴリ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "商談の支払いステータスのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "支払いステータスID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "支払いステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "商談パイプラインのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "パイプラインID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "パイプライン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "商談の受注または失注の理由のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "商談理由ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "受注/失注理由"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "パイプライン内の商談ステージのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "商談ステージID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "パイプラインステージ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "完了予定日（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "完了予定"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "完了予定日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "この商談のリードソースのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "リードソースID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "リードソース識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "商談の名前またはタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "商談名"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "関連付けられている営業アカウントのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "関連アカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "商談を受注する確率（`0`から`100`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "確度"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "受注確度"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "この商談のテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "新規案件を作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Freshsales CRM",
+          "message": "Freshsales CRMで新規タスクを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "タスクを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "タスクの詳細な説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "タスクの説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "タスクの期日（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "期日"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "完了期限"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "タスク結果のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "結果ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "タスク結果"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "このタスクを割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "タスクのステータス: 未完了は `0`、完了は `1`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "タスクのステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "案件"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "関連付けるレコードのタイプ: `Contact`、`SalesAccount`、または `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "ターゲットタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "関連レコードタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "関連付ける連絡先、アカウント、または取引の ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ターゲット ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "関連レコード ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "タスクタイプのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "タスクタイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "タスクタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "タスクのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "タスクタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "新しいタスクを作成"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by its ID",
+          "message": "IDによって単一のアカウントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "アカウントの取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID",
+          "message": "アカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "IDによって単一のアカウントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.desc": {
+          "source": "Retrieve a single appointment by its ID",
+          "message": "IDによって単一のアポイントメントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
+          "source": "Get Appointment",
+          "message": "アポイントメントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "アポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID",
+          "message": "アポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Get a single appointment by ID",
+          "message": "IDによって単一のアポイントメントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "連絡先の取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by its ID",
+          "message": "IDによって単一の商談を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get Deal",
+          "message": "取引の取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "取引ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID",
+          "message": "商談ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "IDによって単一の商談を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by its ID",
+          "message": "IDによって単一のタスクを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "タスクの取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID",
+          "message": "タスクID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "IDで単一のタスクを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Freshsales CRM",
+          "message": "Freshsales CRMからノートを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete Note",
+          "message": "ノートを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to delete",
+          "message": "削除するノートの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to delete",
+          "message": "削除するノートID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "メモを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.desc": {
+          "source": "Delete an account from Freshsales CRM",
+          "message": "Freshsales CRMからアカウントを削除します"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
+          "source": "Delete Account",
+          "message": "アカウントを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to delete",
+          "message": "削除するアカウントの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to delete",
+          "message": "削除するアカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
+          "source": "Delete an account",
+          "message": "アカウントの削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Delete an appointment from Freshsales CRM",
+          "message": "Freshsales CRMからアポイントメントを削除します"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Delete Appointment",
+          "message": "アポイントメントを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to delete",
+          "message": "削除するアポイントメントの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "アポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to delete",
+          "message": "削除するアポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Delete an appointment",
+          "message": "アポイントメントを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Freshsales CRM",
+          "message": "Freshsales CRMから連絡先を削除します"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "連絡先を削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "削除する連絡先の一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "削除する連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.desc": {
+          "source": "Delete a deal from Freshsales CRM",
+          "message": "Freshsales CRMから商談を削除します"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
+          "source": "Delete Deal",
+          "message": "取引を削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to delete",
+          "message": "削除する商談の一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "取引ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to delete",
+          "message": "削除する商談ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
+          "source": "Delete a deal",
+          "message": "取引を削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Freshsales CRM",
+          "message": "Freshsales CRMからタスクを削除します"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "タスクを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "削除するタスクの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to delete",
+          "message": "削除するタスクID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "タスクを削除"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks from Freshsales CRM with optional status filtering",
+          "message": "任意のステータスフィルタリングを使用してFreshsales CRMからタスクを一覧表示します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "タスクの一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm92ZXJkdWU.display_name": {
+          "source": "Overdue",
+          "message": "期限超過"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b21vcnJvdw.display_name": {
+          "source": "Due Tomorrow",
+          "message": "明日期限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b2RheQ.display_name": {
+          "source": "Due Today",
+          "message": "今日期限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by status",
+          "message": "ステータスで絞り込み"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.short_desc": {
+          "source": "Get a specific task",
+          "message": "特定のタスクを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filter",
+          "message": "オプションのフィルターでタスクを一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List accounts from Freshsales CRM with optional filtering by view",
+          "message": "ビューによる任意のフィルタリングを使用してFreshsales CRMからアカウントを一覧表示します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "アカウント一覧"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific account",
+          "message": "特定のアカウントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ビューID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "ビューで絞り込み"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List accounts from a view",
+          "message": "ビューからアカウントを一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.desc": {
+          "source": "List appointments from Freshsales CRM with optional time period filtering",
+          "message": "任意の期間フィルタリングを使用してFreshsales CRMからアポイントメントを一覧表示します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
+          "source": "List Appointments",
+          "message": "アポイントメントを一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhc3Q.display_name": {
+          "source": "Past",
+          "message": "過去"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnVwY29taW5n.display_name": {
+          "source": "Upcoming",
+          "message": "今後"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by time period",
+          "message": "期間で絞り込み"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "アポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.short_desc": {
+          "source": "Get a specific appointment",
+          "message": "特定のアポイントメントを取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
+          "source": "List appointments with optional filter",
+          "message": "オプションのフィルターでアポイントメントを一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Freshsales CRM with optional filtering by view or email",
+          "message": "ビューまたはメールによる任意のフィルタリングを使用してFreshsales CRMから連絡先を一覧表示します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Search by email",
+          "message": "メールで検索"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "特定の連絡先を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ビューID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "ビューで絞り込み"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts from a view",
+          "message": "ビューから連絡先を一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals from Freshsales CRM with optional filtering by view",
+          "message": "ビューによる任意のフィルタリングを使用してFreshsales CRMから商談を一覧表示します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "商談一覧"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "取引ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.short_desc": {
+          "source": "Get a specific deal",
+          "message": "特定の商談を取得"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "ビューID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "ビューで絞り込み"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals from a view",
+          "message": "ビューから商談を一覧表示"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Freshsales** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して**Freshsales**に対するカスタムHTTP/REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。応答はステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Freshsales",
+          "message": "Freshsalesに対するカスタムAPI呼び出しを実行"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.desc": {
+          "source": "Poll for new accounts created in Freshsales",
+          "message": "Freshsalesで新しく作成されたアカウントをポーリングします"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
+          "source": "New Account Event",
+          "message": "新規アカウントイベント"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "新しいアカウントを監視"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Poll for new appointments created in Freshsales",
+          "message": "Freshsalesで新しく作成されたアポイントメントをポーリングします"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment Event",
+          "message": "新規アポイントメントイベント"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Watch for new appointments",
+          "message": "新規アポイントメントを監視"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Poll for new contacts created in Freshsales",
+          "message": "Freshsalesで新しく作成された連絡先をポーリングします"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact Event",
+          "message": "新規連絡先イベント"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "新しい連絡先を監視"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.desc": {
+          "source": "Poll for new deals created in Freshsales",
+          "message": "Freshsalesで新しく作成された商談をポーリングします"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
+          "source": "New Deal Event",
+          "message": "新規商談イベント"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
+          "source": "Watch for new deals",
+          "message": "新しい商談を監視"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.desc": {
+          "source": "Poll for new tasks created in Freshsales",
+          "message": "Freshsalesで新しく作成されたタスクをポーリングします"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
+          "source": "New Task Event",
+          "message": "新規タスクイベント"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "新規タスクを監視"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Freshsales CRM",
+          "message": "Freshsales CRMの既存のノートを更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update Note",
+          "message": "ノートを更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated content/body of the note",
+          "message": "更新されたノートの内容/本文"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "ノートのコンテンツ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to update",
+          "message": "更新するノートの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to update",
+          "message": "更新するノートID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "既存のノートを更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Freshsales CRM",
+          "message": "Freshsales CRMの既存のアカウントを更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "アカウントを更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "アカウントの国"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "国名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "アカウントの市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "アカウントの年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "年間収益"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "アカウントの町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "住所"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "このアカウントの業種 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "業種 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "業種分類"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "アカウントのFacebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "このアカウントの業種タイプのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "業種タイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "業種カテゴリ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to update",
+          "message": "更新するアカウントの一意の識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to update",
+          "message": "更新するアカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "アカウントのLinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "アカウント/会社名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "会社名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "アカウントの従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "従業員数"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "アカウントの都道府県/州"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "親アカウント/親会社のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "親アカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "親会社ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "アカウントの電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "アカウントの Web サイト URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "会社のWebサイト"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "このアカウントが属するテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "アカウントのTwitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "アカウントの郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "既存のアカウントを更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Update an existing appointment in Freshsales CRM",
+          "message": "Freshsales CRM 内の既存のアポイントメントを更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Update Appointment",
+          "message": "アポイントメントの更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "アポイントメントの詳細な説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "アポイントメントの説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "終了日時（形式: `YYYY-MM-DDTHH:MM:SSZ`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "終了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "終了日時"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "開始日時（形式: `YYYY-MM-DDTHH:MM:SSZ`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "開始日時"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to update",
+          "message": "更新するアポイントメントの一意識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "アポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to update",
+          "message": "更新するアポイントメントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "アポイントメントの場所"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "ミーティング場所"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "案件"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "関連付けるレコードのタイプ: `Contact`、`SalesAccount`、または `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "ターゲットタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "関連レコードタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "関連付ける連絡先、アカウント、または取引の ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ターゲット ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "関連レコード ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "アポイントメントのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "アポイントメントのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "アポイントメントのタイムゾーン（例: `America/New_York`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "タイムゾーン"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Update an existing appointment",
+          "message": "既存のアポイントメントを更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Freshsales CRM",
+          "message": "Freshsales CRM 内の既存の連絡先を更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "連絡先を更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "コンタクトの国"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "国名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "連絡先のステータス分類のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "連絡先ステータスID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "ステータス識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "この連絡先に関連付けられたキャンペーンのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "キャンペーン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "連絡先の市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "コンタクトの住所（番地など）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "住所"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "連絡先のプライマリメールアドレス。`email`、`mobile_number`、`twitter`のいずれか少なくとも1つを推奨"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "プライマリ メール アドレス"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "連絡先の外部参照識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "外部参照ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "連絡先のFacebookユーザー名またはプロフィールURL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebookプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "連絡先の名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "更新する連絡先の一意識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "更新する連絡先 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "連絡先の役職または肩書"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "肩書"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "連絡先の姓"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "リードソースのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "リードソースID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "リードソース識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "連絡先のライフサイクルステージのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "ライフサイクルステージID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "ライフサイクルステージ識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "連絡先のLinkedInプロフィールのURL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedInプロフィール"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "連絡先の携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "携帯電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "連絡先の州または都道府県"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "連絡先の勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "この連絡先が属するテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "連絡先のTwitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitterハンドル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "連絡先の郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal in Freshsales CRM",
+          "message": "Freshsales CRM 内の既存の取引を更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update Deal",
+          "message": "案件を更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "この商談に関連付けられているキャンペーンのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "キャンペーン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "商談が完了した実際の日付（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "完了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "実際の完了日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "この商談の通貨のID。指定しない場合、アカウントのデフォルト通貨が使用されます"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "通貨ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "商談の通貨"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "案件の金銭的価値"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "商談金額"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "商談タイプ/カテゴリのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "商談タイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "商談カテゴリ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "商談の支払いステータスのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "支払いステータスID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "支払いステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "商談パイプラインのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "パイプラインID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "パイプライン識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "商談の受注または失注の理由のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "商談理由ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "受注/失注理由"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "パイプライン内の商談ステージのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "商談ステージID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "パイプラインステージ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "完了予定日（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "完了予定"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "完了予定日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to update",
+          "message": "更新する取引の一意識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "取引ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to update",
+          "message": "更新する取引ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "所有者として割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "この商談のリードソースのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "リードソースID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "リードソース識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "商談の名前またはタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "商談名"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "関連付けられている営業アカウントのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "関連アカウントID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "商談を受注する確率（`0`から`100`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "確度"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "受注確度"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "この商談のテリトリーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "テリトリーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "テリトリー識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "既存の案件を更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Freshsales CRM",
+          "message": "Freshsales CRM 内の既存のタスクを更新します"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "タスクの更新"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "タスクの詳細な説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "タスクの説明"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "タスクの期日（形式: `YYYY-MM-DD`）"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "期日"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "完了期限"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "更新するタスクの一意識別子"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to update",
+          "message": "更新するタスクID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "タスク結果のID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "結果ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "タスク結果"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "このタスクを割り当てるユーザーのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "タスクのステータス: 未完了は `0`、完了は `1`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "タスクのステータス"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "案件"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "アカウント"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "関連付けるレコードのタイプ: `Contact`、`SalesAccount`、または `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "ターゲットタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "関連レコードタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "関連付ける連絡先、アカウント、または取引の ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "ターゲット ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "関連レコード ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "タスクタイプのID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "タスクタイプID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "タスクタイプ"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "タスクのタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "タスクタイトル"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "既存のタスクを更新"
+        },
+        "app.RnJlc2hzYWxlcw.desc": {
+          "source": "Freshsales is a CRM platform by Freshworks for managing contacts, accounts, deals, tasks, appointments, and notes.\n\nThis integration supports full CRUD operations on core CRM objects and polling-based triggers for new records.",
+          "message": "Freshsales は、連絡先、アカウント、取引、タスク、アポイントメント、メモを管理するための Freshworks による CRM プラットフォームです。\n\nこの統合は、コア CRM オブジェクトに対する完全な CRUD 操作と、新規レコード用のポーリングベースのトリガーをサポートします。"
+        },
+        "app.RnJlc2hzYWxlcw.display_name": {
+          "source": "Freshsales",
+          "message": "Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.short_desc": {
+          "source": "Freshsales CRM integration",
+          "message": "Freshsales CRM 統合"
+        }
+      }
+    }
+  }
+}

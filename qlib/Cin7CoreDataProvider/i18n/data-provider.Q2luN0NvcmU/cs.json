@@ -1,0 +1,2649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
+          "message": "Vytvořit nového zákazníka v Cin7Core s kontaktními údaji, adresami a platebními podmínkami."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Vytvořit zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "Další poznámky k zákazníkovi"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this customer",
+          "message": "Seznam kontaktů, které se mají pro tohoto zákazníka vytvořit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Seznam kontaktů"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Úvěrový limit zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Úvěrový limit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "Úvěrový limit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Třípísmenný kód měny podle ISO"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Výchozí měna"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "Kód účtu pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "Účet pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "Účet pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this customer",
+          "message": "Seznam adres, které se mají pro tohoto zákazníka vytvořit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Seznam adres"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Výchozí procentní sleva"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Výchozí sleva v %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name (required)",
+          "message": "Jméno zákazníka nebo název společnosti (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "Jméno zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "Aktivní zákazník"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "Zastaralý/neaktivní zákazník"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "Aktivní nebo neaktivní stav. Výchozí hodnota je Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "Stav zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "Platební podmínky pro tohoto zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Platební podmínka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "Kód výnosového účtu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "Výnosový účet"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "Výnosový účet"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "Daňové identifikační číslo zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Daňové pravidlo, které se má použít"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "Čárkami oddělené štítky pro zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "Štítky zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Vytvořit nového zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Create a new stock adjustment to modify inventory levels.",
+          "message": "Vytvořit novou úpravu skladu pro změnu stavu zásob."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Create Stock Adjustment",
+          "message": "Vytvořit úpravu skladu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The account for the adjustment",
+          "message": "Účet pro úpravu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Adjustment account",
+          "message": "Účet úpravy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the adjustment (defaults to today)",
+          "message": "Datum úpravy (výchozí hodnota je dnes)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "Datum úpravy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "Datum úpravy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment (required)",
+          "message": "Umístění skladu pro úpravu (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Umístění skladu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of stock adjustment line items (required)",
+          "message": "Seznam položek řádků úpravy skladu (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "Řádky úpravy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.desc": {
+          "source": "The reason for the stock adjustment",
+          "message": "Důvod úpravy skladu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Důvod"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.short_desc": {
+          "source": "Adjustment reason",
+          "message": "Důvod úpravy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Create a new stock adjustment",
+          "message": "Vytvořit novou úpravu skladu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.desc": {
+          "source": "Create a new supplier in Cin7Core with contact information and payment terms.",
+          "message": "Vytvořit nového dodavatele v Cin7Core s kontaktními údaji a platebními podmínkami."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Create Supplier",
+          "message": "Vytvořit dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the supplier",
+          "message": "Další poznámky k dodavateli"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this supplier",
+          "message": "Seznam kontaktů, které se mají pro tohoto dodavatele vytvořit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Seznam kontaktů"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Třípísmenný kód měny podle ISO"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Výchozí měna"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The account payable account code",
+          "message": "Kód účtu závazků"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "Účet závazků"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "AP account",
+          "message": "Účet závazků"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this supplier",
+          "message": "Seznam adres, které se mají pro tohoto dodavatele vytvořit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Seznam adres"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Výchozí procentní sleva"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Výchozí sleva v %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's name or company name (required)",
+          "message": "Jméno dodavatele nebo název společnosti (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "Název dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active supplier",
+          "message": "Aktivní dodavatel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive supplier",
+          "message": "Zastaralý/neaktivní dodavatel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "Aktivní nebo neaktivní stav. Výchozí hodnota je Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "Stav dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "Platební podmínky pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Platební podmínka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "DIČ dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Daňové pravidlo, které se má použít"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the supplier",
+          "message": "Štítky pro dodavatele oddělené čárkami"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Supplier tags",
+          "message": "Štítky dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Create a new supplier",
+          "message": "Vytvořit nového dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.desc": {
+          "source": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
+          "message": "Vytvořit novou prodejní objednávku v Cin7Core se zákazníkem, položkami řádků a podrobnostmi o dopravě."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
+          "source": "Create Sale",
+          "message": "Vytvořit prodej"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.desc": {
+          "source": "The contact name at the customer",
+          "message": "Jméno kontaktní osoby u zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.short_desc": {
+          "source": "Contact name",
+          "message": "Jméno kontaktní osoby"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Třípísmenný kód měny podle ISO"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Kód měny"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name (required). Must match an existing customer",
+          "message": "Jméno zákazníka (povinné). Musí odpovídat existujícímu zákazníkovi"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "Jméno zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for the sale",
+          "message": "Fakturační adresa prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Fakturační adresa"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Fakturační adresa"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the sale",
+          "message": "Umístění skladu prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Umístění skladu"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "List of line items to add to the order",
+          "message": "Seznam položek řádků k přidání do objednávky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Order lines",
+          "message": "Řádky objednávky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "Date when the sale order was created (defaults to today)",
+          "message": "Datum vytvoření prodejní objednávky (výchozí je dnešek)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Datum objednávky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Sale order date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "Date by which the order must be shipped",
+          "message": "Datum, do kterého musí být objednávka odeslána"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "Odeslat do"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "Datum odeslání do"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for the sale",
+          "message": "Dodací adresa prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Doručovací adresa"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Dodací adresa"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.desc": {
+          "source": "Customer phone number",
+          "message": "Telefonní číslo zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "Date by which the order must be delivered",
+          "message": "Datum, do kterého musí být objednávka doručena"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "Požadováno do"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required delivery date",
+          "message": "Požadované datum doručení"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.desc": {
+          "source": "Whether prices include tax",
+          "message": "Zda ceny zahrnují daň"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.display_name": {
+          "source": "Tax Inclusive",
+          "message": "Včetně daně"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.short_desc": {
+          "source": "Prices include tax",
+          "message": "Ceny jsou včetně daně"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "Tax rule to apply",
+          "message": "Daňové pravidlo, které se má použít"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for the sale",
+          "message": "Platební podmínky prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
+          "source": "Create a new sale order",
+          "message": "Vytvořit novou prodejní objednávku"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is created or modified via polling.",
+          "message": "Spustí se při vytvoření nebo úpravě zákazníka prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "Zákazník aktualizován"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "Spustit při vytvoření nebo aktualizaci zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Upload a file attachment to a sale order.",
+          "message": "Nahrát souborovou přílohu k prodejní objednávce."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Add Sale Attachment",
+          "message": "Přidat přílohu prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.desc": {
+          "source": "The file content encoded as Base64 string",
+          "message": "Obsah souboru kódovaný jako řetězec Base64"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.display_name": {
+          "source": "Content (Base64)",
+          "message": "Obsah (Base64)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.short_desc": {
+          "source": "File content in Base64",
+          "message": "Obsah souboru v Base64"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.desc": {
+          "source": "The name of the file being attached",
+          "message": "Název přikládaného souboru"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Název souboru"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.short_desc": {
+          "source": "Attachment file name",
+          "message": "Název souboru přílohy"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale to attach to",
+          "message": "Jedinečný identifikátor (GUID) prodeje, ke kterému se má příloha připojit"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Add an attachment to a sale",
+          "message": "Přidat přílohu k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.desc": {
+          "source": "Add shipment details and tracking information to a sale order.",
+          "message": "Přidat podrobnosti o zásilce a sledovací informace k prodejní objednávce."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
+          "source": "Add Sale Shipment",
+          "message": "Přidat zásilku prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier name",
+          "message": "Název dopravce"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of lines to ship with quantities",
+          "message": "Seznam řádků k odeslání s množstvími"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Shipment lines",
+          "message": "Řádky zásilky"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.desc": {
+          "source": "The date the items were shipped",
+          "message": "Datum odeslání položek"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.display_name": {
+          "source": "Ship Date",
+          "message": "Datum odeslání"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.short_desc": {
+          "source": "Shipment date",
+          "message": "Datum odeslání"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes about the shipment",
+          "message": "Poznámky k zásilce"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "Poznámky k dopravě"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "Poznámky k dopravě"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.desc": {
+          "source": "Date by which shipment is required",
+          "message": "Datum, do kterého je zásilka požadována"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.display_name": {
+          "source": "Required By",
+          "message": "Požadováno do"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.short_desc": {
+          "source": "Required by date",
+          "message": "Požadováno do data"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The fulfilment task ID to add shipment to",
+          "message": "ID úlohy vyřízení, ke které se má zásilka přidat"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "Fulfilment task ID",
+          "message": "ID úlohy vyřízení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.desc": {
+          "source": "The shipment tracking number",
+          "message": "Sledovací číslo zásilky"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.short_desc": {
+          "source": "Tracking number",
+          "message": "Sledovací číslo"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.desc": {
+          "source": "URL to track the shipment",
+          "message": "URL pro sledování zásilky"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.display_name": {
+          "source": "Tracking URL",
+          "message": "Sledovací URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.short_desc": {
+          "source": "Tracking URL",
+          "message": "Sledovací URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
+          "source": "Add shipment/tracking to a sale",
+          "message": "Přidat zásilku/sledování k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Record a payment against a sale order.",
+          "message": "Zaznamenat platbu k prodejní objednávce."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Add Sale Payment",
+          "message": "Přidat platbu k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount (required)",
+          "message": "Částka platby (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Částka platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment to",
+          "message": "Účet, na který se má platba zaevidovat"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Payment account",
+          "message": "Platební účet"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made (defaults to today)",
+          "message": "Datum provedení platby (výchozí je dnešek)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "Datum zaplacení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "Datum platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The GUID of the sale to add the payment to (required)",
+          "message": "GUID prodeje, ke kterému se má platba přidat (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "Sale identifier",
+          "message": "Identifikátor prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment",
+          "message": "Způsob platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "Způsob platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "Způsob platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Payment reference or transaction ID",
+          "message": "Reference platby nebo ID transakce"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "Reference platby"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Add a payment to a sale",
+          "message": "Přidat platbu k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.desc": {
+          "source": "Create a pack or pick task for fulfilling a sale order.",
+          "message": "Vytvořit úlohu balení nebo vyskladnění pro vyřízení prodejní objednávky."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
+          "source": "Add Sale Pack",
+          "message": "Přidat balení k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the pack",
+          "message": "Skladová lokace pro balení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.short_desc": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.desc": {
+          "source": "List of lines to pack with quantities",
+          "message": "Seznam položek k zabalení s množstvím"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.short_desc": {
+          "source": "Pack lines",
+          "message": "Položky balení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.desc": {
+          "source": "Notes or memo for the pack operation",
+          "message": "Poznámky nebo záznam pro operaci balení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Poznámka"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.short_desc": {
+          "source": "Pack memo",
+          "message": "Poznámka k balení"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.desc": {
+          "source": "The date the items were picked",
+          "message": "Datum vyskladnění položek"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.display_name": {
+          "source": "Pick Date",
+          "message": "Datum vyskladnění"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.short_desc": {
+          "source": "Pick date",
+          "message": "Datum vyskladnění"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
+          "source": "Add a pack/pick record to a sale",
+          "message": "Přidat záznam o balení/vyskladnění k prodeji"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier.",
+          "message": "Načíst podrobné informace o konkrétním zákazníkovi podle jeho jedinečného identifikátoru."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Získat zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "Jedinečný identifikátor (GUID) zákazníka, kterého chcete načíst"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by ID",
+          "message": "Získat zákazníka podle ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "Načíst podrobné informace o konkrétním produktu."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Získat produkt"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "Jedinečný identifikátor (GUID) produktu, který chcete načíst"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.short_desc": {
+          "source": "The product ID",
+          "message": "ID produktu"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by ID",
+          "message": "Získat produkt podle ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Retrieve detailed information about a specific stock adjustment.",
+          "message": "Načíst podrobné informace o konkrétní úpravě zásob."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Get Stock Adjustment",
+          "message": "Získat úpravu zásob"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to retrieve",
+          "message": "Jedinečný identifikátor (GUID) úpravy zásob, kterou chcete načíst"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "ID úlohy úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Get a stock adjustment by ID",
+          "message": "Získat úpravu zásob podle ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.desc": {
+          "source": "Retrieve detailed information about a specific supplier.",
+          "message": "Načíst podrobné informace o konkrétním dodavateli."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
+          "source": "Get Supplier",
+          "message": "Získat dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to retrieve",
+          "message": "Jedinečný identifikátor (GUID) dodavatele, kterého chcete načíst"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "ID dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID",
+          "message": "ID dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
+          "source": "Get a supplier by ID",
+          "message": "Získat dodavatele podle ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.desc": {
+          "source": "Retrieve detailed information about a specific sale order.",
+          "message": "Načíst podrobné informace o konkrétní prodejní objednávce."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
+          "source": "Get Sale",
+          "message": "Získat prodej"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to retrieve",
+          "message": "Jedinečný identifikátor (GUID) prodeje, který chcete načíst"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
+          "source": "Get a sale order by ID",
+          "message": "Získat prodejní objednávku podle ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.desc": {
+          "source": "Retrieve pack/pick details for a sale order.",
+          "message": "Načíst podrobnosti o balení/vyskladnění pro prodejní objednávku."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
+          "source": "Get Sale Pack",
+          "message": "Získat balení prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.desc": {
+          "source": "Optional task ID to get a specific pack record",
+          "message": "Volitelné ID úlohy pro získání konkrétního záznamu o balení"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.short_desc": {
+          "source": "The fulfilment task ID",
+          "message": "ID úlohy vyřízení"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
+          "source": "Get pack details for a sale",
+          "message": "Získat podrobnosti balení pro prodej"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Delete or void a stock adjustment in Cin7Core.",
+          "message": "Smazat nebo zrušit úpravu zásob v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Delete Stock Adjustment",
+          "message": "Smazat úpravu zásob"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to delete/void",
+          "message": "Jedinečný identifikátor (GUID) úpravy zásob ke smazání/zrušení"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "ID úlohy úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Delete a stock adjustment",
+          "message": "Smazat úpravu zásob"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.desc": {
+          "source": "Delete or void a sale order in Cin7Core.",
+          "message": "Smazat nebo zrušit prodejní objednávku v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
+          "source": "Delete Sale",
+          "message": "Smazat prodej"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to delete/void",
+          "message": "Jedinečný identifikátor (GUID) prodeje ke smazání/zrušení"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to delete",
+          "message": "ID prodeje ke smazání"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
+          "source": "Delete (void) a sale order",
+          "message": "Smazat (zrušit) prodejní objednávku"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Remove a file attachment from a sale order.",
+          "message": "Odebrat přílohu souboru z prodejní objednávky."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Delete Sale Attachment",
+          "message": "Smazat přílohu prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the attachment to delete",
+          "message": "Jedinečný identifikátor (GUID) přílohy ke smazání"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.display_name": {
+          "source": "Attachment ID",
+          "message": "ID přílohy"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.short_desc": {
+          "source": "The attachment ID",
+          "message": "ID přílohy"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Delete an attachment from a sale",
+          "message": "Smazat přílohu z prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Remove a payment from a sale order.",
+          "message": "Odebrat platbu z prodejní objednávky."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Delete Sale Payment",
+          "message": "Smazat platbu prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the payment to delete",
+          "message": "Jedinečný identifikátor (GUID) platby ke smazání"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The payment ID",
+          "message": "ID platby"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Delete a payment from a sale",
+          "message": "Smazat platbu z prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.desc": {
+          "source": "Search for assembly and finished goods tasks.",
+          "message": "Vyhledat úlohy montáže a hotových výrobků."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
+          "source": "Find Assemblies",
+          "message": "Najít montáže"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
+          "source": "Find assembly/finished goods tasks",
+          "message": "Najít úlohy montáže / hotových výrobků"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.desc": {
+          "source": "Check product availability and stock levels across warehouse locations.",
+          "message": "Zkontrolovat dostupnost produktů a stav zásob napříč skladovými lokacemi."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
+          "source": "Find Product Availability",
+          "message": "Najít dostupnost produktu"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
+          "source": "Check product stock levels",
+          "message": "Zkontrolovat stav zásob produktů"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Search for credit notes associated with sale orders.",
+          "message": "Vyhledat dobropisy spojené s prodejními objednávkami."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Find Sale Credit Notes",
+          "message": "Najít dobropisy prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Find credit notes for sales",
+          "message": "Najít dobropisy k prodejům"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.desc": {
+          "source": "Search for fulfilment, pick, and pack tasks for sales.",
+          "message": "Vyhledat úlohy vyřízení, vyskladnění a zabalení pro prodeje."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
+          "source": "Find Sale Fulfilment",
+          "message": "Najít vyřízení prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
+          "source": "Find fulfilment tasks for sales",
+          "message": "Najít úlohy vyřízení pro prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.desc": {
+          "source": "Search for invoices associated with sale orders.",
+          "message": "Vyhledat faktury spojené s prodejními objednávkami."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
+          "source": "Find Sale Invoices",
+          "message": "Najít faktury prodeje"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
+          "source": "Find invoices for sales",
+          "message": "Najít faktury k prodejům"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cin7Core** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Cin7Core** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou k dispozici jako prvotřídní akce."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cin7Core",
+          "message": "Provést vlastní volání API do Cin7Core"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is detected on a sale via polling.",
+          "message": "Spustí se při zjištění nové platby u prodeje prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nová platba"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Spustit při přijetí nové platby"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.desc": {
+          "source": "Fires when a new sale credit note is authorized via polling.",
+          "message": "Spustí se při schválení nového prodejního dobropisu prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
+          "source": "New Sale Credit Note Authorized",
+          "message": "Nový prodejní dobropis schválen"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
+          "source": "Trigger when a credit note is authorized",
+          "message": "Spustit při schválení dobropisu"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.desc": {
+          "source": "Fires when a new sale invoice is authorized via polling.",
+          "message": "Spustí se při schválení nové prodejní faktury prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
+          "source": "New Sale Invoice Authorized",
+          "message": "Nová prodejní faktura schválena"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
+          "source": "Trigger when an invoice is authorized",
+          "message": "Spustit při schválení faktury"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.desc": {
+          "source": "Fires when sale tracking or shipment information changes via polling.",
+          "message": "Spustí se při změně sledování prodeje nebo informací o zásilce prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
+          "source": "Sale Tracking Changed",
+          "message": "Změna sledování prodeje"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when tracking information changes",
+          "message": "Spustit při změně informací o sledování"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.desc": {
+          "source": "Fires when a sale order is voided via polling.",
+          "message": "Spustí se při zrušení prodejní objednávky prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
+          "source": "Sale Voided",
+          "message": "Prodej zrušen"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
+          "source": "Trigger when a sale is voided",
+          "message": "Spustit při zrušení prodeje"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, or modification date.",
+          "message": "Získat seznam zákazníků z Cin7Core s volitelným filtrováním podle jména, ID nebo data změny."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Vyhledat zákazníky"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "Zobrazit a vyhledat zákazníky"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, category, or brand.",
+          "message": "Získat seznam produktů z Cin7Core s volitelným filtrováním podle SKU, názvu, kategorie nebo značky."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Hledat produkty"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "Zobrazit a vyhledat produkty"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of stock adjustments from Cin7Core.",
+          "message": "Získat seznam úprav zásob z Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
+          "source": "Search Stock Adjustments",
+          "message": "Vyhledat úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List and search stock adjustments",
+          "message": "Zobrazit a vyhledat úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.desc": {
+          "source": "Retrieve a list of suppliers from Cin7Core with optional filtering.",
+          "message": "Získat seznam dodavatelů z Cin7Core s volitelným filtrováním."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
+          "source": "Search Suppliers",
+          "message": "Vyhledat dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
+          "source": "List and search suppliers",
+          "message": "Zobrazit a vyhledat dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.desc": {
+          "source": "Retrieve a list of payments for sales.",
+          "message": "Získat seznam plateb za prodeje."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
+          "source": "Search Sale Payments",
+          "message": "Vyhledat platby prodeje"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
+          "source": "List and search sale payments",
+          "message": "Vypsat a vyhledat platby prodeje"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.desc": {
+          "source": "Retrieve a list of sales orders from Cin7Core with optional filtering.",
+          "message": "Získat seznam prodejních objednávek ze systému Cin7Core s volitelným filtrováním."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
+          "source": "Search Sales",
+          "message": "Hledat prodeje"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Vypsat a vyhledat prodejní objednávky"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.desc": {
+          "source": "Fires when product stock/inventory levels change via polling.",
+          "message": "Spustí se při změně stavu zásob/skladu produktu prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
+          "source": "Stock Level Update",
+          "message": "Aktualizace stavu zásob"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
+          "source": "Trigger when stock levels change",
+          "message": "Spustit při změně stavu zásob"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a supplier is created or modified via polling.",
+          "message": "Spustí se při vytvoření nebo úpravě dodavatele prostřednictvím dotazování."
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
+          "source": "Supplier Updated",
+          "message": "Dodavatel aktualizován"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a supplier is created or updated",
+          "message": "Spustit při vytvoření nebo aktualizaci dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Cin7Core.",
+          "message": "Aktualizovat informace o existujícím zákazníkovi v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Aktualizovat zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "Další poznámky k zákazníkovi"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this customer",
+          "message": "Seznam kontaktů pro tohoto zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Seznam kontaktů"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Úvěrový limit zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Úvěrový limit"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "Úvěrový limit"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Třípísmenný kód měny podle ISO"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Výchozí měna"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "Kód účtu pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "Účet pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "Účet pohledávek"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "Seznam adres pro tohoto zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Seznam adres"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Výchozí procentní sleva"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Výchozí sleva v %"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to update (required)",
+          "message": "Jedinečný identifikátor (GUID) zákazníka k aktualizaci (povinné)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name",
+          "message": "Jméno zákazníka nebo název společnosti"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "Jméno zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "Aktivní zákazník"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "Zastaralý/neaktivní zákazník"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status",
+          "message": "Aktivní nebo neaktivní stav"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "Stav zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "Platební podmínky pro tohoto zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Platební podmínka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "Kód výnosového účtu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "Výnosový účet"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "Výnosový účet"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "Daňové identifikační číslo zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Daňové pravidlo, které se má použít"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "Čárkami oddělené štítky pro zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "Štítky zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aktualizovat existujícího zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Update an existing stock adjustment in Cin7Core.",
+          "message": "Aktualizovat existující úpravu zásob v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Update Stock Adjustment",
+          "message": "Aktualizovat úpravu zásob"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The expense account for the adjustment",
+          "message": "Nákladový účet pro úpravu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Expense account",
+          "message": "Nákladový účet"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the stock adjustment",
+          "message": "Datum úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "Datum úpravy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "Datum úpravy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment",
+          "message": "Skladové umístění pro úpravu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Umístění skladu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of products and quantities to adjust",
+          "message": "Seznam produktů a množství k úpravě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "Řádky úpravy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.desc": {
+          "source": "Notes about the adjustment",
+          "message": "Poznámky k úpravě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Poznámka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.short_desc": {
+          "source": "Memo/notes",
+          "message": "Poznámka/poznámky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.desc": {
+          "source": "The status of the adjustment (Draft, Authorized, Void)",
+          "message": "Stav úpravy (Draft, Authorized, Void)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.short_desc": {
+          "source": "Adjustment status",
+          "message": "Stav úpravy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to update",
+          "message": "Jedinečný identifikátor (GUID) úpravy zásob k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "ID úlohy úpravy zásob"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Update an existing stock adjustment",
+          "message": "Aktualizovat existující úpravu zásob"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.desc": {
+          "source": "Update an existing supplier's information in Cin7Core.",
+          "message": "Aktualizovat informace o existujícím dodavateli v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Update Supplier",
+          "message": "Aktualizovat dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional comments or notes about the supplier",
+          "message": "Další komentáře nebo poznámky o dodavateli"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this supplier",
+          "message": "Seznam kontaktů pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Seznam kontaktů"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The default currency code for this supplier (e.g., USD, EUR)",
+          "message": "Výchozí kód měny pro tohoto dodavatele (např. USD, EUR)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Výchozí měna"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The accounts payable account for this supplier",
+          "message": "Účet závazků pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "Účet závazků"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "Accounts payable account",
+          "message": "Účet závazků"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this supplier",
+          "message": "Seznam adres pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Seznam adres"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "The default discount percentage for this supplier",
+          "message": "Výchozí procentní sleva pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Sleva"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount",
+          "message": "Výchozí sleva"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to update",
+          "message": "Jedinečný identifikátor (GUID) dodavatele k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "ID dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID to update",
+          "message": "ID dodavatele k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's company or individual name",
+          "message": "Název společnosti nebo jméno dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "Název dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "The supplier's status (Active, Deprecated, etc.)",
+          "message": "Stav dodavatele (Active, Deprecated atd.)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "Stav dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "Platební podmínky pro tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Platební podmínka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "DIČ dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "DIČ"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax identification number",
+          "message": "Daňové identifikační číslo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply to this supplier",
+          "message": "Daňové pravidlo, které se má použít na tohoto dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Tags associated with this supplier",
+          "message": "Štítky spojené s tímto dodavatelem"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Update an existing supplier",
+          "message": "Aktualizovat existujícího dodavatele"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.desc": {
+          "source": "Update an existing sale order in Cin7Core.",
+          "message": "Aktualizovat existující prodejní objednávku v Cin7Core."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
+          "source": "Update Sale",
+          "message": "Aktualizovat prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.desc": {
+          "source": "External comments for this sale",
+          "message": "Externí komentáře k tomuto prodeji"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "Komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier for this sale",
+          "message": "Dopravce pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Dopravce"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code for this sale (e.g., USD, EUR)",
+          "message": "Kód měny pro tento prodej (např. USD, EUR)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Kód měny"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "The currency exchange rate",
+          "message": "Směnný kurz měny"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "Měnový kurz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate",
+          "message": "Směnný kurz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name for this sale",
+          "message": "Jméno zákazníka pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "Jméno zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.desc": {
+          "source": "Customer's reference number or PO number",
+          "message": "Referenční číslo zákazníka nebo číslo objednávky (PO)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.display_name": {
+          "source": "Customer Reference",
+          "message": "Reference zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.short_desc": {
+          "source": "Customer reference",
+          "message": "Reference zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.desc": {
+          "source": "Additional charges for this sale",
+          "message": "Další poplatky pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.display_name": {
+          "source": "Additional Charges",
+          "message": "Další poplatky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.short_desc": {
+          "source": "Additional charges",
+          "message": "Další poplatky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for this sale",
+          "message": "Fakturační adresa pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Fakturační adresa"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Fakturační adresa"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to update",
+          "message": "Jedinečný identifikátor (GUID) prodeje k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to update",
+          "message": "ID prodeje k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.desc": {
+          "source": "Internal notes not visible to customer",
+          "message": "Interní poznámky neviditelné pro zákazníka"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.display_name": {
+          "source": "Internal Comments",
+          "message": "Interní komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.short_desc": {
+          "source": "Internal comments",
+          "message": "Interní komentáře"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for this sale",
+          "message": "Skladové umístění pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Umístění"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Umístění skladu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "The line items for this sale",
+          "message": "Položky řádků pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Položky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Line items",
+          "message": "Řádkové položky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "The date when the sale order was created",
+          "message": "Datum vytvoření prodejní objednávky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Sale Order Date",
+          "message": "Datum prodejní objednávky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Date of the order",
+          "message": "Datum objednávky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.desc": {
+          "source": "The sales representative for this sale",
+          "message": "Obchodní zástupce pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.display_name": {
+          "source": "Sales Representative",
+          "message": "Obchodní zástupce"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.short_desc": {
+          "source": "Sales rep",
+          "message": "Obchodní zástupce"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "The date by which the order should be shipped",
+          "message": "Datum, do kterého má být objednávka odeslána"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "Odeslat do"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "Datum odeslání do"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for this sale",
+          "message": "Dodací adresa pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Doručovací adresa"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Dodací adresa"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes for shipping",
+          "message": "Poznámky k dopravě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "Poznámky k dopravě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "Poznámky k dopravě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.desc": {
+          "source": "The current status of the sale",
+          "message": "Aktuální stav prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.short_desc": {
+          "source": "Sale status",
+          "message": "Stav prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.desc": {
+          "source": "The price tier for this sale",
+          "message": "Cenová úroveň pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.display_name": {
+          "source": "Price Tier",
+          "message": "Cenová úroveň"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.short_desc": {
+          "source": "Price tier",
+          "message": "Cenová úroveň"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "The date by which the customer requires the order",
+          "message": "Datum, do kterého zákazník objednávku požaduje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "Požadováno do"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required by date",
+          "message": "Požadováno do data"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.desc": {
+          "source": "How taxes should be calculated (Inclusive, Exclusive)",
+          "message": "Jak se mají počítat daně (včetně daně, bez daně)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.display_name": {
+          "source": "Tax Calculation",
+          "message": "Výpočet daně"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.short_desc": {
+          "source": "Tax calculation method",
+          "message": "Metoda výpočtu daně"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Daňové pravidlo, které se má použít"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Daňové pravidlo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for this sale",
+          "message": "Platební podmínky pro tento prodej"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Podmínky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "Platební podmínky"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
+          "source": "Update an existing sale order",
+          "message": "Aktualizovat existující prodejní objednávku"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Update an existing payment on a sale order.",
+          "message": "Aktualizovat existující platbu prodejní objednávky."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Update Sale Payment",
+          "message": "Aktualizovat platbu prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount",
+          "message": "Částka platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Částka platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment",
+          "message": "Účet pro zaevidování platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Account name",
+          "message": "Název účtu"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made",
+          "message": "Datum provedení platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "Datum zaplacení"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "Datum platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the payment to update",
+          "message": "Jedinečný identifikátor (GUID) platby k aktualizaci"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.short_desc": {
+          "source": "The payment ID",
+          "message": "ID platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Jedinečný identifikátor (GUID) prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "ID prodeje"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment (e.g., Cash, Credit Card, Bank Transfer)",
+          "message": "Způsob platby (např. hotovost, platební karta, bankovní převod)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "Způsob platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "Způsob platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Reference number or note for the payment",
+          "message": "Referenční číslo nebo poznámka k platbě"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "Reference platby"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Aktualizovat existující platbu"
+        },
+        "app.Q2luN0NvcmU.desc": {
+          "source": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required and can be obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, then find the credentials on the Setup tab.",
+          "message": "Cin7Core (dříve DEAR Inventory) je komplexní platforma pro správu zásob a ERP, která vám umožňuje spravovat produkty, prodeje, nákupy, zákazníky, dodavatele a stav zásob.\n\n**Funkce:**\n- Správa zákazníků a dodavatelů\n- Vytváření a sledování prodejních objednávek\n- Zpracování plateb a faktur\n- Monitorování inventáře a stavu zásob\n- Správa úprav zásob\n- Sledování zásilek a vyřizování objednávek\n\n**Autentizace:**\nCin7Core používá ověřování pomocí ID účtu a API klíče. Oba přihlašovací údaje jsou vyžadovány a lze je získat na adrese https://inventory.dearsystems.com/ExternalApi – vytvořte nebo vyberte aplikaci a poté vyhledejte přihlašovací údaje na kartě Setup."
+        },
+        "app.Q2luN0NvcmU.display_name": {
+          "source": "Cin7Core",
+          "message": "Cin7Core"
+        },
+        "app.Q2luN0NvcmU.short_desc": {
+          "source": "Cin7Core inventory management platform",
+          "message": "Platforma pro správu zásob Cin7Core"
+        }
+      }
+    }
+  }
+}

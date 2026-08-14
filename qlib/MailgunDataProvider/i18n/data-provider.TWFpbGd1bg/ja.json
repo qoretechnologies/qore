@@ -1,0 +1,1053 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.desc": {
+          "source": "Fires when a recipient marks an email as spam. Consider removing the recipient from future mailings to maintain sender reputation.",
+          "message": "受信者がメールをスパムとしてマークしたときに起動します。送信者の評判（レピュテーション）を維持するために、以後の配信からその受信者を削除することを検討してください。"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
+          "source": "Spam Complaint",
+          "message": "スパム苦情"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for spam complaint events",
+          "message": "スパム苦情イベントを監視するドメインを選択します"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {
+          "source": "Trigger when an email is marked as spam",
+          "message": "メールがスパムとしてマークされたときにトリガー"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.desc": {
+          "source": "Fires when a recipient clicks a link in an email. Provides information about the clicked URL, recipient, and client information.",
+          "message": "受信者がメール内のリンクをクリックしたときにトリガーされます。クリックされた URL、受信者、およびクライアントに関する情報を提供します。"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "メールリンクがクリックされました"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for click events",
+          "message": "クリックイベントを監視するドメインを選択します"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
+          "source": "Trigger when a link in an email is clicked",
+          "message": "メール内のリンクがクリックされたときにトリガー"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.desc": {
+          "source": "Create a new inbound email route for processing incoming emails. Routes use expressions to match incoming messages and execute actions like forwarding or storing.",
+          "message": "受信メールを処理するための新しいインバウンドメールルートを作成します。ルートは式を使用して受信メッセージを照合し、転送や保存などのアクションを実行します。"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
+          "source": "Create Route",
+          "message": "ルートの作成"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.desc": {
+          "source": "Actions to execute when the expression matches. Examples:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()",
+          "message": "式が一致したときに実行するアクション。例:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.display_name": {
+          "source": "Actions",
+          "message": "アクション"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.short_desc": {
+          "source": "Route actions",
+          "message": "ルートアクション"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what this route does",
+          "message": "このルートの動作の説明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Route description",
+          "message": "ルートの説明"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.desc": {
+          "source": "The expression used to match incoming messages. Examples:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()",
+          "message": "受信メッセージの照合に使用される式。例:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.display_name": {
+          "source": "Expression",
+          "message": "式"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.short_desc": {
+          "source": "Matching expression",
+          "message": "一致条件の式"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.desc": {
+          "source": "Priority of the route (lower number = higher priority, default: 0)",
+          "message": "ルートの優先度（小さい数字 = 高い優先度、デフォルト: 0）"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.short_desc": {
+          "source": "Route priority",
+          "message": "ルートの優先度"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
+          "source": "Create an inbound email route",
+          "message": "インバウンドメールルートを作成"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
+          "message": "Mailgun メーリングリストに新しいメンバーを追加します。カスタム変数および upsert モードをサポートします。"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Add Mailing List Member",
+          "message": "メーリングリストメンバーの追加"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.desc": {
+          "source": "The email address of the member to add",
+          "message": "追加するメンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.display_name": {
+          "source": "Member Email",
+          "message": "メンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to add",
+          "message": "追加するメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to add the member to",
+          "message": "メンバーを追加するメーリングリストを選択します"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "メーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to add the member to",
+          "message": "メンバーを追加するメーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.desc": {
+          "source": "The name of the member",
+          "message": "メンバーの名前"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.short_desc": {
+          "source": "Member's name",
+          "message": "メンバーの名前"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Whether the member is subscribed (default: `True`)",
+          "message": "メンバーが購読中かどうか（デフォルト: `True`）"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "購読中"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Subscription status",
+          "message": "購読ステータス"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.desc": {
+          "source": "If `True`, update the member if they already exist (default: `False`)",
+          "message": "`True` の場合、メンバーが既に存在していれば更新します（デフォルト: `False`）"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.display_name": {
+          "source": "Upsert",
+          "message": "アップサート"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.short_desc": {
+          "source": "Update if exists",
+          "message": "存在する場合は更新"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.desc": {
+          "source": "Custom JSON variables to associate with the member",
+          "message": "メンバーに関連付けるカスタムJSON変数"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.display_name": {
+          "source": "Variables",
+          "message": "変数"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.short_desc": {
+          "source": "Custom variables",
+          "message": "カスタム変数"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Add a member to a mailing list",
+          "message": "メーリングリストにメンバーを追加"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Retrieve a specific member from a Mailgun mailing list by their email address.",
+          "message": "メールアドレスでMailgunメーリングリストから特定のメンバーを取得します。"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Get Mailing List Member",
+          "message": "メーリングリストメンバーを取得"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to get the member from",
+          "message": "メンバーを取得するメーリングリストを選択"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "メーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to get the member from",
+          "message": "メンバーを取得するメーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to retrieve",
+          "message": "取得するメンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "メンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to retrieve",
+          "message": "取得するメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Get a member from a mailing list",
+          "message": "メーリングリストからメンバーを取得"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Remove a member from a Mailgun mailing list by their email address.",
+          "message": "メールアドレスでMailgunメーリングリストからメンバーを削除します。"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Delete Mailing List Member",
+          "message": "メーリングリストメンバーを削除"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to remove the member from",
+          "message": "メンバーを削除するメーリングリストを選択"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "メーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to remove the member from",
+          "message": "メンバーを削除するメーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to remove",
+          "message": "削除するメンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "メンバーのメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to remove",
+          "message": "削除するメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Remove a member from a mailing list",
+          "message": "メーリングリストからメンバーを削除"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.desc": {
+          "source": "Fires when an email is successfully delivered to the recipient's mail server.",
+          "message": "メールが受信者のメールサーバーに正常に配信されたときにトリガーされます。"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
+          "source": "Email Delivered",
+          "message": "メール配信完了"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for delivery events",
+          "message": "配信イベントを監視するドメインを選択"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
+          "source": "Trigger when an email is delivered",
+          "message": "メールが配信されたときにトリガー"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.desc": {
+          "source": "Fires when a recipient opens an email. Provides information about the recipient and client information.",
+          "message": "受信者がメールを開封したときにトリガーされます。受信者およびクライアント情報を提供します。"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "メールが開封された時"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for open events",
+          "message": "開封イベントを監視するドメインを選択"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
+          "source": "Trigger when an email is opened",
+          "message": "メールが開封されたときにトリガー"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains configured in your Mailgun account with optional filtering by state.",
+          "message": "Mailgunアカウントで設定されているすべてのドメインを一覧表示します。状態によるフィルタリングも可能です。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "ドメイン一覧"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of domains to return",
+          "message": "返すドメインの最大数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active domains",
+          "message": "アクティブなドメイン"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled domains",
+          "message": "無効なドメイン"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOnVudmVyaWZpZWQ.desc": {
+          "source": "Unverified domains",
+          "message": "未確認のドメイン"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.desc": {
+          "source": "Filter domains by state (`active`, `unverified`, `disabled`)",
+          "message": "ドメインを状態でフィルタリング (`active`、`unverified`、`disabled`)"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.short_desc": {
+          "source": "Filter by domain state",
+          "message": "ドメイン状態でフィルタリング"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List all sending domains",
+          "message": "すべての送信ドメインを一覧表示"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.desc": {
+          "source": "List all members of a Mailgun mailing list with optional filtering by subscription status.",
+          "message": "Mailgunメーリングリストのすべてのメンバーを一覧表示します。購読ステータスによるフィルタリングも可能です。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "List Mailing List Members",
+          "message": "メーリングリストメンバー一覧"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of members to return",
+          "message": "返されるメンバーの最大数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to list members from",
+          "message": "メンバーを一覧表示するメーリングリストを選択"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "メーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to list members from",
+          "message": "メンバーを一覧表示するメーリングリスト"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Filter members by subscription status",
+          "message": "メンバーを購読ステータスでフィルタリング"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "購読中"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "サブスクリプションのステータスでフィルタリング"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "List members of a mailing list",
+          "message": "メーリングリストのメンバーを一覧表示"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.desc": {
+          "source": "List all mailing lists configured in your Mailgun account.",
+          "message": "Mailgunアカウントで設定されているすべてのメーリングリストを一覧表示します。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
+          "source": "List Mailing Lists",
+          "message": "メーリングリスト一覧"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of mailing lists to return",
+          "message": "返すメーリングリストの最大数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
+          "source": "List all mailing lists",
+          "message": "すべてのメーリングリストを一覧表示"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.desc": {
+          "source": "List all configured inbound email routes for processing incoming emails.",
+          "message": "受信メールを処理するために設定されたすべてのインバウンドメールルートを一覧表示します。"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
+          "source": "List Routes",
+          "message": "ルート一覧"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of routes to return",
+          "message": "返すルートの最大数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
+          "source": "List all inbound email routes",
+          "message": "すべてのインバウンドメールルートを一覧表示"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mailgun** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Mailgun**へのカスタムHTTP / REST API呼び出しを行います。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mailgun",
+          "message": "MailgunへのカスタムAPI呼び出しを実行"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send a transactional email through Mailgun. Supports HTML content, text content, tracking options, and custom headers.",
+          "message": "Mailgun経由でトランザクションメールを送信します。HTMLコンテンツ、テキストコンテンツ、トラッキングオプション、カスタムヘッダーに対応しています。"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send Email",
+          "message": "メールの送信"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "Carbon copy recipients",
+          "message": "CC受信者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "CC 受信者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "Blind carbon copy recipients",
+          "message": "BCC受信者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "BCC 受信者"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.desc": {
+          "source": "The sender email address. Can include a name: 'Name <email@domain.com>'",
+          "message": "送信者のメールアドレス。「名前 <email@domain.com>」の形式で名前を含めることができます。"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.short_desc": {
+          "source": "Sender email address",
+          "message": "送信者のメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.desc": {
+          "source": "Email address for replies",
+          "message": "返信用メールアドレス"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.display_name": {
+          "source": "Reply-To",
+          "message": "返信用アドレス (Reply-To)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.short_desc": {
+          "source": "Reply-to address",
+          "message": "返信用アドレス"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.desc": {
+          "source": "HTML version of the email body",
+          "message": "メール本文のHTMLバージョン"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.display_name": {
+          "source": "HTML Body",
+          "message": "HTML本文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.short_desc": {
+          "source": "HTML body",
+          "message": "HTML本文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.desc": {
+          "source": "Tags for message categorization and tracking",
+          "message": "メッセージの分類およびトラッキング用タグ"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.short_desc": {
+          "source": "Message tags",
+          "message": "メッセージタグ"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.desc": {
+          "source": "Enable tracking for this message",
+          "message": "このメッセージのトラッキングを有効化"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.display_name": {
+          "source": "Enable Tracking",
+          "message": "トラッキングを有効化"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.short_desc": {
+          "source": "Enable click/open tracking",
+          "message": "クリック/開封トラッキングを有効化"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.desc": {
+          "source": "Enable click tracking for this message",
+          "message": "このメッセージのクリックトラッキングを有効化"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.display_name": {
+          "source": "Track Clicks",
+          "message": "クリックをトラッキング"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.short_desc": {
+          "source": "Track link clicks",
+          "message": "リンクのクリックをトラッキング"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.desc": {
+          "source": "Enable open tracking for this message",
+          "message": "このメッセージの開封トラッキングを有効化"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.display_name": {
+          "source": "Track Opens",
+          "message": "開封をトラッキング"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.short_desc": {
+          "source": "Track email opens",
+          "message": "メールの開封をトラッキング"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The email subject line",
+          "message": "メールの件名"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "メールの件名"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more recipient email addresses. Can include names.",
+          "message": "1つ以上の宛先メールアドレス。名前を含めることもできます。"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "宛先"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Recipient email address(es)",
+          "message": "宛先メールアドレス"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.desc": {
+          "source": "Plain text version of the email body",
+          "message": "メール本文のプレーンテキスト版"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.display_name": {
+          "source": "Text Body",
+          "message": "テキスト本文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.short_desc": {
+          "source": "Plain text body",
+          "message": "プレーンテキスト本文"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email via Mailgun",
+          "message": "Mailgun経由でメールを送信"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.desc": {
+          "source": "Fires when an email permanently fails to deliver (hard bounce). This typically indicates an invalid email address or blocked domain.",
+          "message": "メールの配信が恒久的に失敗した（ハードバウンス）ときにトリガーされます。通常、無効なメールアドレスまたはブロックされたドメインを示します。"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
+          "source": "Permanent Failure",
+          "message": "恒久的な配信エラー"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for permanent failure events",
+          "message": "恒久的な配信エラーイベントを監視するドメインを選択"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
+          "source": "Trigger on permanent delivery failure (hard bounce)",
+          "message": "恒久的な配信エラー（ハードバウンス）時にトリガー"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.desc": {
+          "source": "Fires when an email temporarily fails to deliver (soft bounce). Mailgun will retry delivery automatically.",
+          "message": "メールの配信が一時的に失敗した（ソフトバウンス）ときにトリガーされます。Mailgunは自動的に配信を再試行します。"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
+          "source": "Temporary Failure",
+          "message": "一時的な配信エラー"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for temporary failure events",
+          "message": "一時的な配信エラーイベントを監視するドメインを選択"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
+          "source": "Trigger on temporary delivery failure (soft bounce)",
+          "message": "一時的な配信エラー（ソフトバウンス）時にトリガー"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.desc": {
+          "source": "Fires when a recipient clicks an unsubscribe link in an email. Remove the recipient from your mailing list to comply with their preference.",
+          "message": "受信者がメール内の配信停止リンクをクリックしたときにトリガーされます。希望に従ってメーリングリストから受信者を削除してください。"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.display_name": {
+          "source": "Unsubscribed",
+          "message": "配信解除済み"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for unsubscribe events",
+          "message": "配信停止イベントを監視するドメインを選択"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "イベントを監視するドメイン"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Trigger when a recipient unsubscribes",
+          "message": "受信者が配信停止したときにトリガー"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.desc": {
+          "source": "Validate an email address using Mailgun's email validation API. Returns information about deliverability, risk assessment, and suggested corrections.",
+          "message": "Mailgunのメール検証APIを使用してメールアドレスを検証します。到達可能性、リスク評価、修正候補に関する情報を返します。"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
+          "source": "Validate Email",
+          "message": "メールアドレスを検証"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.desc": {
+          "source": "The email address to validate",
+          "message": "検証するメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to validate",
+          "message": "検証するメールアドレス"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
+          "source": "Validate an email address",
+          "message": "メールアドレスを検証"
+        },
+        "app.TWFpbGd1bg.desc": {
+          "source": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. This integration enables sending transactional emails, managing mailing lists, validating email addresses, and receiving webhooks for email events.\n\n**Features:**\n- Send transactional and marketing emails\n- Email validation to verify addresses\n- Mailing list management\n- Inbound email routing\n- Event tracking via webhooks",
+          "message": "Mailgunは、メールの送信、受信、トラッキングを行うための強力なメールAPIサービスです。この連携により、トランザクションメールの送信、メーリングリストの管理、メールアドレスの検証、メールイベントのWebhook受信が可能になります。\n\n**機能:**\n- トランザクションメールおよびマーケティングメールの送信\n- メールアドレスを検証するメール検証機能\n- メーリングリストの管理\n- インバウンドメールのルーティング\n- Webhookによるイベントトラッキング"
+        },
+        "app.TWFpbGd1bg.display_name": {
+          "source": "Mailgun",
+          "message": "Mailgun"
+        },
+        "app.TWFpbGd1bg.short_desc": {
+          "source": "Mailgun email delivery and management service",
+          "message": "Mailgunメール配信および管理サービス"
+        }
+      }
+    }
+  }
+}

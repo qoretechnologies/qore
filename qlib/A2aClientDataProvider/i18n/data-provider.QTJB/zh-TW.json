@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.desc": {
+          "source": "Cancel a running A2A task by its ID",
+          "message": "透過 ID 取消正在執行的 A2A 任務"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
+          "source": "Cancel Task",
+          "message": "取消任務"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to cancel",
+          "message": "要取消之任務的唯一識別碼"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
+          "source": "Cancel a running task",
+          "message": "取消正在執行的任務"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.desc": {
+          "source": "Retrieve the A2A agent's card with its capabilities and skills",
+          "message": "擷取包含功能與技能的 A2A 代理卡"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Agent Card",
+          "message": "取得代理卡"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get the agent's card",
+          "message": "取得代理卡"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.desc": {
+          "source": "Get the authenticated extended agent card with additional details",
+          "message": "取得包含額外詳細資訊的已驗證延伸代理卡"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Extended Agent Card",
+          "message": "取得延伸代理卡"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get authenticated extended agent card",
+          "message": "取得已驗證的延伸代理卡"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Get the push notification configuration for an A2A task",
+          "message": "取得 A2A 任務的推播通知設定"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Get Push Notification Config",
+          "message": "取得推播通知設定"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "用於管理推播通知設定的任務 ID"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Get push notification config for a task",
+          "message": "取得任務的推播通知設定"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve the current status of an A2A task by its ID",
+          "message": "透過 ID 擷取 A2A 任務的目前狀態"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "取得任務"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "要擷取之任務的唯一識別碼"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get task status by ID",
+          "message": "透過 ID 取得任務狀態"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Delete push notification configuration for an A2A task",
+          "message": "刪除 A2A 任務的推播通知設定"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Delete Push Notification Config",
+          "message": "刪除推播通知設定"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to delete push notification config for",
+          "message": "要刪除推播通知設定的任務 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.desc": {
+          "source": "The ID of the push notification config to delete",
+          "message": "要刪除之推播通知設定的 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.display_name": {
+          "source": "Config ID",
+          "message": "設定 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.short_desc": {
+          "source": "Push notification config ID",
+          "message": "推播通知設定 ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Delete push notification config for a task",
+          "message": "刪除任務的推播通知設定"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.desc": {
+          "source": "List A2A tasks, optionally filtered by context ID",
+          "message": "列出 A2A 任務，可選擇依情境 ID 篩選"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "列出任務"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID to filter tasks by",
+          "message": "用於篩選任務的可選情境 ID"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "情境 ID"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.short_desc": {
+          "source": "Filter by context ID",
+          "message": "依情境 ID 篩選"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.desc": {
+          "source": "Optional page size for cursor-based pagination",
+          "message": "用於游標分頁的可選頁面大小"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.short_desc": {
+          "source": "Number of results per page (v1.0)",
+          "message": "每頁結果數 (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.desc": {
+          "source": "Optional cursor for retrieving the next page of results",
+          "message": "用於擷取下一頁結果的可選游標"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "頁面 Token"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Pagination cursor (v1.0)",
+          "message": "分頁游標 (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filtering",
+          "message": "列出任務並支援可選的篩選"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.desc": {
+          "source": "List all push notification configurations for an A2A task",
+          "message": "列出 A2A 任務的所有推播通知設定"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
+          "source": "List Push Notification Configs",
+          "message": "列出推播通知設定"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "用於管理推播通知設定的任務 ID"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
+          "source": "List push notification configs for a task",
+          "message": "列出任務的推播通知設定"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Set the push notification configuration for an A2A task",
+          "message": "設定 A2A 任務的推播通知設定"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Set Push Notification Config",
+          "message": "設定推播通知設定"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to set push notification config for",
+          "message": "要設定推播通知設定的任務 ID"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "任務識別碼"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.desc": {
+          "source": "Optional verification token for the webhook",
+          "message": "Webhook 的可選驗證 Token"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.display_name": {
+          "source": "Token",
+          "message": "Token"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.short_desc": {
+          "source": "Verification token",
+          "message": "驗證 Token"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.desc": {
+          "source": "The URL to receive push notifications for task events",
+          "message": "用於接收任務事件推播通知的 URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.display_name": {
+          "source": "Webhook URL",
+          "message": "Webhook URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.short_desc": {
+          "source": "Push notification webhook URL",
+          "message": "推播通知 Webhook URL"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Set push notification config for a task",
+          "message": "為任務設定推播通知設定"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message to the A2A agent and get back a task",
+          "message": "傳送訊息給 A2A 代理並取得任務"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send Message",
+          "message": "傳送訊息"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.desc": {
+          "source": "Optional v1.0 configuration including `acceptedOutputModes`, `historyLength`, `returnImmediately`",
+          "message": "可選的 v1.0 設定，包含 `acceptedOutputModes`、`historyLength`、`returnImmediately`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.display_name": {
+          "source": "Configuration",
+          "message": "設定"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.short_desc": {
+          "source": "Send message configuration (v1.0)",
+          "message": "傳送訊息設定 (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID for grouping related tasks into a conversation",
+          "message": "用於將相關任務分組至對話中的可選上下文 ID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "情境 ID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.short_desc": {
+          "source": "Context identifier",
+          "message": "上下文識別碼"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata for the message",
+          "message": "訊息的可選元資料"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "元資料"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Message metadata",
+          "message": "訊息元資料"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.desc": {
+          "source": "Optional unique identifier for the message",
+          "message": "訊息的可選唯一識別碼"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.short_desc": {
+          "source": "Optional message identifier",
+          "message": "可選訊息識別碼"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.desc": {
+          "source": "List of message parts (text, file, or data).\n\nEach part is a hash with a `type` key:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`",
+          "message": "訊息部分的清單（文字、檔案或資料）。\n\n每個部分都是帶有 `type` 鍵的雜湊：\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.display_name": {
+          "source": "Parts",
+          "message": "部分"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.short_desc": {
+          "source": "Message parts",
+          "message": "訊息部分"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.desc": {
+          "source": "A message from the agent",
+          "message": "來自代理的訊息"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.display_name": {
+          "source": "Agent",
+          "message": "代理"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.short_desc": {
+          "source": "Message from agent",
+          "message": "來自代理的訊息"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A message from the user",
+          "message": "來自使用者的訊息"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "使用者"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Message from user",
+          "message": "來自使用者的訊息"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.desc": {
+          "source": "The role of the message sender: `user` or `agent`",
+          "message": "訊息傳送者的角色：`user` 或 `agent`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "角色"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.short_desc": {
+          "source": "Message role",
+          "message": "訊息角色"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.desc": {
+          "source": "Optional tenant identifier for multi-tenancy support",
+          "message": "多租戶支援的可選租戶識別碼"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "租戶"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.short_desc": {
+          "source": "Tenant identifier (v1.0)",
+          "message": "租戶識別碼 (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to the agent",
+          "message": "傳送訊息給代理"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.desc": {
+          "source": "Receive a notification when an A2A task artifact is added or modified",
+          "message": "當新增或修改 A2A 任務產物時接收通知"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
+          "source": "Task Artifact Update",
+          "message": "任務產物更新"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
+          "source": "An A2A task artifact has been updated",
+          "message": "A2A 任務產物已更新"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.desc": {
+          "source": "Receive a notification when a new message is added to an A2A task",
+          "message": "當新增訊息至 A2A 任務時接收通知"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
+          "source": "Task Message Update",
+          "message": "任務訊息更新"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {
+          "source": "An A2A task has a new message",
+          "message": "A2A 任務有新訊息"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.desc": {
+          "source": "Receive a notification when an A2A task status changes",
+          "message": "當 A2A 任務狀態變更時接收通知"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
+          "source": "Task Status Update",
+          "message": "任務狀態更新"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
+          "source": "An A2A task status has changed",
+          "message": "A2A 任務狀態已變更"
+        },
+        "app.QTJB.desc": {
+          "source": "Connect to A2A agents for agent-to-agent collaboration",
+          "message": "連線至 A2A 代理以進行代理對代理的協作"
+        },
+        "app.QTJB.display_name": {
+          "source": "A2A Agent",
+          "message": "A2A 代理"
+        },
+        "app.QTJB.short_desc": {
+          "source": "Agent-to-Agent protocol",
+          "message": "Agent-to-Agent 協定"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,973 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a file or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "Asynchronicznie kopiuje plik lub folder do nowej lokalizacji, opcjonalnie pod nową nazwą. Zwraca adres URL monitorowania, aby śledzić postęp kopiowania"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Item",
+          "message": "Kopiuj element"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zwróć błąd żądania"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zwróć błąd"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "Automatycznie zmień nazwę nowej kopii"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Zmień nazwę"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Zastąp istniejący plik"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Zastąp"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "Zachowanie w przypadku konfliktu nazw, jeśli element o tej samej nazwie istnieje w miejscu docelowym:\n- `rename`: automatycznie zmień nazwę nowej kopii\n- `replace`: zastąp istniejący plik (obsługiwane tylko dla plików, nie folderów)\n- `fail`: zwróć błąd żądania (domyślnie)"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Zachowanie w przypadku konfliktu"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Sposób obsługi konfliktów nazw"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "Unikatowy identyfikator pliku lub folderu do skopiowania"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "Identyfikator elementu do skopiowania"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "Nowa nazwa skopiowanego elementu. Jeśli nie zostanie podana, zostanie użyta nazwa taka sama jak oryginału"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nowa nazwa"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "Nowa nazwa kopii"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "Unikatowy identyfikator dysku docelowego. Wymagany podczas kopiowania na inny dysk"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "Identyfikator dysku docelowego"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "Identyfikator dysku docelowego dla kopii"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "Identyfikator folderu docelowego. W przypadku pominięcia element jest kopiowany do katalogu głównego dysku"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "Identyfikator folderu docelowego"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "Identyfikator folderu docelowego dla kopii"
+        },
+        "app.T25lRHJpdmU.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a file or folder",
+          "message": "Kopiuj plik lub folder"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in OneDrive, optionally within a specific parent folder",
+          "message": "Utwórz nowy folder w usłudze OneDrive, opcjonalnie w określonym folderze nadrzędnym"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Utwórz folder"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zwróć błąd żądania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zwróć błąd"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "Automatycznie zmień nazwę nowego folderu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Zmień nazwę"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "Zastąp istniejący element"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Zastąp"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "Zachowanie w przypadku konfliktu nazw, jeśli element o tej samej nazwie już istnieje:\n- `rename`: automatycznie zmień nazwę nowego folderu\n- `replace`: zastąp istniejący element\n- `fail`: zwróć błąd żądania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Zachowanie w przypadku konfliktu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Sposób obsługi konfliktów nazw"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "Opcjonalny opis folderu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "Opis folderu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "Nazwa nowego folderu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "Nazwa folderu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "Nazwa folderu do utworzenia"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "Identyfikator folderu nadrzędnego. W przypadku pominięcia folder zostanie utworzony w katalogu głównym dysku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "Utwórz nowy folder"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a file or folder in OneDrive",
+          "message": "Utwórz link do udostępniania (wyświetlanie, edycja lub osadzanie) dla pliku lub folderu w usłudze OneDrive"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "Utwórz link do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "Data i godzina wygaśnięcia linku do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "Data wygaśnięcia"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "Kiedy link wygasa"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "Unikatowy identyfikator elementu, dla którego ma zostać utworzony link do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "Identyfikator elementu do udostępnienia"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "Tylko użytkownicy w tej samej organizacji"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "Każda osoba z linkiem ma dostęp"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "Anonimowy"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "Zakres linku:\n- `anonymous`: każda osoba z linkiem ma dostęp\n- `organization`: dostęp mają tylko użytkownicy z tej samej organizacji"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "Zakres linku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "Zakres linku do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "Hasło do linku do udostępniania (opcjonalne)"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Hasło"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "Hasło do linku do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "Dostęp do odczytu i zapisu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "Edytuj"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "Link do osadzenia"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "Osadź"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "Dostęp tylko do odczytu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "Widok"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "Typ linku do udostępniania, który ma zostać utworzony:\n- `view`: link tylko do odczytu\n- `edit`: link do odczytu i zapisu\n- `embed`: link do osadzenia"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "Typ linku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "Typ linku do udostępniania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for an item",
+          "message": "Utwórz link do udostępniania dla elementu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading large files (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "Utwórz wznawialną sesję przekazywania do przesyłania dużych plików (>4 MB) we fragmentach. Zwraca adres URL przekazywania, który akceptuje żądania PUT z zakresami bajtów"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "Utwórz sesję przekazywania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "Zwróć błąd żądania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "Zwróć błąd"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "Automatycznie zmień nazwę nowego pliku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "Zmień nazwę"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "Zastąp istniejący plik"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "Zastąp"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "Zachowanie w przypadku konfliktu nazw, jeśli plik o tej samej nazwie już istnieje:\n- `rename`: automatycznie zmień nazwę nowego pliku\n- `replace`: zastąp istniejący plik\n- `fail`: zwróć błąd żądania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "Zachowanie w przypadku konfliktu"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "Sposób obsługi konfliktów nazw"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "Nazwa pliku do przekazania (np. `large-file.zip`)"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Nazwa pliku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "Nazwa pliku do przesłania"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "Identyfikator folderu nadrzędnego. W przypadku pominięcia plik zostanie przesłany do katalogu głównego dysku"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "Utwórz wznawialną sesję przesyłania"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve the current user's OneDrive metadata including storage quota, drive type, and owner information",
+          "message": "Pobierz metadane usługi OneDrive bieżącego użytkownika, w tym limit pamięci podręcznej, typ dysku i informacje o właścicielu"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Drive Info",
+          "message": "Pobierz informacje o dysku"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get drive metadata and quota",
+          "message": "Pobierz metadane dysku i limit miejsca"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a specific file or folder by ID or path",
+          "message": "Pobierz metadane określonego pliku lub folderu według identyfikatora lub ścieżki"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Pobierz pozycję"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "Unikatowy identyfikator elementu do pobrania. Podaj `id` lub `path`"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "Identyfikator elementu do pobrania"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "Ścieżka elementu względem katalogu głównego dysku (np. `/Documents/file.txt`). Podaj `id` lub `path`"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "Ścieżka elementu"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "Ścieżka elementu do pobrania"
+        },
+        "app.T25lRHJpdmU.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get file or folder metadata",
+          "message": "Pobierz metadane pliku lub folderu"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a file. Returns a pre-authenticated download URL that can be used to download the file content directly",
+          "message": "Pobierz adres URL pobierania i metadane pliku. Zwraca wstępnie uwierzytelniony adres URL pobierania, którego można użyć do bezpośredniego pobrania zawartości pliku"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Pobierz plik"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "Unikatowy identyfikator pliku do pobrania"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "Identyfikator elementu do pobrania"
+        },
+        "app.T25lRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file",
+          "message": "Pobierz plik"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a file or folder from OneDrive. The item is moved to the recycle bin",
+          "message": "Usuń plik lub folder z usługi OneDrive. Element zostanie przeniesiony do kosza"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "Usuń element"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "Unikatowy identyfikator elementu do usunięcia"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "Identyfikator elementu do usunięcia"
+        },
+        "app.T25lRHJpdmU.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a file or folder",
+          "message": "Usuń plik lub folder"
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.desc": {
+          "source": "Fires when a file or folder is created, modified, or deleted in OneDrive. Uses delta queries to track changes efficiently",
+          "message": "Uruchamiane po utworzeniu, zmodyfikowaniu lub usunięciu pliku lub folderu w usłudze OneDrive. Używa zapytań różnicowych do wydajnego śledzenia zmian"
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.display_name": {
+          "source": "File or Folder Changed",
+          "message": "Zmieniono plik lub folder"
+        },
+        "app.T25lRHJpdmU.action.ZmlsZS1jaGFuZ2U.short_desc": {
+          "source": "Trigger when a file or folder is created, modified, or deleted",
+          "message": "Wyzwalaj po utworzeniu, zmodyfikowaniu lub usunięciu pliku lub folderu"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft OneDrive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie interfejsu HTTP / REST API do **Microsoft OneDrive** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną do bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.T25lRHJpdmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft OneDrive",
+          "message": "Wykonaj niestandardowe wywołanie API do Microsoft OneDrive"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List items in a folder or search across the drive. Supports pagination and sorting",
+          "message": "Wyświetl elementy w folderze lub przeszukaj dysk. Obsługuje stronicowanie i sortowanie"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Items",
+          "message": "Wyszukaj pozycje"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the drive root",
+          "message": "Identyfikator folderu, z którego mają zostać wylistowane elementy. W przypadku pominięcia listuje elementy z katalogu głównego dysku"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "Identyfikator folderu"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "Folder, z którego mają zostać wylistowane elementy"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "Kolejność sortowania wyników (np. `name asc`, `size desc`)"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Sortuj według"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "Pole i kierunek sortowania"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "Ciąg zapytania wyszukiwania do filtrowania elementów według nazwy lub zawartości"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "Zapytanie wyszukiwania"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "Ciąg zapytania wyszukiwania"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "Maksymalna liczba elementów zwracanych na stronę (domyślnie `200`, maks. `1000`)"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "Do góry"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "Maksymalna liczba elementów zwracanych na stronę"
+        },
+        "app.T25lRHJpdmU.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search files and folders",
+          "message": "Wyświetl listę lub przeszukaj pliki i foldery"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a file or folder in OneDrive. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "Zaktualizuj metadane pliku lub folderu w usłudze OneDrive. Może służyć do zmiany nazwy elementu, przeniesienia go do innego folderu lub aktualizacji jego opisu"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "Zaktualizuj element"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "Zapewnia widoczny dla użytkownika opis elementu"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "Widoczny dla użytkownika opis elementu"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "Unikatowy identyfikator elementu do zaktualizowania"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "Identyfikator elementu do zaktualizowania"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "Nowa nazwa pliku lub folderu (w tym rozszerzenie w przypadku plików)"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "Nowa nazwa"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "Nowa nazwa elementu"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "Identyfikator folderu docelowego, do którego ma zostać przeniesiony element. Ustaw to pole, aby przenieść element do innego folderu"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "Identyfikator nowego folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "Identyfikator folderu docelowego do przeniesienia"
+        },
+        "app.T25lRHJpdmU.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a file or folder",
+          "message": "Zmień nazwę, przenieś lub zaktualizuj plik lub folder"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file to OneDrive using simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "Prześlij plik do usługi OneDrive za pomocą prostego przesyłania. W przypadku plików większych niż 4 MB użyj zamiast tego akcji `create-upload-session`"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Prześlij plik"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "Plik do przesłania do usługi OneDrive, w tym nazwa pliku, zawartość i typ MIME. W przypadku plików większych niż 4 MB użyj zamiast tego akcji `create-upload-session`"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Plik"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Plik do przesłania"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "Identyfikator folderu nadrzędnego. W przypadku pominięcia plik zostanie przesłany do katalogu głównego dysku"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "Identyfikator folderu nadrzędnego"
+        },
+        "app.T25lRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file (up to 4 MB)",
+          "message": "Prześlij plik (do 4 MB)"
+        },
+        "app.T25lRHJpdmU.desc": {
+          "source": "Provides access to [Microsoft OneDrive](https://onedrive.live.com/) for cloud file storage and management via the Microsoft Graph API.\n\n**Common use cases**:\n- **File management**: list, upload, download, and delete files and folders\n- **Sharing**: create sharing links for files and folders\n- **Change tracking**: watch for file changes using delta queries\n- **Large file uploads**: create resumable upload sessions for files larger than 4 MB\n\nMicrosoft and OneDrive are trademarks of the Microsoft group of companies",
+          "message": "Zapewnia dostęp do usługi [Microsoft OneDrive](https://onedrive.live.com/) w celu przechowywania plików w chmurze i zarządzania nimi za pośrednictwem interfejsu API Microsoft Graph.\n\n**Typowe przypadki użycia**:\n- **Zarządzanie plikami**: wyświetlanie listy, przesyłanie, pobieranie i usuwanie plików oraz folderów\n- **Udostępnianie**: tworzenie łączy udostępniania dla plików i folderów\n- **Śledzenie zmian**: monitorowanie zmian w plikach za pomocą zapytań różnicowych\n- **Przesyłanie dużych plików**: tworzenie wznawialnych sesji przesyłania dla plików większych niż 4 MB\n\nMicrosoft i OneDrive są znakami towarowymi grupy firm Microsoft"
+        },
+        "app.T25lRHJpdmU.display_name": {
+          "source": "Microsoft OneDrive",
+          "message": "Microsoft OneDrive"
+        },
+        "app.T25lRHJpdmU.short_desc": {
+          "source": "Microsoft OneDrive cloud file storage",
+          "message": "Przechowywanie plików w chmurze Microsoft OneDrive"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1893 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a document or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "문서 또는 폴더를 새 위치로 비동기 복사합니다(선택적으로 새 이름 지정 가능). 복사 진행 상황을 추적할 수 있는 모니터 URL을 반환합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Document",
+          "message": "문서 복사"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "새 복사본 이름 자동 변경"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "기존 파일 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "대상 위치에 같은 이름의 항목이 있는 경우 충돌 해결 동작:\n- `rename`: 새 복사본의 이름을 자동으로 바꿈\n- `replace`: 기존 파일을 바꿈(폴더가 아닌 파일에만 지원됨)\n- `fail`: 오류와 함께 요청 실패 처리(기본값)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "복사할 파일 또는 폴더의 고유 식별자"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "복사할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "복사된 항목의 새 이름입니다. 제공하지 않으면 원본과 동일한 이름이 사용됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "새 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "복사본의 새 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "대상 드라이브의 고유 식별자입니다. 다른 드라이브로 복사할 때 필요합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "대상 드라이브 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "복사 대상 드라이브 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "대상 폴더의 ID입니다. 생략하면 항목이 드라이브 루트로 복사됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "대상 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "복사 대상 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a document or folder",
+          "message": "문서 또는 폴더 복사"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in a document library, optionally within a parent folder",
+          "message": "문서 라이브러리에 새 폴더를 생성합니다(선택적으로 상위 폴더 내에 생성 가능)."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "폴더 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "새 폴더 이름 자동 변경"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "기존 항목 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "동일한 이름의 항목이 이미 있는 경우 충돌 해결 동작:\n- `rename`: 새 폴더의 이름을 자동으로 바꿈\n- `replace`: 기존 항목을 바꿈\n- `fail`: 오류와 함께 요청 실패 처리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "폴더에 대한 선택적 설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "폴더 설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "새 폴더의 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "폴더 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "생성할 폴더의 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 폴더가 드라이브 루트에 생성됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "새 폴더 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.desc": {
+          "source": "Create a new list in a SharePoint site, optionally with its columns",
+          "message": "SharePoint 사이트에 새 목록을 생성합니다(선택적으로 열 포함 가능)."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
+          "source": "Create List",
+          "message": "리스트 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.desc": {
+          "source": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column",
+          "message": "목록을 생성할 열입니다. Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) 개체 목록 형태(예: `{\"name\": \"Amount\", \"number\": {}}`)입니다. 생략하면 기본 `Title` 열만 포함되어 목록이 생성됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "열"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.short_desc": {
+          "source": "The columns to create the list with",
+          "message": "목록을 생성할 열"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the list to create",
+          "message": "생성할 목록에 대한 설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the new list",
+          "message": "새 목록에 대한 설명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "The title of the list to create, as shown to users",
+          "message": "사용자에게 표시되는 생성할 목록의 제목"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "List Name",
+          "message": "리스트 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "The name of the new list",
+          "message": "새 목록의 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.desc": {
+          "source": "A library of files, reached with the file actions",
+          "message": "파일 작업으로 액세스할 수 있는 파일 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "A calendar of events",
+          "message": "이벤트 캘린더"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Calendar",
+          "message": "캘린더"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.desc": {
+          "source": "An ordinary list of records",
+          "message": "일반 레코드 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.display_name": {
+          "source": "Generic List",
+          "message": "일반 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.desc": {
+          "source": "A task list",
+          "message": "작업 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.display_name": {
+          "source": "Tasks",
+          "message": "작업"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.desc": {
+          "source": "The SharePoint template the list is based on; `genericList` is an ordinary list of records and `documentLibrary` holds files",
+          "message": "목록의 기반이 되는 SharePoint 템플릿입니다. `genericList`은 일반 레코드 목록이고 `documentLibrary`은 파일을 보관합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "템플릿"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.short_desc": {
+          "source": "The kind of list to create",
+          "message": "생성할 목록의 종류"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
+          "source": "Create a new list",
+          "message": "새 목록 만들기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Create an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "SharePoint 목록에 항목을 생성합니다. 사이트와 목록을 선택하면 해당 목록의 열이 개별 유형 옵션으로 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Create List Item",
+          "message": "목록 항목 만들기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "내부 열 이름을 키로 하여 항목의 열에 설정할 값입니다. 사이트와 목록을 선택하면 개별 열이 해당 유형과 함께 제공됩니다. `columns` 작업이 이를 나열합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "열 값"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "항목의 열에 설정할 값"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Create an item in a list",
+          "message": "목록에 항목 만들기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a document or folder",
+          "message": "문서 또는 폴더에 대한 공유 링크(보기, 편집 또는 포함) 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "공유 링크 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "공유 링크가 만료되는 날짜 및 시간"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "만료 날짜"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "링크 만료 일시"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "공유 링크를 생성할 항목의 고유 식별자"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "공유할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "동일한 조직의 사용자만"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "조직"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "링크가 있는 모든 사용자가 액세스 가능"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "익명"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "링크의 범위:\n- `anonymous`: 링크가 있는 모든 사용자가 액세스 가능\n- `organization`: 동일한 조직의 사용자만 액세스 가능"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "링크 범위"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "공유 링크의 범위"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "공유 링크의 비밀번호(선택 사항)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "비밀번호"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "공유 링크 비밀번호"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "읽기/쓰기 권한"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "편집"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "임베드 가능 링크"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "임베드"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "읽기 전용 권한"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "뷰"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "생성할 공유 링크의 유형:\n- `view`: 읽기 전용 링크\n- `edit`: 읽기/쓰기 링크\n- `embed`: 임베드 가능 링크"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "링크 유형"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "공유 링크 유형"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for a document",
+          "message": "문서에 대한 공유 링크 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading a large document (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "대용량 문서(4MB 초과)를 청크 단위로 업로드하기 위한 재개 가능한 업로드 세션을 생성합니다. 바이트 범위가 포함된 PUT 요청을 수락하는 업로드 URL을 반환합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "업로드 세션 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "오류와 함께 요청 실패 처리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "실패"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "새 파일 이름 자동 변경"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "이름 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "기존 파일 바꾸기"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "대체"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "동일한 이름의 파일이 이미 있는 경우 충돌 해결 동작:\n- `rename`: 새 파일의 이름을 자동으로 바꿈\n- `replace`: 기존 파일을 바꿈\n- `fail`: 오류와 함께 요청 실패 처리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "충돌 동작"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "이름 충돌 처리 방법"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "업로드할 파일의 이름(예: `large-file.zip`)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "파일 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "업로드할 파일의 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 파일이 드라이브 루트에 업로드됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "이어올리기 가능한 업로드 세션 생성"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve a document library's metadata, including its storage quota and owner",
+          "message": "저장소 할당량 및 소유자를 포함한 문서 라이브러리의 메타데이터 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Document Library Info",
+          "message": "문서 라이브러리 정보 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get document library metadata and quota",
+          "message": "문서 라이브러리 메타데이터 및 할당량 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a document or folder by ID or by path within the library",
+          "message": "라이브러리 내의 ID 또는 경로별로 문서 또는 폴더의 메타데이터 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Document",
+          "message": "문서 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "검색할 항목의 고유 식별자입니다. `id` 또는 `path` 중 하나를 제공하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "검색할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "드라이브 루트 기준 항목 경로(예: `/Documents/file.txt`). `id` 또는 `path` 중 하나를 제공하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "항목 경로"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "검색할 항목 경로"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get document or folder metadata",
+          "message": "문서 또는 폴더 메타데이터 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.desc": {
+          "source": "Retrieve metadata for a SharePoint list",
+          "message": "SharePoint 목록의 메타데이터 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
+          "source": "Get List",
+          "message": "리스트 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
+          "source": "Get list metadata",
+          "message": "목록 메타데이터 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.desc": {
+          "source": "Retrieve a list item with the values of all of its columns",
+          "message": "모든 열의 값과 함께 목록 항목 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
+          "source": "Get List Item",
+          "message": "목록 항목 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "대상 목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "항목"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
+          "source": "Get a list item and its column values",
+          "message": "목록 항목 및 해당 열 값 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.desc": {
+          "source": "Retrieve metadata for a SharePoint site",
+          "message": "SharePoint 사이트의 메타데이터 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
+          "source": "Get Site",
+          "message": "사이트 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
+          "source": "Get site metadata",
+          "message": "사이트 메타데이터 가져오기"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a document. Returns a pre-authenticated download URL that can be used to download the content directly",
+          "message": "문서의 다운로드 URL 및 메타데이터를 가져옵니다. 콘텐츠를 직접 다운로드하는 데 사용할 수 있는 사전 인증된 다운로드 URL을 반환합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download Document",
+          "message": "문서 다운로드"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "다운로드할 파일의 고유 식별자"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "다운로드할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a document",
+          "message": "문서 다운로드"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a document or folder from a library. The item is moved to the recycle bin",
+          "message": "라이브러리에서 문서 또는 폴더를 삭제합니다. 항목이 휴지통으로 이동됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Document",
+          "message": "문서 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "삭제할 항목의 고유 식별자"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "삭제할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a document or folder",
+          "message": "문서 또는 폴더 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.desc": {
+          "source": "Delete a SharePoint list and every item in it",
+          "message": "SharePoint 목록 및 그 안의 모든 항목 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "목록 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
+          "source": "Delete a list",
+          "message": "목록 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Delete an item from a SharePoint list",
+          "message": "SharePoint 목록에서 항목 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Delete List Item",
+          "message": "목록 항목 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "대상 목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "항목"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Delete an item from a list",
+          "message": "목록에서 항목 삭제"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "라이브러리에 이미 있는 문서가 수정될 때 트리거됩니다. 라이브러리를 다시 읽는 대신 중단된 지점부터 정확히 다시 시작하는 델타 쿼리를 사용합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "Document Modified",
+          "message": "문서 수정됨"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "Trigger when a document is modified",
+          "message": "문서가 수정될 때 트리거"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.desc": {
+          "source": "List the columns of a SharePoint list, with their types and whether they can be written",
+          "message": "유형 및 쓰기 가능 여부와 함께 SharePoint 목록의 열 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
+          "source": "List Columns",
+          "message": "열 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.desc": {
+          "source": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject",
+          "message": "쓸 수 있는 열만 반환합니다. SharePoint는 생성 또는 업데이트 호출 시 거부되는 많은 읽기 전용 열을 유지 관리합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.display_name": {
+          "source": "Writable Only",
+          "message": "쓰기 가능 항목만"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.short_desc": {
+          "source": "Return only columns that can be written",
+          "message": "쓸 수 있는 열만 반환"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
+          "source": "List the columns of a list",
+          "message": "목록의 열 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.desc": {
+          "source": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a library identifies it to every file action",
+          "message": "SharePoint 사이트의 문서 라이브러리(드라이브)를 나열합니다. 라이브러리의 `drive_id`은(는) 모든 파일 작업에서 해당 라이브러리를 식별합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
+          "source": "List Document Libraries",
+          "message": "문서 라이브러리 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
+          "source": "List the document libraries in a site",
+          "message": "사이트의 문서 라이브러리 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.desc": {
+          "source": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded by default",
+          "message": "SharePoint 사이트의 목록을 나열합니다. SharePoint 자체 내부 목록은 기본적으로 제외됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "리스트 목록 조회"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.desc": {
+          "source": "Include lists whose template is `documentLibrary`",
+          "message": "템플릿이 `documentLibrary`인 목록 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.display_name": {
+          "source": "Include Document Libraries",
+          "message": "문서 라이브러리 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.short_desc": {
+          "source": "Include document libraries as well as record lists",
+          "message": "레코드 목록뿐만 아니라 문서 라이브러리도 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.desc": {
+          "source": "Include the lists SharePoint maintains for its own bookkeeping",
+          "message": "SharePoint가 자체 관리를 위해 유지하는 목록 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.display_name": {
+          "source": "Include System Lists",
+          "message": "시스템 목록 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.short_desc": {
+          "source": "Include SharePoint's own internal lists",
+          "message": "SharePoint 자체 내부 목록 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
+          "source": "List the lists in a site",
+          "message": "사이트의 목록 나열"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.desc": {
+          "source": "List the sites available. With no search term the tenant's root site and its subsites are returned, which always works; a search term is answered from the SharePoint search index",
+          "message": "사용 가능한 사이트를 나열합니다. 검색어가 없으면 항상 작동하는 테넌트의 루트 사이트 및 해당 하위 사이트가 반환됩니다. 검색어가 있으면 SharePoint 검색 인덱스에서 응답합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
+          "source": "List Sites",
+          "message": "사이트 목록 조회"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.desc": {
+          "source": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned",
+          "message": "사이트 제목 및 URL을 검색할 검색어입니다. 생략하면 테넌트의 루트 사이트 및 해당 하위 사이트가 반환됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "검색"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.short_desc": {
+          "source": "Search term to match sites against",
+          "message": "사이트와 일치시킬 검색어"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
+          "source": "List or search SharePoint sites",
+          "message": "SharePoint 사이트 나열 또는 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft SharePoint** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Microsoft SharePoint**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft SharePoint",
+          "message": "Microsoft SharePoint에 사용자 지정 API 호출 수행"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "문서 라이브러리에 문서가 추가될 때 트리거됩니다. 라이브러리를 다시 읽는 대신 중단된 지점부터 정확히 다시 시작하는 델타 쿼리를 사용합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
+          "source": "Document Added",
+          "message": "문서 추가됨"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
+          "source": "Trigger when a document is added to a library",
+          "message": "라이브러리에 문서가 추가될 때 트리거"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is added to a document library",
+          "message": "문서 라이브러리에 폴더가 추가될 때 트리거됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "Folder Added",
+          "message": "폴더 추가됨"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "Trigger when a folder is added to a library",
+          "message": "라이브러리에 폴더가 추가될 때 트리거"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.desc": {
+          "source": "Fires when an item is added to a SharePoint list. Uses delta queries, which resume exactly where they left off rather than polling the head of the list",
+          "message": "SharePoint 목록에 항목이 추가될 때 트리거됩니다. 목록의 맨 앞을 폴링하는 대신 중단된 지점부터 정확히 다시 시작하는 델타 쿼리를 사용합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
+          "source": "List Item Added",
+          "message": "목록 항목 추가됨"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {
+          "source": "Trigger when an item is added to a list",
+          "message": "목록에 항목이 추가될 때 트리거"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List the items in a folder of a document library, or search the whole library. Supports pagination and sorting",
+          "message": "문서 라이브러리 폴더의 항목을 나열하거나 전체 라이브러리를 검색합니다. 페이지 매김 및 정렬을 지원합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Documents",
+          "message": "문서 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the root of the library",
+          "message": "항목을 나열할 폴더의 ID입니다. 생략하면 라이브러리의 루트에서 항목을 나열합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "항목을 나열할 폴더"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "결과 정렬 순서(예: `name asc`, `size desc`)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "정렬 필드 및 방향"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "이름 또는 콘텐츠별로 항목을 필터링하기 위한 검색 쿼리 문자열"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "검색 쿼리 문자열"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "페이지당 반환할 최대 항목 수(기본값 `200`, 최대 `1000`)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "위쪽"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "페이지당 반환할 최대 항목 수"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search documents and folders",
+          "message": "문서 및 폴더 나열 또는 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.desc": {
+          "source": "List the items in a SharePoint list, optionally filtered with an OData expression over the item's columns",
+          "message": "SharePoint 목록의 항목을 나열하며, 선택적으로 항목 열에 대한 OData 표현식으로 필터링할 수 있습니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
+          "source": "Search List Items",
+          "message": "목록 항목 검색"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.desc": {
+          "source": "An OData `$filter` expression over the item's columns, for example `fields/Title eq 'Widget'`. Column names are prefixed with `fields/`",
+          "message": "항목 열에 대한 OData `$filter` 표현식(예: `fields/Title eq 'Widget'`)입니다. 열 이름 앞에는 `fields/` 접두사가 붙습니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.short_desc": {
+          "source": "An OData filter expression",
+          "message": "OData 필터 표현식"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results, for example `fields/Title asc`",
+          "message": "결과의 정렬 순서입니다. 예: `fields/Title asc`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "정렬 필드 및 방향"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.desc": {
+          "source": "Stop after this many items in total, across all pages",
+          "message": "모든 페이지를 합쳐 총 이 개수의 항목에 도달하면 중지합니다"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum items to return in total",
+          "message": "반환할 총 최대 항목 수"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
+          "source": "List or search the items in a list",
+          "message": "목록의 항목을 나열하거나 검색합니다"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a document or folder. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "문서 또는 폴더의 메타데이터를 업데이트합니다. 항목 이름 바꾸기, 다른 폴더로 이동 또는 설명 업데이트에 사용할 수 있습니다"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Document",
+          "message": "문서 업데이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "사용자에게 표시되는 항목 설명을 제공합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "사용자에게 표시되는 항목 설명"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "업데이트할 항목의 고유 식별자"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "업데이트할 항목 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "파일 또는 폴더의 새 이름(파일의 경우 확장자 포함)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "새 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "항목의 새 이름"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "항목을 이동할 대상 폴더의 ID입니다. 항목을 다른 폴더로 이동하려면 이 값을 설정하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "새 상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "이동할 대상 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a document or folder",
+          "message": "문서 또는 폴더 이름 바꾸기, 이동 또는 업데이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Update the column values of an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "SharePoint 목록에 있는 항목의 열 값을 업데이트합니다. 사이트와 목록이 선택되면 목록 자체 열이 개별 유형별 옵션으로 제공됩니다"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Update List Item",
+          "message": "목록 항목 업데이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "내부 열 이름을 키로 하여 항목의 열에 설정할 값입니다. 사이트와 목록을 선택하면 개별 열이 해당 유형과 함께 제공됩니다. `columns` 작업이 이를 나열합니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "열 값"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "항목의 열에 설정할 값"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "대상 목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "항목"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "목록 항목"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "대상 목록입니다. 사이트의 목록 목록을 확인하려면 `list-lists` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "목록"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 목록"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Update an item's column values",
+          "message": "항목의 열 값 업데이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a document to a library using a simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "간단한 업로드를 사용하여 라이브러리에 문서를 업로드합니다. 4MB보다 큰 파일의 경우 대신 `create-upload-session` 작업을 사용하세요"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload Document",
+          "message": "문서 업로드"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "대상 문서 라이브러리입니다. 사이트의 라이브러리 목록을 확인하려면 `list-drives` 작업을 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "문서 라이브러리"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "문서 라이브러리(드라이브)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "OneDrive에 업로드할 파일(파일명, 콘텐츠, MIME 타입 포함)입니다. 4MB보다 큰 파일의 경우 `create-upload-session` 액션을 대신 사용하세요."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "파일"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "업로드할 파일"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "대상 SharePoint 사이트입니다. 사용 가능한 사이트를 검색하려면 `list-sites` 작업을 사용하세요. 테넌트의 루트 사이트가 항상 제공됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 사이트"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "상위 폴더의 ID입니다. 생략하면 파일이 드라이브 루트에 업로드됩니다."
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "상위 폴더 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a document (up to 4 MB)",
+          "message": "문서 업로드(최대 4MB)"
+        },
+        "app.U2hhcmVQb2ludA.desc": {
+          "source": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) document libraries and lists via the Microsoft Graph API.\n\n**Common use cases**:\n- **Document management**: upload, download, copy, move, and delete documents in a document library, including resumable uploads for large files\n- **Sharing**: create sharing links for documents and folders\n- **Lists**: create and delete lists, and create, update, search, and delete list items\n- **Records**: read and write list items as records, typed from each list's own columns\n- **Change tracking**: react to new and modified documents and to new list items, using delta queries that resume exactly where they left off\n\nMicrosoft and SharePoint are trademarks of the Microsoft group of companies",
+          "message": "Microsoft Graph API를 통해 [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) 문서 라이브러리 및 목록에 대한 액세스를 제공합니다.\n\n**일반적인 사용 사례**:\n- **문서 관리**: 대용량 파일에 대한 이어올리기를 포함하여 문서 라이브러리의 문서 업로드, 다운로드, 복사, 이동 및 삭제\n- **공유**: 문서 및 폴더에 대한 공유 링크 생성\n- **목록**: 목록 생성 및 삭제, 목록 항목 생성, 업데이트, 검색 및 삭제\n- **레코드**: 각 목록의 고유한 열에서 유형이 지정된 레코드로 목록 항목 읽기 및 쓰기\n- **변경 내용 추적**: 중단된 위치부터 정확히 다시 시작하는 델타 쿼리를 사용하여 새 문서 및 수정된 문서, 새 목록 항목에 반응\n\nMicrosoft 및 SharePoint는 Microsoft 그룹 계열사의 상표입니다"
+        },
+        "app.U2hhcmVQb2ludA.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.short_desc": {
+          "source": "Microsoft SharePoint document libraries and lists",
+          "message": "Microsoft SharePoint 문서 라이브러리 및 목록"
+        }
+      }
+    }
+  }
+}

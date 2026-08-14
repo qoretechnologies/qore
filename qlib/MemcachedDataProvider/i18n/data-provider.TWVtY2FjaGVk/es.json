@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.TWVtY2FjaGVk.action.Y2Fz.desc": {
+          "source": "Update a value only if its CAS token matches (optimistic locking)",
+          "message": "Actualizar un valor solo si su token CAS coincide (bloqueo optimista)"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
+          "source": "Compare and Swap",
+          "message": "Comparar y reemplazar (CAS)"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
+          "source": "Update value with optimistic locking",
+          "message": "Actualizar valor con bloqueo optimista"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.desc": {
+          "source": "Store a key-value pair in memcached only if the key doesn't already exist",
+          "message": "Almacenar un par clave-valor en memcached solo si la clave aún no existe"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.display_name": {
+          "source": "Add Value",
+          "message": "Agregar valor"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
+          "source": "Store a value only if key doesn't exist",
+          "message": "Almacenar un valor solo si la clave no existe"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.desc": {
+          "source": "Retrieve a cached value by key",
+          "message": "Recuperar un valor almacenado en caché por clave"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
+          "source": "Get Value",
+          "message": "Obtener valor"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
+          "source": "Retrieve a value from the cache",
+          "message": "Recuperar un valor de la caché"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.desc": {
+          "source": "Retrieve a cached value with its CAS token for optimistic locking",
+          "message": "Recuperar un valor en caché con su token CAS para bloqueo optimista"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.display_name": {
+          "source": "Get with CAS",
+          "message": "Obtener con CAS"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.short_desc": {
+          "source": "Retrieve a value with CAS token",
+          "message": "Recuperar un valor con token CAS"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.desc": {
+          "source": "Atomically decrement a numeric value in the cache",
+          "message": "Decrementar de forma atómica un valor numérico en la caché"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.display_name": {
+          "source": "Decrement",
+          "message": "Decrementar"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.short_desc": {
+          "source": "Decrement a numeric value",
+          "message": "Decrementar un valor numérico"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.desc": {
+          "source": "Remove a key and its value from the cache",
+          "message": "Eliminar una clave y su valor de la caché"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.display_name": {
+          "source": "Delete",
+          "message": "Eliminar"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a key from the cache",
+          "message": "Eliminar una clave de la caché"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.desc": {
+          "source": "Invalidate all items in the cache",
+          "message": "Invalidar todos los elementos de la caché"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
+          "source": "Flush All",
+          "message": "Vaciar todo"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {
+          "source": "Clear all cached data",
+          "message": "Borrar todos los datos en caché"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.desc": {
+          "source": "Atomically increment a numeric value in the cache",
+          "message": "Incrementar de forma atómica un valor numérico en la caché"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.display_name": {
+          "source": "Increment",
+          "message": "Incrementar"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.short_desc": {
+          "source": "Increment a numeric value",
+          "message": "Incrementar un valor numérico"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.desc": {
+          "source": "Retrieve multiple cached values in a single batch request",
+          "message": "Recuperar múltiples valores en caché en una sola solicitud por lotes"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
+          "source": "Multi-Get",
+          "message": "Multi-Get"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
+          "source": "Retrieve multiple values",
+          "message": "Recuperar múltiples valores"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.desc": {
+          "source": "Store a key-value pair in memcached, overwriting any existing value",
+          "message": "Almacenar un par clave-valor en memcached, sobrescribiendo cualquier valor existente"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.display_name": {
+          "source": "Set Value",
+          "message": "Establecer valor"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
+          "source": "Store a value in the cache",
+          "message": "Almacenar un valor en la caché"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.desc": {
+          "source": "Retrieve general server statistics and metrics",
+          "message": "Recuperar estadísticas y métricas generales del servidor"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.display_name": {
+          "source": "Statistics",
+          "message": "Estadísticas"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.short_desc": {
+          "source": "Get server statistics",
+          "message": "Obtener estadísticas del servidor"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.desc": {
+          "source": "Replace a value in memcached only if the key already exists",
+          "message": "Reemplazar un valor en memcached solo si la clave ya existe"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
+          "source": "Replace Value",
+          "message": "Reemplazar valor"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
+          "source": "Replace an existing value",
+          "message": "Reemplazar un valor existente"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.desc": {
+          "source": "Update the expiration time of an existing key",
+          "message": "Actualizar el tiempo de expiración de una clave existente"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.display_name": {
+          "source": "Touch",
+          "message": "Touch"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.short_desc": {
+          "source": "Update expiration time",
+          "message": "Actualizar tiempo de expiración"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.desc": {
+          "source": "Retrieve the memcached server version",
+          "message": "Recuperar la versión del servidor memcached"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.short_desc": {
+          "source": "Get server version",
+          "message": "Obtener versión del servidor"
+        },
+        "app.TWVtY2FjaGVk.desc": {
+          "source": "Memcached distributed memory object caching system",
+          "message": "Sistema de almacenamiento en caché de objetos en memoria distribuida Memcached"
+        },
+        "app.TWVtY2FjaGVk.display_name": {
+          "source": "Memcached Server",
+          "message": "Servidor Memcached"
+        },
+        "app.TWVtY2FjaGVk.short_desc": {
+          "source": "Memcached caching server",
+          "message": "Servidor de caché Memcached"
+        }
+      }
+    }
+  }
+}

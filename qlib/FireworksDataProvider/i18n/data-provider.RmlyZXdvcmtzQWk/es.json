@@ -1,0 +1,581 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Fireworks-hosted model via the OpenAI-compatible `/v1/chat/completions` endpoint.",
+          "message": "Envía una lista de mensajes de chat a un modelo alojado en Fireworks a través del endpoint `/v1/chat/completions` compatible con OpenAI."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Completado de chat"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens by frequency.  Range `-2.0` to `2.0`.",
+          "message": "Penaliza los tokens por frecuencia. Rango de `-2.0` a `2.0`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalización de frecuencia"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize tokens by frequency",
+          "message": "Penalizar tokens por frecuencia"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Fireworks model identifier in `accounts/<owner>/models/<name>` format, e.g. `accounts/fireworks/models/llama-v3p1-405b-instruct`, `accounts/fireworks/models/qwen2p5-72b-instruct`.\n\nSee the [Fireworks model catalog](https://fireworks.ai/models).",
+          "message": "Identificador de modelo de Fireworks en formato `accounts/<owner>/models/<name>`, p. ej., `accounts/fireworks/models/llama-v3p1-405b-instruct`, `accounts/fireworks/models/qwen2p5-72b-instruct`.\n\nConsulte el [catálogo de modelos de Fireworks](https://fireworks.ai/models)."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "The Fireworks-hosted model identifier",
+          "message": "El identificador del modelo alojado en Fireworks"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Número máximo de tokens a generar."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Máximo de tokens"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "Máximo de tokens a emitir en la compleción"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "El historial de conversación como una lista de objetos de mensaje."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Mensajes"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Lista de mensajes de chat que forman la conversación"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "Single string or list of strings; generation halts when emitted.",
+          "message": "Cadena única o lista de cadenas; la generación se detiene cuando se emite."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Secuencias de parada"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "Stop sequences",
+          "message": "Secuencias de parada"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "Cuando es `True`, el servidor transmite completados parciales como SSE."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as SSE",
+          "message": "Transmitir completados parciales como SSE"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared.  Range `-2.0` to `2.0`.",
+          "message": "Penaliza los tokens que ya han aparecido. Rango de `-2.0` a `2.0`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalización de presencia"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize repeated tokens",
+          "message": "Penalizar tokens repetidos"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`.",
+          "message": "Hash que fuerza una forma de respuesta estructurada, p. ej., `{type: \"json_object\"}` o `{type: \"json_schema\", schema: {...}}`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato de respuesta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Forzar salida estructurada (p. ej., JSON)"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Ninguno: no llamar nunca a una herramienta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Automático: el modelo decide"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Obligatorio: debe llamar a una herramienta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Modo de invocación de herramientas: `none`, `auto` o `required`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Elección de herramienta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "Si el modelo debe invocar una herramienta y cuál"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.",
+          "message": "Lista de definiciones de herramientas que el modelo puede invocar."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Herramientas"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definiciones de herramientas de estilo OpenAI que el modelo puede llamar"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  Fireworks-specific extension to the OpenAI chat API.",
+          "message": "Restringe el muestreo a los K tokens siguientes más probables. Extensión específica de Fireworks para la API de chat de OpenAI."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Muestrear únicamente de los K siguientes tokens más probables"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "Punto de corte del muestreo nuclear."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Punto de corte del muestreo nuclear (0-1)"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.",
+          "message": "Controla la aleatoriedad de la salida. Rango de `0.0` a `2.0`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Temperatura de muestreo (0-2)"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Fireworks-hosted model",
+          "message": "Generar una finalización de chat a partir de un modelo alojado en Fireworks"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using a Fireworks-hosted embedding model via the OpenAI-compatible `/v1/embeddings` endpoint.",
+          "message": "Convierte entradas de texto en vectores de incrustación mediante un modelo de incrustación alojado en Fireworks a través del endpoint `/v1/embeddings` compatible con OpenAI."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Crear embeddings"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded float32 buffer",
+          "message": "Base64: búfer float32 codificado"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - JSON list of floats",
+          "message": "Float: lista JSON de flotantes"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float` (predeterminado) o `base64`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formato de codificación"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for the returned vectors",
+          "message": "Formato de transmisión para los vectores devueltos"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
+          "message": "Entrada(s) de texto para convertir en vectores de incrustación. Puede ser una sola cadena o una lista de cadenas para incrustación por lotes."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Entrada"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Texto(s) a incrustar"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Fireworks embedding model identifier, e.g. `nomic-ai/nomic-embed-text-v1.5`.",
+          "message": "Identificador del modelo de incrustación de Fireworks, p. ej. `nomic-ai/nomic-embed-text-v1.5`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The Fireworks-hosted embedding model",
+          "message": "El modelo de incrustación alojado en Fireworks"
+        },
+        "app.RmlyZXdvcmtzQWk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Fireworks-hosted model",
+          "message": "Generar vectores de incrustación a partir de un modelo alojado en Fireworks"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Fireworks AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Fireworks AI** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtiliza esta acción para endpoints que aún no estén expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.RmlyZXdvcmtzQWk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Fireworks AI",
+          "message": "Realizar una llamada personalizada a la API de Fireworks AI"
+        },
+        "app.RmlyZXdvcmtzQWk.desc": {
+          "source": "Provides access to [Fireworks AI](https://fireworks.ai) — a managed inference platform for open-weight LLMs (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) and embedding models via an OpenAI-compatible API.\n\n**Common use cases**:\n- **High-throughput OSS chat** without owning GPU infrastructure\n- **RAG embeddings** using `nomic-ai/nomic-embed-text-v1.5` and similar models\n- **Tool-calling agents** with structured-output JSON schema support",
+          "message": "Proporciona acceso a [Fireworks AI](https://fireworks.ai) — una plataforma de inferencia administrada para LLM de ponderación abierta (Llama 3.1/3.3, Qwen, DeepSeek, Mixtral) y modelos de incrustación a través de una API compatible con OpenAI.\n\n**Casos de uso comunes**:\n- **Chat OSS de alto rendimiento** sin necesidad de poseer infraestructura de GPU\n- **Incrustaciones RAG** utilizando `nomic-ai/nomic-embed-text-v1.5` y modelos similares\n- **Agentes con llamadas a herramientas** con compatibilidad con esquemas JSON de salida estructurada"
+        },
+        "app.RmlyZXdvcmtzQWk.display_name": {
+          "source": "Fireworks AI",
+          "message": "Fireworks AI"
+        },
+        "app.RmlyZXdvcmtzQWk.short_desc": {
+          "source": "Fireworks AI hosted open-weight LLMs and embeddings",
+          "message": "LLM de ponderación abierta e incrustaciones alojados en Fireworks AI"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
+          "source": "React to files created in a server directory",
+          "message": "在伺服器目錄中建立檔案時作出回應"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
+          "source": "New File Created",
+          "message": "已建立新檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.desc": {
+          "source": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask",
+          "message": "要使用的輪詢遮罩；若 `regex` 為 `true`，則會將其視為規則運算式，否則該值為 glob 遮罩"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
+          "source": "Polling Mask",
+          "message": "輪詢遮罩"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
+          "source": "The polling mask to use to match files to poll",
+          "message": "用於比對要輪詢之檔案的輪詢遮罩"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "指定輪詢檔案前的最小檔案存在時間（以秒為單位）的整數；這是為了避開非原子檔案傳輸作業。\n\n如果需要此選項，請將其設定為大於傳輸檔案所需最長時間的值"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "最小輪詢時間"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "要輪詢的檔案最小時間（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "用於排序資料的 `name` 或 `date`"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "排序類型"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "用於檔案排序的欄位"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "遞減排序；若未提供，且已給定 `sort_type`，則預設為遞增排序"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "遞減排序"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "按遞減順序排序檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "輪詢檔案的時間間隔（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "若為 `true`，則 `mask` 會被視為常規表示式而非 glob 模式"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "常規表示式匹配"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "若為 true，則 'mask' 引數會被視為常規表示式"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "常規表示式選項的位元欄 (`1` = 忽略大小寫，`2` = 將 EOL 視為一般字元)；若 `regex` 不是 `true` 則被忽略"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "常規表示式選項"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "常規表示式選項的位元欄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
+          "source": "A file is created in a server directory",
+          "message": "伺服器目錄中已建立檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "存取伺服器檔案系統"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "伺服器檔案系統"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "存取伺服器檔案系統"
+        }
+      }
+    }
+  }
+}

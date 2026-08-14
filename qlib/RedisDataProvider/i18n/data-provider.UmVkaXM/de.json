@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.UmVkaXM.action.Z2V0LWhhc2g.desc": {
+          "source": "Get the values of hash fields from Redis",
+          "message": "Werte von Hash-Feldern aus Redis abrufen"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
+          "source": "Get Hash Fields",
+          "message": "Hash-Felder abrufen"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
+          "source": "Get hash field values",
+          "message": "Hash-Feldwerte abrufen"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.desc": {
+          "source": "Get the string value of a key from Redis",
+          "message": "Den Zeichenfolgenwert eines Schlüssels aus Redis abrufen"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
+          "source": "Get String",
+          "message": "Zeichenfolge abrufen"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
+          "source": "Get the string value of a key",
+          "message": "Den Zeichenfolgenwert eines Schlüssels abrufen"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.desc": {
+          "source": "Set the value of a hash field in Redis",
+          "message": "Den Wert eines Hash-Felds in Redis festlegen"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
+          "source": "Set Hash Field",
+          "message": "Hash-Feld festlegen"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
+          "source": "Set a hash field value",
+          "message": "Einen Hash-Feldwert festlegen"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.desc": {
+          "source": "Set the string value of a key in Redis",
+          "message": "Den Zeichenfolgenwert eines Schlüssels in Redis festlegen"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
+          "source": "Set String",
+          "message": "Zeichenfolge festlegen"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
+          "source": "Set the string value of a key",
+          "message": "Den Zeichenfolgenwert eines Schlüssels festlegen"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.desc": {
+          "source": "Pop elements from a list in Redis",
+          "message": "Elemente aus einer Liste in Redis entfernen und abrufen (pop)"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
+          "source": "Pop from List",
+          "message": "Aus Liste entfernen (Pop)"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
+          "source": "Pop elements from a list",
+          "message": "Elemente aus einer Liste entfernen und abrufen"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.desc": {
+          "source": "Publish a message to a Redis pub/sub channel",
+          "message": "Eine Nachricht in einem Redis Pub/Sub-Kanal veröffentlichen"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
+          "source": "Publish Message",
+          "message": "Nachricht veröffentlichen"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {
+          "source": "Publish a message to a channel",
+          "message": "Eine Nachricht in einem Kanal veröffentlichen"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.desc": {
+          "source": "Push elements to a list in Redis",
+          "message": "Elemente zu einer Liste in Redis hinzufügen (push)"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
+          "source": "Push to List",
+          "message": "Zur Liste hinzufügen (Push)"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
+          "source": "Push elements to a list",
+          "message": "Elemente zu einer Liste hinzufügen"
+        },
+        "app.UmVkaXM.desc": {
+          "source": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",
+          "message": "Redis In-Memory-Datenstrukturspeicher, verwendet als Datenbank, Cache, Message Broker und Warteschlange"
+        },
+        "app.UmVkaXM.display_name": {
+          "source": "Redis Server",
+          "message": "Redis-Server"
+        },
+        "app.UmVkaXM.short_desc": {
+          "source": "Redis in-memory data store",
+          "message": "Redis In-Memory-Datenspeicher"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2457 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.desc": {
+          "source": "Process a request with a Grok model via the Responses API with optional tool calling and conversation continuation",
+          "message": "선택적 도구 호출 및 대화 연속 기능을 통해 Responses API를 사용하여 Grok 모델로 요청 처리"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
+          "source": "Process Request With a Model",
+          "message": "모델로 요청 처리"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 식별자입니다. 대화 컨텍스트 저장소가 구성된 경우에만 사용됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "컨텍스트 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "대화 컨텍스트 저장소의 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true`인 경우 응답이 백그라운드에서 비동기식으로 처리됩니다. 반환된 응답 ID와 함께 `get-response` 액션을 사용하여 결과를 폴링하세요"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "배경 정보"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "백그라운드에서 비동기식으로 응답 처리"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "모델 응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "응답을 위한 입력 콘텐츠입니다. 각 항목에는 역할, 텍스트 및 선택적 이미지가 포함됩니다. 간단한 텍스트 프롬프트의 경우 텍스트가 포함된 단일 항목으로 충분합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "입력"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "모델에 전달할 텍스트 또는 메시지 입력"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "모델 컨텍스트의 최상단에 삽입되는 시스템(또는 개발자) 메시지"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "시스템 프롬프트 지침"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "출력 토큰의 로그 확률을 반환할지 여부입니다. `true`인 경우 각 출력 토큰의 로그 확률을 반환합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "로그 확률"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "출력 토큰의 로그 확률 반환 여부"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "사용할 Grok 모델(예: `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "사용할 Grok 모델"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "출력 토큰과 추론 토큰을 모두 포함하여 응답에서 생성할 수 있는 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Max Output Tokens"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "추론을 포함하여 생성할 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "에이전트 도구 호출 반복의 최대 횟수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "최대 턴 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "최대 에이전트 도구 호출 라운드 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "응답에 첨부할 키-값 쌍의 집합입니다. 최대 16개 쌍, 키는 최대 64자, 값은 최대 512자입니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "메타데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "추가 메타데이터 키-값 쌍"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "웹 검색 통합을 위한 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "검색 매개변수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "웹 검색 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "부하에 따른 자동 티어 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "자동 티어 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "요청 처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "서비스 계층"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true`인 경우 입력 및 응답이 영구 삭제 전 30일 동안 저장됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "저장하시겠습니까?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "30일 동안 입력 및 응답 유지"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true`인 경우 응답이 서버 전송 이벤트(SSE)를 사용하여 스트리밍됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "스트림?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "서버 전송 이벤트 스트리밍 활성화"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "병렬 도구 실행 허용 여부"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "병렬 도구 호출"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "동시 도구 실행 허용"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "입력을 반복하지 않고 연속적인 컨텍스트로 사용할 이전 응답의 고유 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "이전 응답 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "연속성을 위한 이전 응답 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "유사한 요청에 대한 응답을 캐시하여 캐시 적중률을 최적화하기 위해 xAI에서 사용됨"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "프롬프트 캐시 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "캐시 적중률을 최적화하기 위해 프롬프트를 캐싱하는 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "노력 수준 및 요약 유형을 포함한 추론 구성입니다. 추론 가능한 모델(예: `grok-3-mini`)에서만 지원됩니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "추론"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "추론 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "모델이 어떤 도구도 호출하지 않고 대신 메시지를 생성합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "모델이 어떤 도구도 호출하지 않음"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "모델이 메시지 생성 또는 하나 이상의 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "모델이 도구 호출 여부를 결정함"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "모델이 사용할 수 있는 도구를 제어합니다.\n\n사전 정의된 값 중 하나를 사용하거나 특정 함수(예: 함수 이름)를 강제 적용하기 위해 사용자 지정 값을 입력하세요"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "도구 호출 제어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "함수 및 웹 검색을 포함하여 모델에서 사용할 수 있는 도구 목록"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "사용 가능한 도구(최대 128개)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "각 토큰 위치에서 반환할 가장 가능성 높은 토큰 수를 지정하는 `0` 및 `20` 사이의 정수(각각 관련 로그 확률 포함)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "상위 로그 확률"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "각 위치에서 반환할 가장 가능성이 높은 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "모델이 top_p 확률 질량을 구성하는 토큰을 고려하는 핵 샘플링 임계값"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "핵 샘플링 임계값(0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "모델의 텍스트 응답 형식 구성입니다. JSON 스키마를 통해 구조화된 출력을 지정하는 데 사용합니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "텍스트 서식"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "텍스트 응답 형식 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0과 2 사이의 샘플링 온도입니다. 값이 높을수록 출력이 더 무작위해집니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "샘플링 온도 (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "대화 중간부터 자동으로 자릅니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "긴 대화 자동 자르기"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "자르지 않으며, 컨텍스트가 한도를 초과하면 오류를 반환합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "자르지 않음; 너무 길면 오류 반환"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "컨텍스트가 모델의 최대 컨텍스트 길이를 초과할 때의 자르기 전략입니다. `auto`은(는) 컨텍스트 창에 맞추기 위해 대화 중간부터 자릅니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "자르기"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "긴 대화에 대한 자르기 전략"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "최종 사용자 식별자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Process a request with a Grok model via the Responses API",
+          "message": "Responses API를 통해 Grok 모델로 요청 처리"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.desc": {
+          "source": "Create a response via the Responses API with full control over model selection and options",
+          "message": "모델 선택 및 옵션을 완전히 제어하여 Responses API를 통해 응답 생성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
+          "source": "Create Response",
+          "message": "응답 생성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 식별자입니다. 대화 컨텍스트 저장소가 구성된 경우에만 사용됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "컨텍스트 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "대화 컨텍스트 저장소의 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true`인 경우 응답이 백그라운드에서 비동기식으로 처리됩니다. 반환된 응답 ID와 함께 `get-response` 액션을 사용하여 결과를 폴링하세요"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "배경 정보"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "백그라운드에서 비동기식으로 응답 처리"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "모델 응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "응답을 위한 입력 콘텐츠입니다. 각 항목에는 역할, 텍스트 및 선택적 이미지가 포함됩니다. 간단한 텍스트 프롬프트의 경우 텍스트가 포함된 단일 항목으로 충분합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "입력"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "모델에 전달할 텍스트 또는 메시지 입력"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "모델 컨텍스트의 최상단에 삽입되는 시스템(또는 개발자) 메시지"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "시스템 프롬프트 지침"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "출력 토큰의 로그 확률을 반환할지 여부입니다. `true`인 경우 각 출력 토큰의 로그 확률을 반환합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "로그 확률"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "출력 토큰의 로그 확률 반환 여부"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
+          "message": "응답에 사용할 모델(예: `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the response",
+          "message": "응답에 사용할 모델"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "출력 토큰과 추론 토큰을 모두 포함하여 응답에서 생성할 수 있는 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Max Output Tokens"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "추론을 포함하여 생성할 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "에이전트 도구 호출 반복의 최대 횟수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "최대 턴 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "최대 에이전트 도구 호출 라운드 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "응답에 첨부할 키-값 쌍의 집합입니다. 최대 16개 쌍, 키는 최대 64자, 값은 최대 512자입니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "메타데이터"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "추가 메타데이터 키-값 쌍"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "웹 검색 통합을 위한 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "검색 매개변수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "웹 검색 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "부하에 따른 자동 티어 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "자동 티어 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "요청 처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "서비스 계층"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true`인 경우 입력 및 응답이 영구 삭제 전 30일 동안 저장됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "저장하시겠습니까?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "30일 동안 입력 및 응답 유지"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true`인 경우 응답이 서버 전송 이벤트(SSE)를 사용하여 스트리밍됩니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "스트림?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "서버 전송 이벤트 스트리밍 활성화"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "병렬 도구 실행 허용 여부"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "병렬 도구 호출"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "동시 도구 실행 허용"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "입력을 반복하지 않고 연속적인 컨텍스트로 사용할 이전 응답의 고유 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "이전 응답 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "연속성을 위한 이전 응답 ID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "유사한 요청에 대한 응답을 캐시하여 캐시 적중률을 최적화하기 위해 xAI에서 사용됨"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "프롬프트 캐시 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "캐시 적중률을 최적화하기 위해 프롬프트를 캐싱하는 키"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "노력 수준 및 요약 유형을 포함한 추론 구성입니다. 추론 가능한 모델(예: `grok-3-mini`)에서만 지원됩니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "추론"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "추론 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "모델이 어떤 도구도 호출하지 않고 대신 메시지를 생성합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "모델이 어떤 도구도 호출하지 않음"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "모델이 메시지 생성 또는 하나 이상의 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "모델이 도구 호출 여부를 결정함"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "모델이 사용할 수 있는 도구를 제어합니다.\n\n사전 정의된 값 중 하나를 사용하거나 특정 함수(예: 함수 이름)를 강제 적용하기 위해 사용자 지정 값을 입력하세요"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "도구 호출 제어"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "함수 및 웹 검색을 포함하여 모델에서 사용할 수 있는 도구 목록"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "사용 가능한 도구(최대 128개)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "각 토큰 위치에서 반환할 가장 가능성 높은 토큰 수를 지정하는 `0` 및 `20` 사이의 정수(각각 관련 로그 확률 포함)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "상위 로그 확률"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "각 위치에서 반환할 가장 가능성이 높은 토큰 수"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "모델이 top_p 확률 질량을 구성하는 토큰을 고려하는 핵 샘플링 임계값"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "핵 샘플링 임계값(0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "모델의 텍스트 응답 형식 구성입니다. JSON 스키마를 통해 구조화된 출력을 지정하는 데 사용합니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "텍스트 서식"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "텍스트 응답 형식 구성"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0과 2 사이의 샘플링 온도입니다. 값이 높을수록 출력이 더 무작위해집니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "샘플링 온도 (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "대화 중간부터 자동으로 자릅니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "긴 대화 자동 자르기"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "자르지 않으며, 컨텍스트가 한도를 초과하면 오류를 반환합니다"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "자르지 않음; 너무 길면 오류 반환"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "컨텍스트가 모델의 최대 컨텍스트 길이를 초과할 때의 자르기 전략입니다. `auto`은(는) 컨텍스트 창에 맞추기 위해 대화 중간부터 자릅니다."
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "자르기"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "긴 대화에 대한 자르기 전략"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "최종 사용자 식별자"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
+          "source": "Create a response via the Responses API without model context",
+          "message": "모델 컨텍스트 없이 Responses API를 통해 응답 생성"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.desc": {
+          "source": "Retrieve a previously stored response by its unique identifier",
+          "message": "고유 식별자로 이전에 저장된 응답 조회"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
+          "source": "Get Response",
+          "message": "응답 가져오기"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "조회할 응답의 고유 식별자"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "응답 ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "조회할 응답의 ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "조회할 응답의 고유 식별자"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "응답"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "조회할 응답의 ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
+          "source": "Retrieve a previously stored response by ID",
+          "message": "ID로 이전에 저장된 응답 조회"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.desc": {
+          "source": "Retrieve the result of a deferred chat completion request using the request ID",
+          "message": "요청 ID를 사용하여 지연된 채팅 완성 요청의 결과 조회"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
+          "source": "Get Deferred Completion",
+          "message": "지연된 완성 조회"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The request ID returned from a deferred chat completion request",
+          "message": "지연된 채팅 완성 요청에서 반환된 요청 ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "요청 ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The request ID from a deferred chat completion",
+          "message": "지연된 채팅 완성의 요청 ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {
+          "source": "Retrieve a deferred chat completion result by request ID",
+          "message": "요청 ID로 지연된 채팅 완성 결과 조회"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.desc": {
+          "source": "Delete a previously stored response by its unique identifier",
+          "message": "고유 식별자로 이전에 저장된 응답 삭제"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
+          "source": "Delete Response",
+          "message": "응답 삭제"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "삭제할 응답의 고유 식별자"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "응답 ID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "삭제할 응답의 ID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "삭제할 응답의 고유 식별자"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "응답"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "삭제할 응답의 ID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Delete a stored response by ID",
+          "message": "ID로 저장된 응답 삭제"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Grok AI Services** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Grok AI Services**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정하세요. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에 아직 퍼스트 클래스 액션으로 노출되지 않은 엔드포인트에 이 작업을 사용하세요."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Grok AI Services",
+          "message": "Grok AI Services에 커스텀 API 호출 수행"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with Grok by sending multiple messages at once and potentially getting multiple replies",
+          "message": "한 번에 여러 메시지를 보내고 잠재적으로 여러 응답을 받으며 Grok과 대화"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "다중 채팅"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "`true`(이)면 지연된 완성 엔드포인트를 통해 완성 결과를 폴링하는 데 사용할 수 있는 request_id를 반환합니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "지연됨"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "비동기 조회를 위한 request_id 반환"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0에서 2.0 사이의 숫자입니다. 양수 값은 지금까지 텍스트에 나타난 빈도를 기반으로 새 토큰에 페널티를 부여하여 모델이 동일한 줄을 그대로 반복할 가능성을 줄입니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "빈도 페널티"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "토큰 반복 페널티(-2.0 ~ 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "완성에 지정된 토큰이 나타날 가능성을 수정합니다. 토큰 ID(문자열 형태)를 `-100`에서 `100` 사이의 바이어스 값으로 매핑합니다. `-100` 또는 `100` 값은 관련 토큰의 금지 또는 독점 선택을 초래합니다.\n\n**예**: 텍스트 끝 토큰을 방지하기 위한 `{\"50256\": -100}`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "로짓 바이어스"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "완성에 지정된 토큰이 나타날 가능성 수정"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "출력 토큰의 로그 확률을 반환할지 여부입니다. `true`(이)면 메시지 내용에 반환된 각 출력 토큰의 로그 확률을 반환합니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "로그 확률"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "출력 토큰의 로그 확률 반환 여부"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "응답을 생성하는 데 사용할 모델(예: `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "응답을 생성하는 데 사용할 모델"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "표시되는 출력 토큰 및 추론 토큰을 포함하여 완성에 생성할 수 있는 토큰 수의 상한선"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "최대 완성 토큰 수"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "응답에서 생성되는 토큰의 상한선"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "채팅 완성에서 생성할 수 있는 최대 토큰 수입니다. 지원 중단됨; 대신 max_completion_tokens를 사용하세요."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "최대 토큰 수(지원 중단됨)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "생성할 최대 토큰 수(지원 중단됨; max_completion_tokens 사용)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "지금까지의 대화를 구성하는 메시지 목록"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "지금까지의 대화를 구성하는 메시지 목록"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.desc": {
+          "source": "How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all of the choices",
+          "message": "각 입력 메시지에 대해 생성할 채팅 완성 선택 항목의 수입니다. 모든 선택 항목에서 생성된 토큰 수에 따라 요금이 부과됩니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.display_name": {
+          "source": "Number of Choices",
+          "message": "선택 항목 수"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.short_desc": {
+          "source": "The number of choices to generate for each input message",
+          "message": "각 입력 메시지에 대해 생성할 선택 항목 수"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "날짜 범위, 출처 및 인용 옵션이 포함된 웹 검색 통합 구성"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "검색 매개변수"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "웹 검색 구성"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "지정된 경우, 시스템은 동일한 시드와 매개변수를 사용한 반복 요청이 동일한 결과를 반환하도록 결정론적으로 샘플링하기 위해 최선을 다합니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "시드"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "결정론적 샘플링을 위한 값"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "API가 추가 토큰 생성을 중단할 최대 4개의 시퀀스"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "API가 추가 토큰 생성을 중단할 최대 4개의 시퀀스"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`true`(이)면 부분 메시지 델타가 사용 가능해지는 대로 데이터 전용 서버 전송 이벤트로 전송되며, 스트림은 `data: [DONE]` 메시지로 종료됩니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "스트림?"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "SSE를 통한 부분 메시지 델타 활성화 설정"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "스트리밍 응답을 위한 옵션입니다. `stream: true`(으)로 설정한 경우에만 설정하세요."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "스트림 옵션"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "스트리밍 응답 옵션"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "도구 사용 중 병렬 함수 호출 활성화 여부"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "병렬 도구 호출"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "동시 도구 호출 활성화"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0에서 2.0 사이의 숫자입니다. 양수 값은 지금까지 텍스트에 나타났는지 여부를 기반으로 새 토큰에 페널티를 부여하여 모델이 새로운 주제를 이야기할 가능성을 높입니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "존재 페널티"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "텍스트 출현 기반 새 토큰 페널티(-2.0 ~ 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "중간 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "보통"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "중간 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "높은 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "높은 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "낮은 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "낮은 추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "추론 모델의 추론 노력을 제한합니다. 추론 지원 모델에서만 지원됩니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "추론 노력"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "추론 모델 제한 수준"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "모델이 출력해야 하는 형식을 지정하는 객체입니다. `{\"type\": \"json_object\"}`(으)로 설정하면 JSON 모드가 활성화되어 모델이 생성하는 메시지가 유효한 JSON임을 보장합니다."
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "응답 형식"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "모델이 어떤 도구도 호출하지 않고 대신 메시지를 생성합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "모델이 어떤 도구도 호출하지 않음"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "모델이 메시지 생성 또는 하나 이상의 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "모델이 메시지 생성 또는 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "모델이 호출할 도구(있는 경우)를 제어합니다. 도구가 없는 경우 `none`이(가) 기본값입니다. 도구가 있는 경우 `auto`이(가) 기본값입니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "모델이 호출할 도구를 제어합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "모델이 호출할 수 있는 도구 목록입니다. 현재는 함수만 도구로 지원됩니다. 최대 128개의 함수가 지원됩니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "모델이 호출할 수 있는 도구 목록 (최대 128개)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "각 토큰 위치에서 반환할 가능성이 가장 높은 토큰 수를 지정하는 0에서 8 사이의 정수입니다. 이 매개변수를 사용하는 경우 `logprobs`을(를) `true`(으)로 설정해야 합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "상위 로그 확률"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "각 위치에서 반환할 가능성이 가장 높은 토큰 수 (0-8)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "온도 샘플링의 대안인 핵 샘플링(nucleus sampling)으로, 모델이 top_p 확률 질량을 가진 토큰의 결과를 고려합니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "핵 샘플링 확률 질량 (0-1)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "사용할 샘플링 온도(0~2 사이)입니다. 0.8과 같은 높은 값은 출력을 더 무작위로 만들고, 0.2와 같은 낮은 값은 출력을 더 집중되고 결정론적으로 만듭니다"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "사용할 샘플링 온도 (0-2)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with Grok using multiple messages with multi-reply support",
+          "message": "다중 응답을 지원하는 여러 메시지를 사용하여 Grok과 채팅합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "단일 메시지를 보내고 단일 응답을 받아 Grok과 채팅합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Simple Chat"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The message content to send to the model",
+          "message": "모델에 보낼 메시지 내용"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "내용"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message content",
+          "message": "메시지 내용"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "`true`(이)면 지연된 완성 엔드포인트를 통해 완성 결과를 폴링하는 데 사용할 수 있는 request_id를 반환합니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "지연됨"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "비동기 조회를 위한 request_id 반환"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0에서 2.0 사이의 숫자입니다. 양수 값은 지금까지 텍스트에 나타난 빈도를 기반으로 새 토큰에 페널티를 부여하여 모델이 동일한 줄을 그대로 반복할 가능성을 줄입니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "빈도 페널티"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "토큰 반복 페널티(-2.0 ~ 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "완성에 지정된 토큰이 나타날 가능성을 수정합니다. 토큰 ID(문자열 형태)를 `-100`에서 `100` 사이의 바이어스 값으로 매핑합니다. `-100` 또는 `100` 값은 관련 토큰의 금지 또는 독점 선택을 초래합니다.\n\n**예**: 텍스트 끝 토큰을 방지하기 위한 `{\"50256\": -100}`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "로짓 바이어스"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "완성에 지정된 토큰이 나타날 가능성 수정"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "출력 토큰의 로그 확률을 반환할지 여부입니다. `true`(이)면 메시지 내용에 반환된 각 출력 토큰의 로그 확률을 반환합니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "로그 확률"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "출력 토큰의 로그 확률 반환 여부"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "응답을 생성하는 데 사용할 모델(예: `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "응답을 생성하는 데 사용할 모델"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "표시되는 출력 토큰 및 추론 토큰을 포함하여 완성에 생성할 수 있는 토큰 수의 상한선"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "최대 완성 토큰 수"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "응답에서 생성되는 토큰의 상한선"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "채팅 완성에서 생성할 수 있는 최대 토큰 수입니다. 지원 중단됨; 대신 max_completion_tokens를 사용하세요."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "최대 토큰 수(지원 중단됨)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "생성할 최대 토큰 수(지원 중단됨; max_completion_tokens 사용)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
+          "source": "An optional name for the participant",
+          "message": "참가자의 선택적 이름"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.short_desc": {
+          "source": "An optional name for the participant",
+          "message": "참가자의 선택적 이름"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "날짜 범위, 출처 및 인용 옵션이 포함된 웹 검색 통합 구성"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "검색 매개변수"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "웹 검색 구성"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "지정된 경우, 시스템은 동일한 시드와 매개변수를 사용한 반복 요청이 동일한 결과를 반환하도록 결정론적으로 샘플링하기 위해 최선을 다합니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "시드"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "결정론적 샘플링을 위한 값"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "API가 추가 토큰 생성을 중단할 최대 4개의 시퀀스"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "API가 추가 토큰 생성을 중단할 최대 4개의 시퀀스"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`true`(이)면 부분 메시지 델타가 사용 가능해지는 대로 데이터 전용 서버 전송 이벤트로 전송되며, 스트림은 `data: [DONE]` 메시지로 종료됩니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "스트림?"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "SSE를 통한 부분 메시지 델타 활성화 설정"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "스트리밍 응답을 위한 옵션입니다. `stream: true`(으)로 설정한 경우에만 설정하세요."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "스트림 옵션"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "스트리밍 응답 옵션"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "도구 사용 중 병렬 함수 호출 활성화 여부"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "병렬 도구 호출"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "동시 도구 호출 활성화"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0에서 2.0 사이의 숫자입니다. 양수 값은 지금까지 텍스트에 나타났는지 여부를 기반으로 새 토큰에 페널티를 부여하여 모델이 새로운 주제를 이야기할 가능성을 높입니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "존재 페널티"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "텍스트 출현 기반 새 토큰 페널티(-2.0 ~ 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author is an assistant",
+          "message": "작성자는 어시스턴트입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "어시스턴트"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author is an assistant",
+          "message": "작성자는 어시스턴트입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author is the system",
+          "message": "작성자는 시스템입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "시스템"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author is the system",
+          "message": "작성자는 시스템입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author is a user",
+          "message": "작성자는 사용자입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author is a user",
+          "message": "작성자는 사용자입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "이 메시지 작성자의 역할"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "역할"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "메시지 작성자의 역할"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "중간 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "보통"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "중간 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "높은 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "높은 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "낮은 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "낮은 추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "추론 모델의 추론 노력을 제한합니다. 추론 지원 모델에서만 지원됩니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "추론 노력"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "추론 모델 제한 수준"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "모델이 출력해야 하는 형식을 지정하는 객체입니다. `{\"type\": \"json_object\"}`(으)로 설정하면 JSON 모드가 활성화되어 모델이 생성하는 메시지가 유효한 JSON임을 보장합니다."
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "응답 형식"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "모델이 어떤 도구도 호출하지 않고 대신 메시지를 생성합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "모델이 어떤 도구도 호출하지 않음"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "모델이 메시지 생성 또는 하나 이상의 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "모델이 메시지 생성 또는 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "모델이 호출할 도구(있는 경우)를 제어합니다. 도구가 없는 경우 `none`이(가) 기본값입니다. 도구가 있는 경우 `auto`이(가) 기본값입니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "모델이 호출할 도구를 제어합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "모델이 호출할 수 있는 도구 목록입니다. 현재는 함수만 도구로 지원됩니다. 최대 128개의 함수가 지원됩니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "모델이 호출할 수 있는 도구 목록 (최대 128개)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "각 토큰 위치에서 반환할 가능성이 가장 높은 토큰 수를 지정하는 0에서 8 사이의 정수입니다. 이 매개변수를 사용하는 경우 `logprobs`을(를) `true`(으)로 설정해야 합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "상위 로그 확률"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "각 위치에서 반환할 가능성이 가장 높은 토큰 수 (0-8)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "온도 샘플링의 대안인 핵 샘플링(nucleus sampling)으로, 모델이 top_p 확률 질량을 가진 토큰의 결과를 고려합니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "핵 샘플링 확률 질량 (0-1)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "사용할 샘플링 온도(0~2 사이)입니다. 0.8과 같은 높은 값은 출력을 더 무작위로 만들고, 0.2와 같은 낮은 값은 출력을 더 집중되고 결정론적으로 만듭니다"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "사용할 샘플링 온도 (0-2)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "단일 메시지를 보내고 단일 응답을 받아 Grok과 채팅합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
+          "message": "실시간 토큰 전달을 위해 Server-Sent Events를 사용하여 Grok 모델의 응답을 스트리밍합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
+          "source": "Stream Response",
+          "message": "응답 스트림"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 식별자입니다. 대화 컨텍스트 저장소가 구성된 경우에만 사용됩니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "컨텍스트 키"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "대화 컨텍스트 저장소의 키"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true`인 경우 응답이 백그라운드에서 비동기식으로 처리됩니다. 반환된 응답 ID와 함께 `get-response` 액션을 사용하여 결과를 폴링하세요"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "배경 정보"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "백그라운드에서 비동기식으로 응답 처리"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "모델 응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "응답에 포함할 추가 출력 데이터"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "응답을 위한 입력 콘텐츠입니다. 각 항목에는 역할, 텍스트 및 선택적 이미지가 포함됩니다. 간단한 텍스트 프롬프트의 경우 텍스트가 포함된 단일 항목으로 충분합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "입력"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "모델에 전달할 텍스트 또는 메시지 입력"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "모델 컨텍스트의 최상단에 삽입되는 시스템(또는 개발자) 메시지"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "시스템 프롬프트 지침"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "출력 토큰의 로그 확률을 반환할지 여부입니다. `true`인 경우 각 출력 토큰의 로그 확률을 반환합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "로그 확률"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "출력 토큰의 로그 확률 반환 여부"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "사용할 Grok 모델(예: `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "사용할 Grok 모델"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "출력 토큰과 추론 토큰을 모두 포함하여 응답에서 생성할 수 있는 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Max Output Tokens"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "추론을 포함하여 생성할 최대 토큰 수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "에이전트 도구 호출 반복의 최대 횟수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "최대 턴 수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "최대 에이전트 도구 호출 라운드 수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "응답에 첨부할 키-값 쌍의 집합입니다. 최대 16개 쌍, 키는 최대 64자, 값은 최대 512자입니다."
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "메타데이터"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "추가 메타데이터 키-값 쌍"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "웹 검색 통합을 위한 구성"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "검색 매개변수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "웹 검색 구성"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "부하에 따른 자동 티어 선택"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "자동 티어 선택"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "기본값"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "기본 처리 티어"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "요청 처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "서비스 계층"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "처리에 사용할 지연 시간 티어를 지정합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true`인 경우 입력 및 응답이 영구 삭제 전 30일 동안 저장됩니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "저장하시겠습니까?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "30일 동안 입력 및 응답 유지"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true`인 경우 응답이 서버 전송 이벤트(SSE)를 사용하여 스트리밍됩니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "스트림?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "서버 전송 이벤트 스트리밍 활성화"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "병렬 도구 실행 허용 여부"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "병렬 도구 호출"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "동시 도구 실행 허용"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "입력을 반복하지 않고 연속적인 컨텍스트로 사용할 이전 응답의 고유 ID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "이전 응답 ID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "연속성을 위한 이전 응답 ID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "유사한 요청에 대한 응답을 캐시하여 캐시 적중률을 최적화하기 위해 xAI에서 사용됨"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "프롬프트 캐시 키"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "캐시 적중률을 최적화하기 위해 프롬프트를 캐싱하는 키"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "노력 수준 및 요약 유형을 포함한 추론 구성입니다. 추론 가능한 모델(예: `grok-3-mini`)에서만 지원됩니다."
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "추론"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "추론 구성"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "모델이 어떤 도구도 호출하지 않고 대신 메시지를 생성합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "모델이 어떤 도구도 호출하지 않음"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "모델이 메시지 생성 또는 하나 이상의 도구 호출 중에서 선택할 수 있습니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "모델이 도구 호출 여부를 결정함"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "모델이 하나 이상의 도구를 호출해야 합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "모델이 사용할 수 있는 도구를 제어합니다.\n\n사전 정의된 값 중 하나를 사용하거나 특정 함수(예: 함수 이름)를 강제 적용하기 위해 사용자 지정 값을 입력하세요"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "도구 호출 제어"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "함수 및 웹 검색을 포함하여 모델에서 사용할 수 있는 도구 목록"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "사용 가능한 도구(최대 128개)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "각 토큰 위치에서 반환할 가장 가능성 높은 토큰 수를 지정하는 `0` 및 `20` 사이의 정수(각각 관련 로그 확률 포함)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "상위 로그 확률"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "각 위치에서 반환할 가장 가능성이 높은 토큰 수"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "모델이 top_p 확률 질량을 구성하는 토큰을 고려하는 핵 샘플링 임계값"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "핵 샘플링 임계값(0-1)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "모델의 텍스트 응답 형식 구성입니다. JSON 스키마를 통해 구조화된 출력을 지정하는 데 사용합니다."
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "텍스트 서식"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "텍스트 응답 형식 구성"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0과 2 사이의 샘플링 온도입니다. 값이 높을수록 출력이 더 무작위해집니다."
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "샘플링 온도 (0-2)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "대화 중간부터 자동으로 자릅니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "긴 대화 자동 자르기"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "자르지 않으며, 컨텍스트가 한도를 초과하면 오류를 반환합니다"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "자르지 않음; 너무 길면 오류 반환"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "컨텍스트가 모델의 최대 컨텍스트 길이를 초과할 때의 자르기 전략입니다. `auto`은(는) 컨텍스트 창에 맞추기 위해 대화 중간부터 자릅니다."
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "자르기"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "긴 대화에 대한 자르기 전략"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "오남용 모니터링을 위해 최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "사용자"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "최종 사용자 식별자"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events",
+          "message": "Server-Sent Events를 사용하여 Grok 모델의 응답 스트리밍"
+        },
+        "app.R3Jvaw.desc": {
+          "source": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n**Features**:\n- **Chat Completions**: multi-message and simple chat with tool calling and web search\n- **Responses API**: create, retrieve, and delete responses with conversation continuation\n- **Streaming**: real-time token delivery via Server-Sent Events\n- **Deferred Completions**: asynchronous request processing\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "채팅 완성, Responses API 및 SSE 스트리밍을 제공하는 xAI Grok AI 서비스입니다.\n\n**기능**:\n- **채팅 완성**: 도구 호출 및 웹 검색을 지원하는 다중 메시지 및 단순 채팅\n- **Responses API**: 대화 연속성을 통한 응답 생성, 검색 및 삭제\n- **스트리밍**: Server-Sent Events를 통한 실시간 토큰 전달\n- **지연 완성**: 비동기 요청 처리\n\n[xAI Console](https://console.x.ai/)에서 API 키를 받으세요"
+        },
+        "app.R3Jvaw.display_name": {
+          "source": "Grok AI Services",
+          "message": "Grok AI 서비스"
+        },
+        "app.R3Jvaw.short_desc": {
+          "source": "xAI Grok AI services",
+          "message": "xAI Grok AI 서비스"
+        }
+      }
+    }
+  }
+}

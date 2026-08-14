@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+          "message": "Uruchamiane po dodaniu nowego komentarza do dowolnego zgłoszenia w Linear. Używa webhooków do powiadomień w czasie rzeczywistym."
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
+          "source": "Comment Created",
+          "message": "Utworzono komentarz"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new comment is created",
+          "message": "Uruchamiaj, gdy zostanie utworzony nowy komentarz"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.desc": {
+          "source": "Create a new cycle for time-boxed work",
+          "message": "Utwórz nowy cykl dla pracy określonej w czasie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
+          "source": "Create Cycle",
+          "message": "Utwórz cykl"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.desc": {
+          "source": "The end date of the cycle",
+          "message": "Data zakończenia cyklu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.display_name": {
+          "source": "Ends At",
+          "message": "Kończy się"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.short_desc": {
+          "source": "When the cycle ends",
+          "message": "Kiedy cykl się kończy"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.desc": {
+          "source": "The name of the cycle",
+          "message": "Nazwa cyklu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.short_desc": {
+          "source": "The cycle name",
+          "message": "Nazwa cyklu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.desc": {
+          "source": "The start date of the cycle",
+          "message": "Data rozpoczęcia cyklu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.display_name": {
+          "source": "Starts At",
+          "message": "Rozpoczyna się"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.short_desc": {
+          "source": "When the cycle starts",
+          "message": "Kiedy cykl się rozpoczyna"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.desc": {
+          "source": "The team to create the cycle in",
+          "message": "Zespół, w którym ma zostać utworzony cykl"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the cycle in",
+          "message": "Zespół, w którym ma zostać utworzony cykl"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
+          "source": "Create a new cycle (sprint) in Linear",
+          "message": "Utwórz nowy cykl (sprint) w Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Create a new comment on an existing Linear issue",
+          "message": "Utwórz nowy komentarz do istniejącego zgłoszenia w Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create Comment",
+          "message": "Utwórz komentarz"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body/content of the comment in markdown format",
+          "message": "Treść/zawartość komentarza w formacie markdown"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "The comment body",
+          "message": "Treść komentarza"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.desc": {
+          "source": "The issue to add the comment to",
+          "message": "Zgłoszenie, do którego ma zostać dodany komentarz"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.display_name": {
+          "source": "Issue",
+          "message": "Problem"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.short_desc": {
+          "source": "The issue to add the comment to",
+          "message": "Zgłoszenie, do którego ma zostać dodany komentarz"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Add a comment to a Linear issue",
+          "message": "Dodaj komentarz do zgłoszenia w Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.desc": {
+          "source": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+          "message": "Utwórz nowe zgłoszenie w zespole Linear z tytułem, opisem, priorytetem i innymi atrybutami"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
+          "source": "Create Issue",
+          "message": "Utwórz zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to add the issue to",
+          "message": "Cykl (sprint), do którego ma zostać dodane zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cykl"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle/sprint",
+          "message": "Cykl/sprint"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The user to assign the issue to",
+          "message": "Użytkownik, do którego ma zostać przypisane zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Osoba przypisana"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The user to assign the issue to",
+          "message": "Użytkownik, do którego ma zostać przypisane zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the issue in markdown format",
+          "message": "Opis zgłoszenia w formacie markdown"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The issue description",
+          "message": "Opis zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The estimated complexity/effort",
+          "message": "Szacowana złożoność/nakład pracy"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Oszacowanie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The issue estimate",
+          "message": "Oszacowanie zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to attach to the issue",
+          "message": "Etykiety do dołączenia do zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels",
+          "message": "Etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The workflow state to set on the issue",
+          "message": "Stan przepływu pracy do ustawienia w zgłoszeniu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The workflow state",
+          "message": "Stan przepływu pracy"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue for creating a sub-issue",
+          "message": "Zgłoszenie nadrzędne do utworzenia podzgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Zgłoszenie nadrzędne"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "Zgłoszenie nadrzędne"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "Brak priorytetu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Brak priorytetu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Pilny priorytet"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Pilne"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "Wysoki priorytet"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Normalny priorytet"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normalny"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Niski priorytet"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The priority of the issue",
+          "message": "Priorytet zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorytet"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The issue priority",
+          "message": "Priorytet zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to add the issue to",
+          "message": "Projekt, do którego ma zostać dodane zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project",
+          "message": "Projekt"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.desc": {
+          "source": "The team to create the issue in",
+          "message": "Zespół, w którym ma zostać utworzone zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the issue in",
+          "message": "Zespół, w którym ma zostać utworzone zgłoszenie"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The title of the issue",
+          "message": "Tytuł zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The issue title",
+          "message": "Tytuł zgłoszenia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
+          "source": "Create a new issue in Linear",
+          "message": "Utwórz nowe zgłoszenie w Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label for categorizing issues",
+          "message": "Utwórz nową etykietę do kategoryzowania zgłoszeń"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "Utwórz etykietę"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.desc": {
+          "source": "The color of the label in hex format",
+          "message": "Kolor etykiety w formacie szesnastkowym (hex)"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Kolor"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.short_desc": {
+          "source": "The label color",
+          "message": "Kolor etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the label",
+          "message": "Opis etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The label description",
+          "message": "Opis etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The name of the label",
+          "message": "Nazwa etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The label name",
+          "message": "Nazwa etykiety"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.desc": {
+          "source": "The team to create the label in (leave empty for workspace labels)",
+          "message": "Zespół, w którym ma zostać utworzona etykieta (pozostaw puste dla etykiet przestrzeni roboczej)"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the label in",
+          "message": "Zespół, w którym ma zostać utworzona etykieta"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label in Linear",
+          "message": "Utwórz nową etykietę w Linear"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project for organizing related issues",
+          "message": "Utwórz nowy projekt do organizowania powiązanych zgłoszeń"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create Project",
+          "message": "Utwórz projekt"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the project",
+          "message": "Opis projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "Opis projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.desc": {
+          "source": "The user leading the project",
+          "message": "Użytkownik prowadzący projekt"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.display_name": {
+          "source": "Lead",
+          "message": "Lead"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.short_desc": {
+          "source": "The project lead",
+          "message": "Lider projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project",
+          "message": "Nazwa projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The project name",
+          "message": "Nazwa projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.desc": {
+          "source": "The planned start date of the project",
+          "message": "Planowana data rozpoczęcia projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Data rozpoczęcia"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.short_desc": {
+          "source": "The project start date",
+          "message": "Data rozpoczęcia projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled project",
+          "message": "Projekt anulowany"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Anulowany"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed project",
+          "message": "Projekt ukończony"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Ukończono"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused project",
+          "message": "Projekt wstrzymany"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Wstrzymana"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned project",
+          "message": "Projekt zaplanowany"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Zaplanowano"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started project",
+          "message": "Projekt rozpoczęty"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Rozpoczęte"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.desc": {
+          "source": "The initial state of the project",
+          "message": "Początkowy stan projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.short_desc": {
+          "source": "The project state",
+          "message": "Stan projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.desc": {
+          "source": "The target completion date of the project",
+          "message": "Docelowa data ukończenia projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.display_name": {
+          "source": "Target Date",
+          "message": "Data docelowa"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.short_desc": {
+          "source": "The project target date",
+          "message": "Docelowa data projektu"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.desc": {
+          "source": "The teams to associate with the project",
+          "message": "Zespoły do powiązania z projektem"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.display_name": {
+          "source": "Teams",
+          "message": "Zespoły"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.short_desc": {
+          "source": "The teams to associate with the project",
+          "message": "Zespoły do powiązania z projektem"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project in Linear",
+          "message": "Utwórz nowy projekt w Linear"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.desc": {
+          "source": "Archive (soft delete) a Linear issue",
+          "message": "Zarchiwizuj (usuń nietrwale) zgłoszenie w Linear"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
+          "source": "Archive Issue",
+          "message": "Zarchiwizuj zgłoszenie"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.desc": {
+          "source": "The issue to archive",
+          "message": "Zgłoszenie do zarchiwizowania"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Problem"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.short_desc": {
+          "source": "The issue to archive",
+          "message": "Zgłoszenie do zarchiwizowania"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
+          "source": "Archive a Linear issue",
+          "message": "Zarchiwizuj zgłoszenie Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.desc": {
+          "source": "Retrieve a specific issue by its ID",
+          "message": "Pobierz określone zgłoszenie po jego identyfikatorze ID"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
+          "source": "Get Issue",
+          "message": "Pobierz zgłoszenie"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to retrieve",
+          "message": "Zgłoszenie do pobrania"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Problem"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to retrieve",
+          "message": "Zgłoszenie do pobrania"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
+          "source": "Get a specific issue from Linear",
+          "message": "Pobierz określone zgłoszenie z Linear"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.desc": {
+          "source": "Retrieve a specific team by its ID",
+          "message": "Pobierz określony zespół po jego identyfikatorze ID"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
+          "source": "Get Team",
+          "message": "Pobierz zespół"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.desc": {
+          "source": "The team to retrieve",
+          "message": "Zespół do pobrania"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.short_desc": {
+          "source": "The team to retrieve",
+          "message": "Zespół do pobrania"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
+          "source": "Get a specific team from Linear",
+          "message": "Pobierz określony zespół z Linear"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+          "message": "Uruchamia się po utworzeniu nowego zgłoszenia w Linear. Używa webhooków do powiadomień w czasie rzeczywistym."
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
+          "source": "Issue Created",
+          "message": "Utworzono zgłoszenie"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues created in this team (optional)",
+          "message": "Wywołuj tylko dla zgłoszeń utworzonych w tym zespole (opcjonalnie)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Filtruj do zgłoszeń z określonego zespołu"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new issue is created",
+          "message": "Uruchamiaj, gdy zostanie utworzone nowe zgłoszenie"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.desc": {
+          "source": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+          "message": "Uruchamia się po zaktualizowaniu istniejącego zgłoszenia w Linear. Używa webhooków do powiadomień w czasie rzeczywistym."
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
+          "source": "Issue Updated",
+          "message": "Zaktualizowano zgłoszenie"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues updated in this team (optional)",
+          "message": "Wywołuj tylko dla zgłoszeń zaktualizowanych w tym zespole (opcjonalnie)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "Filtruj do zgłoszeń z określonego zespołu"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an issue is updated",
+          "message": "Uruchamiaj, gdy zgłoszenie zostanie zaktualizowane"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Linear** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod stanu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako pierwszorzędne akcje w tej aplikacji."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Linear",
+          "message": "Wykonaj niestandardowe wywołanie API do Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.desc": {
+          "source": "Search for cycles with optional team filter",
+          "message": "Wyszukuj cykle z opcjonalnym filtrem zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
+          "source": "Search Cycles",
+          "message": "Szukaj cykli"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.desc": {
+          "source": "Filter cycles by team",
+          "message": "Filtruj cykle według zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filtruj według zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
+          "source": "Search for cycles in Linear",
+          "message": "Wyszukaj cykle w Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.desc": {
+          "source": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+          "message": "Wyszukuj zgłoszenia z opcjonalnymi filtrami zespołu, projektu, cyklu, osoby przypisanej i stanu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
+          "source": "Search Issues",
+          "message": "Wyszukaj zgłoszenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.desc": {
+          "source": "Filter issues by cycle (sprint)",
+          "message": "Filtruj zgłoszenia według cyklu (sprintu)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cykl"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.short_desc": {
+          "source": "Filter by cycle",
+          "message": "Filtruj według cyklu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.desc": {
+          "source": "Filter issues by assignee",
+          "message": "Filtruj zgłoszenia według osoby przypisanej"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Osoba przypisana"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "Filter by assignee",
+          "message": "Filtruj według osoby przypisanej"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.desc": {
+          "source": "Filter issues by workflow state",
+          "message": "Filtruj zgłoszenia według stanu przepływu pracy"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.short_desc": {
+          "source": "Filter by workflow state",
+          "message": "Filtruj według stanu przepływu pracy"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Brak priorytetu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Pilne"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normalny"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.desc": {
+          "source": "Filter issues by priority level",
+          "message": "Filtruj zgłoszenia według poziomu priorytetu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorytet"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.short_desc": {
+          "source": "Filter by priority",
+          "message": "Filtruj według priorytetu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.desc": {
+          "source": "Filter issues by project",
+          "message": "Filtruj zgłoszenia według projektu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.short_desc": {
+          "source": "Filter by project",
+          "message": "Filtruj według projektu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.desc": {
+          "source": "Filter issues by team",
+          "message": "Filtruj zgłoszenia według zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filtruj według zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
+          "source": "Search for issues in Linear",
+          "message": "Wyszukaj zgłoszenia w Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.desc": {
+          "source": "Search for labels with optional team filter",
+          "message": "Wyszukuj etykiety z opcjonalnym filtrem zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
+          "source": "Search Labels",
+          "message": "Szukaj etykiet"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.desc": {
+          "source": "Filter labels by team (`NOTHING` for workspace labels)",
+          "message": "Filtruj etykiety według zespołu (`NOTHING` dla etykiet przestrzeni roboczej)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "Zespół"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "Filtruj według zespołu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
+          "source": "Search for labels in Linear",
+          "message": "Wyszukaj etykiety w Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects with optional state filter",
+          "message": "Wyszukuj projekty z opcjonalnym filtrem stanu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "Szukaj projektów"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled projects",
+          "message": "Anulowane projekty"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "Anulowany"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed projects",
+          "message": "Ukończone projekty"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Ukończono"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused projects",
+          "message": "Wstrzymane projekty"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "Wstrzymana"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned projects",
+          "message": "Zaplanowane projekty"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "Zaplanowano"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started projects",
+          "message": "Rozpoczęte projekty"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "Rozpoczęte"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.desc": {
+          "source": "Filter projects by state",
+          "message": "Filtruj projekty według stanu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.short_desc": {
+          "source": "Filter by project state",
+          "message": "Filtruj według stanu projektu"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects in Linear",
+          "message": "Wyszukaj projekty w Linear"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.desc": {
+          "source": "List all teams accessible to the authenticated user",
+          "message": "Wyświetl listę wszystkich zespołów dostępnych dla uwierzytelnionego użytkownika"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
+          "source": "Search Teams",
+          "message": "Szukaj zespołów"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
+          "source": "List teams in Linear",
+          "message": "Wyświetl listę zespołów w Linear"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.desc": {
+          "source": "Update the properties of an existing Linear issue",
+          "message": "Zaktualizuj właściwości istniejącego zgłoszenia Linear"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
+          "source": "Update Issue",
+          "message": "Zaktualizuj problem"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to move the issue to",
+          "message": "Cykl (sprint), do którego ma zostać przeniesione zgłoszenie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "Cykl"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle to move the issue to",
+          "message": "Cykl, do którego ma zostać przeniesione zgłoszenie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The new user to assign the issue to",
+          "message": "Nowy użytkownik, do którego ma zostać przypisane zgłoszenie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "Osoba przypisana"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The new assignee",
+          "message": "Nowa przypisana osoba"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the issue (supports markdown)",
+          "message": "Nowy opis zgłoszenia (obsługuje Markdown)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new issue description",
+          "message": "Nowy opis zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The new estimated complexity/effort",
+          "message": "Nowe oszacowanie złożoności/nakładu pracy"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "Oszacowanie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The new issue estimate",
+          "message": "Nowe oszacowanie zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to update",
+          "message": "Zgłoszenie do zaktualizowania"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "Problem"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to update",
+          "message": "Zgłoszenie do zaktualizowania"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to set on the issue (replaces existing labels)",
+          "message": "Etykiety do ustawienia w zgłoszeniu (zastępuje istniejące etykiety)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Etykiety"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels to set",
+          "message": "Etykiety do ustawienia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The new workflow state for the issue",
+          "message": "Nowy stan przepływu pracy dla zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The new workflow state",
+          "message": "Nowy stan przepływu pracy"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue ID (to make this a sub-issue)",
+          "message": "Identyfikator nadrzędnego zgłoszenia (aby uczynić je podzgłoszeniem)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "Zgłoszenie nadrzędne"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "Zgłoszenie nadrzędne"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "Brak priorytetu"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "Brak priorytetu"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "Pilny priorytet"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "Pilne"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "Wysoki priorytet"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "Normalny priorytet"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "Normalny"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "Niski priorytet"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority of the issue",
+          "message": "Nowy priorytet zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorytet"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The new issue priority",
+          "message": "Nowy priorytet zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to move the issue to",
+          "message": "Projekt, do którego ma zostać przeniesione zgłoszenie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project to move the issue to",
+          "message": "Projekt, do którego ma zostać przeniesione zgłoszenie"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The new title of the issue",
+          "message": "Nowy tytuł zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The new issue title",
+          "message": "Nowy tytuł zgłoszenia"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
+          "source": "Update an existing Linear issue",
+          "message": "Zaktualizuj istniejące zgłoszenie Linear"
+        },
+        "app.TGluZWFy.desc": {
+          "source": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API.",
+          "message": "Linear to nowoczesne narzędzie do śledzenia zgłoszeń i zarządzania projektami dla zespołów programistycznych. Ta integracja umożliwia tworzenie, odczytywanie, aktualizowanie i archiwizowanie zgłoszeń, projektów, cykli, etykiet i komentarzy za pośrednictwem interfejsu GraphQL API platformy Linear."
+        },
+        "app.TGluZWFy.display_name": {
+          "source": "Linear",
+          "message": "Linear"
+        },
+        "app.TGluZWFy.short_desc": {
+          "source": "Linear issue tracking and project management",
+          "message": "Śledzenie zgłoszeń i zarządzanie projektami w Linear"
+        }
+      }
+    }
+  }
+}

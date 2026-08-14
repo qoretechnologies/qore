@@ -1,0 +1,2033 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return request for an order",
+          "message": "注文に対する新規返品リクエストを作成します"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "返品を作成"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID from the e-commerce platform (used as `order.external_id` in the API request)",
+          "message": "Eコマースプラットフォームの注文ID（APIリクエスト内で`order.external_id`として使用）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "外部注文ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "Order ID from e-commerce platform",
+          "message": "Eコマースプラットフォームの注文ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.desc": {
+          "source": "List of items to return with quantities, reasons, and resolutions",
+          "message": "数量、理由、解決方法を含む返品対象アイテムのリスト"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.display_name": {
+          "source": "Return Items",
+          "message": "返品アイテム"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.short_desc": {
+          "source": "Items to return",
+          "message": "返品対象アイテム"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return request",
+          "message": "新規返品リクエストを作成します"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.desc": {
+          "source": "Create a new package tracking by providing a tracking number and optional courier code",
+          "message": "追跡番号と任意の配送業者コードを指定して新しい荷物の追跡を作成します"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
+          "source": "Create Tracking",
+          "message": "追跡を作成"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.desc": {
+          "source": "Identifier for the courier connection to use for this tracking",
+          "message": "この追跡に使用する配送業者接続の識別子"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.display_name": {
+          "source": "Courier Connection ID",
+          "message": "配送業者接続ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.short_desc": {
+          "source": "Courier connection reference",
+          "message": "配送業者接続の参照"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "追加の追跡データ用のカスタムキー・値の文字列ペア"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "カスタムキー・値データ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.desc": {
+          "source": "Name of the package recipient",
+          "message": "荷物の受取人の氏名"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.display_name": {
+          "source": "Customer Name",
+          "message": "顧客名"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "受取人名"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "ドアツードア"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "配送業者営業所受取"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "店舗受取"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "配送タイプ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "ISO Alpha-3宛先国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "宛先国"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "宛先国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "宛先の市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "宛先市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "宛先市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "宛先の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "宛先都道府県/州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "宛先の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "宛先の郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "注文が行われた日付"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "注文日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "注文日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "グローバル注文識別子"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "グローバル注文識別子"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "マーチャントシステム内の注文へのURL"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "注文IDパス"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "マーチャントシステム内の注文へのURL"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "判読可能な注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "判読可能な注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "顧客に約束された配達予定日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "配達約束日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "配達予定日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "発送元の市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "発送元市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "発送元市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "ISO Alpha-3発送国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "発送国"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "発送国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "発送元の郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "発送元郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "発送元郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "発送元の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "発送元都道府県/州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "発送元の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "店舗ロケーションID。発送元住所フィールドに自動入力されます"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ロケーションID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "店舗ロケーションID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "通知用のISO 639-1言語コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "通知言語（ISO 639-1）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "User-provided text notes for this tracking",
+          "message": "この追跡に関するユーザー指定のテキストメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "テキストメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "List of tags to assign to the shipment for categorization",
+          "message": "分類のために配送に割り当てるタグのリスト"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "配送タグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Tags for the shipment",
+          "message": "配送のタグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "配送業者サービスタイプの説明"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "配送タイプ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "配送業者のサービス説明"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "チェックアウト時に選択された配送サービス方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "配送サービス方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "複数スラッグ検出用の配送業者グループコード（例: `fedex-group`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "配送業者グループ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "配送業者グループコード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Unique courier code (e.g., `fedex`, `ups`). If not specified, Aftership will auto-detect",
+          "message": "一意の配送業者コード（例: `fedex`、`ups`）。指定しない場合、Aftershipが自動検出します"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "配送業者コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Unique courier code",
+          "message": "一意の配送業者コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "荷物の集荷/受取に関する指示"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "ピックアップメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "ピックアップの指示"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "受取人による受取場所の詳細"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "ピックアップ場所"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "ピックアップ場所の詳細"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking; defaults to the tracking number",
+          "message": "追跡の表示名（デフォルトは追跡番号）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name for the tracking",
+          "message": "追跡の表示名"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "追跡認証情報用の配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "追跡アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "特定の配送業者向けの追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "追跡キー"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Carrier tracking number (4-100 characters)",
+          "message": "配送業者の追跡番号（4〜100文字）"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "配送業者の追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "追跡の発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Create a new tracking",
+          "message": "新しい追跡を作成"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.desc": {
+          "source": "Attach a shipping label or tracking number to a return",
+          "message": "返品に配送ラベルまたは追跡番号を添付"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
+          "source": "Add Return Shipment",
+          "message": "返品配送を追加"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier code for the return shipment (e.g., `fedex`, `ups`)",
+          "message": "返品配送の配送業者コード（例: `fedex`、`ups`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "配送業者コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Return shipment courier",
+          "message": "返品配送の配送業者"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.desc": {
+          "source": "The Aftership return ID to attach the shipping label/tracking to",
+          "message": "配送ラベル/追跡番号を添付するAftership返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.short_desc": {
+          "source": "The return ID to add shipment to",
+          "message": "配送を追加する返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the return shipment",
+          "message": "返品配送の追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Return shipment tracking number",
+          "message": "返品配送の追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
+          "source": "Add a shipment to a return",
+          "message": "返品に配送を追加"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.desc": {
+          "source": "Approve a pending return request",
+          "message": "保留中の返品リクエストを承認"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
+          "source": "Approve Return",
+          "message": "返品を承認"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to approve",
+          "message": "承認するAftership返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to approve",
+          "message": "承認する返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
+          "source": "Approve a return request",
+          "message": "返品リクエストを承認"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.desc": {
+          "source": "Retrieve the most recent checkpoint event for a tracking",
+          "message": "追跡の最新チェックポイントイベントを取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
+          "source": "Get Last Checkpoint",
+          "message": "最新チェックポイントを取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to get the last checkpoint for",
+          "message": "最新チェックポイントを取得するAftership追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.short_desc": {
+          "source": "The tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
+          "source": "Get the last checkpoint of a tracking",
+          "message": "追跡の最新チェックポイントを取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve a single return record by its ID or RMA number",
+          "message": "IDまたはRMA番号で単一の返品レコードを取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "返品を取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID or RMA number to retrieve",
+          "message": "取得するAftership返品IDまたはRMA番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to retrieve",
+          "message": "取得する返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a return by ID",
+          "message": "IDで返品を取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.desc": {
+          "source": "Retrieve a single tracking record by its Aftership tracking ID",
+          "message": "Aftership 追跡 ID から単一の追跡レコードを取得します"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
+          "source": "Get Tracking",
+          "message": "追跡を取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrieve",
+          "message": "取得する Aftership 追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrieve",
+          "message": "取得する追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
+          "source": "Get a tracking by ID",
+          "message": "ID で追跡を取得"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.desc": {
+          "source": "Automatically detect the courier for a given tracking number",
+          "message": "指定された追跡番号から配送業者を自動検出します"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
+          "source": "Detect Courier",
+          "message": "配送業者を検出"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code to improve detection accuracy",
+          "message": "検出精度を高めるための配送先国の ISO Alpha-3 コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "宛先国"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "宛先国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination to improve detection accuracy",
+          "message": "検出精度を高めるための配送先の州または県"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "宛先都道府県/州"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "宛先の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Destination postal code to improve detection accuracy",
+          "message": "検出精度を高めるための配送先の郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code to improve detection accuracy",
+          "message": "検出精度を高めるための発送元国の ISO Alpha-3 コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "発送国"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "発送国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "複数スラッグ検出用の配送業者グループコード（例: `fedex-group`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "配送業者グループ"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "配送業者グループコード"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.desc": {
+          "source": "List of courier codes to narrow detection (e.g., `fedex`, `ups`)",
+          "message": "検出対象を絞り込むための配送業者コードのリスト（例: `fedex`、`ups`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.display_name": {
+          "source": "Courier Slugs",
+          "message": "配送業者スラッグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier codes",
+          "message": "配送業者コードで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number to help narrow courier detection",
+          "message": "配送業者の検出を絞り込むための配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "追跡アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential to help narrow courier detection",
+          "message": "配送業者の検出を絞り込むための追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "追跡キー"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to identify the courier for",
+          "message": "配送業者を特定するための追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number to identify",
+          "message": "特定する追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date to help narrow courier detection",
+          "message": "配送業者の検出を絞り込むための発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
+          "source": "Auto-detect courier from tracking number",
+          "message": "追跡番号から配送業者を自動検出"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.desc": {
+          "source": "Delete an existing tracking by its Aftership tracking ID",
+          "message": "Aftership 追跡 ID で既存の追跡を削除します"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
+          "source": "Delete Tracking",
+          "message": "追跡を削除"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to delete",
+          "message": "削除する Aftership 追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to delete",
+          "message": "削除する追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
+          "source": "Delete a tracking",
+          "message": "追跡を削除"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "Retrieve a list of all couriers supported by Aftership",
+          "message": "Aftership でサポートされているすべての配送業者のリストを取得します"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "配送業者を一覧表示"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List all supported couriers",
+          "message": "サポートされているすべての配送業者を一覧表示"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Aftership** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Aftership** へのカスタム HTTP / REST API 呼び出しを実行します。\n\nHTTP メソッド、URI パス（接続の API ベース URL からの相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Aftership",
+          "message": "Aftership へのカスタム API 呼び出しを実行"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.desc": {
+          "source": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+          "message": "理由（配達完了、紛失、または差出人に返送）を指定して追跡を完了としてマークします"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
+          "source": "Mark as Completed",
+          "message": "完了としてマーク"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.desc": {
+          "source": "Timestamp of when the completion event occurred. If not provided, the current time is used",
+          "message": "完了イベントが発生した日時のタイムスタンプ。指定しない場合は現在の時刻が使用されます"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.display_name": {
+          "source": "Event Date/Time",
+          "message": "イベント日時"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.short_desc": {
+          "source": "When the event occurred",
+          "message": "イベントが発生した日時"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to mark as completed",
+          "message": "完了としてマークする Aftership 追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.short_desc": {
+          "source": "The tracking ID to mark as completed",
+          "message": "完了としてマークする追跡 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkRFTElWRVJFRA.display_name": {
+          "source": "Delivered",
+          "message": "配達完了"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkxPU1Q.display_name": {
+          "source": "Lost",
+          "message": "失注"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOlJFVFVSTkVEX1RPX1NFTkRFUg.display_name": {
+          "source": "Returned to Sender",
+          "message": "差出人に返送済み"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.desc": {
+          "source": "Reason for marking the tracking as completed",
+          "message": "追跡を完了としてマークする理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.short_desc": {
+          "source": "Completion reason",
+          "message": "完了理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
+          "source": "Mark a tracking as completed",
+          "message": "追跡を完了としてマーク"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.desc": {
+          "source": "Search and list returns with optional filters for status, email, outcome, and date range",
+          "message": "ステータス、メールアドレス、結果、日付範囲の任意のフィルターを使用して返品を検索および一覧表示します"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
+          "source": "Search Returns",
+          "message": "返品を検索"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter returns created before this date",
+          "message": "この日付より前に作成された返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "作成日時（以前）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "最大作成日で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter returns created after this date",
+          "message": "この日付より後に作成された返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "作成日時（以降）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "最小作成日で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.desc": {
+          "source": "Filter returns by customer email address",
+          "message": "顧客のメールアドレスで返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.display_name": {
+          "source": "Customer Email",
+          "message": "顧客のメールアドレス"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.short_desc": {
+          "source": "Filter by customer email",
+          "message": "顧客のメールアドレスで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.display_name": {
+          "source": "Approved",
+          "message": "承認済み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.display_name": {
+          "source": "Done",
+          "message": "完了"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "期限切れ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.display_name": {
+          "source": "Rejected",
+          "message": "却下済み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnN1Ym1pdHRlZA.display_name": {
+          "source": "Submitted",
+          "message": "送信済み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.desc": {
+          "source": "Filter returns by approval status",
+          "message": "承認ステータスで返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.display_name": {
+          "source": "Approval Status",
+          "message": "承認ステータス"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.short_desc": {
+          "source": "Filter by approval status",
+          "message": "承認ステータスで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.desc": {
+          "source": "Filter by order name (e.g., `#1001`)",
+          "message": "注文名で絞り込み（例: `#1001`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.display_name": {
+          "source": "Order Name",
+          "message": "注文名"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.short_desc": {
+          "source": "Filter by order name",
+          "message": "注文名で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOmV4Y2hhbmdl.display_name": {
+          "source": "Exchange",
+          "message": "交換"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnJlZnVuZA.display_name": {
+          "source": "Refund",
+          "message": "返金"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnN0b3JlX2NyZWRpdA.display_name": {
+          "source": "Store Credit",
+          "message": "ストアクレジット"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnVwc2VsbA.display_name": {
+          "source": "Upsell",
+          "message": "アップセル"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.desc": {
+          "source": "Filter returns by outcome type",
+          "message": "結果タイプで返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.display_name": {
+          "source": "Outcome",
+          "message": "結果"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.short_desc": {
+          "source": "Filter by return outcome",
+          "message": "返品結果で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.desc": {
+          "source": "Number of returns per page (1-50, default `10`)",
+          "message": "1ページあたりの返品数（1〜50、デフォルトは `10`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (1-200, default `1`)",
+          "message": "ページネーションのページ番号（1〜200、デフォルトは `1`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+          "source": "Customer Courier",
+          "message": "顧客指定の配送業者"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+          "source": "Carrier Dropoff",
+          "message": "配送業者への持ち込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+          "source": "Carrier Pickup",
+          "message": "配送業者による集荷"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+          "source": "Green Return",
+          "message": "Green Return"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+          "source": "Happy Returns",
+          "message": "Happy Returns"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+          "source": "In Store",
+          "message": "店舗持ち込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+          "source": "Retail Reworks",
+          "message": "Retail Reworks"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+          "source": "Retailer Label",
+          "message": "小売業者ラベル"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.desc": {
+          "source": "Filter returns by shipping method",
+          "message": "配送方法で返品を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.display_name": {
+          "source": "Return Method",
+          "message": "返品方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.short_desc": {
+          "source": "Filter by return method",
+          "message": "返品方法で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
+          "source": "Search and list returns",
+          "message": "返品を検索して一覧表示"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.desc": {
+          "source": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+          "message": "キーワード、配送業者、ステータス、日付範囲の任意のフィルターを使用して追跡情報を検索および一覧表示"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
+          "source": "Search Trackings",
+          "message": "追跡情報を検索"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings created before this date",
+          "message": "この日付より前に作成された追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "作成日時（以前）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "最大作成日で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings created after this date",
+          "message": "この日付より後に作成された追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "作成日時（以降）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "最小作成日で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.desc": {
+          "source": "Cursor for pagination; use the value from the previous response to get the next page",
+          "message": "ページネーション用のカーソル。次のページを取得するには前回のレスポンスの値を使用します"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "カーソル"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.desc": {
+          "source": "ISO Alpha-3 destination country code(s), comma-separated",
+          "message": "カンマ区切りのISO Alpha-3宛先国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Country",
+          "message": "宛先国"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Filter by destination country",
+          "message": "宛先国で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.desc": {
+          "source": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+          "message": "追跡番号、タイトル、注文IDなどで追跡情報を絞り込むための検索キーワード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "キーワード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "検索キーワード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.desc": {
+          "source": "Filter trackings by the order ID",
+          "message": "注文IDで追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "注文IDで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.desc": {
+          "source": "ISO Alpha-3 origin country code(s), comma-separated",
+          "message": "カンマ区切りのISO Alpha-3発送国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.display_name": {
+          "source": "Origin Country",
+          "message": "発送国"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.short_desc": {
+          "source": "Filter by origin country",
+          "message": "発送国で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.desc": {
+          "source": "Number of trackings per page (max 200)",
+          "message": "1ページあたりの追跡件数（最大200件）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "Comma-separated shipment tags to filter by",
+          "message": "絞り込みに使用するカンマ区切りの配送タグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "配送タグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Filter by shipment tags",
+          "message": "配送タグで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.desc": {
+          "source": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+          "message": "配送業者コードで追跡情報を絞り込み（例: `fedex`、`ups`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "配送業者コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier code",
+          "message": "配送業者コードで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.desc": {
+          "source": "Filter trackings by return-to-sender status. Set to `True` to show only return-to-sender shipments, `False` to exclude them",
+          "message": "差出人への返送ステータスで追跡情報を絞り込み。差出人返送の荷物のみを表示するには`True`に設定し、除外するには`False`に設定します"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.display_name": {
+          "source": "Return to Sender",
+          "message": "差出人に返送"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.short_desc": {
+          "source": "Filter return-to-sender shipments",
+          "message": "差出人に返送された荷物を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOk91dEZvckRlbGl2ZXJ5.display_name": {
+          "source": "Out for Delivery",
+          "message": "配達中"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF0dGVtcHRGYWls.display_name": {
+          "source": "Attempt Failed",
+          "message": "配達試行失敗"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF2YWlsYWJsZUZvclBpY2t1cA.display_name": {
+          "source": "Available for Pickup",
+          "message": "受取可能"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "配達完了"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4Y2VwdGlvbg.display_name": {
+          "source": "Exception",
+          "message": "例外"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "期限切れ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluVHJhbnNpdA.display_name": {
+          "source": "In Transit",
+          "message": "輸送中"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluZm9SZWNlaXZlZA.display_name": {
+          "source": "Info Received",
+          "message": "情報受信済み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOlBlbmRpbmc.display_name": {
+          "source": "Pending",
+          "message": "保留中"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.desc": {
+          "source": "Filter trackings by delivery status",
+          "message": "配送ステータスで追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.display_name": {
+          "source": "Status Tag",
+          "message": "ステータスタグ"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.short_desc": {
+          "source": "Filter by status tag",
+          "message": "ステータスタグで絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.desc": {
+          "source": "Comma-separated tracking numbers to filter by (up to 50)",
+          "message": "絞り込みに使用するカンマ区切りの追跡番号（最大50件）"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.display_name": {
+          "source": "Tracking Numbers",
+          "message": "追跡番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.short_desc": {
+          "source": "Filter by tracking numbers",
+          "message": "追跡番号で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings updated before this date",
+          "message": "この日付より前に更新された追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.display_name": {
+          "source": "Updated Before",
+          "message": "指定日時以前に更新"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum update date",
+          "message": "更新日の上限で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings updated after this date",
+          "message": "この日付より後に更新された追跡情報を絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.display_name": {
+          "source": "Updated After",
+          "message": "指定日時以降に更新"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum update date",
+          "message": "更新日の下限で絞り込み"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
+          "source": "Search and list trackings",
+          "message": "追跡情報を検索して一覧表示"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.desc": {
+          "source": "Reactivate tracking for an expired shipment",
+          "message": "期限切れの荷物の追跡を再有効化"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.display_name": {
+          "source": "Retrack",
+          "message": "再追跡"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrack (reactivates expired trackings)",
+          "message": "再追跡するAftership追跡ID（期限切れの追跡情報を再有効化）"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrack",
+          "message": "再追跡する追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.short_desc": {
+          "source": "Retrack an expired tracking",
+          "message": "期限切れの追跡情報を再追跡"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.desc": {
+          "source": "Reject a pending return request with an optional reason",
+          "message": "保留中の返品リクエストを任意の理由とともに拒否"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
+          "source": "Reject Return",
+          "message": "返品を拒否"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID to reject",
+          "message": "拒否するAftership返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to reject",
+          "message": "拒否する返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Reason for rejecting the return",
+          "message": "返品を拒否する理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Rejection reason",
+          "message": "拒否理由"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
+          "source": "Reject a return request",
+          "message": "返品リクエストを拒否"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.desc": {
+          "source": "Mark a return as resolved (completed processing)",
+          "message": "返品を解決済み（処理完了）としてマーク"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
+          "source": "Resolve Return",
+          "message": "返品を解決"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to mark as resolved",
+          "message": "解決済みとしてマークするAftership返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to resolve",
+          "message": "解決する返品ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
+          "source": "Resolve a return",
+          "message": "返品を解決する"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+          "message": "Aftership APIをポーリングし、追跡の配送ステータスが変更されたときにイベントをトリガーします"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Tracking Status Changed",
+          "message": "追跡ステータスが変更されました"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Watch for tracking status changes",
+          "message": "追跡ステータスの変更を監視"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.desc": {
+          "source": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+          "message": "既存の追跡メタデータ（タイトル、注文ID、メモなど）を更新します"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
+          "source": "Update Tracking",
+          "message": "追跡の更新"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "追加の追跡データ用のカスタムキー・値の文字列ペア"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "カスタムキー・値データ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "ドアツードア"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "配送業者営業所受取"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "店舗受取"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "配送タイプ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "ISO Alpha-3宛先国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "宛先国"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "宛先国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "宛先の市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "宛先市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "宛先市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "宛先の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "宛先都道府県/州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "宛先の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "宛先の郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "宛先郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to update",
+          "message": "更新するAftership追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to update",
+          "message": "更新する追跡ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "注文が行われた日付"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "注文日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "注文日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "グローバル注文識別子"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "グローバル注文識別子"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "マーチャントシステム内の注文へのURL"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "注文IDパス"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "マーチャントシステム内の注文へのURL"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "判読可能な注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "判読可能な注文番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "顧客に約束された配達予定日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "配達約束日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "配達予定日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "発送元の市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "発送元市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "発送元市区町村"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "ISO Alpha-3発送国コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "発送国"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "発送国コード（ISO Alpha-3）"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "発送元の郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "発送元郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "発送元郵便番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "発送元の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "発送元都道府県/州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "発送元の都道府県または州"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "店舗ロケーションID。発送元住所フィールドに自動入力されます"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ロケーションID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "店舗ロケーションID"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "通知用のISO 639-1言語コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "通知言語（ISO 639-1）"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "Text notes for this tracking",
+          "message": "この追跡のテキストメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "テキストメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "配送業者サービスタイプの説明"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "配送タイプ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "配送業者のサービス説明"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "チェックアウト時に選択された配送サービス方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "配送方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "配送サービス方法"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Update the courier code for this tracking (e.g., `fedex`, `ups`)",
+          "message": "この追跡の配送業者コードを更新します（例: `fedex`、`ups`）"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "配送業者コード"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Update the courier code",
+          "message": "配送業者コードを更新"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "荷物の集荷/受取に関する指示"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "ピックアップメモ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "ピックアップの指示"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "受取人による受取場所の詳細"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "ピックアップ場所"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "ピックアップ場所の詳細"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking",
+          "message": "追跡の表示名"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name",
+          "message": "表示名"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "追跡認証情報用の配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "追跡アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "配送業者アカウント番号"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "特定の配送業者向けの追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "追跡キー"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "追跡認証情報"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "追跡の発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "発送日"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Update a tracking",
+          "message": "追跡を更新"
+        },
+        "app.QWZ0ZXJzaGlw.desc": {
+          "source": "Aftership package tracking and returns management services providing access to tracking, courier detection, and returns APIs",
+          "message": "追跡、配送業者検出、返品APIへのアクセスを提供するAftership荷物追跡および返品管理サービス"
+        },
+        "app.QWZ0ZXJzaGlw.display_name": {
+          "source": "Aftership",
+          "message": "Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.short_desc": {
+          "source": "Aftership package tracking and returns",
+          "message": "Aftership荷物追跡および返品"
+        }
+      }
+    }
+  }
+}

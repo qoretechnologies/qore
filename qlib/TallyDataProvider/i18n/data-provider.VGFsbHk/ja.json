@@ -1,0 +1,1329 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form with content blocks and settings, optionally based on a template or within a specific workspace",
+          "message": "コンテンツブロックと設定を含む新しいフォームを作成します（オプションでテンプレートに基づき、または特定のワークスペース内に作成可能）"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create Form",
+          "message": "フォームを作成"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "List of form content blocks defining the form structure (questions, text, images, etc.); a `FORM_TITLE` block is automatically prepended from the `title` field",
+          "message": "フォーム構造（質問、テキスト、画像など）を定義するフォームコンテンツブロックのリスト。`title` フィールドから `FORM_TITLE` ブロックが自動的に先頭に追加されます"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "ブロック"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Form content blocks",
+          "message": "フォームコンテンツブロック"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Form configuration including closure, notifications, and display options",
+          "message": "クローズ、通知、表示オプションを含むフォーム設定"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Form settings",
+          "message": "フォーム設定"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "空白"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "公開済み"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The initial status of the form",
+          "message": "フォームの初期ステータス"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Initial form status",
+          "message": "初期フォームステータス"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The workspace to create the form in; defaults to the user's default workspace",
+          "message": "フォームを作成するワークスペース。デフォルトはユーザーのデフォルトワークスペースです"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "Target workspace",
+          "message": "対象のワークスペース"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.desc": {
+          "source": "Optional template ID to use as a base for the new form",
+          "message": "新しいフォームのベースとして使用するオプションのテンプレートID"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.display_name": {
+          "source": "Template ID",
+          "message": "テンプレートID"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.short_desc": {
+          "source": "Template to base form on",
+          "message": "フォームのベースとなるテンプレート"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.desc": {
+          "source": "The title displayed at the top of the form; automatically creates the required `FORM_TITLE` block as the first block",
+          "message": "フォームの上部に表示されるタイトル。必須の `FORM_TITLE` ブロックを最初のブロックとして自動的に作成します"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.display_name": {
+          "source": "Form Title",
+          "message": "フォームタイトル"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.short_desc": {
+          "source": "The title of the form",
+          "message": "フォームのタイトル"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "新しいフォームを作成"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook for a form to receive events when forms are submitted",
+          "message": "フォーム送信時にイベントを受信するための新しい Webhook をフォームに作成します"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "Webhookを作成"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "フォームの回答"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "購読するイベントタイプのリスト。有効な値は `FORM_RESPONSE` のみです"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "イベントタイプ"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "購読するイベントタイプ"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.desc": {
+          "source": "Optional identifier for the external subscriber",
+          "message": "外部サブスクライバーのオプションの識別子"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.display_name": {
+          "source": "External Subscriber",
+          "message": "外部サブスクライバー"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.short_desc": {
+          "source": "External subscriber identifier",
+          "message": "外部サブスクライバー識別子"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "この Webhook をトリガーするフォームのID"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form to attach the webhook to",
+          "message": "Webhook をアタッチするフォーム"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Optional list of custom HTTP header objects (name/value pairs) sent with webhook requests",
+          "message": "Webhook リクエストとともに送信されるカスタム HTTP ヘッダーオブジェクト（名前/値のペア）のオプションのリスト"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP ヘッダー"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "カスタムHTTPヘッダー"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Optional secret used to sign webhook payloads for verification",
+          "message": "検証用に Webhook ペイロードの署名に使用されるオプションのシークレット"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "署名シークレット"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Secret for payload signing",
+          "message": "ペイロード署名用シークレット"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "Webhook イベントが配信される送信先 URL"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook endpoint URL",
+          "message": "Webhook エンドポイント URL"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a new webhook",
+          "message": "新しいWebhookを作成"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Create a new workspace and assign the authenticated user as a member; requires a Tally Pro or higher subscription",
+          "message": "新しいワークスペースを作成し、認証済みユーザーをメンバーとして割り当てます。Tally Pro 以上のサブスクリプションが必要です"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Create Workspace",
+          "message": "ワークスペースを作成"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The display name for the new workspace",
+          "message": "新しいワークスペースの表示名"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Workspace name",
+          "message": "ワークスペース名"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Create a new workspace",
+          "message": "新しいワークスペースを作成"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieve information about the currently authenticated user",
+          "message": "現在認証されているユーザーに関する情報を取得します"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "現在のユーザーを取得"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the current authenticated user",
+          "message": "現在の認証済みユーザーを取得"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by its ID, including all blocks and settings",
+          "message": "すべてのブロックと設定を含む単一のフォームを ID で取得します"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "フォームの取得"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to retrieve",
+          "message": "取得するフォームの一意の識別子"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "取得するフォームのID"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a form by ID",
+          "message": "ID でフォームを取得"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific form submission with all its responses and the form questions",
+          "message": "すべての回答およびフォームの質問を含む特定のフォーム送信を取得します"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "送信を取得"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "送信を含むフォームのID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to retrieve",
+          "message": "取得する送信の一意の識別子"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "取得する送信ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a submission by ID",
+          "message": "ID で送信を取得"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.desc": {
+          "source": "Retrieve a single workspace by its ID, including its members and pending invites",
+          "message": "メンバーや保留中の招待を含む単一のワークスペースを ID で取得します"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
+          "source": "Get Workspace",
+          "message": "ワークスペースを取得"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to retrieve",
+          "message": "取得するワークスペースの一意の識別子"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to retrieve",
+          "message": "取得するワークスペースID"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
+          "source": "Get a workspace by ID",
+          "message": "ID でワークスペースを取得"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form by its ID and move it to the trash",
+          "message": "IDを指定してフォームを削除し、ゴミ箱に移動します"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete Form",
+          "message": "フォームを削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to delete (moves to trash)",
+          "message": "削除（ゴミ箱に移動）するフォームの一意の識別子"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to delete",
+          "message": "削除するフォームID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "フォームを削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Delete a specific submission from a form",
+          "message": "フォームから特定の送信データを削除します"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "送信を削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "送信を含むフォームのID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to delete",
+          "message": "削除する送信データの一意の識別子"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to delete",
+          "message": "削除する送信ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a submission",
+          "message": "送信データを削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook by its ID",
+          "message": "IDを指定してWebhookを削除します"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "Webhookの削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to delete",
+          "message": "削除するWebhookの一意の識別子"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "Webhook ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to delete",
+          "message": "削除するWebhook ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "Webhookを削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Delete a workspace and all its associated forms",
+          "message": "ワークスペースと関連するすべてのフォームを削除します"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Delete Workspace",
+          "message": "ワークスペースを削除"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to delete; this also deletes all forms in the workspace",
+          "message": "削除するワークスペースの一意の識別子。ワークスペース内のすべてのフォームも削除されます"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to delete",
+          "message": "削除するワークスペースID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Delete a workspace",
+          "message": "ワークスペースを削除"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.desc": {
+          "source": "Fires when a new form submission is received for the specified form",
+          "message": "指定したフォームで新しいフォーム送信を受信したときにトリガーされます"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
+          "source": "New Form Submission",
+          "message": "新しいフォーム送信"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to watch for new submissions",
+          "message": "新しい送信を監視するフォームのID"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "送信を監視するフォーム"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Polling interval in seconds (minimum `30`, default `60`)",
+          "message": "ポーリング間隔（秒単位、最小 `30`、デフォルト `60`）"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {
+          "source": "Trigger when a new form submission is received",
+          "message": "新しいフォーム送信を受信したときにトリガー"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tally** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定されたコネクションの認証を使用して、**Tally** へのカスタムHTTP / REST APIコールを実行します。\n\nHTTPメソッド、URIパス（コネクションのAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエストボディを指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンスボディを含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tally",
+          "message": "TallyへのカスタムAPIコールを実行"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.desc": {
+          "source": "Search and list forms with optional pagination and workspace filtering",
+          "message": "任意のページネーションおよびワークスペースのフィルタリングを使用してフォームを検索・一覧表示します"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
+          "source": "Search Forms",
+          "message": "フォームを検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Number of forms per page (1-500, default `50`)",
+          "message": "1ページあたりのフォーム数（1〜500、デフォルト `50`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "ページネーションのページ番号（デフォルト `1`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.desc": {
+          "source": "List of workspace IDs to filter results",
+          "message": "結果をフィルタリングするためのワークスペースIDのリスト"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.display_name": {
+          "source": "Workspace IDs",
+          "message": "ワークスペースID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.short_desc": {
+          "source": "Filter by workspace IDs",
+          "message": "ワークスペースIDでフィルタリング"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
+          "source": "Search and list forms",
+          "message": "フォームを検索・一覧表示"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.desc": {
+          "source": "List all questions in a specific form",
+          "message": "特定のフォーム内のすべての質問を一覧表示します"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
+          "source": "Search Questions",
+          "message": "質問を検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve questions from",
+          "message": "質問を取得するフォームのID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list questions for",
+          "message": "質問を一覧表示するフォーム"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
+          "source": "List form questions",
+          "message": "フォームの質問を一覧表示"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.desc": {
+          "source": "Search and list submissions for a specific form with optional filtering by status, date range, and pagination",
+          "message": "ステータス、日付範囲、ページネーションによる任意のフィルタリングを使用して、特定のフォームの送信データを検索・一覧表示します"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
+          "source": "Search Submissions",
+          "message": "送信データを検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.desc": {
+          "source": "Get submissions after a specific submission ID",
+          "message": "特定の送信ID以降の送信データを取得"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.display_name": {
+          "source": "After ID",
+          "message": "After ID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.short_desc": {
+          "source": "Cursor-based pagination",
+          "message": "カーソルベースのページネーション"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.desc": {
+          "source": "Filter submissions submitted on or before this date",
+          "message": "この日付以前に送信された送信データをフィルタリング"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.display_name": {
+          "source": "End Date",
+          "message": "終了日"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.short_desc": {
+          "source": "Filter by end date",
+          "message": "終了日でフィルター"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve submissions from",
+          "message": "送信データを取得するフォームのID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list submissions for",
+          "message": "送信データを一覧表示するフォーム"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "すべて"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhcnRpYWw.display_name": {
+          "source": "Partial",
+          "message": "一部"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions by completion status",
+          "message": "完了ステータスで送信データをフィルタリング"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.short_desc": {
+          "source": "Submission status filter",
+          "message": "送信ステータスフィルター"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.desc": {
+          "source": "Number of submissions per page (1-500, default `50`)",
+          "message": "1ページあたりの送信データ数（1〜500、デフォルト `50`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.desc": {
+          "source": "Filter submissions submitted on or after this date",
+          "message": "この日付以降に送信された送信データをフィルタリング"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.short_desc": {
+          "source": "Filter by start date",
+          "message": "開始日でフィルター"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "ページネーションのページ番号（デフォルト `1`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "Search and list form submissions",
+          "message": "フォーム送信データを検索・一覧表示"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.desc": {
+          "source": "List webhook delivery events (status, status code, response, retry count, payload) for a specific webhook; useful for debugging failed deliveries",
+          "message": "特定のWebhookの配信イベント（ステータス、ステータスコード、レスポンス、再試行回数、ペイロード）を一覧表示します。失敗した配信のデバッグに役立ちます"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
+          "source": "Search Webhook Events",
+          "message": "Webhookイベントを検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "ページネーションのページ番号（デフォルト `1`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook to retrieve delivery events for",
+          "message": "配信イベントを取得するWebhookのID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "Webhook ID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook to list events for",
+          "message": "イベントを一覧表示するWebhook"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
+          "source": "List delivery events for a webhook",
+          "message": "Webhookの配信イベントを一覧表示"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.desc": {
+          "source": "List all webhooks across your accessible forms with optional pagination",
+          "message": "アクセス可能なフォーム全体のすべてのWebhookを任意のページネーションで一覧表示します"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
+          "source": "Search Webhooks",
+          "message": "Webhookを検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.desc": {
+          "source": "Number of webhooks per page (1-100, default `25`)",
+          "message": "1ページあたりのWebhook数（1〜100、デフォルト `25`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "ページネーションのページ番号（デフォルト `1`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
+          "source": "Search and list webhooks",
+          "message": "Webhookを検索・一覧表示"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.desc": {
+          "source": "List all workspaces with their members and pending invites; supports page-based pagination",
+          "message": "すべてのワークスペースをメンバーおよび保留中の招待とともに一覧表示します。ページベースのページネーションをサポートしています"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
+          "source": "Search Workspaces",
+          "message": "ワークスペースを検索"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "ページネーションのページ番号（デフォルト `1`）"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "ページ番号"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
+          "source": "Search and list workspaces",
+          "message": "ワークスペースを検索・一覧表示"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.desc": {
+          "source": "Retry sending a previously failed webhook event delivery",
+          "message": "以前失敗したWebhookイベント配信の送信を再試行します"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
+          "source": "Retry Webhook Event",
+          "message": "Webhookイベントを再試行"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.desc": {
+          "source": "The ID of the failed webhook event to retry",
+          "message": "再試行する失敗したWebhookイベントのID"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "イベントID"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "The webhook event to retry",
+          "message": "再試行するWebhookイベント"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook that originally produced the event",
+          "message": "最初にイベントを生成したWebhookのID"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "Webhook ID"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook owning the event",
+          "message": "イベントを所有するWebhook"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
+          "source": "Retry a failed webhook event",
+          "message": "失敗したWebhookイベントを再試行"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update a form's settings, blocks, or status",
+          "message": "フォームの設定、ブロック、またはステータスを更新します"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update Form",
+          "message": "フォームを更新"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "Updated list of form content blocks",
+          "message": "フォームコンテンツブロックの更新されたリスト"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "ブロック"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Updated form blocks",
+          "message": "更新されたフォームブロック"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "更新するフォームの一意識別子"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to update",
+          "message": "更新するフォームID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new display name for the form",
+          "message": "フォームの新しい表示名"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "Updated form name",
+          "message": "更新されたフォーム名"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Updated form configuration",
+          "message": "更新されたフォーム構成"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated form settings",
+          "message": "更新されたフォーム設定"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "空白"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "Deleted",
+          "message": "削除済み"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "公開済み"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The new status for the form",
+          "message": "フォームの新しいステータス"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Updated form status",
+          "message": "更新されたフォームステータス"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update a form",
+          "message": "フォームを更新"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook configuration. The Tally API requires `formId`, `url`, `eventTypes`, and `isEnabled` to be supplied on every update; supply the current value for any field that should not change",
+          "message": "既存のWebhook設定を更新します。Tally APIでは、更新ごとに`formId`、`url`、`eventTypes`、および`isEnabled`を指定する必要があります。変更しないフィールドには現在の値を指定してください"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "Webhook の更新"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "フォームの回答"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "購読するイベントタイプのリスト。有効な値は `FORM_RESPONSE` のみです"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "イベントタイプ"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "購読するイベントタイプ"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "この Webhook をトリガーするフォームのID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form this webhook is attached to",
+          "message": "このWebhookが関連付けられているフォーム"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Updated list of custom HTTP header objects",
+          "message": "カスタムHTTPヘッダーオブジェクトの更新されたリスト"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP ヘッダー"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Updated HTTP headers",
+          "message": "更新されたHTTPヘッダー"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to update",
+          "message": "更新するWebhookの一意識別子"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "Webhook ID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to update",
+          "message": "更新するWebhook ID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.desc": {
+          "source": "Set to `True` to enable or `False` to disable the webhook",
+          "message": "Webhookを有効にするには`True`、無効にするには`False`を設定します"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.display_name": {
+          "source": "Is Enabled",
+          "message": "有効"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.short_desc": {
+          "source": "Enable or disable the webhook",
+          "message": "Webhookを有効化または無効化"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Updated secret for payload signing",
+          "message": "ペイロード署名用の更新されたシークレット"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "署名シークレット"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Updated signing secret",
+          "message": "更新された署名シークレット"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "Webhook イベントが配信される送信先 URL"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Endpoint URL",
+          "message": "エンドポイントURL"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "Webhook を更新"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Update a workspace's information by its ID",
+          "message": "IDでワークスペースの情報を更新します"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Update Workspace",
+          "message": "ワークスペースを更新"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to update",
+          "message": "更新するワークスペースの一意の識別子"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to update",
+          "message": "更新するワークスペースID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the workspace",
+          "message": "ワークスペースの新しい表示名"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated workspace name",
+          "message": "更新されたワークスペース名"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Update a workspace",
+          "message": "ワークスペースを更新"
+        },
+        "app.VGFsbHk.desc": {
+          "source": "Provides access to [Tally.so](https://tally.so/) for programmatic form creation, submission management, and webhook configuration.\n\n**Common use cases**:\n- **Form management**: create, update, and publish forms programmatically\n- **Submission processing**: retrieve and filter form submissions for data analysis\n- **Automation**: set up webhooks to trigger workflows when forms are submitted\n- **User management**: retrieve authenticated user information",
+          "message": "[Tally.so](https://tally.so/) へのアクセスを提供し、プログラムによるフォーム作成、送信データの管理、およびWebhookの設定を可能にします。\n\n**一般的なユースケース**:\n- **フォーム管理**: プログラムによるフォームの作成、更新、公開\n- **送信データの処理**: データ分析のためのフォーム送信データの取得とフィルタリング\n- **自動化**: フォーム送信時にワークフローをトリガーするWebhookの設定\n- **ユーザー管理**: 認証済みユーザー情報の取得"
+        },
+        "app.VGFsbHk.display_name": {
+          "source": "Tally",
+          "message": "Tally"
+        },
+        "app.VGFsbHk.short_desc": {
+          "source": "Tally.so form builder and management",
+          "message": "Tally.soフォームビルダーおよび管理"
+        }
+      }
+    }
+  }
+}

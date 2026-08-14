@@ -1,0 +1,2181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.desc": {
+          "source": "Cancel an announced parcel in SendCloud. This removes the parcel from the outgoing queue and voids the shipping label if one was created.",
+          "message": "Zrušiť ohlásenú zásielku v službe SendCloud. Týmto sa zásielka odstráni z odchádzajúceho radu a zruší sa platnosť prepravného štítku, ak bol vytvorený."
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
+          "source": "Cancel Parcel",
+          "message": "Zrušiť zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel to cancel",
+          "message": "Číselné ID zásielky na zrušenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "Parcel to cancel",
+          "message": "Zásielka na zrušenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
+          "source": "Cancel an announced parcel",
+          "message": "Zrušiť ohlásenú zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.desc": {
+          "source": "Cancel a previously created return so that it will not be processed further.",
+          "message": "Zrušiť predtým vytvorené vrátenie, aby sa ďalej nespracovávalo."
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
+          "source": "Cancel Return",
+          "message": "Zrušiť vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.desc": {
+          "source": "Numeric ID of the return to cancel",
+          "message": "Číselné ID vrátenia na zrušenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.short_desc": {
+          "source": "Return to cancel",
+          "message": "Vrátenie na zrušenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
+          "source": "Cancel a return",
+          "message": "Zrušiť vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.desc": {
+          "source": "Create a new parcel in SendCloud, optionally requesting a shipping label and announcing the parcel to the selected carrier.",
+          "message": "Vytvoriť novú zásielku v službe SendCloud, s voliteľným vyžiadaním prepravného štítku a ohlásením zásielky vybranému dopravcovi."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
+          "source": "Create Parcel",
+          "message": "Vytvoriť balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code of the recipient",
+          "message": "Dvojpísmenový ISO kód krajiny príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code",
+          "message": "Kód krajiny ISO 3166-1 alpha-2"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.desc": {
+          "source": "State or region code (required for some destinations such as US and CA)",
+          "message": "Kód štátu alebo regiónu (vyžadovaný pre niektoré destinácie, ako napr. US a CA)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.display_name": {
+          "source": "State / Region",
+          "message": "Štát / región"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.short_desc": {
+          "source": "Country state or region code",
+          "message": "Kód štátu alebo regiónu krajiny"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Optional company name of the recipient",
+          "message": "Voliteľný názov spoločnosti príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Názov spoločnosti"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Recipient company name",
+          "message": "Názov spoločnosti príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.desc": {
+          "source": "City of the recipient",
+          "message": "Mesto príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.short_desc": {
+          "source": "Recipient city",
+          "message": "Mesto príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.desc": {
+          "source": "Invoice number to include on customs declarations (international shipments)",
+          "message": "Číslo faktúry, ktoré sa má uviesť na colných vyhláseniach (medzinárodné zásielky)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.display_name": {
+          "source": "Customs Invoice Number",
+          "message": "Číslo colnej faktúry"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.short_desc": {
+          "source": "Customs invoice number",
+          "message": "Číslo colnej faktúry"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjA.desc": {
+          "source": "Gift",
+          "message": "Darček"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjA.display_name": {
+          "source": "Gift",
+          "message": "Darček"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjE.desc": {
+          "source": "Documents",
+          "message": "Dokumenty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjE.display_name": {
+          "source": "Documents",
+          "message": "Dokumenty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjI.desc": {
+          "source": "Commercial goods",
+          "message": "Obchodný tovar"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjI.display_name": {
+          "source": "Commercial Goods",
+          "message": "Obchodný tovar"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjM.desc": {
+          "source": "Commercial sample",
+          "message": "Obchodná vzorka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjM.display_name": {
+          "source": "Commercial Sample",
+          "message": "Obchodná vzorka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjQ.desc": {
+          "source": "Returned goods",
+          "message": "Vrátený tovar"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjQ.display_name": {
+          "source": "Returned Goods",
+          "message": "Vrátený tovar"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.desc": {
+          "source": "Customs shipment type; determines the CN22/CN23 declaration category",
+          "message": "Typ colnej zásielky; určuje kategóriu vyhlásenia CN22/CN23"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.display_name": {
+          "source": "Customs Shipment Type",
+          "message": "Typ colnej zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.short_desc": {
+          "source": "Customs shipment type code",
+          "message": "Kód typu colnej zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.desc": {
+          "source": "Apartment/suite or additional recipient address information",
+          "message": "Byt/apartmán alebo dodatočné informácie o adrese príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.display_name": {
+          "source": "Address Line 2",
+          "message": "2. riadok adresy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.short_desc": {
+          "source": "Secondary address line",
+          "message": "Druhý riadok adresy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.desc": {
+          "source": "Street address of the recipient",
+          "message": "Ulica príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.display_name": {
+          "source": "Street Address",
+          "message": "Ulica a číslo"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.short_desc": {
+          "source": "Primary recipient street",
+          "message": "Hlavná ulica príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.desc": {
+          "source": "If `True`, SendCloud applies configured shipping rules to choose a shipping method",
+          "message": "Ak je `True`, SendCloud použije nakonfigurované prepravné pravidlá na výber spôsobu dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.display_name": {
+          "source": "Apply Shipping Rules",
+          "message": "Použiť prepravné pravidlá"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.short_desc": {
+          "source": "Apply SendCloud shipping rules",
+          "message": "Použiť prepravné pravidlá SendCloud"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.desc": {
+          "source": "ID of the brand associated with this parcel (must be linked to the chosen sender address)",
+          "message": "ID značky priradenej k tomuto balíku (musí byť prepojená so zvolenou adresou odosielateľa)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Značka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.short_desc": {
+          "source": "Brand ID",
+          "message": "ID značky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.desc": {
+          "source": "Extra arbitrary merchant data attached to the parcel",
+          "message": "Dodatočné ľubovoľné údaje obchodníka pripojené k balíku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Dáta"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.short_desc": {
+          "source": "Arbitrary extra parcel data",
+          "message": "Ľubovoľné dodatočné údaje o balíku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.desc": {
+          "source": "Email address of the recipient",
+          "message": "E-mailová adresa príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.short_desc": {
+          "source": "Recipient email",
+          "message": "E-mail príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID in the originating e-commerce system",
+          "message": "ID objednávky v zdrojovom systéme elektronického obchodu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "Externé ID objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "External system order ID",
+          "message": "ID objednávky v externom systéme"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.desc": {
+          "source": "Additional reference attached to the parcel",
+          "message": "Dodatočná referencia pripojená k balíku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.display_name": {
+          "source": "External Reference",
+          "message": "Externá referencia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.short_desc": {
+          "source": "Free-form reference",
+          "message": "Referencia vo voľnom formáte"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.desc": {
+          "source": "If provided, overrides the sender phone number for this parcel",
+          "message": "Ak je zadané, prepíše telefónne číslo odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.display_name": {
+          "source": "Sender Phone (Override)",
+          "message": "Telefón odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.short_desc": {
+          "source": "Per-parcel sender phone override",
+          "message": "Prepísanie telefónu odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.desc": {
+          "source": "If provided, overrides the sender street line for this parcel",
+          "message": "Ak je zadané, prepíše riadok ulice odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.display_name": {
+          "source": "Sender Street (Override)",
+          "message": "Ulica odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.short_desc": {
+          "source": "Per-parcel sender street override",
+          "message": "Prepísanie ulice odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.desc": {
+          "source": "If provided, overrides the sender address-line-2 for this parcel",
+          "message": "Ak je zadané, prepíše 2. riadok adresy odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.display_name": {
+          "source": "Sender Address 2 (Override)",
+          "message": "Adresa odosielateľa 2 (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.short_desc": {
+          "source": "Per-parcel sender address line 2 override",
+          "message": "Prepísanie 2. riadku adresy odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.desc": {
+          "source": "If provided, overrides the sender city for this parcel",
+          "message": "Ak je zadané, prepíše mesto odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.display_name": {
+          "source": "Sender City (Override)",
+          "message": "Mesto odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.short_desc": {
+          "source": "Per-parcel sender city override",
+          "message": "Prepísanie mesta odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.desc": {
+          "source": "If provided, overrides the sender company for this parcel",
+          "message": "Ak je zadané, prepíše spoločnosť odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.display_name": {
+          "source": "Sender Company (Override)",
+          "message": "Spoločnosť odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.short_desc": {
+          "source": "Per-parcel sender company override",
+          "message": "Prepísanie spoločnosti odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.desc": {
+          "source": "If provided, overrides the sender country (ISO 3166-1 alpha-2) for this parcel",
+          "message": "Ak je zadané, prepíše krajinu odosielateľa (ISO 3166-1 alpha-2) pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.display_name": {
+          "source": "Sender Country (Override)",
+          "message": "Krajina odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.short_desc": {
+          "source": "Per-parcel sender country override",
+          "message": "Prepísanie krajiny odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.desc": {
+          "source": "If provided, overrides the sender state/region for this parcel",
+          "message": "Ak je zadané, prepíše štát/región odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.display_name": {
+          "source": "Sender State (Override)",
+          "message": "Štát odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.short_desc": {
+          "source": "Per-parcel sender state override",
+          "message": "Prepísanie štátu odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.desc": {
+          "source": "If provided, overrides the sender email for this parcel",
+          "message": "Ak je zadané, prepíše e-mail odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.display_name": {
+          "source": "Sender Email (Override)",
+          "message": "E-mail odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.short_desc": {
+          "source": "Per-parcel sender email override",
+          "message": "Prepísanie e-mailu odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.desc": {
+          "source": "If provided, overrides the sender house number for this parcel",
+          "message": "Ak je zadané, prepíše číslo domu odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.display_name": {
+          "source": "Sender House Number (Override)",
+          "message": "Číslo domu odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.short_desc": {
+          "source": "Per-parcel sender house number override",
+          "message": "Prepísanie čísla domu odosielateľa pre daný balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.desc": {
+          "source": "If provided, overrides the sender name for this parcel",
+          "message": "Ak je zadané, prepíše meno odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.display_name": {
+          "source": "Sender Name (Override)",
+          "message": "Meno odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.short_desc": {
+          "source": "Per-parcel sender name override",
+          "message": "Prepísanie mena odosielateľa pre balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.desc": {
+          "source": "If provided, overrides the sender postal code for this parcel",
+          "message": "Ak je zadané, prepíše PSČ odosielateľa pre tento balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Sender Postal Code (Override)",
+          "message": "PSČ odosielateľa (prepísanie)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Per-parcel sender postal-code override",
+          "message": "Prepísanie PSČ odosielateľa pre balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.desc": {
+          "source": "House/street number of the recipient",
+          "message": "Číslo domu/ulice príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.display_name": {
+          "source": "House Number",
+          "message": "Číslo domu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.short_desc": {
+          "source": "Recipient house number",
+          "message": "Číslo domu príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.desc": {
+          "source": "Height of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"10.0\"`)",
+          "message": "Výška balíka (desatinné číslo vo forme reťazca, jednotka cez `length_unit`, napr. `\"10.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Výška"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.short_desc": {
+          "source": "Parcel height",
+          "message": "Výška balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.desc": {
+          "source": "If `True`, mark this parcel as a return shipment",
+          "message": "Ak je `True`, označí tento balík ako spätnú zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Je vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Whether this parcel is a return",
+          "message": "Či je tento balík spätnou zásielkou"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Order number to display on the label",
+          "message": "Číslo objednávky, ktoré sa má zobraziť na štítku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Merchant order number",
+          "message": "Číslo objednávky obchodníka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.desc": {
+          "source": "Length of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"30.0\"`)",
+          "message": "Dĺžka balíka (desatinné číslo vo forme reťazca, jednotka cez `length_unit`, napr. `\"30.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "Dĺžka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.short_desc": {
+          "source": "Parcel length",
+          "message": "Dĺžka balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm0.desc": {
+          "source": "Meters",
+          "message": "Metre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm0.display_name": {
+          "source": "Meters",
+          "message": "Metre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm1t.desc": {
+          "source": "Millimeters",
+          "message": "Milimetre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm1t.display_name": {
+          "source": "Millimeters",
+          "message": "Milimetre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmNt.desc": {
+          "source": "Centimeters",
+          "message": "Centimetre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmNt.display_name": {
+          "source": "Centimeters",
+          "message": "Centimetre"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmlu.desc": {
+          "source": "Inches",
+          "message": "Palce"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmlu.display_name": {
+          "source": "Inches",
+          "message": "Palce"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.desc": {
+          "source": "Unit used for `length`, `width`, and `height`",
+          "message": "Jednotka použitá pre `length`, `width` a `height`"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.display_name": {
+          "source": "Length Unit",
+          "message": "Jednotka dĺžky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.short_desc": {
+          "source": "Length/width/height unit",
+          "message": "Jednotka dĺžky/šírky/výšky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.desc": {
+          "source": "Name of the parcel's recipient",
+          "message": "Meno príjemcu balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.display_name": {
+          "source": "Recipient Name",
+          "message": "Meno príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.short_desc": {
+          "source": "Full name of the recipient",
+          "message": "Celé meno príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.desc": {
+          "source": "ID of the sender address. Omit to use the default sender address",
+          "message": "ID adresy odosielateľa. Vynechajte na použitie predvolenej adresy odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.display_name": {
+          "source": "Sender Address",
+          "message": "Adresa odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.short_desc": {
+          "source": "Sender address ID",
+          "message": "ID adresy odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Numeric ID of the SendCloud shipping method to use for this parcel.  Required by the v3 announce endpoint (translated to a `shipping_option_code` via the SendCloud compatibility endpoint).  Use `list-shipping-methods` to discover available IDs for your account; `8` (*Unstamped letter*) is the no-billing test method",
+          "message": "Číselné ID spôsobu dopravy SendCloud, ktorý sa má použiť pre tento balík. Vyžadované koncovým bodom na ohlásenie v3 (preložené na `shipping_option_code` cez koncový bod kompatibility SendCloud). Použite `list-shipping-methods` na zistenie dostupných ID pre váš účet; `8` (*Unstamped letter*) je testovací spôsob bez účtovania poplatkov"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Spôsob dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method ID",
+          "message": "ID spôsobu dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code of the recipient",
+          "message": "Poštové smerovacie číslo (PSČ) príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Recipient postal code",
+          "message": "PSČ príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.desc": {
+          "source": "List of parcel items; required for international shipments that need a customs declaration",
+          "message": "Zoznam položiek balíka; vyžaduje sa pri medzinárodných zásielkach, ktoré vyžadujú colné vyhlásenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.display_name": {
+          "source": "Parcel Items",
+          "message": "Položky balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.short_desc": {
+          "source": "Customs line items",
+          "message": "Položky colného vyhlásenia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.desc": {
+          "source": "Number of labels to generate for this parcel (multi-collo shipments)",
+          "message": "Počet štítkov, ktoré sa majú vygenerovať pre tento balík (viackusové zásielky)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.display_name": {
+          "source": "Label Quantity",
+          "message": "Počet štítkov"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of labels to generate",
+          "message": "Počet štítkov na vygenerovanie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.desc": {
+          "source": "If `True`, the parcel is announced to the carrier and a label is generated immediately",
+          "message": "Ak je `True`, balík sa ohlási prepravcovi a okamžite sa vygeneruje štítok"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.display_name": {
+          "source": "Request Label",
+          "message": "Požiadať o štítok"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.short_desc": {
+          "source": "Immediately announce & request a label",
+          "message": "Okamžite ohlásiť a požiadať o štítok"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.desc": {
+          "source": "Total weight of the parcel as a string-encoded decimal (e.g., `\"1.500\"`).  The unit defaults to kilograms; override via `weight_unit` (`kg`, `g`, `lb`, `oz`).  Required by the SendCloud v3 announce endpoint",
+          "message": "Celková hmotnosť balíka ako desatinné číslo vo forme reťazca (napr. `\"1.500\"`). Predvolená jednotka sú kilogramy; zmeňte pomocou `weight_unit` (`kg`, `g`, `lb`, `oz`). Vyžadované koncovým bodom na ohlásenie SendCloud v3"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "Hmotnosť (kg)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
+          "source": "Parcel weight in kilograms",
+          "message": "Hmotnosť balíka v kilogramoch"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.desc": {
+          "source": "Ounces",
+          "message": "Unce"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.display_name": {
+          "source": "Ounces",
+          "message": "Unce"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.desc": {
+          "source": "Grams",
+          "message": "Gramy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.display_name": {
+          "source": "Grams",
+          "message": "Gramy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.desc": {
+          "source": "Kilograms",
+          "message": "Kilogramy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.display_name": {
+          "source": "Kilograms",
+          "message": "Kilogramy"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.desc": {
+          "source": "Pounds",
+          "message": "Libry"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.display_name": {
+          "source": "Pounds",
+          "message": "Libry"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.desc": {
+          "source": "Unit used for the `weight` field",
+          "message": "Jednotka použitá pre pole `weight`"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.display_name": {
+          "source": "Weight Unit",
+          "message": "Jednotka hmotnosti"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.short_desc": {
+          "source": "Weight unit",
+          "message": "Jednotka hmotnosti"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
+          "source": "Width of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"20.0\"`)",
+          "message": "Šírka balíka (desatinné číslo vo forme reťazca, jednotka cez `length_unit`, napr. `\"20.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Šírka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.short_desc": {
+          "source": "Parcel width",
+          "message": "Šírka balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.desc": {
+          "source": "Insured value of the parcel contents in the order currency",
+          "message": "Poistená hodnota obsahu balíka v mene objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.display_name": {
+          "source": "Total Insured Value",
+          "message": "Celková poistená hodnota"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.short_desc": {
+          "source": "Total insured value",
+          "message": "Celková poistená hodnota"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.desc": {
+          "source": "Total order value as a string-encoded decimal; pair with `total_order_value_currency`",
+          "message": "Celková hodnota objednávky ako desatinné číslo vo forme reťazca; spárujte s `total_order_value_currency`"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.display_name": {
+          "source": "Total Order Value",
+          "message": "Celková hodnota objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.short_desc": {
+          "source": "Order value (string-encoded decimal)",
+          "message": "Hodnota objednávky (desatinné číslo vo forme reťazca)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.desc": {
+          "source": "Currency of the order value (e.g., EUR, USD)",
+          "message": "Mena hodnoty objednávky (napr. EUR, USD)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.display_name": {
+          "source": "Order Value Currency",
+          "message": "Mena hodnoty objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.short_desc": {
+          "source": "ISO 4217 currency code",
+          "message": "Kód meny podľa ISO 4217"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.desc": {
+          "source": "ID of the service point the parcel will be delivered to (for service-point shipments)",
+          "message": "ID výdajného miesta, na ktoré bude balík doručený (pre zásielky na výdajné miesto)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.display_name": {
+          "source": "Destination Service Point",
+          "message": "Cieľové výdajné miesto"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.short_desc": {
+          "source": "Service point ID the parcel is sent to",
+          "message": "ID odberného miesta (service point), na ktoré sa balík odosiela"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.desc": {
+          "source": "Post number used for the destination service point (when required)",
+          "message": "Číslo pošty použité pre cieľové odberné miesto (ak je vyžadované)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.display_name": {
+          "source": "Post Number",
+          "message": "Číslo pošty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.short_desc": {
+          "source": "Destination post number",
+          "message": "Cieľové číslo pošty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.desc": {
+          "source": "Phone number of the recipient",
+          "message": "Telefónne číslo príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.display_name": {
+          "source": "Telephone",
+          "message": "Telefón"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.short_desc": {
+          "source": "Recipient phone",
+          "message": "Telefón príjemcu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
+          "source": "Create a new parcel",
+          "message": "Vytvoriť nový balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return in SendCloud for an outgoing parcel, optionally including refund details and the list of returned items.",
+          "message": "Vytvorte novú vratku v službe SendCloud pre odchádzajúci balík, voliteľne vrátane podrobností o vrátení peňazí a zoznamu vrátených položiek."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "Vytvoriť vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.desc": {
+          "source": "Pickup address for the return (if different from the original shipping address)",
+          "message": "Adresa vyzdvihnutia pre vratku (ak sa líši od pôvodnej dodacej adresy)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.display_name": {
+          "source": "Pickup Address",
+          "message": "Adresa vyzdvihnutia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.short_desc": {
+          "source": "Pickup address for the return",
+          "message": "Adresa vyzdvihnutia pre vratku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.desc": {
+          "source": "ID of the original outgoing parcel being returned.  Used to derive the customer pickup address (`from_address` on the v3 return) and the merchant return destination (`to_address`) automatically.",
+          "message": "ID pôvodného odchádzajúceho balíka, ktorý sa vracia. Používa sa na automatické odvodenie adresy vyzdvihnutia od zákazníka (`from_address` na v3 vratke) a cieľa vrátenia obchodníka (`to_address`)."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.display_name": {
+          "source": "Outgoing Parcel",
+          "message": "Odchádzajúci balík"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.short_desc": {
+          "source": "The parcel being returned",
+          "message": "Balík, ktorý sa vracia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.desc": {
+          "source": "Customer-provided message describing the return",
+          "message": "Správa od zákazníka s popisom vratky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.display_name": {
+          "source": "Message",
+          "message": "Správa"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.short_desc": {
+          "source": "Customer-provided message",
+          "message": "Správa poskytnutá zákazníkom"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.desc": {
+          "source": "v3 shipping option code to use for the return (e.g. `dpd:return/return`).  Required for v3-cohort accounts; if omitted, the data provider attempts to translate the outgoing parcel's shipping method via the SendCloud compatibility endpoint, but this is not guaranteed to produce a return-capable option.  Use a return-specific code when in doubt.",
+          "message": "Kód možnosti dopravy v3, ktorý sa má použiť pre vratku (napr. `dpd:return/return`). Vyžaduje sa pre účty kohorty v3; ak sa vynechá, poskytovateľ údajov sa pokúsi preložiť spôsob dopravy odchádzajúceho balíka prostredníctvom koncového bodu kompatibility SendCloud, nie je však zaručené, že sa tým vytvorí možnosť podporujúca vrátenie. V prípade pochybností použite kód špecifický pre vrátenie tovaru."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.display_name": {
+          "source": "Return Shipping Option Code",
+          "message": "Kód možnosti dopravy vratky"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.short_desc": {
+          "source": "v3 shipping_option_code for the return shipment",
+          "message": "v3 shipping_option_code pre vratnú zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.desc": {
+          "source": "List of product lines being returned (at least one entry required)",
+          "message": "Zoznam položiek produktov, ktoré sa vracajú (vyžaduje sa aspoň jedna položka)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Produkty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.short_desc": {
+          "source": "Products being returned",
+          "message": "Vracané produkty"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vX2xvbmdlcl9uZWVkZWQ.desc": {
+          "source": "Product no longer needed",
+          "message": "Produkt už nie je potrebný"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vX2xvbmdlcl9uZWVkZWQ.display_name": {
+          "source": "No Longer Needed",
+          "message": "Už nie je potrebné"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vdF9hc19kZXNjcmliZWQ.desc": {
+          "source": "Product not as described",
+          "message": "Produkt nezodpovedá popisu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vdF9hc19kZXNjcmliZWQ.display_name": {
+          "source": "Not as Described",
+          "message": "Nezodpovedá popisu"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other reason",
+          "message": "Iný dôvod"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other",
+          "message": "Iné"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRhbWFnZWQ.desc": {
+          "source": "Product damaged",
+          "message": "Poškodený produkt"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRhbWFnZWQ.display_name": {
+          "source": "Damaged",
+          "message": "Poškodené"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRlZmVjdGl2ZQ.desc": {
+          "source": "Product defective",
+          "message": "Chybný produkt"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRlZmVjdGl2ZQ.display_name": {
+          "source": "Defective",
+          "message": "Chybné"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOndyb25nX3Byb2R1Y3Q.desc": {
+          "source": "Wrong product delivered",
+          "message": "Doručený nesprávny produkt"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOndyb25nX3Byb2R1Y3Q.display_name": {
+          "source": "Wrong Product",
+          "message": "Nesprávny produkt"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Return reason category",
+          "message": "Kategória dôvodu vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Dôvod"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Overall return reason",
+          "message": "Celkový dôvod vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.desc": {
+          "source": "Optional refund hash describing the refund type and amount",
+          "message": "Voliteľný hash vrátenia peňazí popisujúci typ a sumu refundácie"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.display_name": {
+          "source": "Refund",
+          "message": "Vrátenie peňazí"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.short_desc": {
+          "source": "Refund details",
+          "message": "Podrobnosti o vrátení peňazí"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.desc": {
+          "source": "Total weight of the return parcel (string-encoded decimal in kg).  Defaults to the outgoing parcel's weight when not provided; falls back to `1.000` when the outgoing parcel has no weight set.",
+          "message": "Celková hmotnosť vracaného balíka (desatinné číslo zakódované ako reťazec v kg). Ak sa neuvedie, predvolene sa použije hmotnosť odchádzajúceho balíka; ak odchádzajúci balík nemá nastavenú hmotnosť, použije sa hodnota `1.000`."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Hmotnosť"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.short_desc": {
+          "source": "Total weight of the return parcel",
+          "message": "Celková hmotnosť vracaného balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return",
+          "message": "Vytvoriť novú vratku"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.desc": {
+          "source": "Retrieve detailed information about a specific SendCloud parcel by its numeric ID.",
+          "message": "Získajte podrobné informácie o konkrétnom balíku SendCloud podľa jeho číselného ID."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
+          "source": "Get Parcel",
+          "message": "Získať balík"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel to retrieve",
+          "message": "Číselné ID balíka, ktorý sa má načítať"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "Parcel ID to retrieve",
+          "message": "ID balíka na načítanie"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
+          "source": "Get a single parcel by ID",
+          "message": "Získať jeden balík podľa ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.desc": {
+          "source": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs declaration, or commercial invoice) as binary PDF data.",
+          "message": "Stiahnite si konkrétny dokument balíka (napríklad prepravný štítok, colné vyhlásenie CN22/CN23 alebo obchodnú faktúru) ako binárne údaje PDF."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
+          "source": "Get Parcel Document",
+          "message": "Získať dokument balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "PDF format",
+          "message": "Formát PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "PNG image (only available for certain document types like QR codes)",
+          "message": "Obrázok PNG (k dispozícii len pre určité typy dokumentov, napríklad QR kódy)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnpwbA.desc": {
+          "source": "ZPL (Zebra printer) format",
+          "message": "Formát ZPL (tlačiareň Zebra)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnpwbA.display_name": {
+          "source": "ZPL",
+          "message": "ZPL"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.desc": {
+          "source": "Output format of the document",
+          "message": "Výstupný formát dokumentu"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.display_name": {
+          "source": "Format",
+          "message": "Formát"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.short_desc": {
+          "source": "Output format",
+          "message": "Výstupný formát"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel",
+          "message": "Číselné ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.short_desc": {
+          "source": "Parcel whose document to retrieve",
+          "message": "Balík, ktorého dokument sa má načítať"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmFpci13YXliaWxs.desc": {
+          "source": "Air waybill document",
+          "message": "Dokument leteckého nákladného listu"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmFpci13YXliaWxs.display_name": {
+          "source": "Air Waybill",
+          "message": "Letecký nákladný list"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjI.desc": {
+          "source": "CN22 customs declaration form",
+          "message": "Formulár colného vyhlásenia CN22"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjI.display_name": {
+          "source": "CN22",
+          "message": "CN22"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjM.desc": {
+          "source": "CN23 customs declaration form",
+          "message": "Formulár colného vyhlásenia CN23"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjM.display_name": {
+          "source": "CN23",
+          "message": "CN23"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjMtZGVmYXVsdA.desc": {
+          "source": "CN23 customs declaration form (default layout)",
+          "message": "Formulár colného vyhlásenia CN23 (predvolené rozloženie)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjMtZGVmYXVsdA.display_name": {
+          "source": "CN23 (Default)",
+          "message": "CN23 (predvolené)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1lcmNpYWwtaW52b2ljZQ.desc": {
+          "source": "Commercial invoice PDF",
+          "message": "Obchodná faktúra v PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1lcmNpYWwtaW52b2ljZQ.display_name": {
+          "source": "Commercial Invoice",
+          "message": "Obchodná faktúra"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNwNzE.desc": {
+          "source": "CP71 international parcel form",
+          "message": "Medzinárodný sprievodný formulár balíka CP71"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNwNzE.display_name": {
+          "source": "CP71",
+          "message": "CP71"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmxhYmVs.desc": {
+          "source": "Shipping label PDF",
+          "message": "Prepravný štítok v PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmxhYmVs.display_name": {
+          "source": "Label",
+          "message": "Štítok"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOnFy.desc": {
+          "source": "QR code label (for paperless return drop-offs)",
+          "message": "Štítok s QR kódom (pre bezpapierové odovzdanie vrátených zásielok)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOnFy.display_name": {
+          "source": "QR Code",
+          "message": "QR kód"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.desc": {
+          "source": "Type of document to download for the parcel",
+          "message": "Typ dokumentu na stiahnutie pre zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.display_name": {
+          "source": "Document Type",
+          "message": "Typ dokumentu"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.short_desc": {
+          "source": "Type of document to download",
+          "message": "Typ dokumentu na stiahnutie"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
+          "source": "Download a parcel document (label, customs, invoice)",
+          "message": "Stiahnuť dokument zásielky (štítok, colné doklady, faktúra)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.desc": {
+          "source": "Retrieve the shipping label URL(s) for an announced parcel. The label is available as a normal-printer PDF and a label-printer PDF.",
+          "message": "Získať URL adresu/adresy prepravného štítku pre ohlásenú zásielku. Štítok je k dispozícii ako PDF pre bežnú tlačiareň a PDF pre tlačiareň štítkov."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
+          "source": "Get Parcel Label",
+          "message": "Získať štítok zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.desc": {
+          "source": "Numeric ID of the parcel whose label URLs are being retrieved",
+          "message": "Číselné ID zásielky, ktorej URL adresy štítkov sa získavajú"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Parcel whose label URLs to retrieve",
+          "message": "Zásielka, ktorej URL adresy štítkov sa majú získať"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
+          "source": "Get shipping label URLs for a parcel",
+          "message": "Získať URL adresy prepravného štítku pre zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve detailed information about a specific return by its numeric ID.",
+          "message": "Získať podrobné informácie o konkrétnom vrátení tovaru podľa jeho číselného ID."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "Získať vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "Numeric ID of the return to retrieve",
+          "message": "Číselné ID vrátenia tovaru, ktoré sa má získať"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "Return ID to retrieve",
+          "message": "ID vrátenia tovaru na získanie"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a single return by ID",
+          "message": "Získať jedno vrátenie tovaru podľa ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve information about the currently authenticated SendCloud user (account owner).",
+          "message": "Získať informácie o aktuálne overenom používateľovi SendCloud (vlastníkovi účtu)."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get User",
+          "message": "Získať používateľa"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get the authenticated user",
+          "message": "Získať overeného používateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.desc": {
+          "source": "Retrieve the SendCloud user/account owning the current API credentials. The list contains at most one entry because the API returns the authenticated user only.",
+          "message": "Získať používateľa/účet SendCloud vlastniaceho aktuálne prihlasovacie údaje API. Zoznam obsahuje najviac jeden záznam, pretože API vracia iba overeného používateľa."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Zoznam používateľov"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List the authenticated user",
+          "message": "Vypísať overeného používateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.desc": {
+          "source": "Retrieve a list of brands configured on your SendCloud account. Brands are used to customize tracking pages and shipping documentation.",
+          "message": "Získať zoznam značiek nakonfigurovaných vo vašom účte SendCloud. Značky sa používajú na prispôsobenie stránok sledovania zásielok a prepravnej dokumentácie."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
+          "source": "List Brands",
+          "message": "Zoznam značiek"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
+          "source": "List configured brands",
+          "message": "Zoznam nakonfigurovaných značiek"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.desc": {
+          "source": "Retrieve a list of parcels from SendCloud with optional filtering by order number, tracking number, and creation/update date ranges.",
+          "message": "Získať zoznam zásielok zo SendCloud s voliteľným filtrovaním podľa čísla objednávky, sledovacieho čísla a rozsahov dátumov vytvorenia/aktualizácie."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
+          "source": "List Parcels",
+          "message": "Zoznam zásielok"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.desc": {
+          "source": "Only return parcels announced to the carrier on or after this timestamp",
+          "message": "Vrátiť iba zásielky ohlásené dopravcovi v tejto časovej značke alebo po nej"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.display_name": {
+          "source": "Announced After",
+          "message": "Ohlásené po"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.short_desc": {
+          "source": "Earliest announcement date",
+          "message": "Najskorší dátum ohlásenia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.desc": {
+          "source": "Filter parcels by the merchant-supplied `external_reference` field",
+          "message": "Filtrovať zásielky podľa poľa `external_reference` zadaného obchodníkom"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.display_name": {
+          "source": "External Reference",
+          "message": "Externá referencia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.short_desc": {
+          "source": "Filter by external reference",
+          "message": "Filtrovať podľa externej referencie"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Filter parcels by the merchant-provided order number",
+          "message": "Filtrovať zásielky podľa čísla objednávky zadaného obchodníkom"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Filter by merchant order number",
+          "message": "Filtrovať podľa čísla objednávky obchodníka"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.desc": {
+          "source": "Maximum number of aggregated records to return across pages",
+          "message": "Maximálny počet agregovaných záznamov, ktoré sa majú vrátiť naprieč stránkami"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.short_desc": {
+          "source": "Maximum total records",
+          "message": "Maximálny celkový počet záznamov"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.desc": {
+          "source": "Numeric SendCloud parcel-status ID to filter on",
+          "message": "Číselné ID stavu zásielky SendCloud, podľa ktorého sa má filtrovať"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.display_name": {
+          "source": "Parcel Status",
+          "message": "Stav zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.short_desc": {
+          "source": "Filter by parcel status ID",
+          "message": "Filtrovať podľa ID stavu zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Filter parcels by the carrier tracking number",
+          "message": "Filtrovať zásielky podľa sledovacieho čísla dopravcu"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Číslo sledovania"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Filter by carrier tracking number",
+          "message": "Filtrovať podľa sledovacieho čísla dopravcu"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Only return parcels updated on or after this timestamp",
+          "message": "Vrátiť iba zásielky aktualizované v tejto časovej značke alebo po nej"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "Aktualizované po"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Earliest update date",
+          "message": "Najskorší dátum aktualizácie"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
+          "source": "List and search parcels",
+          "message": "Vypísať a vyhľadávať zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.desc": {
+          "source": "Retrieve a list of returns from SendCloud, optionally filtered by status, parcel, and creation date range.",
+          "message": "Získať zoznam vrátení tovaru zo SendCloud, voliteľne filtrovaný podľa stavu, zásielky a rozsahu dátumu vytvorenia."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
+          "source": "List Returns",
+          "message": "Zoznam vrátení"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.desc": {
+          "source": "Only return records created on or before this timestamp",
+          "message": "Vrátiť iba záznamy vytvorené v tejto časovej značke alebo pred ňou"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.display_name": {
+          "source": "Created To",
+          "message": "Vytvorené do"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.short_desc": {
+          "source": "Latest creation date",
+          "message": "Najneskorší dátum vytvorenia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.desc": {
+          "source": "Only return records created on or after this timestamp",
+          "message": "Vrátiť iba záznamy vytvorené v tejto časovej značke alebo po nej"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.display_name": {
+          "source": "Created From",
+          "message": "Vytvorené z"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.short_desc": {
+          "source": "Earliest creation date",
+          "message": "Najskorší dátum vytvorenia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of aggregated records to return across pages",
+          "message": "Maximálny počet agregovaných záznamov, ktoré sa majú vrátiť naprieč stránkami"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum total records",
+          "message": "Maximálny celkový počet záznamov"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.display_name": {
+          "source": "Announced",
+          "message": "Ohlásené"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.display_name": {
+          "source": "Cancelled",
+          "message": "Zrušené"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Dokončené"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.display_name": {
+          "source": "Created",
+          "message": "Vytvorené"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Doručené"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.desc": {
+          "source": "Filter returns by status",
+          "message": "Filtrovať vrátenia podľa stavu"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by return status",
+          "message": "Filtrovať podľa stavu vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.desc": {
+          "source": "Filter returns whose outgoing parcel matches the given ID",
+          "message": "Filtrovať vrátenia, ktorých odchádzajúca zásielka sa zhoduje so zadaným ID"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel",
+          "message": "Balík"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Filter by outgoing parcel",
+          "message": "Filtrovať podľa odchádzajúcej zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
+          "source": "List and search returns",
+          "message": "Vypísať a vyhľadávať vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.desc": {
+          "source": "Retrieve a list of sender addresses configured on your SendCloud account; the default sender address is used when no other is specified on a parcel.",
+          "message": "Získať zoznam adries odosielateľa nakonfigurovaných vo vašom účte SendCloud; predvolená adresa odosielateľa sa použije, ak nie je na zásielke špecifikovaná iná."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
+          "source": "List Sender Addresses",
+          "message": "Zoznam adries odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
+          "source": "List sender addresses",
+          "message": "Vypísať adresy odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.desc": {
+          "source": "Retrieve a list of carrier service points (pickup/drop-off locations) within a country; supports filtering by city, postal code, carrier, and radius.",
+          "message": "Získať zoznam výdajných a podacích miest dopravcu v danej krajine; podporuje filtrovanie podľa mesta, PSČ, dopravcu a okruhu."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
+          "source": "List Service Points",
+          "message": "Zoznam výdajných miest"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code to search service points within",
+          "message": "Dvojpísmenový kód krajiny ISO, v ktorej sa majú vyhľadávať výdajné miesta"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code (required)",
+          "message": "Kód krajiny ISO 3166-1 alpha-2 (povinné)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.desc": {
+          "source": "Filter service points by carrier code (e.g., `postnl`, `dhl`, `ups`)",
+          "message": "Filtrovať výdajné miesta podľa kódu dopravcu (napr. `postnl`, `dhl`, `ups`)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier code filter",
+          "message": "Filter kódu dopravcu"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.desc": {
+          "source": "Filter service points by city name",
+          "message": "Filtrovať výdajné miesta podľa názvu mesta"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.short_desc": {
+          "source": "City name filter",
+          "message": "Filter názvu mesta"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.desc": {
+          "source": "Postal code to search service points near (with distance returned)",
+          "message": "Poštové smerovacie číslo, v ktorého blízkosti sa majú vyhľadávať výdajné miesta (s vrátenou vzdialenosťou)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Near Postal Code",
+          "message": "V blízkosti PSČ"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Postal code near-search origin",
+          "message": "Východiskové PSČ pre vyhľadávanie v okolí"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code used as a search origin",
+          "message": "PSČ použité ako východiskový bod vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal code to search near",
+          "message": "PSČ, v ktorého okolí sa má vyhľadávať"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.desc": {
+          "source": "Radius in meters around the search origin (max 50000)",
+          "message": "Polomer v metroch okolo východiskového bodu vyhľadávania (max. 50000)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.display_name": {
+          "source": "Radius (m)",
+          "message": "Polomer (m)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.short_desc": {
+          "source": "Search radius in meters",
+          "message": "Polomer vyhľadávania v metroch"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
+          "source": "List service points for a country",
+          "message": "Zoznam výdajných a podacích miest pre krajinu"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.desc": {
+          "source": "Retrieve a list of shipping methods available on your SendCloud account, including carrier details, service levels and destination countries.",
+          "message": "Získať zoznam spôsobov dopravy dostupných vo vašom účte SendCloud vrátane podrobností o dopravcovi, úrovniach služieb a cieľových krajinách."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
+          "source": "List Shipping Methods",
+          "message": "Zoznam spôsobov dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.desc": {
+          "source": "If `True`, only return-capable shipping methods are returned",
+          "message": "Ak je nastavené na `True`, vrátia sa iba spôsoby dopravy podporujúce vrátenie tovaru"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Je vrátenie"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Filter return methods",
+          "message": "Filtrovať spôsoby vrátenia tovaru"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.desc": {
+          "source": "Only return shipping methods available for the given sender address ID",
+          "message": "Vrátiť iba spôsoby dopravy dostupné pre zadané ID adresy odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.display_name": {
+          "source": "Sender Address",
+          "message": "Adresa odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.short_desc": {
+          "source": "Filter methods by sender address",
+          "message": "Filtrovať spôsoby podľa adresy odosielateľa"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Methods that don't accept a service point",
+          "message": "Spôsoby, ktoré neprijímajú výdajné/podacie miesto"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm9wdGlvbmFs.desc": {
+          "source": "Methods where a service point is optional",
+          "message": "Spôsoby, kde je výdajné/podacie miesto voliteľné"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm9wdGlvbmFs.display_name": {
+          "source": "Optional",
+          "message": "Voliteľné"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "Methods that require a service point",
+          "message": "Spôsoby, ktoré vyžadujú výdajné/podacie miesto"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.desc": {
+          "source": "Filter methods by whether a service point is required, optional, or not used",
+          "message": "Filtrovať spôsoby podľa toho, či je výdajné/podacie miesto vyžadované, voliteľné alebo nepoužité"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.display_name": {
+          "source": "Service Point Input",
+          "message": "Vstup výdajného/podacieho miesta"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.short_desc": {
+          "source": "Service-point input filter",
+          "message": "Filter vstupu výdajného/podacieho miesta"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.desc": {
+          "source": "If `True`, include a detailed pricing breakdown on each method",
+          "message": "Ak je nastavené na `True`, zahrnúť podrobný rozpis cien pri každom spôsobe"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.display_name": {
+          "source": "Price Breakdown",
+          "message": "Rozpis cien"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.short_desc": {
+          "source": "Include detailed price breakdown",
+          "message": "Zahrnúť podrobný rozpis cien"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.desc": {
+          "source": "ISO 3166-1 alpha-2 destination country code; only methods shipping to this country are returned",
+          "message": "Kód cieľovej krajiny ISO 3166-1 alpha-2; vrátia sa iba spôsoby dopravy do tejto krajiny"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.display_name": {
+          "source": "To Country",
+          "message": "Do krajiny"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.short_desc": {
+          "source": "Destination country filter",
+          "message": "Filter cieľovej krajiny"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
+          "source": "List available shipping methods",
+          "message": "Zoznam dostupných spôsobov dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **SendCloud** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **SendCloud** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to SendCloud",
+          "message": "Vykonať vlastné volanie API do SendCloud"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.desc": {
+          "source": "Search for carrier service points (pickup/drop-off locations) near a location; supports postal-code or lat/long search origins and radius/weight filters.",
+          "message": "Vyhľadajte výdajné a podacie miesta dopravcov v blízkosti lokality; podporuje vyhľadávanie podľa PSČ alebo zemepisnej šírky/dĺžky a filtre polomeru/hmotnosti."
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
+          "source": "Search Service Points",
+          "message": "Vyhľadať výdajné a podacie miesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code to search service points within",
+          "message": "Dvojpísmenový kód krajiny ISO, v ktorej sa majú vyhľadávať výdajné miesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code (required)",
+          "message": "Kód krajiny ISO 3166-1 alpha-2 (povinné)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.desc": {
+          "source": "Filter service points by carrier code (e.g., postnl, dhl, ups)",
+          "message": "Filtrovať výdajné a podacie miesta podľa kódu dopravcu (napr. postnl, dhl, ups)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Prepravca"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier code filter",
+          "message": "Filter kódu dopravcu"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.desc": {
+          "source": "Filter service points by city name",
+          "message": "Filtrovať výdajné miesta podľa názvu mesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.short_desc": {
+          "source": "City name filter",
+          "message": "Filter názvu mesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.desc": {
+          "source": "House number used together with the search origin",
+          "message": "Číslo domu použité spolu s východiskovým bodom vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.display_name": {
+          "source": "House Number",
+          "message": "Číslo domu"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.short_desc": {
+          "source": "House number near the search origin",
+          "message": "Číslo domu v blízkosti východiskového bodu vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude used as a search origin",
+          "message": "Zemepisná dĺžka použitá ako východiskový bod vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Zemepisná dĺžka"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude filter",
+          "message": "Filter zemepisnej dĺžky"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude used as a search origin",
+          "message": "Zemepisná šírka použitá ako východiskový bod vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Zemepisná šírka"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude filter",
+          "message": "Filter zemepisnej šírky"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.desc": {
+          "source": "Latitude to search service points near",
+          "message": "Zemepisná šírka, v ktorej okolí sa majú vyhľadávať výdajné a podacie miesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.display_name": {
+          "source": "Near Latitude",
+          "message": "Približná zemepisná šírka"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.short_desc": {
+          "source": "Latitude near-search origin",
+          "message": "Zemepisná šírka východiskového bodu vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.desc": {
+          "source": "Longitude to search service points near",
+          "message": "Zemepisná dĺžka, v ktorej okolí sa majú vyhľadávať výdajné a podacie miesta"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.display_name": {
+          "source": "Near Longitude",
+          "message": "Približná zemepisná dĺžka"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.short_desc": {
+          "source": "Longitude near-search origin",
+          "message": "Zemepisná dĺžka východiskového bodu vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.desc": {
+          "source": "Postal code to search service points near (with distance returned)",
+          "message": "Poštové smerovacie číslo, v ktorého blízkosti sa majú vyhľadávať výdajné miesta (s vrátenou vzdialenosťou)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Near Postal Code",
+          "message": "V blízkosti PSČ"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Postal code near-search origin",
+          "message": "Východiskové PSČ pre vyhľadávanie v okolí"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code used as a search origin",
+          "message": "PSČ použité ako východiskový bod vyhľadávania"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal code to search near",
+          "message": "PSČ, v ktorého okolí sa má vyhľadávať"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.desc": {
+          "source": "Radius in meters around the search origin (max 50000)",
+          "message": "Polomer v metroch okolo východiskového bodu vyhľadávania (max. 50000)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.display_name": {
+          "source": "Radius (m)",
+          "message": "Polomer (m)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.short_desc": {
+          "source": "Search radius in meters",
+          "message": "Polomer vyhľadávania v metroch"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.desc": {
+          "source": "Parcel weight in kilograms (string-encoded decimal)",
+          "message": "Hmotnosť zásielky v kilogramoch (desatinné číslo zakódované ako reťazec)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "Hmotnosť (kg)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.short_desc": {
+          "source": "Parcel weight to filter by capability",
+          "message": "Hmotnosť zásielky na filtrovanie podľa dostupnosti"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
+          "source": "Search service points across carriers",
+          "message": "Vyhľadávať výdajné a podacie miesta naprieč dopravcami"
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.desc": {
+          "source": "Fires whenever the status of a SendCloud parcel changes. The poll interval is configurable; a minimum interval is enforced to respect SendCloud API limits.",
+          "message": "Spustí sa pri každej zmene stavu zásielky v SendCloud. Interval dopytovania je konfigurovateľný; uplatňuje sa minimálny interval, aby sa dodržali limity SendCloud API."
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
+          "source": "Parcel Status Changed",
+          "message": "Stav zásielky sa zmenil"
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when a parcel's status changes",
+          "message": "Spustiť pri zmene stavu zásielky"
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.desc": {
+          "source": "Fires whenever a return record is created or updated in SendCloud. The poll interval is configurable; a minimum interval is enforced to respect SendCloud API limits.",
+          "message": "Spustí sa pri každom vytvorení alebo aktualizácii záznamu o vrátení tovaru v SendCloud. Interval dopytovania je konfigurovateľný; uplatňuje sa minimálny interval, aby sa dodržali limity SendCloud API."
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
+          "source": "Return Updated",
+          "message": "Vrátenie tovaru aktualizované"
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a return is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii vrátenia tovaru"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.desc": {
+          "source": "Update an existing parcel in SendCloud; commonly used to announce a parcel and request a shipping label after initial creation.",
+          "message": "Aktualizovať existujúcu zásielku v SendCloud; bežne sa používa na ohlásenie zásielky a vyžiadanie prepravného štítku po jej počiatočnom vytvorení."
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
+          "source": "Update Parcel",
+          "message": "Aktualizovať zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the existing parcel to update",
+          "message": "Číselné ID existujúcej zásielky na aktualizáciu"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíka"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "ID of the parcel to update",
+          "message": "ID zásielky na aktualizáciu"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.desc": {
+          "source": "Shipping method to assign to the parcel before announcing — a hash with `id` (required) and optional `name`. Required when `request_label` is `True`",
+          "message": "Spôsob dopravy, ktorý sa má priradiť k zásielke pred ohlásením — hash s `id` (povinné) a voliteľným `name`. Povinné, ak má `request_label` hodnotu `True`"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.display_name": {
+          "source": "Shipping Method",
+          "message": "Spôsob dopravy"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.short_desc": {
+          "source": "Shipping method to assign (id + name)",
+          "message": "Spôsob dopravy na priradenie (id + name)"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.desc": {
+          "source": "If `True`, announces the parcel to the carrier and generates a shipping label",
+          "message": "Ak je nastavené na `True`, ohlási zásielku dopravcovi a vygeneruje prepravný štítok"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.display_name": {
+          "source": "Request Label",
+          "message": "Požiadať o štítok"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.short_desc": {
+          "source": "Announce the parcel and generate a label",
+          "message": "Ohlásiť zásielku a vygenerovať štítok"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
+          "source": "Update an existing parcel",
+          "message": "Aktualizovať existujúcu zásielku"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.desc": {
+          "source": "Update fields on an existing return (status, refund details, etc.).",
+          "message": "Aktualizovať polia existujúcej vratky (stav, podrobnosti o vrátení platby atď.)."
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
+          "source": "Update Return",
+          "message": "Aktualizovať vratku"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.desc": {
+          "source": "ID of the return to update",
+          "message": "ID vratky na aktualizáciu"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrátenia"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.short_desc": {
+          "source": "Numeric ID of the return to update",
+          "message": "Číselné ID vratky na aktualizáciu"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.desc": {
+          "source": "Return announced",
+          "message": "Vratka ohlásená"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.display_name": {
+          "source": "Announced",
+          "message": "Ohlásené"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Return cancelled",
+          "message": "Vratka zrušená"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.display_name": {
+          "source": "Cancelled",
+          "message": "Zrušené"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Return completed",
+          "message": "Vratka dokončená"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Dokončené"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.desc": {
+          "source": "Return created",
+          "message": "Vratka vytvorená"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.display_name": {
+          "source": "Created",
+          "message": "Vytvorené"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.desc": {
+          "source": "Return delivered",
+          "message": "Vratka doručená"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Doručené"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.desc": {
+          "source": "New status for the return",
+          "message": "Nový stav vratky"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.short_desc": {
+          "source": "New status",
+          "message": "Nový stav"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Updated return reason",
+          "message": "Aktualizovaný dôvod vratky"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Dôvod"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Updated reason",
+          "message": "Aktualizovaný dôvod"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to associate with the return",
+          "message": "Sledovacie číslo, ktoré sa má priradiť k vratke"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Číslo sledovania"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "Číslo sledovania prepravcu"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
+          "source": "Update an existing return",
+          "message": "Aktualizovať existujúcu vratku"
+        },
+        "app.U2VuZENsb3Vk.desc": {
+          "source": "SendCloud is a European shipping automation platform that helps eCommerce merchants manage parcels, carriers, labels, returns, and tracking from a single integration. This integration enables creating and managing parcels, requesting shipping labels, processing returns, and receiving real-time notifications via polling-based triggers.\n\n**Features:**\n- Parcel management (create, update, cancel, track)\n- Shipping label generation and PDF retrieval\n- Return management (create, update, cancel)\n- Service point lookup across carriers\n- Brand and sender-address management\n- Triggers for parcel status changes and return updates",
+          "message": "SendCloud je európska platforma na automatizáciu prepravy, ktorá pomáha obchodníkom v oblasti elektronického obchodu spravovať zásielky, prepravcov, štítky, vratky a sledovanie z jedinej integrácie. Táto integrácia umožňuje vytvárať a spravovať zásielky, vyžadovať prepravné štítky, spracovávať vratky a prijímať oznámenia v reálnom čase prostredníctvom triggerov založených na dotazovaní (polling).\n\n**Funkcie:**\n- Správa zásielok (vytvorenie, aktualizácia, zrušenie, sledovanie)\n- Generovanie prepravných štítkov a získavanie PDF\n- Správa vratiek (vytvorenie, aktualizácia, zrušenie)\n- Vyhľadávanie odberných miest u rôznych prepravcov\n- Správa značky a adresy odosielateľa\n- Triggery pre zmeny stavu zásielky a aktualizácie vratiek"
+        },
+        "app.U2VuZENsb3Vk.display_name": {
+          "source": "SendCloud",
+          "message": "SendCloud"
+        },
+        "app.U2VuZENsb3Vk.short_desc": {
+          "source": "SendCloud shipping automation platform",
+          "message": "Platforma na automatizáciu prepravy SendCloud"
+        }
+      }
+    }
+  }
+}

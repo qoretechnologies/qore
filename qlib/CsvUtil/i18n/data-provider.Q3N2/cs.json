@@ -1,0 +1,681 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Q3N2.action.cmVhZA.desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Přečíst data CSV souboru z konkrétního umístění souboru"
+        },
+        "app.Q3N2.action.cmVhZA.display_name": {
+          "source": "Read CSV File",
+          "message": "Přečíst CSV soubor"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Výchozí formát data pro parsování polí `date`; více informací o této možnosti viz [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) (např. `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Výchozí maska pro parsování vstupních hodnot data"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Kódování znaků pro vstupní soubor (a výstupní data; výstupní data pouze při použití možnosti `data`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Vstupní kódování znaků"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Kódování znaků pro vstupní soubor"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(y) konce řádku / záznamu"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Hash popisující pole CSV na vstupu. Klíče jsou názvy polí zadané možnostmi `header_names` nebo `headers` (pokud není použita žádná z nich, názvy polí jsou čísla začínající od `0`). Hodnoty jsou [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) nebo hash s následujícími klíči:\n- `type`: [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: pro typy `date` hodnota [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); pro typy `int`, `float` nebo `number` řetězec číselného formátu: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (např. `\".,3\"` = tisíce `.`, desetinná `,`, 3 desetinná místa)\n- `timezone`: pouze pro typy `date`; předává se do [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) pro parsování dat (přepisuje jakékoli výchozí časové pásmo; použijte, když mají různé sloupce různá časová pásma)\n\n**Poznámka**: nastavení této hodnoty také nastaví `headers`, pokud není nastaveno automaticky pomocí `header_names`. Pokud není zadán žádný typ pole, výchozí hodnota je `*string`. Neplatné názvy polí v této možnosti jsou ignorovány."
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Popisy polí"
+        },
+        "app.Q3N2.action.cmVhZA.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Hash popisující pole CSV na vstupu"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "Pokud je `true`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_lines` explicitně nastaveno, předpokládá se hodnota `1`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Automaticky detekovat záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Pokud je hodnota true, záhlaví budou automaticky detekována z prvního řádku záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Počet řádků záhlaví v souboru"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Počet řádků záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Počet řádků záhlaví v souboru"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Pokud je `true` (výchozí) a jsou zadány `headers`, datová pole se přeuspořádají podle záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Pokud je hodnota true, vstupní data budou přeuspořádána v pořadí `headers`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data; pokud je zadán, musí mít `header_names` hodnotu `false`"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Názvy záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ignorovat prázdné řádky"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Pokud je `true`, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ignorovat počáteční a koncové bílé znaky"
+        },
+        "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Pokud je hodnota true, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Výchozí formát pro pole `int`, `float` a `number` jako řetězec udávající oddělovač tisíců následovaný oddělovačem desetinných míst (např. `.,` pro čísla kontinentálního evropského stylu)"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Formát čísel"
+        },
+        "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Výchozí formát čísel pro parsování polí typu int, float a number"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "Řetězec oddělující pole v souboru (výchozí: `,`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Oddělovač polí"
+        },
+        "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(y) oddělovače polí"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The location of the CSV data; conflicts with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Umístění CSV dat; je v konfliktu s `stream` a `data`; vyhodnoceno voláním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "CSV Input Location",
+          "message": "Vstupní umístění CSV"
+        },
+        "app.Q3N2.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "Umístění vstupního souboru"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Znak uvozovek pole (výchozí: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.cmVhZA.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Pokud je `true` (výchozí `false`), všechny názvy záhlaví budou převedeny na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Převést záhlaví na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZA.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Převést všechny názvy záhlaví na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Region časového pásma použitý při parsování dat (např. `Europe/Prague`); platné hodnoty viz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Oblast časového pásma"
+        },
+        "app.Q3N2.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Pokud je `true` (výchozí `false`) a je naparsován řádek s jiným počtem sloupců či polí než ostatní řádky, vyvolá se výjimka `CSVFILEITERATOR-DATA-ERROR`\n\nPovolení této možnosti sníží výkon"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Ověřit sloupce"
+        },
+        "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Ověří vstupní data a zajistí, že mají očekávanou strukturu"
+        },
+        "app.Q3N2.action.cmVhZA.short_desc": {
+          "source": "Read CSV file data from a specific file location",
+          "message": "Přečíst data CSV souboru z konkrétního umístění souboru"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.desc": {
+          "source": "Read CSV inline data",
+          "message": "Přečíst inline CSV data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read CSV Inline Data",
+          "message": "Přečíst inline CSV data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "CSV data to process; conflicts with `stream` and `path`",
+          "message": "CSV data ke zpracování; je v konfliktu s `stream` a `path`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Input Data",
+          "message": "Vstupní data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "CSV data to process",
+          "message": "CSV data ke zpracování"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Výchozí formát data pro parsování polí `date`; více informací o této možnosti viz [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) (např. `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Výchozí maska pro parsování vstupních hodnot data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data; output data only if the `data` option is used)",
+          "message": "Kódování znaků pro vstupní soubor (a výstupní data; výstupní data pouze při použití možnosti `data`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Vstupní kódování znaků"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Kódování znaků pro vstupní soubor"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(y) konce řádku / záznamu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
+          "message": "Hash popisující pole CSV na vstupu. Klíče jsou názvy polí zadané možnostmi `header_names` nebo `headers` (pokud není použita žádná z nich, názvy polí jsou čísla začínající od `0`). Hodnoty jsou [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) nebo hash s následujícími klíči:\n- `type`: [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: pro typy `date` hodnota [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); pro typy `int`, `float` nebo `number` řetězec číselného formátu: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (např. `\".,3\"` = tisíce `.`, desetinná `,`, 3 desetinná místa)\n- `timezone`: pouze pro typy `date`; předává se do [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) pro parsování dat (přepisuje jakékoli výchozí časové pásmo; použijte, když mají různé sloupce různá časová pásma)\n\n**Poznámka**: nastavení této hodnoty také nastaví `headers`, pokud není nastaveno automaticky pomocí `header_names`. Pokud není zadán žádný typ pole, výchozí hodnota je `*string`. Neplatné názvy polí v této možnosti jsou ignorovány."
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Popisy polí"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields on input",
+          "message": "Hash popisující pole CSV na vstupu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.desc": {
+          "source": "if `true` then the object will parse the header names from the first header row, in this case if `header_lines` is not set explicitly, it will be assumed to be `1`",
+          "message": "Pokud je `true`, objekt naparsuje názvy záhlaví z prvního řádku záhlaví; v tomto případě, pokud není `header_lines` explicitně nastaveno, předpokládá se hodnota `1`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.display_name": {
+          "source": "Automatically Detect Headers",
+          "message": "Automaticky detekovat záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
+          "source": "If true then headers will be automatically detected from the first header row",
+          "message": "Pokud je hodnota true, záhlaví budou automaticky detekována z prvního řádku záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Počet řádků záhlaví v souboru"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.display_name": {
+          "source": "Number of Header Lines",
+          "message": "Počet řádků záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.short_desc": {
+          "source": "The number of headers lines in the file",
+          "message": "Počet řádků záhlaví v souboru"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Pokud je `true` (výchozí) a jsou zadány `headers`, datová pole se přeuspořádají podle záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of `headers`",
+          "message": "Pokud je hodnota true, vstupní data budou přeuspořádána v pořadí `headers`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
+          "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data; pokud je zadán, musí mít `header_names` hodnotu `false`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Názvy záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.short_desc": {
+          "source": "List of header / column names for the data iterated",
+          "message": "Seznam názvů záhlaví / sloupců pro iterovaná data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ignorovat prázdné řádky"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.desc": {
+          "source": "If `true`, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Pokud je `true`, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.display_name": {
+          "source": "Ignore Leading and Trailing Whitespace",
+          "message": "Ignorovat počáteční a koncové bílé znaky"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
+          "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
+          "message": "Pokud je hodnota true, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Výchozí formát pro pole `int`, `float` a `number` jako řetězec udávající oddělovač tisíců následovaný oddělovačem desetinných míst (např. `.,` pro čísla kontinentálního evropského stylu)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Formát čísel"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Výchozí formát čísel pro parsování polí typu int, float a number"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.desc": {
+          "source": "the string separating the fields in the file (default: `,`)",
+          "message": "Řetězec oddělující pole v souboru (výchozí: `,`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Oddělovač polí"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(y) oddělovače polí"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
+          "source": "An input stream for CSV data; conflicts with `path` and `data`",
+          "message": "Vstupní stream pro CSV data; je v konfliktu s `path` a `data`"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "Vstupní proud"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for CSV data",
+          "message": "Objekt vstupního streamu pro CSV data"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.desc": {
+          "source": "The field quote character (default: `\"`)",
+          "message": "Znak uvozovek pole (výchozí: `\"`)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
+          "source": "If `true` (default `false`), all header names will be converted to lower case letters",
+          "message": "Pokud je `true` (výchozí `false`), všechny názvy záhlaví budou převedeny na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.display_name": {
+          "source": "Convert Headers to Lower Case",
+          "message": "Převést záhlaví na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.short_desc": {
+          "source": "Convert all header names to lower case",
+          "message": "Převést všechny názvy záhlaví na malá písmena"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Region časového pásma použitý při parsování dat (např. `Europe/Prague`); platné hodnoty viz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Oblast časového pásma"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "if `true` (default `false`), if a line is parsed with a different column or field count than other lines, a `CSVFILEITERATOR-DATA-ERROR` exception is raised\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Pokud je `true` (výchozí `false`) a je naparsován řádek s jiným počtem sloupců či polí než ostatní řádky, vyvolá se výjimka `CSVFILEITERATOR-DATA-ERROR`\n\nPovolení této možnosti sníží výkon"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Ověřit sloupce"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Ověří vstupní data a zajistí, že mají očekávanou strukturu"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read CSV inline data",
+          "message": "Přečíst inline CSV data"
+        },
+        "app.Q3N2.action.d3JpdGU.desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Zapsat data CSV souboru do konkrétního umístění souboru"
+        },
+        "app.Q3N2.action.d3JpdGU.display_name": {
+          "source": "Write CSV Data",
+          "message": "Zapsat CSV data"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Velikost bloku při generování hromadného výstupu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.display_name": {
+          "source": "Block Size",
+          "message": "Velikost bloku"
+        },
+        "app.Q3N2.action.d3JpdGU.option.YmxvY2s.short_desc": {
+          "source": "The block size when generating bulk output",
+          "message": "Velikost bloku při generování hromadného výstupu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.desc": {
+          "source": "Sets a hash mapping actual data key names to the output field names, for use in case the data field names differ; does not have to include every data or output key; keys not present will be assumed to be mapped 1:1",
+          "message": "Nastaví hash mapující skutečné názvy datových klíčů na názvy výstupních polí pro případ, že se názvy datových polí liší; nemusí obsahovat každý datový nebo výstupní klíč; u neuvedených klíčů se předpokládá mapování 1:1"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.display_name": {
+          "source": "Output Field Name Map",
+          "message": "Mapa názvů výstupních polí"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0YW1hcA.short_desc": {
+          "source": "Maps data key names to output field names",
+          "message": "Mapuje názvy datových klíčů na názvy výstupních polí"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for date value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Výchozí maska pro formátování výstupních hodnot data; více informací viz [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Výchozí maska pro formátování výstupních hodnot data"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Výstupní kódování znaků pro data"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kódování znaků"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Kódování výstupních znaků"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Znak(y) konce řádku / záznamu; pokud není uvedeno, použije se výchozí standard platformy"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(y) konce řádku / záznamu"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
+          "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)",
+          "message": "Hash popisující pole CSV pro výstup. Klíče jsou názvy polí, hodnoty jsou [typy polí](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) nebo hash s následujícími klíči:\n- `type`: [řetězec typu pole](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: pro typy `date` [formát data](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); pro typy `int`, `float` nebo `number` formátovací řetězec čísla: *<oddělovač_tisíců>*[*<desetinný_oddělovač>*[*<desetinná_místa>*]] (např. `\".,3\"` = tisíce `.`, desetinné `,`, 3 desetinná místa)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.display_name": {
+          "source": "Field Descriptions",
+          "message": "Popisy polí"
+        },
+        "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.short_desc": {
+          "source": "A hash describing the CSV fields to output",
+          "message": "Hash popisující pole CSV pro výstup"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.desc": {
+          "source": "If `true` (the default) then if `headers` are provided, then data fields are reordered to follow headers",
+          "message": "Pokud je `true` (výchozí) a jsou zadány `headers`, datová pole se přeuspořádají podle záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
+          "source": "Enforce Header Order",
+          "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of `headers`",
+          "message": "Pokud je hodnota true, výstupní data budou přeuspořádána v pořadí `headers`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Seznam názvů polí / záhlaví pro výstup dat"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.display_name": {
+          "source": "Header Names",
+          "message": "Názvy záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.short_desc": {
+          "source": "List of field / header names for the data output",
+          "message": "Seznam názvů polí / záhlaví pro výstup dat"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.desc": {
+          "source": "Set to `false` to disable optimal quoting; when optimal quoting is disabled, all fields are quoted regardless of type or content, when it is enabled, then fields are quoted only if they require quoting (i.e. they contain a quote or separator character); the default is `true`",
+          "message": "Nastavte na `false` pro zakázání optimálního uvádění v uvozovkách; pokud je optimální uvádění v uvozovkách zakázáno, všechna pole jsou v uvozovkách bez ohledu na typ či obsah, pokud je povoleno, pak jsou v uvozovkách pouze pole, která to vyžadují (tj. obsahují uvozovku nebo oddělovač); výchozí hodnota je `true`"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.display_name": {
+          "source": "Optimal Quotes",
+          "message": "Optimální uvozovky"
+        },
+        "app.Q3N2.action.d3JpdGU.option.b3B0aW1hbF9xdW90ZXM.short_desc": {
+          "source": "Quote output fields only when necessary",
+          "message": "Uvozovat výstupní pole pouze v případě potřeby"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Výchozí výstupní formát pro pole `int`, `float` a `number`; jedná se o formátovací řetězec čísla s 1 až 3 poli následovně: *<oddělovač_tisíců>*[*<desetinný_oddělovač>*[*<desetinná_místa>*]]; např.: `\".,3\"` (= `.` pro oddělovač tisíců, `,` pro desetinný oddělovač a 3 číslice za desetinnou čárkou)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Formát výstupního čísla"
+        },
+        "app.Q3N2.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Výchozí výstupní formát pro pole 'int', 'float' a 'number'"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.desc": {
+          "source": "The string separating fields in the output data (default: `,`)",
+          "message": "Řetězec oddělující pole ve výstupních datech (výchozí: `,`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.display_name": {
+          "source": "Field Separator",
+          "message": "Oddělovač polí"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.short_desc": {
+          "source": "The field separator character(s)",
+          "message": "Znak(y) oddělovače polí"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "An output stream for CSV data; mutually exclusive with \"path\"",
+          "message": "Výstupní proud pro data CSV; vzájemně se vylučuje s \"path\""
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Výstupní proud"
+        },
+        "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the CSV data",
+          "message": "Objekt výstupního proudu pro data CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The location for the output CSV data file; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "Umístění pro výstupní datový soubor CSV; vzájemně se vylučuje se \"stream\"; výstupní umístění je obsluhováno voláním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "CSV Output Path",
+          "message": "Cesta k výstupu CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the CSV output file",
+          "message": "Kam zapsat výstupní soubor CSV"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.desc": {
+          "source": "The quote character to quote fields (default: `\"`)",
+          "message": "Znak uvozovek pro uzavírání polí (výchozí: `\"`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
+          "source": "Quote Char(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGU.short_desc": {
+          "source": "The quote character(s)",
+          "message": "Znak(y) uvozovek"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
+          "source": "The escape character(s) used for `quote` (default: `\\`)",
+          "message": "Únikové znaky používané pro `quote` (výchozí: `\\`)"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.display_name": {
+          "source": "Quote Escape Char(s)",
+          "message": "Únikové znaky pro uvozovky"
+        },
+        "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
+          "source": "The escape character(s) for quotes in a field",
+          "message": "Únikové znaky pro uvozovky v poli"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
+          "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",
+          "message": "Nastavte na `false` pro potlačení výstupu záhlaví; výchozí hodnota je `true`, což znamená vypsat záhlaví, pokud existují"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.display_name": {
+          "source": "Output Headers",
+          "message": "Výstupní záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.short_desc": {
+          "source": "Include headers as the first output record",
+          "message": "Zahrnout záhlaví jako první výstupní záznam"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.desc": {
+          "source": "If `true` (the default is `false`) then if a line is parsed with a different column count than other lines, a `CSVFILEWRITER-DATA-ERROR` exception is thrown.\n\nNote that enabling this option will incurr a performance penalty",
+          "message": "Pokud je `true` (výchozí je `false`), pak pokud je zpracován řádek s jiným počtem sloupců než ostatní řádky, je vyvolána výjimka `CSVFILEWRITER-DATA-ERROR`.\n\nUpozorňujeme, že povolení této možnosti může mít dopad na výkon"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.display_name": {
+          "source": "Verify Columns",
+          "message": "Ověřit sloupce"
+        },
+        "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
+          "source": "Verifies input data to ensure it has the expected structure",
+          "message": "Ověří vstupní data a zajistí, že mají očekávanou strukturu"
+        },
+        "app.Q3N2.action.d3JpdGU.short_desc": {
+          "source": "Write CSV file data to a specific file location",
+          "message": "Zapsat data CSV souboru do konkrétního umístění souboru"
+        },
+        "app.Q3N2.desc": {
+          "source": "Read and write CSV file data",
+          "message": "Čtení a zápis dat souborů CSV"
+        },
+        "app.Q3N2.display_name": {
+          "source": "CSV Files",
+          "message": "Soubory CSV"
+        },
+        "app.Q3N2.short_desc": {
+          "source": "Read and write CSV file data",
+          "message": "Čtení a zápis dat souborů CSV"
+        }
+      }
+    }
+  }
+}

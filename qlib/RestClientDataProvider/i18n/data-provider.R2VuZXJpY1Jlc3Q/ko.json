@@ -1,0 +1,1061 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.desc": {
+          "source": "Make a call to a REST server or a webhook and return the response",
+          "message": "REST 서버 또는 웹후크를 호출하고 응답을 반환합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.display_name": {
+          "source": "Call REST API / Webhook",
+          "message": "REST API / 웹후크 호출"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "사용할 연결 제한 시간(밀리초 단위, 기본값: 45초)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "연결 제한 시간"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "밀리초 단위의 연결 제한 시간"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "bzip2 인코딩 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "deflate 알고리즘 사용([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "GNU zip 인코딩 사용([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "콘텐츠 인코딩을 사용하지 않음"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "데이터 압축 / 전송 인코딩(`send_encoding` 옵션이 설정되지 않은 경우) 및 사용되는 응답 인코딩을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "압축"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "데이터 압축 / 인코딩을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "HTTP `GET` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "HTTP GET 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "HTTP `PATCH` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "HTTP PATCH 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "HTTP `POST` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "HTTP POST 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "HTTP `PUT` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "HTTP PUT 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업의 HTTP 메서드를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "사용자 지정 토큰 갱신 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업의 HTTP 메서드를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed-value.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "메시지 본문에 사용자 이름과 비밀번호를 포함합니다. `custom_token_method` = `GET`과(와) 함께 사용할 수 없습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업의 인증 방식을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "사용자 지정 토큰 갱신 인증 방식"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업의 인증 방식을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed-value.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "응답 본문에서 토큰을 직접 가져옵니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed-value.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "역직렬화 없이 응답 본문에서 토큰을 가져옵니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "응답에서 새 토큰의 위치를 제공합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "사용자 지정 토큰 갱신 위치"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "응답에서 새 토큰의 위치를 제공합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업 요청에 대한 URI 경로를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "사용자 지정 토큰 갱신 URI 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "사용자 지정 토큰 갱신 작업 요청에 대한 URI 경로를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "설정하면 역직렬화할 수 없는 응답이 있는 그대로 반환됩니다. 이는 HTML 또는 파일 데이터를 반환하는 REST 형식의 요청을 수행할 때 유용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "모든 응답 허용?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "설정하면 역직렬화할 수 없는 응답이 있는 그대로 반환됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "서버가 `charset` 값을 보내지 않는 경우 지정된 인코딩으로 간주합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "문자 인코딩 가정"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "'charset'이 누락된 경우 가정할 문자 인코딩을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "다음 순서로 우선 적용됩니다: `json`, `yaml`, `rawxml`, `xml`, `url` 및 `text`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "데이터 직렬화가 없는 바이너리 메시지 본문용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "JSON 직렬화 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "원시 XML 직렬화 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "일반 텍스트만 사용; 직렬화는 사용되지 않음"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "URL로 인코딩된 메시지 본문용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "XML-RPC 직렬화만 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "YAML 직렬화만 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "요청에서 데이터를 직렬화하는 방법을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "데이터 직렬화"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "데이터 직렬화 방법을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "자동 ping 비활성화; 속도 제한 또는 종량제 연결에 유용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "자동 Ping 비활성화?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "자동 핑을 비활성화합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "URL에서 퍼센트 인코딩을 적용할 추가 문자 집합"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "URL 문자 인코딩"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "URL에서 퍼센트 인코딩을 적용할 추가 문자 집합"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "`True`인 경우 오류를 나타내는 HTTP 상태 코드가 `HTTP-CLIENT-RECEIVE-ERROR` 예외를 발생시키지 않고, 이러한 응답이 다른 응답과 마찬가지로 호출자에게 그대로 전달됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "오류 전달"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "오류를 정상적인 성공 응답처럼 반환할지 여부"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.desc": {
+          "source": "Any headers to include in the request",
+          "message": "요청에 포함할 헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.display_name": {
+          "source": "Headers",
+          "message": "헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.short_desc": {
+          "source": "Any headers to include in the request",
+          "message": "요청에 포함할 헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "HTTP/1.0 전용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "HTTP/1.1 전용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "HTTP/2 필수, 서버가 지원하지 않으면 실패(TLS 필요)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "HTTP/3(QUIC) 필수, 사용할 수 없으면 실패(TLS 필요)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "HTTPS에 대해 HTTP/3 우선 해피 아이볼(Happy Eyeballs) 사용; 필요한 경우 HTTP/2로 폴백(기본값)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "사용할 HTTP 버전: `auto`(HTTPS의 경우 HTTP/3 우선 해피 아이볼, 기본값), `1.0`, `1.1`, `2.0` 또는 `3.0`. HTTP/2는 TLS가 필요하며 ALPN을 통해 협상됩니다. HTTP/3은 TLS가 필요하며 전송 프로토콜로 QUIC을 사용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "HTTP 버전"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "사용할 HTTP 버전"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "OAuth2 토큰을 자동으로 새로 고칠지 여부"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "OAuth2 자동 새로 고침"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use",
+          "message": "OAuth2 토큰을 자동으로 새로 고칠지 여부를 설정합니다. 순수 OAuth2가 사용되지 않는 경우 사용자 지정 토큰 새로 고침도 활성화합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "`authorization_code` 부여 유형의 인증 요청에 대한 선택적 인수입니다. `token` 옵션이 설정된 경우 무시됩니다. `authorization_code` 부여 유형은 액세스 토큰을 획득하기 위해 외부 사용자 인증이 필요합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "OAuth2 인증 인수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Optional arguments for authentication requests for the authorization_code grant type",
+          "message": "authorization_code 부여 유형의 인증 요청에 대한 선택적 인수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "`authorization_code` 부여 유형의 OAuth2 인증 URL입니다. `token` 옵션이 설정된 경우 무시됩니다. `authorization_code` 부여 유형은 액세스 토큰을 획득하기 위해 외부 사용자 인증이 필요합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "OAuth2 인증 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "authorization_code 부여 유형의 OAuth2 인증 URL을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "토큰 가져오기 호출을 래핑하는 데 사용될 대체 토큰 URL입니다. 설정된 경우 `oauth2_token_url`보다 우선 적용됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "OAuth2 대체 토큰 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "토큰 가져오기 호출을 래핑하는 데 사용될 대체 토큰 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "대체 서버에 대한 토큰 요청 시 선택적 URL 대체 정보"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "OAuth2 대체 URL 치환 정보"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "대체 서버에 대한 토큰 요청 시 선택적 URL 대체 정보"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "OAuth2 구성을 위해 OAuth2 요청을 외부 구성으로 처리하는 외부 프로그램에 대한 힌트입니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "OAuth2 애플리케이션"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "외부 프로그램에 OAuth2 구성 힌트를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "OAuth2 클라이언트 ID입니다. `token` 옵션이 설정된 경우 로그인 시 무시됩니다(단, 토큰 새로 고침 시 사용될 수 있음)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "OAuth2 클라이언트 ID"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "OAuth2 클라이언트 ID를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "OAuth2 클라이언트 암호를 설정합니다. `token` 옵션이 설정된 경우 로그인 시 무시됩니다(단, 토큰 새로 고침 시 사용될 수 있음)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "OAuth2 클라이언트 시크릿"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "OAuth2 클라이언트 시크릿을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "OAuth2 부여 흐름이 사용되지 않습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "OAuth2 2.0 권한 부여 코드 부여([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); 이 부여 유형은 액세스 토큰을 얻기 위해 외부 사용자 인가가 필요하며, 외부 인증 서버에 인가를 요청할 위치를 외부 코드에 알리기 위해 `oauth2_auth_url`을(를) 설정해야 합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "OAuth2 2.0 클라이언트 자격 증명 부여([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "OAuth2 2.0 암시적 부여([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); 이 부여 유형은 코드 교환 단계 없이 리디렉션 URL 프래그먼트로 액세스 토큰을 직접 반환합니다. 외부 사용자 인가가 필요하며 `oauth2_auth_url`이(가) 설정되어야 하고 `oauth2_token_url`은(는) 필요하지 않습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "OAuth2 2.0 레거시 비밀번호 부여([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "OAuth2 부여 유형입니다. `token` 옵션이 설정된 경우 로그인 시 무시됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "OAuth2 부여 유형"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "OAuth2 부여 유형을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "PKCE를 사용할 때 코드 챌린지가 URL 인코딩된 SHA-256 다이제스트로 전송됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "PKCE가 사용되지 않습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "PKCE를 사용할 때 코드 챌린지에 인코딩이 적용되지 않습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "`authorization_code` 흐름과 함께 사용되는 PKCE(Proof Key Code Exchange)용 코드 챌린지 방식"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "OAuth2 PKCE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow",
+          "message": "외부 애플리케이션에 권한 부여 코드 흐름과 함께 PKCE(Proof Key Code Exchange)를 사용하도록 힌트를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "OAuth2 사양(RFC 6749)에 따르면 state 매개변수는 인증 서버에서 반환되어야 합니다. 일부 제공자(예: Trello)는 state 매개변수를 전달하지 않습니다. 표준을 준수하지 않는 제공자를 위한 해결 방법으로 redirect_uri에 state를 포함하려면 이 값을 False로 설정하세요. 기본값: True(사양 준수 동작)."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "OAuth2 리디렉션 상태 전달 여부"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "False인 경우 표준을 준수하지 않는 OAuth2 제공자를 위해 redirect_uri에 state를 포함합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "`authorization_code` 부여 유형의 OAuth2 리디렉션 URL입니다. `token` 옵션이 설정된 경우 무시됩니다. `authorization_code` 부여 유형은 액세스 토큰을 획득하기 위해 외부 사용자 인가가 필요하며, 특수 값 `auto`(기본값)은 OAuth2 권한 부여 코드 클라이언트 처리를 구현하는 서버에서 해석되도록 설계되었습니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "OAuth2 리디렉션 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "authorization_code 부여 유형의 OAuth2 리디렉션 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "OAuth2 새로 고침 토큰이 있는 경우 이를 설정합니다(옵션 `token` 보완)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "OAuth2 새로 고침 토큰"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "OAuth2 새로 고침 토큰을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "URI 인수의 OAuth2 스코프 구분 문자"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "OAuth2 스코프 구분 기호"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "URI 인수의 OAuth2 스코프 구분 문자"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "요청할 OAuth2 스코프 문자열 목록입니다. `token` 옵션이 설정된 경우 무시됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "OAuth2 스코프"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "요청할 OAuth2 스코프 목록"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "토큰 요청 시 클라이언트 시크릿만 사용하여 기본 인증을 사용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "OAuth2 토큰 인증 시 클라이언트 시크릿만 사용하시겠습니까?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "토큰 요청 시 클라이언트 시크릿만 사용하여 기본 인증을 사용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "토큰 갱신 요청을 위한 선택적 추가 인수입니다. 이 옵션과 `oauth2_alt_token_url`이(가) 모두 설정된 경우 `oauth2_alt_token_url`에 요청할 때 `oauth2_token_url` 값도 여기에 추가됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "OAuth2 토큰 갱신 인수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "토큰 요청을 위한 선택적 추가 인수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "토큰 만료 날짜"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "OAuth2 토큰 만료 날짜"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "토큰 만료 날짜"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "토큰을 갱신해야 하기 전까지 유효하게 유지될 예상 시간(분)입니다. 이 옵션은 연결에 갱신 토큰이 있고 서버가 토큰 응답에서 토큰의 수명을 나타내지 않을 때만 사용됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "OAuth2 토큰 수명 힌트(분 단위)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed",
+          "message": "토큰을 갱신해야 하기 전까지 유효하게 유지될 예상 시간(분)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "OAuth2 플로우용 토큰 URL입니다. `token` 옵션이 설정되어 있으면 로그인 시 무시됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "OAuth2 토큰 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "OAuth2 플로우용 토큰 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "토큰 요청 시 클라이언트 ID 및 클라이언트 시크릿으로 기본 인증을 사용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "OAuth2 토큰에 기본 인증을 사용하시겠습니까?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "토큰 요청 시 클라이언트 ID 및 클라이언트 시크릿으로 기본 인증을 사용합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
+          "source": "An OpenApi 3 schema location or file data for the REST connection",
+          "message": "REST 연결을 위한 OpenApi 3 스키마 위치 또는 파일 데이터"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "OpenApi 3 스키마"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "연결에 사용할 OpenApi 3 스키마의 위치를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "단일 요청에서 지원할 최대 HTTP 리디렉션 수를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "최대 리디렉션 수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "지원할 최대 HTTP 리디렉션 수를 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS` method",
+          "message": "HTTP `OPTIONS` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS method",
+          "message": "HTTP OPTIONS 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE` method",
+          "message": "HTTP `DELETE` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE method",
+          "message": "HTTP DELETE 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "HTTP `GET` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "HTTP GET 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD` method",
+          "message": "HTTP `HEAD` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD method",
+          "message": "HTTP HEAD 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "HTTP `PATCH` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "HTTP PATCH 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "HTTP `POST` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "HTTP POST 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "HTTP `PUT` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "HTTP PUT 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE` method",
+          "message": "HTTP `TRACE` 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE method",
+          "message": "HTTP TRACE 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.desc": {
+          "source": "The REST method to use",
+          "message": "사용할 REST 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.display_name": {
+          "source": "Method",
+          "message": "메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The REST method to use",
+          "message": "사용할 REST 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "이를 지원하는 REST 클라이언트에 대해 Kerberos/SPNEGO HTTP Negotiate 인증을 사용하도록 설정합니다. 원시 HTTPClient 경로는 HTTP-NEGOTIATE-AUTH-ERROR로 이 옵션을 거부합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Kerberos Negotiate 인증을 사용하시겠습니까?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Kerberos/SPNEGO HTTP Negotiate 인증을 활성화합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Kerberos/SPNEGO HTTP Negotiate 인증에 사용할 자격 증명 캐시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Kerberos 자격 증명 캐시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "Kerberos HTTP Negotiate 인증용 자격 증명 캐시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "자격 증명을 위임하지 않음"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "지원되는 경우 개시자 자격 증명을 직접 위임"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "지원되는 경우 S4U를 통한 제약 위임 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Kerberos/SPNEGO HTTP Negotiate 인증의 위임 모드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Kerberos 위임 모드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Kerberos HTTP Negotiate 인증용 위임 모드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Kerberos/SPNEGO HTTP Negotiate 인증에 사용할 클라이언트 키탭"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Kerberos 클라이언트 키탭"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "Kerberos HTTP Negotiate 인증용 클라이언트 키탭"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "True인 경우 401 챌린지를 받기 전에 초기 Negotiate 토큰을 전송합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "선제적 Kerberos Negotiate를 사용하시겠습니까?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "401 챌린지를 기다리지 않고 초기 Negotiate 토큰을 전송합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "HTTP Negotiate 인증에 사용할 Kerberos 서비스 주체입니다. 생략할 경우 REST 클라이언트는 URL에서 호스트 기반 HTTP 서비스 이름을 파생합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Kerberos 서비스 주체"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Kerberos HTTP 서비스 주체"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "bzip2 인코딩 사용"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "deflate 알고리즘 사용([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "GNU zip 인코딩 사용([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "콘텐츠 인코딩을 사용하지 않음"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "메시지 전송 시 사용할 압축 알고리즘을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "전송 압축"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "메시지 전송 시 사용할 압축 알고리즘을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path",
+          "message": "URI 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.display_name": {
+          "source": "URI path",
+          "message": "URI 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path",
+          "message": "URI 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "인증용 비밀번호입니다. URL에 사용자 이름이나 비밀번호가 설정되어 있지 않고 `username` 옵션도 함께 사용되는 경우에만 사용됩니다. `token` 옵션과 충돌합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "비밀번호"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "인증용 비밀번호"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "고급 ping 작업을 수행할 때 전송할 메시지 본문입니다. `ping_method` 및 `ping_path` 중 하나라도 설정되지 않았거나 `ping_method`이(가) `GET`인 경우 무시됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Ping 본문"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "ping과 함께 전송할 메시지 본문"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "고급 ping 작업을 수행할 때 전송할 HTTP 헤더입니다. `ping_method` 및 `ping_path` 중 하나라도 설정되지 않은 경우 무시됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Ping 헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "핑과 함께 보낼 HTTP 헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "고급 핑에 사용할 HTTP 메서드입니다. 소켓 폴링 핑 작업의 일부로 HTTP 요청을 수행하려면 이 항목과 `ping_path`을(를) 반드시 설정해야 합니다. 유효한 HTTP 메서드 이름이어야 합니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "핑 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "핑에 사용할 HTTP 메서드"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "고급 핑에 사용할 URI 경로입니다. 소켓 폴링 핑 작업의 일부로 HTTP 요청을 수행하려면 이 항목과 `ping_method`을(를) 설정해야 합니다. 이 옵션의 값이 `/` 문자로 시작하면 REST 클라이언트의 모든 연결 경로를 대체하고, 그렇지 않으면 REST 클라이언트의 연결 경로 뒤에 추가됩니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "핑 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "핑에 사용할 URI 경로"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "`true`인 경우 URL의 모든 URI 경로가 이미 [퍼센트 인코딩](https://en.wikipedia.org/wiki/Percent-encoding)된 것으로 간주됩니다. 이 플래그가 설정되어 있고 새 요청의 URL에 인코딩되지 않은 문자가 전송되면 예외가 발생합니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "사전 인코딩된 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "true인 경우 URL이 사전 인코딩된 것으로 간주됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "사용할 HTTP 프록시 URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP 프록시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "사용할 HTTP 프록시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Any query to include in the request; these will be added to the URI path in the request",
+          "message": "요청에 포함할 쿼리입니다. 요청의 URI 경로에 추가됩니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Any query to include in the request",
+          "message": "요청에 포함할 쿼리"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "`True`인 경우 리디렉션 응답을 처리하는 대신 호출자에게 그대로 전달합니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "리디렉션 패스스루"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "true인 경우 리디렉션 응답이 호출자에게 반환됩니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "인증 오류를 확인하기 위해 서버에서 역직렬화된 모든 본문을 검사하는 해시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "REST 본문 인증 오류 검사"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors",
+          "message": "200 OK 서버 응답에서 역직렬화된 모든 본문의 인증 오류를 검사하는 해시"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "연결에 사용할 인증 토큰입니다. 요청 헤더에서 `Authorization: Bearer ...`(`token_type`이(가) `Bearer`(이)라고 가정)으로 전달됩니다. 이 옵션은 사용자 이름 및 비밀번호 옵션이나 URL의 인증 정보와 함께 사용할 수 없습니다. 이 옵션을 설정하면 로그인 시 대부분의 OAuth2 옵션이 무시됩니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "인증 토큰"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "요청에 포함할 인증 토큰을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "`token`이(가) API 키로 전송될 HTTP 헤더의 이름입니다. 이 옵션은 OAuth2 옵션과 호환되지 않습니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "API 키 헤더"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "토큰이 API 키로 전송될 HTTP 헤더의 이름"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "`Authorization` 헤더에 사용할 `token` 유형입니다. `token` 옵션이 설정되어 있지 않으면 무시됩니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "인증 토큰 유형"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "인증 토큰의 유형"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "사용할 전송 제한 시간(밀리초 단위, 기본값: 45초)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 제한 시간"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "개별 I/O 작업에 소요될 수 있는 최대 시간(밀리초 단위)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "인증에 사용할 사용자 이름입니다. URL에 사용자 이름이나 비밀번호가 설정되어 있지 않은 경우에만 사용되며, `token` 옵션과 충돌합니다."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "사용자 이름"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "인증용 사용자 이름을 설정합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.short_desc": {
+          "source": "Make a call to a REST server or webhook",
+          "message": "REST 서버 또는 웹후크를 호출합니다"
+        },
+        "app.R2VuZXJpY1Jlc3Q.desc": {
+          "source": "Generic REST server",
+          "message": "일반 REST 서버"
+        },
+        "app.R2VuZXJpY1Jlc3Q.display_name": {
+          "source": "REST Server",
+          "message": "REST 서버"
+        },
+        "app.R2VuZXJpY1Jlc3Q.short_desc": {
+          "source": "Generic REST server",
+          "message": "일반 REST 서버"
+        }
+      }
+    }
+  }
+}

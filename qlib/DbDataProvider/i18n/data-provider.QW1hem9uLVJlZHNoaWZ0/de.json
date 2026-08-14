@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.QW1hem9uLVJlZHNoaWZ0.desc": {
+          "source": "Create and manage connections to a Amazon Redshift data warehouse",
+          "message": "Verbindungen zu einem Amazon Redshift Data Warehouse erstellen und verwalten"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.display_name": {
+          "source": "Amazon-Redshift",
+          "message": "Amazon-Redshift"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.short_desc": {
+          "source": "Amazon Redshift data warehouse",
+          "message": "Amazon Redshift Data Warehouse"
+        }
+      }
+    }
+  }
+}

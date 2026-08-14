@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.R21haWw.action.Z2V0.desc": {
+          "source": "Retrieve a message",
+          "message": "Отримати повідомлення"
+        },
+        "app.R21haWw.action.Z2V0.display_name": {
+          "source": "Retrieve a Message",
+          "message": "Отримати повідомлення"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "ID повідомлення для отримання"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.short_desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "ID повідомлення для отримання"
+        },
+        "app.R21haWw.action.Z2V0.short_desc": {
+          "source": "Retrieve a message",
+          "message": "Отримати повідомлення"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve an attachment",
+          "message": "Отримати вкладення"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "Отримати вкладення"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "Ідентифікатор вкладення для отримання"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.display_name": {
+          "source": "Attachment ID",
+          "message": "Ідентифікатор вкладення"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.short_desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "Ідентифікатор вкладення для отримання"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "Ідентифікатор повідомлення з вкладенням для отримання"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.short_desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "Ідентифікатор повідомлення з вкладенням для отримання"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve an attachment",
+          "message": "Отримати вкладення"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
+          "message": "Остаточно видаляє повідомлення. **Цю дію не можна скасувати**: повідомлення не потрапляє в кошик і копій не залишається, тому використовуйте `trash-message`, якщо повідомлення не потрібно знищити негайно.\n\nВикористовуйте цю дію з обробника події `watch` або `watch-attachment` зі значенням `message_id`, яке несе подія, після успішної обробки. Видалення безпосередньо зі стеження за допомогою `delete_messages` знищує повідомлення відразу після виникнення події незалежно від того, чи завершилася обробка успішно.\n\nGmail API не повертає вмісту для цього виклику"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "Видалити повідомлення"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.desc": {
+          "source": "The ID of the message to delete permanently; watch events carry this value as `message_id`",
+          "message": "Ідентифікатор повідомлення для остаточного видалення; події стеження містять це значення як `message_id`"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.short_desc": {
+          "source": "The ID of the message to delete permanently",
+          "message": "Ідентифікатор повідомлення для остаточного видалення"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Permanently delete a message; this cannot be undone",
+          "message": "Остаточно видалити повідомлення; цю дію не можна скасувати"
+        },
+        "app.R21haWw.action.bGlzdA.desc": {
+          "source": "Search for messages in the account",
+          "message": "Пошук повідомлень в обліковому записі"
+        },
+        "app.R21haWw.action.bGlzdA.display_name": {
+          "source": "Search for Messages",
+          "message": "Пошук повідомлень"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Включати папки спаму та кошика в пошук?"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Включати спам і кошик?"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Включати папки спаму та кошика в пошук?"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "Повертати лише повідомлення з мітками, які відповідають усім указаним ідентифікаторам міток. Повідомлення в ланцюжку можуть мати мітки, яких немає в інших повідомленнях того самого ланцюжка"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Мітки"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "Повертати лише повідомлення з мітками, які відповідають усім указаним ідентифікаторам міток"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Токен сторінки для отримання певної сторінки результатів у списку"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Токен сторінки для отримання певної сторінки результатів у списку"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Критерії пошуку gmail для отримання повідомлень; наприклад: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Критерії пошуку"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "Критерії пошуку gmail для отримання повідомлень"
+        },
+        "app.R21haWw.action.bGlzdA.short_desc": {
+          "source": "Search for messages",
+          "message": "Пошук повідомлень"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати користувацький виклик HTTP / REST API до **Gmail**, використовуючи автентифікацію налаштованого з'єднання.\n\nУкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається як хеш, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не реалізовані як стандартні дії в цьому застосунку."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gmail",
+          "message": "Виконати користувацький виклик API до Gmail"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message",
+          "message": "Надіслати повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "Надіслати повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Одна або кілька адрес `Cc:` для електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Адреси для копії"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Будь-які вкладення для повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Вкладення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Вкладення повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Тіло повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Тіло повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Без кодування вмісту (не рекомендовано)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Немає"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Без кодування вмісту (не рекомендовано)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "Ідеально для двійкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "Ідеально для двійкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` для рядкових даних, `base64` для двійкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "'quoted-printable' для рядкових даних, 'base64' для двійкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "Ідеально для рядкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "Ідеально для рядкових даних"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "Кодування для вкладення:\n- `default`: `quoted-printable` для рядкових даних, `base64` для двійкових даних\n- `none`: без кодування вмісту (не рекомендовано)\n- `quoted-printable`: кодування quoted printable \n- `base64`: кодування base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Кодування тіла"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "Кодування для вкладення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "Текст HTML"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "Текст HTML"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Звичайний текст"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Звичайний текст"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME-тип тіла повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "MIME-тип тіла"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME-тип тіла повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Одна або кілька адрес `Bcc:` для електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Адреси прихованої копії"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "Адреса відправника електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Відправник"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "Адреса відправника електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "Тема електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "Тема електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Одна або кілька адрес `To:` для електронного листа"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Адреси одержувачів повідомлення"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message",
+          "message": "Надіслати повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2g.desc": {
+          "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
+          "message": "Реагувати на нові електронні листи; коли надходить новий електронний лист, уся інформація про повідомлення, включно з його тілом, повертається як вихідні дані"
+        },
+        "app.R21haWw.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "Новий електронний лист"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its event?\n\n**The message is deleted as soon as its event has been raised, whatever the event consumer then does with it.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the message, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` the event carries",
+          "message": "Остаточно видаляти кожне відповідне повідомлення після створення його події?\n\n**Повідомлення видаляється одразу після створення його події, незалежно від того, що споживач події робитиме з ним далі.** Якщо у споживача станеться збій, тайм-аут або перезапуск під час обробки, єдину копію повідомлення вже буде втрачено, а видалення в Gmail неможливо скасувати.\n\nДля будь-яких робочих процесів, де неприпустимо втрачати вихідне повідомлення, залиште цей параметр невстановленим і використовуйте дію `delete-message` або `trash-message` зі споживача після успішної обробки з `message_id`, яке передає подія"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Видаляти повідомлення?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its event?",
+          "message": "Остаточно видаляти кожне відповідне повідомлення після створення його події?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування; невстановлене значення або `0` означає відсутність обмеження.\n\nОбмеження застосовується від **найстарішого** кінця черги, тому курсор відстеження продовжує безперервно просуватися, а решта повідомлень передається в наступних циклах, а не пропускається. Використовуйте це, щоб обмежити обсяг роботи за один цикл, коли може накопичитися велика черга"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "Максимум повідомлень за цикл"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "Зберігати лише одне найновіше відповідне повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "Останнє загалом"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "Зберігати найновіше повідомлення в кожній гілці Gmail"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "Останнє в кожній гілці"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "Як групуються відповідні повідомлення перед вибором останнього в кожній групі; ігнорується, якщо не встановлено `snapshot_mode`.\n\n- `all`: одна загальна група, тому кожен цикл створює одну подію з найновішим відповідним повідомленням\n- `thread`: групування за гілками Gmail, тому кожен цикл створює одну подію для кожної гілки з найновішим повідомленням цієї гілки"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "Групування знімка"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "Як групуються повідомлення перед вибором останнього"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "Згортати чергу до останнього повідомлення замість її відтворення.\n\nДеякі джерела є знімками, а не журналом: кожне повідомлення повторює поточний стан, тому після збою достатньо обробити лише останнє. Якщо цей параметр встановлено, кожен цикл опитування створює одну подію на групу (див. `snapshot_key`) з найновішим відповідним повідомленням і повідомляє про згорнуті повідомлення в полях події `superseded_count` та `superseded_ids`. Згорнуті повідомлення ніколи не завантажуються повністю, тому велика черга коштує отримання лише одного повідомлення, а не одного на кожне повідомлення.\n\nЗалиште цей параметр невстановленим для каналу, де потрібно обробити кожне повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "Лише останнє повідомлення?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "Згортати чергу до останнього повідомлення замість її відтворення?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Встановлює початкову дату й час для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Встановлює початкову дату й час для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "Остаточно видаляти замінені повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "Видалити остаточно"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "Залишати замінені повідомлення в поштовій скриньці"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "Зберігати"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "Переміщати замінені повідомлення в кошик Gmail"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "Перемістити в кошик"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "Що робити з повідомленнями, згорнутими `snapshot_mode`; ігнорується, якщо не встановлено `snapshot_mode`.\n\n- `ignore`: залишати їх у поштовій скриньці для аудиту; для них не створюватимуться події знову, оскільки курсор відстеження вже пройшов повз них\n- `trash`: переміщати їх у кошик Gmail, де їх усе ще можна відновити\n- `delete`: видаляти їх остаточно; **це неможливо скасувати**\n\nЯкщо видалення зазнає невдачі, це фіксується в журналі, а повідомлення залишається на місці; повторна спроба не виконується, оскільки його подію вже створено, а курсор відстеження вже пройшов повз нього"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "Дія для замінених повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "Що робити з повідомленнями, які було згорнуто"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "Як часто перевіряти відповідні електронні листи в секундах; нижня межа 30; менші числа встановлять мінімальний період опитування"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "Як часто перевіряти відповідні електронні листи в секундах"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Критерії пошуку Gmail для пошуку відповідних повідомлень; наприклад: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Критерії пошуку"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "Критерії пошуку Gmail для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "Отримувати дані вкладень автоматично?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachments?",
+          "message": "Отримувати вкладення?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "Отримувати дані вкладень автоматично?"
+        },
+        "app.R21haWw.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "Реагувати на нові електронні листи"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to new email attachments",
+          "message": "Реагувати на нові вкладення електронних листів"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "Нові вкладення електронних листів"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments; if not set, then all attachments are reported; if set, then only attachments matching the pattern are reported; by default, the glob pattern is case-insensitive; to make it case-sensitive, set the `ignore_case` option to `false`",
+          "message": "Необов'язковий шаблон імен файлів (glob) для пошуку вкладень; якщо не встановлено, повертаються всі вкладення; якщо встановлено, повертаються лише ті вкладення, які відповідають шаблону; за замовчуванням шаблон glob нечутливий до регістру; щоб зробити його чутливим до регістру, встановіть параметр `ignore_case` у значення `false`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "Шаблон файлів вкладень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern (glob) for matching attachments",
+          "message": "Необов'язковий шаблон імен файлів (glob) для пошуку вкладень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
+          "message": "Остаточно видаляти кожне відповідне повідомлення після створення його подій? Видаляється кожне відповідне повідомлення, навіть якщо жодне з його вкладень не відповідало критеріям і подія взагалі не створювалася.\n\n**Повідомлення видаляється одразу після створення його подій, незалежно від того, що споживач події робитиме з ними далі.** Якщо у споживача станеться збій, тайм-аут або перезапуск під час обробки, єдину копію вкладення вже буде втрачено, а видалення в Gmail неможливо скасувати.\n\nДля будь-яких робочих процесів, де неприпустимо втрачати вихідне повідомлення, залиште цей параметр невстановленим і використовуйте дію `delete-message` або `trash-message` зі споживача після успішної обробки з `message_id`, яке передає кожна подія вкладення"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Видаляти повідомлення?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its events?",
+          "message": "Остаточно видаляти кожне відповідне повідомлення після створення його подій?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
+          "message": "Ігнорувати регістр у масках; ігнорується, якщо `attachment_glob` не встановлено"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Glob Case?",
+          "message": "Ігнорувати регістр маски?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Ignore case in globs",
+          "message": "Ігнорувати регістр у масках"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування; невстановлене значення або `0` означає відсутність обмеження.\n\nОбмеження застосовується від **найстарішого** кінця черги, тому курсор відстеження продовжує безперервно просуватися, а решта повідомлень передається в наступних циклах, а не пропускається. Використовуйте це, щоб обмежити обсяг роботи за один цикл, коли може накопичитися велика черга"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "Максимум повідомлень за цикл"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "Максимальна кількість повідомлень, що передаються за один цикл опитування"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "Зберігати лише одне найновіше відповідне повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "Останнє загалом"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "Зберігати найновіше повідомлення в кожній гілці Gmail"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "Останнє в кожній гілці"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "Як групуються відповідні повідомлення перед вибором останнього в кожній групі; ігнорується, якщо не встановлено `snapshot_mode`.\n\n- `all`: одна загальна група, тому кожен цикл створює одну подію з найновішим відповідним повідомленням\n- `thread`: групування за гілками Gmail, тому кожен цикл створює одну подію для кожної гілки з найновішим повідомленням цієї гілки"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "Групування знімка"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "Як групуються повідомлення перед вибором останнього"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "Згортати чергу до останнього повідомлення замість її відтворення.\n\nДеякі джерела є знімками, а не журналом: кожне повідомлення повторює поточний стан, тому після збою достатньо обробити лише останнє. Якщо цей параметр встановлено, кожен цикл опитування створює одну подію на групу (див. `snapshot_key`) з найновішим відповідним повідомленням і повідомляє про згорнуті повідомлення в полях події `superseded_count` та `superseded_ids`. Згорнуті повідомлення ніколи не завантажуються повністю, тому велика черга коштує отримання лише одного повідомлення, а не одного на кожне повідомлення.\n\nЗалиште цей параметр невстановленим для каналу, де потрібно обробити кожне повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "Лише останнє повідомлення?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "Згортати чергу до останнього повідомлення замість її відтворення?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Встановлює початкову дату й час для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Встановлює початкову дату й час для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "Остаточно видаляти замінені повідомлення"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "Видалити остаточно"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "Залишати замінені повідомлення в поштовій скриньці"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "Зберігати"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "Переміщати замінені повідомлення в кошик Gmail"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "Перемістити в кошик"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "Що робити з повідомленнями, згорнутими `snapshot_mode`; ігнорується, якщо не встановлено `snapshot_mode`.\n\n- `ignore`: залишати їх у поштовій скриньці для аудиту; для них не створюватимуться події знову, оскільки курсор відстеження вже пройшов повз них\n- `trash`: переміщати їх у кошик Gmail, де їх усе ще можна відновити\n- `delete`: видаляти їх остаточно; **це неможливо скасувати**\n\nЯкщо видалення зазнає невдачі, це фіксується в журналі, а повідомлення залишається на місці; повторна спроба не виконується, оскільки його подію вже створено, а курсор відстеження вже пройшов повз нього"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "Дія для замінених повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "Що робити з повідомленнями, які було згорнуто"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "Як часто перевіряти відповідні електронні листи в секундах; нижня межа 30; менші числа встановлять мінімальний період опитування"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "Як часто перевіряти відповідні електронні листи в секундах"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Критерії пошуку Gmail для пошуку відповідних повідомлень; наприклад: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Критерії пошуку"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "Критерії пошуку Gmail для пошуку відповідних повідомлень"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "Реагувати на нові вкладення електронних листів"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Переміщує повідомлення в кошик. Повідомлення зникає з поштової скриньки, але його можна відновити, доки Gmail не очистить кошик, що робить це безпечним способом видалення повідомлення після завершення робочого процесу.\n\nВикористовуйте цю дію в споживачі події `watch` або `watch-attachment` зі значенням `message_id`, яке містить подія, після успішної обробки. Видалення безпосередньо зі спостереження за допомогою `delete_messages` видаляє повідомлення одразу після виклику події, незалежно від успішності подальшої роботи споживача"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "Перемістити повідомлення в кошик"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.desc": {
+          "source": "The ID of the message to move to the trash; watch events carry this value as `message_id`",
+          "message": "Ідентифікатор повідомлення для переміщення в кошик; події спостереження містять це значення як `message_id`"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.short_desc": {
+          "source": "The ID of the message to move to the trash",
+          "message": "Ідентифікатор повідомлення для переміщення в кошик"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Move a message to the trash, where it can still be recovered",
+          "message": "Перемістити повідомлення в кошик, звідки його ще можна відновити"
+        },
+        "app.R21haWw.desc": {
+          "source": "Gmail services",
+          "message": "Сервіси Gmail"
+        },
+        "app.R21haWw.display_name": {
+          "source": "Gmail",
+          "message": "Gmail"
+        },
+        "app.R21haWw.short_desc": {
+          "source": "Gmail services",
+          "message": "Сервіси Gmail"
+        }
+      }
+    }
+  }
+}

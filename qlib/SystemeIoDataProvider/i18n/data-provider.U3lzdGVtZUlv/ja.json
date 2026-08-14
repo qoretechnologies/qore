@@ -1,0 +1,1417 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Cancel a subscription in Systeme.io",
+          "message": "Systeme.ioでサブスクリプションをキャンセル"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Cancel Subscription",
+          "message": "サブスクリプションをキャンセル"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.desc": {
+          "source": "The unique identifier of the subscription to cancel",
+          "message": "キャンセルするサブスクリプションの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID to cancel",
+          "message": "キャンセルするサブスクリプションID"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Cancel a subscription",
+          "message": "サブスクリプションをキャンセル"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Add a contact as a member of a community in Systeme.io",
+          "message": "Systeme.ioのコミュニティに連絡先をメンバーとして追加"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Create Membership",
+          "message": "メンバーシップを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.desc": {
+          "source": "The unique identifier of the community to add the contact to",
+          "message": "連絡先を追加するコミュニティの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.display_name": {
+          "source": "Community ID",
+          "message": "コミュニティID"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.short_desc": {
+          "source": "The community to join",
+          "message": "参加するコミュニティ"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to add as a member",
+          "message": "メンバーとして追加する連絡先の一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to add",
+          "message": "追加する連絡先"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Add a contact to a community",
+          "message": "コミュニティに連絡先を追加"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Systeme.io",
+          "message": "Systeme.ioで新しい連絡先を作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "コンタクトを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "作成する連絡先のメールアドレス"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "メール アドレス"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "連絡先に設定するカスタムフィールド値のリスト。各エントリは `slug` プロパティと `value` プロパティを持つハッシュである必要があります。\n\n**例:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "連絡先の名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "連絡先のロケール（例: 英語の場合は `en`、フランス語の場合は `fr`）"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "連絡先のロケール"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "連絡先の姓"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "連絡先の電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Create a new custom contact field in Systeme.io",
+          "message": "Systeme.ioで新しいカスタム連絡先フィールドを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Create Contact Field",
+          "message": "連絡先フィールドを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The display name of the custom contact field to create",
+          "message": "作成するカスタム連絡先フィールドの表示名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "Field display name",
+          "message": "フィールド表示名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier for the custom contact field",
+          "message": "カスタム連絡先フィールドの一意のスラッグ識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug identifier",
+          "message": "フィールドのスラッグ識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Create a custom contact field",
+          "message": "カスタム連絡先フィールドを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Enroll a contact in a course in Systeme.io",
+          "message": "Systeme.ioでコースに連絡先を登録"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create Enrollment",
+          "message": "登録を作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.desc": {
+          "source": "The unique identifier of the course to enroll the contact in",
+          "message": "連絡先を登録するコースの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.short_desc": {
+          "source": "The course to enroll in",
+          "message": "登録するコース"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to enroll",
+          "message": "登録する連絡先の一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to enroll",
+          "message": "登録する連絡先"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmRyaXBwaW5nX2NvbnRlbnQ.display_name": {
+          "source": "Dripping Content",
+          "message": "順次配信コンテンツ (Dripping)"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmZ1bGxfYWNjZXNz.display_name": {
+          "source": "Full Access",
+          "message": "フルアクセス"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOnBhcnRpYWxfYWNjZXNz.display_name": {
+          "source": "Partial Access",
+          "message": "一部アクセス"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.desc": {
+          "source": "The type of access to grant the contact",
+          "message": "連絡先に付与するアクセスのタイプ"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.display_name": {
+          "source": "Access Type",
+          "message": "アクセスタイプ"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.short_desc": {
+          "source": "Type of course access",
+          "message": "コースへのアクセスタイプ"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.desc": {
+          "source": "List of module IDs to grant access to. Required when `accessType` is `partial_access`",
+          "message": "アクセスを許可するモジュールIDのリスト。`accessType` が `partial_access` の場合に必須です"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.display_name": {
+          "source": "Modules",
+          "message": "モジュール"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.short_desc": {
+          "source": "Module IDs for partial access",
+          "message": "一部アクセス用のモジュールID"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "連絡先をコースに登録"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Systeme.io",
+          "message": "Systeme.ioで新しいタグを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create Tag",
+          "message": "タグを作成"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "作成するタグの名前"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "新しいタグを作成"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.desc": {
+          "source": "Assign a tag to a contact in Systeme.io",
+          "message": "Systeme.ioで連絡先にタグを割り当て"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Assign Tag to Contact",
+          "message": "連絡先にタグを割り当て"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to assign the tag to",
+          "message": "タグを割り当てる連絡先の一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to assign to the contact",
+          "message": "連絡先に割り当てるタグの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to assign",
+          "message": "割り当てるタグID"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Assign a tag to a contact",
+          "message": "連絡先にタグを割り当て"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "連絡先の取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Retrieve a single custom contact field by its slug",
+          "message": "スラッグを指定して単一のカスタム連絡先フィールドを取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Get Contact Field",
+          "message": "連絡先フィールドを取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "The contact field slug",
+          "message": "連絡先フィールドのスラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Get a single contact field by slug",
+          "message": "スラッグで単一の連絡先フィールドを取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by its ID",
+          "message": "IDを指定して単一のタグを取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "タグを取得"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID で単一のタグを取得"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Remove a contact's membership from a community in Systeme.io",
+          "message": "Systeme.ioのコミュニティから連絡先のメンバーシップを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Delete Membership",
+          "message": "メンバーシップを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.desc": {
+          "source": "The unique identifier of the membership to delete",
+          "message": "削除するメンバーシップの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "メンバーシップID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.short_desc": {
+          "source": "The membership ID to delete",
+          "message": "削除するメンバーシップID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Remove a community membership",
+          "message": "コミュニティメンバーシップを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Systeme.io",
+          "message": "Systeme.ioから連絡先を削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "連絡先を削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "削除する連絡先の一意の識別子"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "削除する連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Delete a custom contact field from Systeme.io",
+          "message": "Systeme.ioからカスタム連絡先フィールドを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Delete Contact Field",
+          "message": "連絡先フィールドを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to delete",
+          "message": "削除するカスタム連絡先フィールドの一意のスラグ識別子"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to delete",
+          "message": "削除するフィールドスラグ"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Delete a custom contact field",
+          "message": "カスタム連絡先フィールドを削除します"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Remove a contact's enrollment from a course in Systeme.io",
+          "message": "Systeme.io でコースから連絡先の登録を削除します"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Delete Enrollment",
+          "message": "登録を削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the enrollment to delete",
+          "message": "削除する登録の一意の識別子"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "受講登録ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.short_desc": {
+          "source": "The enrollment ID to delete",
+          "message": "削除する登録ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Remove a course enrollment",
+          "message": "コース登録を削除します"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Systeme.io",
+          "message": "Systeme.io からタグを削除します"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "タグを削除"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "削除するタグの一意の識別子"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to delete",
+          "message": "削除するタグID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "タグを削除"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.desc": {
+          "source": "List tags from Systeme.io with cursor-based pagination",
+          "message": "Systeme.io からカーソルベースのページネーションを使用してタグを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.short_desc": {
+          "source": "Get a specific tag",
+          "message": "特定のタグを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags with pagination",
+          "message": "ページネーション付きでタグを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities from Systeme.io",
+          "message": "Systeme.io からコミュニティを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "コミュニティの一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "コミュニティID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "特定のコミュニティを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities",
+          "message": "コミュニティを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.desc": {
+          "source": "List custom contact fields from Systeme.io",
+          "message": "Systeme.io からカスタム連絡先フィールドを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
+          "source": "List Contact Fields",
+          "message": "連絡先フィールドを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.short_desc": {
+          "source": "Get a specific field by slug",
+          "message": "スラグを指定して特定のフィールドを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
+          "source": "List custom contact fields",
+          "message": "カスタム連絡先フィールドを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Systeme.io with cursor-based pagination",
+          "message": "Systeme.io からカーソルベースのページネーションを使用して連絡先を一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "特定の連絡先を取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts with pagination",
+          "message": "ページネーション付きで連絡先を一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses from Systeme.io",
+          "message": "Systeme.io からコースを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "コースを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.short_desc": {
+          "source": "Get a specific course",
+          "message": "特定のコースを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List courses",
+          "message": "コースを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments from Systeme.io",
+          "message": "Systeme.io からコース登録を一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "登録を一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "受講登録ID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific enrollment",
+          "message": "特定の登録を取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List course enrollments",
+          "message": "コース登録を一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.desc": {
+          "source": "List community memberships from Systeme.io",
+          "message": "Systeme.io からコミュニティメンバーシップを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "リストメンバーシップ"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "メンバーシップID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.short_desc": {
+          "source": "Get a specific membership",
+          "message": "特定のメンバーシップを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
+          "source": "List community memberships",
+          "message": "コミュニティメンバーシップを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "List subscriptions from Systeme.io",
+          "message": "Systeme.io からサブスクリプションを一覧表示します"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "サブスクリプションを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "サブスクリプションID"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Get a specific subscription",
+          "message": "特定のサブスクリプションを取得"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List subscriptions",
+          "message": "サブスクリプションを一覧表示"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Systeme.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Systeme.io** へのカスタム HTTP / REST API コールを実行します。\n\nHTTP メソッド、URI パス (接続の API ベース URL からの相対パス)、任意のクエリパラメータ、ヘッダー、リクエストボディを指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンスボディを含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Systeme.io",
+          "message": "Systeme.io へのカスタム API コールを実行"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Systeme.io",
+          "message": "Systeme.io で新しい連絡先が作成されたときにトリガーされます"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新規連絡先"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "新しい連絡先が作成されたときにトリガー"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.desc": {
+          "source": "Fires when a new tag is created in Systeme.io",
+          "message": "Systeme.io で新しいタグが作成されたときにトリガーされます"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
+          "source": "New Tag",
+          "message": "新規タグ"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {
+          "source": "Trigger when a new tag is created",
+          "message": "新しいタグが作成されたときにトリガー"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Remove a tag from a contact in Systeme.io",
+          "message": "Systeme.io で連絡先からタグを削除します"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to remove the tag from",
+          "message": "タグを削除する連絡先の一意の識別子"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to remove from the contact",
+          "message": "連絡先から削除するタグの一意の識別子"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to remove",
+          "message": "削除するタグID"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Systeme.io using merge-patch",
+          "message": "Systeme.io で merge-patch を使用して既存の連絡先を更新します"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "連絡先を更新"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "作成する連絡先のメールアドレス"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "メール アドレス"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "連絡先に設定するカスタムフィールド値のリスト。各エントリは `slug` プロパティと `value` プロパティを持つハッシュである必要があります。\n\n**例:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "連絡先の名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "更新する連絡先の一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "更新する連絡先 ID"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "連絡先のロケール（例: 英語の場合は `en`、フランス語の場合は `fr`）"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "連絡先のロケール"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "連絡先の姓"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "連絡先の電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Update an existing custom contact field in Systeme.io",
+          "message": "Systeme.io で既存のカスタム連絡先フィールドを更新します"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Update Contact Field",
+          "message": "連絡先フィールドを更新"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the custom contact field",
+          "message": "カスタム連絡先フィールドの新しい表示名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "New field display name",
+          "message": "新しいフィールド表示名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to update",
+          "message": "更新するカスタム連絡先フィールドの一意のスラグ識別子"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to update",
+          "message": "更新するフィールドスラグ"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Update a custom contact field",
+          "message": "カスタム連絡先フィールドを更新します"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Systeme.io",
+          "message": "Systeme.io で既存のタグを更新します"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update Tag",
+          "message": "タグを更新"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "更新するタグの一意識別子"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to update",
+          "message": "更新するタグ ID"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "タグの新しい名前"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "New tag name",
+          "message": "新しいタグ名"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "既存のタグを更新"
+        },
+        "app.U3lzdGVtZUlv.desc": {
+          "source": "Systeme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing online courses and communities, and handling affiliate programs.\n\nThis integration supports managing contacts, tags, custom fields, course enrollments, community memberships, and subscriptions.",
+          "message": "Systeme.io は、セールスファネルの構築、メールキャンペーンの実行、オンラインコースやコミュニティの管理、アフィリエイトプログラムの処理を行うオールインワンのオンラインマーケティングプラットフォームです。\n\nこの統合では、連絡先、タグ、カスタムフィールド、コース登録、コミュニティメンバーシップ、およびサブスクリプションの管理がサポートされています。"
+        },
+        "app.U3lzdGVtZUlv.display_name": {
+          "source": "Systeme.io",
+          "message": "Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.short_desc": {
+          "source": "Systeme.io all-in-one marketing platform",
+          "message": "Systeme.io オールインワンマーケティングプラットフォーム"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1869 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber enrolls in a course in Kit",
+          "message": "Kitで購読者がコースに登録したときにトリガーされます"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
+          "source": "Course Subscription",
+          "message": "コース登録"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for course subscriptions",
+          "message": "コース登録を監視"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+          "message": "Kitで新しいブロードキャストを作成します。スケジュールを設定するには `send_at` を指定し、下書きにする場合は空のままにします"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Create a Broadcast",
+          "message": "ブロードキャストを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "ブロードキャストメールのHTMLコンテンツ"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "ブロードキャストのHTMLコンテンツ"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "内部参照用のブロードキャストの説明"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "ブロードキャストの説明"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "ブロードキャストの送信者として使用されるメールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "送信者のメールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "ブロードキャストに使用するメールテンプレートの識別子"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "メールテンプレートID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "メールテンプレートID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "ブロードキャストを送信する日時のタイムスタンプ。下書きの場合は `null` に設定します"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "送信日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "ブロードキャストの送信日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "ブロードキャストメールの件名"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "ブロードキャストの件名"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "メールを開く前にメールクライアントに表示されるプレビューテキスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "プレビューテキスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "プレビューテキスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "ブロードキャストが一般公開されているかどうかを示します"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "ブロードキャストが公開されているかどうか"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "ブロードキャストを公開する日時のタイムスタンプ"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "公開日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "ブロードキャストの公開日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "ブロードキャストサムネイル画像の代替テキスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "サムネイルのAlt属性"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "サムネイルのaltテキスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "ブロードキャストサムネイル画像のURL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "サムネイルURL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "サムネイルURL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Create a new broadcast or draft",
+          "message": "新しいブロードキャストまたは下書きを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Kit",
+          "message": "Kitに新しいカスタムフィールドを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "カスタムフィールドを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The display label of the custom field to create",
+          "message": "作成するカスタムフィールドの表示ラベル"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "ラベル"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The custom field label",
+          "message": "カスタムフィールドのラベル"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "新しいカスタムフィールドを作成します"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.desc": {
+          "source": "Create a new purchase record in Kit for e-commerce tracking",
+          "message": "Eコマース追跡のためにKitに新しい購入レコードを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
+          "source": "Create a Purchase",
+          "message": "購入レコードを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for the purchase (defaults to `USD`)",
+          "message": "購入のISO 4217通貨コード（デフォルトは`USD`）"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "通貨コード"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount applied to the purchase",
+          "message": "購入に適用された割引額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.short_desc": {
+          "source": "The discount amount",
+          "message": "割引額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the buyer",
+          "message": "購入者のメールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The buyer's email address",
+          "message": "購入者のメールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.desc": {
+          "source": "The shipping cost for the purchase",
+          "message": "購入の配送料"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.display_name": {
+          "source": "Shipping",
+          "message": "配送"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.short_desc": {
+          "source": "The shipping cost",
+          "message": "配送料"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.desc": {
+          "source": "The current status of the purchase",
+          "message": "購入の現在のステータス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.short_desc": {
+          "source": "The purchase status",
+          "message": "購入ステータス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.desc": {
+          "source": "The subtotal amount of the purchase before tax, shipping, and discount",
+          "message": "税金、送料、割引前の購入小計額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "小計"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.short_desc": {
+          "source": "The purchase subtotal",
+          "message": "購入小計"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.desc": {
+          "source": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`",
+          "message": "購入内の製品のリスト。それぞれ`name`、`pid`、`lid`、`quantity`、`unit_price`などの製品詳細を含みます"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "商品"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.short_desc": {
+          "source": "List of products in the purchase",
+          "message": "購入内の製品リスト"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.desc": {
+          "source": "The total amount of the purchase",
+          "message": "購入の合計額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.display_name": {
+          "source": "Total",
+          "message": "合計"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.short_desc": {
+          "source": "The total amount",
+          "message": "合計額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.desc": {
+          "source": "The tax amount applied to the purchase",
+          "message": "購入に適用された税額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.display_name": {
+          "source": "Tax",
+          "message": "税金"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.short_desc": {
+          "source": "The tax amount",
+          "message": "税額"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The external transaction identifier for the purchase",
+          "message": "購入の外部トランザクション識別子"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "取引ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The external transaction ID",
+          "message": "外部トランザクションID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.desc": {
+          "source": "The timestamp when the transaction occurred",
+          "message": "トランザクションが発生した日時のタイムスタンプ"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.display_name": {
+          "source": "Transaction Time",
+          "message": "トランザクション日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.short_desc": {
+          "source": "When the transaction occurred",
+          "message": "トランザクションが発生した日時"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
+          "source": "Create a new purchase record",
+          "message": "新しい購入レコードを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+          "message": "Kitに新しい購読者を作成（アップサート動作 — メールが既に存在する場合は更新）"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Create a Subscriber",
+          "message": "購読者を作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to create or update (upsert behavior)",
+          "message": "作成または更新する購読者のメールアドレス（アップサート動作）"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "購読者に設定するカスタムフィールド値のハッシュ"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.desc": {
+          "source": "The state of the subscriber (e.g., `active`, `inactive`)",
+          "message": "購読者の状態（例: `active`、`inactive`）"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.short_desc": {
+          "source": "The subscriber's state",
+          "message": "購読者の状態"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Create or update a subscriber",
+          "message": "購読者を作成または更新"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Kit",
+          "message": "Kitに新しいタグを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "タグを作成"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "作成するタグの名前"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "タグ名"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "新しいタグを作成"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.desc": {
+          "source": "Add a subscriber to a form in Kit by email address",
+          "message": "メールアドレスでKitのフォームに購読者を追加"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
+          "source": "Add Subscriber to Form",
+          "message": "フォームに購読者を追加"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the form",
+          "message": "フォームに追加する購読者のメールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to add the subscriber to",
+          "message": "購読者を追加するフォームの一意の識別子"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "フォームID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
+          "source": "Add a subscriber to a form",
+          "message": "フォームに購読者を追加"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.desc": {
+          "source": "Add a subscriber to an email sequence in Kit",
+          "message": "Kitのメールシーケンスに購読者を追加"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
+          "source": "Add Subscriber to Sequence",
+          "message": "シーケンスに購読者を追加"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the sequence",
+          "message": "シーケンスに追加する購読者のメールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.desc": {
+          "source": "The unique identifier of the sequence to add the subscriber to",
+          "message": "購読者を追加するシーケンスの一意の識別子"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "シーケンスID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence ID",
+          "message": "シーケンスID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
+          "source": "Add a subscriber to a sequence",
+          "message": "シーケンスに購読者を追加"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "Apply a tag to multiple subscribers in Kit at once",
+          "message": "Kitで複数の購読者にタグを一括適用"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Tag Subscribers",
+          "message": "購読者を一括タグ付け"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscriber email addresses to tag",
+          "message": "タグ付けする購読者のメールアドレスのリスト"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "購読者"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscriber email addresses",
+          "message": "購読者のメールアドレスリスト"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscribers",
+          "message": "購読者に適用するタグの一意の識別子"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Apply a tag to multiple subscribers",
+          "message": "複数の購読者にタグを適用します"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.desc": {
+          "source": "Bulk create subscribers in Kit (async processing)",
+          "message": "Kitで購読者を一括作成します（非同期処理）"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Create Subscribers",
+          "message": "購読者を一括作成"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.desc": {
+          "source": "A URL that will receive a webhook when the bulk operation completes",
+          "message": "一括処理の完了時にWebhookを受信するURL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.display_name": {
+          "source": "Callback URL",
+          "message": "コールバックURL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.short_desc": {
+          "source": "URL to receive completion callback",
+          "message": "完了コールバックを受信するURL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscribers to create, each containing at least an `email_address` field",
+          "message": "作成する購読者のリスト（各購読者に少なくとも `email_address` フィールドが必要）"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "購読者"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscribers to create",
+          "message": "作成する購読者のリスト"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Create multiple subscribers at once",
+          "message": "一度に複数の購読者を作成します"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a single broadcast by ID from Kit",
+          "message": "KitからIDで単一のブロードキャストを取得します"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get a Broadcast",
+          "message": "ブロードキャストを取得"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a single broadcast by ID",
+          "message": "IDで単一のブロードキャストを取得します"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.desc": {
+          "source": "Get statistics for a specific broadcast in Kit",
+          "message": "Kitで特定のブロードキャストの統計情報を取得します"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
+          "source": "Get Broadcast Stats",
+          "message": "ブロードキャスト統計を取得"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to get stats for",
+          "message": "統計情報を取得するブロードキャストの一意の識別子"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
+          "source": "Get statistics for a broadcast",
+          "message": "ブロードキャストの統計情報を取得します"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.desc": {
+          "source": "Retrieve a single purchase record by ID from Kit",
+          "message": "KitからIDで単一の購入レコードを取得します"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
+          "source": "Get a Purchase",
+          "message": "購入を取得"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "購入ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "The purchase ID",
+          "message": "購入ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
+          "source": "Get a single purchase by ID",
+          "message": "IDで単一の購入を取得します"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.desc": {
+          "source": "Retrieve a single subscriber by ID from Kit",
+          "message": "KitからIDで単一の購読者を取得します"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
+          "source": "Get a Subscriber",
+          "message": "購読者を取得"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
+          "source": "Get a single subscriber by ID",
+          "message": "IDで単一の購読者を取得します"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Delete a broadcast from Kit (only before sending)",
+          "message": "Kitからブロードキャストを削除します（送信前のみ）"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Delete a Broadcast",
+          "message": "ブロードキャストを削除"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to delete",
+          "message": "削除するブロードキャストの一意の識別子"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to delete",
+          "message": "削除するブロードキャストID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Delete a broadcast",
+          "message": "ブロードキャストを削除します"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Kit",
+          "message": "Kitからカスタムフィールドを削除します"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "カスタムフィールドを削除"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to delete",
+          "message": "削除するカスタムフィールドの一意の識別子"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to delete",
+          "message": "削除するカスタムフィールドID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "カスタムフィールドを削除"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.desc": {
+          "source": "Triggers when a subscriber signs up through a form in Kit",
+          "message": "購読者がKitのフォームからサインアップしたときにトリガーされます"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
+          "source": "Form Subscription",
+          "message": "フォーム購読"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
+          "source": "Watch for form subscriptions",
+          "message": "フォーム購読を監視します"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "List all subscribers that have a specific tag applied in Kit",
+          "message": "Kitで特定のタグが適用されたすべての購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "List Tag Subscribers",
+          "message": "タグの購読者を一覧表示"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "購読者状態"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "購読者状態でフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag to list subscribers for",
+          "message": "購読者を一覧表示するタグ"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "List subscribers for a tag",
+          "message": "タグの購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Kit with optional filtering",
+          "message": "Kitのタグを任意のフィルタリングで一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "名前で絞り込み"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "タグIDで絞り込み"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "すべてのタグを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "List broadcasts in Kit",
+          "message": "Kitのブロードキャストを一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "ブロードキャストを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "Filter by broadcast ID",
+          "message": "ブロードキャストIDでフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List all broadcasts",
+          "message": "すべてのブロードキャストを一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List all custom fields in Kit",
+          "message": "Kitのすべてのカスタムフィールドを一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "カスタムフィールド一覧"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "すべてのカスタムフィールドを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.desc": {
+          "source": "List all subscribers that subscribed through a specific form in Kit",
+          "message": "Kitで特定のフォームから購読したすべての購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
+          "source": "List Form Subscribers",
+          "message": "フォームの購読者を一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list subscribers for",
+          "message": "購読者を一覧表示するフォーム"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "購読者状態"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "購読者状態でフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
+          "source": "List subscribers for a form",
+          "message": "フォームの購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in Kit with optional status filter",
+          "message": "Kitのフォームを任意のステータスフィルターで一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "フォーム一覧"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "フォームIDで絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by form status",
+          "message": "フォームステータスでフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "すべてのフォームを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.desc": {
+          "source": "List purchase records in Kit",
+          "message": "Kitの購入レコードを一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
+          "source": "List Purchases",
+          "message": "購入一覧"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "購入ID"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "Filter by purchase ID",
+          "message": "購入IDでフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
+          "source": "List all purchases",
+          "message": "すべての購入を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.desc": {
+          "source": "List all subscribers in a specific email sequence in Kit",
+          "message": "Kitの特定のメールシーケンス内のすべての購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Sequence Subscribers",
+          "message": "シーケンスの購読者を一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "シーケンスID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence to list subscribers for",
+          "message": "購読者を一覧表示するシーケンス"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "購読者状態"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "購読者状態でフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List subscribers for a sequence",
+          "message": "シーケンスの購読者を一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.desc": {
+          "source": "List email sequences in Kit",
+          "message": "Kitのメールシーケンスを一覧表示します"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
+          "source": "List Sequences",
+          "message": "シーケンスを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "シーケンスID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "Filter by sequence ID",
+          "message": "シーケンスIDでフィルタリング"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
+          "source": "List all sequences",
+          "message": "すべてのシーケンスを一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.desc": {
+          "source": "List subscribers in Kit with optional filtering",
+          "message": "オプションのフィルタリングを使用してKitの購読者を一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Subscribers",
+          "message": "購読者を一覧表示"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "作成日時（以降）"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "作成日で絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "作成日時（以前）"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "作成日で絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "並べ替えフィールド"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "並べ替えに使用するフィールド"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by state",
+          "message": "状態で絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "Filter by subscriber ID",
+          "message": "購読者IDで絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "タグで絞り込み"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "指定日時以降に更新"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "更新日でフィルター"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.display_name": {
+          "source": "Updated Before",
+          "message": "指定日時以前に更新"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by update date",
+          "message": "更新日でフィルター"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List all subscribers",
+          "message": "すべての購読者を一覧表示"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Kit**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Kit",
+          "message": "KitへのカスタムAPI呼び出しを実行"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber unsubscribes in Kit",
+          "message": "Kitで購読者が購読解除したときにトリガーされます"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
+          "source": "Subscriber Unsubscribed",
+          "message": "購読者が購読解除しました"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for subscriber unsubscribes",
+          "message": "購読者の購読解除を監視"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.desc": {
+          "source": "Triggers when a subscriber is activated in Kit",
+          "message": "Kitで購読者がアクティブ化されたときにトリガーされます"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
+          "source": "Subscriber Activated",
+          "message": "購読者がアクティブ化されました"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
+          "source": "Watch for new subscriber activations",
+          "message": "新規購読者のアクティブ化を監視"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.desc": {
+          "source": "Triggers when a subscriber's email bounces in Kit",
+          "message": "Kitで購読者のメールがバウンスしたときにトリガーされます"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
+          "source": "Subscriber Bounced",
+          "message": "購読者がバウンスしました"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
+          "source": "Watch for subscriber bounces",
+          "message": "購読者のバウンスを監視"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.desc": {
+          "source": "Triggers when a subscriber marks an email as spam in Kit",
+          "message": "Kitで購読者がメールを迷惑メールとして報告したときにトリガーされます"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
+          "source": "Subscriber Complained",
+          "message": "購読者が報告しました"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
+          "source": "Watch for subscriber complaints",
+          "message": "購読者の報告を監視"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.desc": {
+          "source": "Apply a tag to a subscriber in Kit by email address",
+          "message": "メールアドレスでKitの購読者にタグを適用"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
+          "source": "Tag a Subscriber",
+          "message": "購読者にタグを付与"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to tag",
+          "message": "タグを付与する購読者のメールアドレス"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscriber",
+          "message": "購読者に適用するタグの一意の識別子"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
+          "source": "Apply a tag to a subscriber",
+          "message": "購読者にタグを適用"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.desc": {
+          "source": "Remove a tag from a subscriber in Kit",
+          "message": "Kitの購読者からタグを削除"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
+          "source": "Untag a Subscriber",
+          "message": "購読者のタグを解除"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to untag",
+          "message": "タグを解除する購読者の一意の識別子"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to remove from the subscriber",
+          "message": "購読者から削除するタグの一意の識別子"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
+          "source": "Remove a tag from a subscriber",
+          "message": "購読者からタグを削除"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.desc": {
+          "source": "Unsubscribe a subscriber from Kit",
+          "message": "Kitから購読者を購読解除"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
+          "source": "Unsubscribe a Subscriber",
+          "message": "購読者を購読解除"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to unsubscribe",
+          "message": "購読解除する購読者の一意の識別子"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to unsubscribe",
+          "message": "購読解除する購読者ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
+          "source": "Unsubscribe a subscriber",
+          "message": "購読者を購読解除"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Update an existing broadcast in Kit",
+          "message": "Kitの既存のブロードキャストを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Update a Broadcast",
+          "message": "ブロードキャストを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "ブロードキャストメールのHTMLコンテンツ"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "ブロードキャストのHTMLコンテンツ"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to update",
+          "message": "更新するブロードキャストの一意の識別子"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "ブロードキャストID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to update",
+          "message": "更新するブロードキャストID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "内部参照用のブロードキャストの説明"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "ブロードキャストの説明"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "ブロードキャストの送信者として使用されるメールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "送信者のメールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "ブロードキャストに使用するメールテンプレートの識別子"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "メールテンプレートID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "メールテンプレートID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "ブロードキャストを送信する日時のタイムスタンプ。下書きの場合は `null` に設定します"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "送信日時"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "ブロードキャストの送信日時"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "ブロードキャストメールの件名"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "ブロードキャストの件名"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "メールを開く前にメールクライアントに表示されるプレビューテキスト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "プレビューテキスト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "プレビューテキスト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "ブロードキャストが一般公開されているかどうかを示します"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "ブロードキャストが公開されているかどうか"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "ブロードキャストを公開する日時のタイムスタンプ"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "公開日時"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "ブロードキャストの公開日時"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "ブロードキャストサムネイル画像の代替テキスト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "サムネイルのAlt属性"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "サムネイルのaltテキスト"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "ブロードキャストサムネイル画像のURL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "サムネイルURL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "サムネイルURL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Update an existing broadcast",
+          "message": "既存のブロードキャストを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update the label of an existing custom field in Kit",
+          "message": "Kitの既存のカスタムフィールドのラベルを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "カスタムフィールドの更新"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to update",
+          "message": "更新するカスタムフィールドの一意の識別子"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "カスタムフィールド ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to update",
+          "message": "更新するカスタムフィールドID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new display label for the custom field",
+          "message": "カスタムフィールドの新しい表示ラベル"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "ラベル"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The new custom field label",
+          "message": "新しいカスタムフィールドのラベル"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update a custom field label",
+          "message": "カスタムフィールドのラベルを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Update an existing subscriber in Kit",
+          "message": "Kitの既存の購読者を更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Update a Subscriber",
+          "message": "購読者を更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "購読者のメールアドレス"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "購読者に設定するカスタムフィールド値のハッシュ"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "カスタムフィールド"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "カスタムフィールド値"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "購読者の名"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to update",
+          "message": "更新する購読者の一意の識別子"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "購読者ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to update",
+          "message": "更新する購読者ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Update an existing subscriber",
+          "message": "既存の購読者を更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name of an existing tag in Kit",
+          "message": "Kitの既存のタグの名前を更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "タグを更新"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "タグの新しい名前"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The new tag name",
+          "message": "新しいタグ名"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "更新するタグの一意識別子"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "更新するタグ ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update a tag name",
+          "message": "タグ名を更新"
+        },
+        "app.S2l0.desc": {
+          "source": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers.",
+          "message": "Kit（旧ConvertKit）は、購読者、タグ、カスタムフィールド、ブロードキャスト、フォーム、シーケンス、および購入をサポートする、クリエイター向けのメールマーケティングプラットフォームです。\n\nこの統合では、主要リソースに対する完全なCRUD操作およびイベントベースのトリガーをサポートします。"
+        },
+        "app.S2l0.display_name": {
+          "source": "Kit",
+          "message": "Kit"
+        },
+        "app.S2l0.short_desc": {
+          "source": "Kit email marketing platform for creators",
+          "message": "クリエイター向けKitメールマーケティングプラットフォーム"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RWRpZmFjdA.action.c2NoZW1h.desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "Načítať schému adresára EDIFACT z vyrovnávacej pamäte alebo plochých súborov"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
+          "source": "Load EDIFACT Schema",
+          "message": "Načítať schému EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "Prepíše QORE_EDIFACT_DIRCACHE pre tento proces."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "Adresár vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "Prepísať koreňový adresár vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "Ako spracovávať chyby analýzy/typu vo vyrovnávacej pamäti: ignore, warn alebo error."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "Spracovanie chýb vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "Spracovať chyby analýzy/typu vo vyrovnávacej pamäti"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "Ak je `True`, načítať iba z vyrovnávacej pamäte a pri jej absencii vyhodiť výnimku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "Iba vyrovnávacia pamäť"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "Načítať iba z vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "Adresár obsahujúci ploché súbory EDMD/EDSD/EDCD/EDED/UNCL pre dané vydanie."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "Adresár"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "Adresár obsahujúci ploché súbory EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "Ak je `True`, preskočiť čítanie z vyrovnávacej pamäte na disku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "Preskočiť čítanie vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "Nečítať z vyrovnávacej pamäte na disku"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "Ak je `True`, overovať súbory EDMD prísnejšie (hlavička tabuľky segmentov, odsadenie a štrukturálna integrita)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "Prísna validácia EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "Povoliť prísnu validáciu EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "Ak je `True`, vrátiť iba počty a index segmentov bez úplných údajov schémy."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Iba súhrn"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Vrátiť iba súhrn"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "Identifikátor vydania EDIFACT (napr.: D01B)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "Vydanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "Identifikátor vydania EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "Ak je `True`, ignorovať pamäťový register a znova načítať."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Znova načítať"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "Ignorovať pamäťový register a znova načítať"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "Načítať schému adresára EDIFACT z vyrovnávacej pamäte alebo plochých súborov"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "Načítať iba súhrn schémy EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "Schema Summary",
+          "message": "Súhrn schémy"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "Prepíše QORE_EDIFACT_DIRCACHE pre tento proces."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "Adresár vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "Prepísať koreňový adresár vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "Ako spracovávať chyby analýzy/typu vo vyrovnávacej pamäti: ignore, warn alebo error."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "Spracovanie chýb vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "Spracovať chyby analýzy/typu vo vyrovnávacej pamäti"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "Ak je `True`, načítať iba z vyrovnávacej pamäte a pri jej absencii vyhodiť výnimku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "Iba vyrovnávacia pamäť"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "Načítať iba z vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "Adresár obsahujúci ploché súbory EDMD/EDSD/EDCD/EDED/UNCL pre dané vydanie."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "Adresár"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "Adresár obsahujúci ploché súbory EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "Ak je `True`, preskočiť čítanie z vyrovnávacej pamäte na disku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "Preskočiť čítanie vyrovnávacej pamäte"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "Nečítať z vyrovnávacej pamäte na disku"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "Ak je `True`, overovať súbory EDMD prísnejšie (hlavička tabuľky segmentov, odsadenie a štrukturálna integrita)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "Prísna validácia EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "Povoliť prísnu validáciu EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "Ak je `True`, vrátiť iba počty a index segmentov bez úplných údajov schémy."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Iba súhrn"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Vrátiť iba súhrn"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "Identifikátor vydania EDIFACT (napr.: D01B)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "Vydanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "Identifikátor vydania EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "Ak je `True`, ignorovať pamäťový register a znova načítať."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Znova načítať"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "Ignorovať pamäťový register a znova načítať"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "Načítať iba súhrn schémy EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "Čítať dáta správ EDIFACT z konkrétneho umiestnenia súboru"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.display_name": {
+          "source": "Read EDIFACT File",
+          "message": "Čítať súbor EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII (základné)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1 (Latin-1, predvolené)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2 (stredoeurópske)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5 (cyrilika)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9 (turecké)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8 (odporúčané pre Unicode)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used in the EDIFACT message. Common values are ISO-8859-1 (Latin-1, default for UNOC) and UTF-8 (for UNOY).",
+          "message": "Kódovanie znakov použité v správe EDIFACT. Bežné hodnoty sú ISO-8859-1 (Latin-1, predvolené pre UNOC) a UTF-8 (pre UNOY)."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kódovanie znakov"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding of the EDIFACT data",
+          "message": "Kódovanie znakov dát EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.desc": {
+          "source": "If `True`, skip service segments (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) during iteration, returning only business data segments.",
+          "message": "Ak je `True`, preskočiť servisné segmenty (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) počas iterácie a vrátiť iba segmenty obchodných dát."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.display_name": {
+          "source": "Skip Service Segments",
+          "message": "Preskočiť servisné segmenty"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.short_desc": {
+          "source": "Skip envelope segments during iteration",
+          "message": "Preskočiť obálkové segmenty počas iterácie"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "Absolútna alebo relatívna cesta k súboru EDIFACT. Podporuje štandardnú syntax umiestnenia súborov vrátane file://, sftp:// atď."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Location",
+          "message": "Umiestnenie súboru"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the EDIFACT file to read",
+          "message": "Umiestnenie súboru EDIFACT na čítanie"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "Čítať dáta správ EDIFACT z konkrétneho umiestnenia súboru"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "Zapísať dáta správ EDIFACT do konkrétneho umiestnenia súboru"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
+          "source": "Write EDIFACT Data",
+          "message": "Zapísať dáta EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII (základné)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1 (Latin-1, predvolené)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2 (stredoeurópske)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5 (cyrilika)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9 (turecké)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8 (odporúčané pre Unicode)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use for the EDIFACT output. Should match the syntax identifier (e.g., ISO-8859-1 for UNOC, UTF-8 for UNOY).",
+          "message": "Kódovanie znakov, ktoré sa má použiť pre výstup EDIFACT. Malo by sa zhodovať s identifikátorom syntaxe (napr. ISO-8859-1 pre UNOC, UTF-8 pre UNOY)."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kódovanie znakov"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Kódovanie znakov pre výstup"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.desc": {
+          "source": "If `True`, add a newline character after each segment terminator. This makes the output more readable but increases file size slightly.",
+          "message": "Ak je `True`, pridať znak nového riadka za každý ukončovač segmentu. Tým sa výstup stane čitateľnejším, no mierne sa zvýši veľkosť súboru."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.display_name": {
+          "source": "Add Line Breaks",
+          "message": "Pridať zlomy riadkov"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.short_desc": {
+          "source": "Add newlines after each segment",
+          "message": "Pridať nové riadky za každý segment"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0E.desc": {
+          "source": "Level A - basic Latin uppercase",
+          "message": "Úroveň A – základná latinka, veľké písmená"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0I.desc": {
+          "source": "Level B - Latin upper/lowercase",
+          "message": "Úroveň B – latinka, veľké/malé písmená"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0M.desc": {
+          "source": "Level C - ISO 8859-1 (Latin-1, most common)",
+          "message": "Úroveň C – ISO 8859-1 (Latin-1, najbežnejšie)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Q.desc": {
+          "source": "Level D - ISO 8859-2 (Central European)",
+          "message": "Úroveň D – ISO 8859-2 (stredoeurópske)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0U.desc": {
+          "source": "Level E - ISO 8859-5 (Cyrillic)",
+          "message": "Úroveň E – ISO 8859-5 (cyrilika)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Y.desc": {
+          "source": "Level F - ISO 8859-7 (Greek)",
+          "message": "Úroveň F – ISO 8859-7 (grécke)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0c.desc": {
+          "source": "Level G - ISO 8859-3 (South European)",
+          "message": "Úroveň G – ISO 8859-3 (juhoeurópske)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0g.desc": {
+          "source": "Level H - ISO 8859-4 (North European)",
+          "message": "Úroveň H – ISO 8859-4 (severoeurópske)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0k.desc": {
+          "source": "Level I - ISO 8859-6 (Arabic)",
+          "message": "Úroveň I – ISO 8859-6 (arabské)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0o.desc": {
+          "source": "Level J - ISO 8859-8 (Hebrew)",
+          "message": "Úroveň J – ISO 8859-8 (hebrejské)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0s.desc": {
+          "source": "Level K - ISO 8859-9 (Turkish)",
+          "message": "Úroveň K – ISO 8859-9 (turecké)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1g.desc": {
+          "source": "Level X - ISO 2022 with escapes",
+          "message": "Úroveň X – ISO 2022 s riadiacimi sekvenciami escape"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1k.desc": {
+          "source": "Level Y - UTF-8 (recommended for Unicode)",
+          "message": "Úroveň Y – UTF-8 (odporúčané pre Unicode)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.desc": {
+          "source": "The syntax identifier to use in the UNB segment. Defines the character set and syntax rules. UNOC (ISO 8859-1) is most common.",
+          "message": "Identifikátor syntaxe, ktorý sa má použiť v segmente UNB. Definuje znakovú sadu a syntaktické pravidlá. Najbežnejší je UNOC (ISO 8859-1)."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.display_name": {
+          "source": "Syntax Identifier",
+          "message": "Identifikátor syntaxe"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.short_desc": {
+          "source": "EDIFACT syntax identifier for UNB",
+          "message": "Identifikátor syntaxe EDIFACT pre UNB"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjE.desc": {
+          "source": "Syntax version 1",
+          "message": "Verzia syntaxe 1"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjI.desc": {
+          "source": "Syntax version 2",
+          "message": "Verzia syntaxe 2"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjM.desc": {
+          "source": "Syntax version 3 (most common)",
+          "message": "Verzia syntaxe 3 (najbežnejšia)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjQ.desc": {
+          "source": "Syntax version 4",
+          "message": "Verzia syntaxe 4"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.desc": {
+          "source": "The syntax version number to use in the UNB segment. Version 3 is most commonly used.",
+          "message": "Číslo verzie syntaxe, ktoré sa má použiť v segmente UNB. Najčastejšie sa používa verzia 3."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.display_name": {
+          "source": "Syntax Version",
+          "message": "Verzia syntaxe"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.short_desc": {
+          "source": "EDIFACT syntax version for UNB",
+          "message": "Verzia syntaxe EDIFACT pre UNB"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to write the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "Absolútna alebo relatívna cesta na zápis súboru EDIFACT. Podporuje štandardnú syntax umiestnenia súborov vrátane file://, sftp:// atď."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Cesta k súboru"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the EDIFACT output file",
+          "message": "Cesta k výstupnému súboru EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.desc": {
+          "source": "If `True`, write the UNA segment at the beginning of the interchange to explicitly define the delimiter characters. Recommended for interoperability.",
+          "message": "Ak je `True`, zapísať segment UNA na začiatok výmeny údajov na explicitné definovanie oddeľovacích znakov. Odporúčané pre interoperabilitu."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.display_name": {
+          "source": "Write UNA Segment",
+          "message": "Zapísať segment UNA"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.short_desc": {
+          "source": "Include UNA service string advice",
+          "message": "Zahrnúť odporúčanie servisného reťazca UNA"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "Zapísať dáta správ EDIFACT do konkrétneho umiestnenia súboru"
+        },
+        "app.RWRpZmFjdA.desc": {
+          "source": "Read and write UN/EDIFACT electronic data interchange messages",
+          "message": "Čítať a zapisovať správy elektronickej výmeny údajov UN/EDIFACT"
+        },
+        "app.RWRpZmFjdA.display_name": {
+          "source": "EDIFACT Messages",
+          "message": "Správy EDIFACT"
+        },
+        "app.RWRpZmFjdA.short_desc": {
+          "source": "Read and write UN/EDIFACT EDI messages",
+          "message": "Čítať a zapisovať správy EDI UN/EDIFACT"
+        }
+      }
+    }
+  }
+}

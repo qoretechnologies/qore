@@ -1,0 +1,537 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a DeepSeek model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- General-purpose chat with `deepseek-chat`\n- Multi-step reasoning with `deepseek-reasoner` — the response carries a `reasoning_content` field alongside the final `content`\n- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
+          "message": "OpenAI 호환 `/v1/chat/completions` 엔드포인트를 사용하여 DeepSeek 모델에 채팅 메시지 목록을 전송하고 생성된 응답을 반환합니다.\n\n**사용 사례 예시**:\n- `deepseek-chat`을(를) 사용한 범용 대화\n- `deepseek-reasoner`을(를) 사용한 다단계 추론 — 응답에는 최종 `content`와(과) 함께 `reasoning_content` 필드가 포함됩니다\n- 도구 호출 에이전트(요청 시 `tools` 및 `tool_choice` 전달)\n- 구조화된 추출(JSON 스키마와 함께 `response_format` 전달)"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "채팅 완성"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens based on how often they have already appeared in the output.  Range `-2.0` to `2.0`.  Positive values reduce verbatim repetition.",
+          "message": "토큰이 출력에 이미 나타난 빈도에 따라 페널티를 부여합니다. 범위는 `-2.0`부터 `2.0`까지입니다. 양수 값은 단어 그대로의 반복을 줄입니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "빈도 페널티"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize repeated tokens proportional to their frequency",
+          "message": "반복되는 토큰의 빈도에 비례하여 페널티 부여"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Name of the DeepSeek model to use for this request.  Common values:\n\n- `deepseek-chat` — general-purpose chat model\n- `deepseek-reasoner` — multi-step reasoning model (emits `reasoning_content` alongside the final answer)",
+          "message": "이 요청에 사용할 DeepSeek 모델의 이름입니다. 일반적인 값:\n\n- `deepseek-chat` — 범용 대화 모델\n- `deepseek-reasoner` — 다단계 추론 모델(최종 답변과 함께 `reasoning_content` 출력)"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "The DeepSeek model to use",
+          "message": "사용할 DeepSeek 모델"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.  Hard cap is 8192 on most DeepSeek models; consult the platform docs for per-model limits.",
+          "message": "생성할 최대 토큰 수입니다. 대부분의 DeepSeek 모델에서 최대 한도는 8192개입니다. 모델별 한도는 플랫폼 문서를 참조하세요."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "최대 토큰 수"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "완성본에서 출력할 최대 토큰 수"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.  Each message has a `role` (`system`, `user`, `assistant`, or `tool`) and `content` (text).",
+          "message": "메시지 객체 목록 형태의 대화 기록입니다. 각 메시지에는 `role`(`system`, `user`, `assistant` 또는 `tool`) 및 `content`(텍스트)가 있습니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "대화를 구성하는 채팅 메시지 목록"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.  With a fixed `seed`, `temperature`, and prompt, the same request returns the same output.",
+          "message": "결정론적 샘플링을 위한 정수 시드입니다. 고정된 `seed`, `temperature` 및 프롬프트를 사용하면 동일한 요청에 대해 동일한 출력이 반환됩니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "시드"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "결정론적 샘플링 시드"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.  Generation halts as soon as the model emits any of them.  Can be a single string or a list of strings.",
+          "message": "하나 이상의 정지 시퀀스입니다. 모델이 이 중 하나라도 출력하는 즉시 생성이 중단됩니다. 단일 문자열 또는 문자열 목록일 수 있습니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "문자열 또는 문자열 목록, 출력 시 생성 중단"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as Server-Sent Events (SSE) instead of returning a single response.  Most data provider flows expect non-streaming (`False` / omitted); enable only when wiring into a streaming consumer.",
+          "message": "`True`인 경우 서버는 단일 응답을 반환하는 대신 부분 완료를 SSE(Server-Sent Events)로 스트리밍합니다. 대부분의 데이터 공급자 흐름은 비스트리밍(`False` / 생략)을 예상하므로 스트리밍 컨슈머에 연결할 때만 활성화하세요."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "스트림"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as Server-Sent Events",
+          "message": "부분 완료를 Server-Sent Events로 스트리밍"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared in the output, regardless of frequency.  Range `-2.0` to `2.0`.  Positive values encourage topic diversity.",
+          "message": "빈도에 관계없이 출력에 이미 나타난 토큰에 페널티를 부여합니다. 범위는 `-2.0`부터 `2.0`까지입니다. 양수 값은 주제 다양성을 촉진합니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "존재 페널티"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize any token that has already appeared",
+          "message": "이미 나타난 모든 토큰에 페널티 부여"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape.  The most common use is JSON mode: `{type: \"json_object\"}`.",
+          "message": "구조화된 응답 형태를 강제하는 해시입니다. 가장 일반적인 용도는 JSON 모드(`{type: \"json_object\"}`)입니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "구조화된 출력 강제(예: JSON)"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - never call a tool"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - model decides"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required - must call a tool"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls tool invocation.\n\n- `none` — never call a tool (text-only reply)\n- `auto` — model decides (default when `tools` is set)\n- `required` — model must call at least one tool",
+          "message": "도구 호출을 제어합니다.\n\n- `none` — 도구를 호출하지 않음(텍스트 전용 응답)\n- `auto` — 모델이 결정(`tools` 설정 시 기본값)\n- `required` — 모델이 최소 하나 이상의 도구를 호출해야 함"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "모델이 도구를 호출해야 하는지 여부 및 호출할 도구"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.  Each entry is a hash with a `type` field (`function`) and a `function` hash containing `name`, `description`, and a JSON-schema `parameters` object.",
+          "message": "모델이 호출할 수 있는 도구 정의 목록입니다. 각 항목은 `type` 필드(`function`)와 `name`, `description` 및 JSON 스키마 `parameters` 객체를 포함하는 `function` 해시로 구성된 해시입니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "모델이 호출할 수 있는 OpenAI 스타일 도구 정의"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff.  Range `0.0` to `1.0`.  Usually left at `1.0`.",
+          "message": "Nucleus 샘플링 컷오프입니다. 범위는 `0.0`부터 `1.0`까지입니다. 일반적으로 `1.0`(으)로 둡니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "핵 샘플링(Nucleus sampling) 컷오프(0-1)"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.  Defaults to `1.0` on DeepSeek.\n\nDeepSeek recommends `0.0` for coding/math, `1.3` for general chat, and `1.5` for creative writing.",
+          "message": "출력의 무작위성을 제어합니다. 범위는 `0.0`부터 `2.0`까지입니다. DeepSeek의 기본값은 `1.0`입니다.\n\nDeepSeek에서는 코딩/수학의 경우 `0.0`, 일반 대화의 경우 `1.3`, 창작 글쓰기의 경우 `1.5`을(를) 권장합니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "온도"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2); higher values give more varied output",
+          "message": "샘플링 온도(0~2), 값이 높을수록 더 다양한 출력이 생성됨"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
+          "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation.",
+          "message": "최종 사용자를 나타내는 불투명 식별자입니다. 악용 추적 및 사용량 귀속을 위해 서버 측에 기록되며 생성에는 영향을 주지 않습니다."
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.display_name": {
+          "source": "User ID",
+          "message": "사용자 ID"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.short_desc": {
+          "source": "Opaque end-user identifier for abuse tracking",
+          "message": "악용 추적을 위한 불투명 최종 사용자 식별자"
+        },
+        "app.RGVlcFNlZWs.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a DeepSeek model",
+          "message": "DeepSeek 모델에서 채팅 완성 생성"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **DeepSeek** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **DeepSeek**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에 아직 최고 수준 작업으로 노출되지 않은 엔드포인트에 이 작업을 사용하세요."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.RGVlcFNlZWs.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to DeepSeek",
+          "message": "DeepSeek에 사용자 지정 API 호출 수행"
+        },
+        "app.RGVlcFNlZWs.desc": {
+          "source": "Provides access to [DeepSeek](https://platform.deepseek.com) — a frontier-class LLM provider offering budget-friendly chat and reasoning models.\n\nDeepSeek exposes an OpenAI-compatible chat-completions API, so DeepSeek models drop into existing OpenAI-shape consumers (chat, tool calling, structured-output JSON schema, streaming) with only a base-URL change.\n\n**Common use cases**:\n- **Cost-sensitive chat assistants** using `deepseek-chat` — competitive quality at a fraction of frontier-model pricing\n- **Multi-step reasoning** using `deepseek-reasoner` — emits `reasoning_content` alongside the final answer for explainable outputs\n- **Tool-calling agents** — OpenAI-shape `tools` and `tool_choice` work unchanged\n- **Structured extraction** via JSON-schema `response_format`",
+          "message": "가성비 뛰어난 대화 및 추론 모델을 제공하는 프론티어급 LLM 제공업체인 [DeepSeek](https://platform.deepseek.com)에 대한 액세스를 제공합니다.\n\nDeepSeek는 OpenAI 호환 chat-completions API를 노출하므로 기본 URL만 변경하여 기존 OpenAI 형태의 소비자(채팅, 도구 호출, 구조화된 출력 JSON 스키마, 스트리밍)에 DeepSeek 모델을 바로 적용할 수 있습니다.\n\n**주요 사용 사례**:\n- `deepseek-chat`을(를) 사용하는 **비용 효율적인 대화형 어시스턴트** — 프론티어 모델 가격의 일부만으로 경쟁력 있는 품질 제공\n- `deepseek-reasoner`을(를) 사용하는 **다단계 추론** — 설명 가능한 출력을 위해 최종 답변과 함께 `reasoning_content` 출력\n- **도구 호출 에이전트** — OpenAI 형태의 `tools` 및 `tool_choice` 수정 없이 작동\n- JSON 스키마 `response_format`을(를) 통한 **구조화된 추출**"
+        },
+        "app.RGVlcFNlZWs.display_name": {
+          "source": "DeepSeek",
+          "message": "DeepSeek"
+        },
+        "app.RGVlcFNlZWs.short_desc": {
+          "source": "DeepSeek frontier and reasoning LLMs via an OpenAI-compatible API",
+          "message": "OpenAI 호환 API를 통한 DeepSeek 프론티어 및 추론 LLM"
+        }
+      }
+    }
+  }
+}

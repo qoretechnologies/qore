@@ -1,0 +1,605 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AssemblyAI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **AssemblyAI** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú vystavené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AssemblyAI",
+          "message": "Vykonať vlastné volanie API do AssemblyAI"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.desc": {
+          "source": "Submits a public audio URL to AssemblyAI's `/v2/transcript` endpoint and waits for the transcript to complete.  Internally drives the upload → poll → fetch lifecycle via @ref QoreAsyncJobUtils::AsyncJobPoller \"AsyncJobPoller\".\n\nAll analytics are opt-in — `speaker_labels`, `summarization`, `sentiment_analysis`, `entity_detection`, `iab_categories`, and `content_safety` add corresponding fields to the response when set to `True`.",
+          "message": "Odošle verejnú adresu URL zvuku do koncového bodu `/v2/transcript` služby AssemblyAI a počká na dokončenie prepisu. Interne riadi životný cyklus nahranie → kontrola stavu → načítanie prostredníctvom @ref QoreAsyncJobUtils::AsyncJobPoller \"AsyncJobPoller\".\n\nVšetky analytiky sú voliteľné – `speaker_labels`, `summarization`, `sentiment_analysis`, `entity_detection`, `iab_categories` a `content_safety` pridajú do odpovede zodpovedajúce polia, ak sú nastavené na `True`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.display_name": {
+          "source": "Transcribe Audio",
+          "message": "Prepísať zvuk"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.desc": {
+          "source": "When `True`, AssemblyAI flags potentially sensitive content (profanity, violence, hate-speech, etc.).",
+          "message": "Keď je nastavené na `True`, AssemblyAI označí potenciálne citlivý obsah (vulgárne výrazy, násilie, nenávistné prejavy atď.)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.display_name": {
+          "source": "Content Safety",
+          "message": "Bezpečnosť obsahu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Y29udGVudF9zYWZldHk.short_desc": {
+          "source": "Flag sensitive content categories",
+          "message": "Označiť kategórie citlivého obsahu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.desc": {
+          "source": "Public URL of the audio file to transcribe.  AssemblyAI fetches the file from this URL; it must be reachable from the public internet.  Supports `mp3`, `mp4`, `wav`, `flac`, `ogg`, `webm`, `m4a`, and more.",
+          "message": "Verejná URL adresa zvukového súboru na prepis. AssemblyAI stiahne súbor z tejto adresy URL; musí byť dostupný z verejného internetu. Podporuje `mp3`, `mp4`, `wav`, `flac`, `ogg`, `webm`, `m4a` a ďalšie."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.display_name": {
+          "source": "Audio URL",
+          "message": "URL adresa zvuku"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.YXVkaW9fdXJs.short_desc": {
+          "source": "Public URL of the audio file to transcribe",
+          "message": "Verejná URL adresa zvukového súboru na prepis"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.desc": {
+          "source": "When `True`, AssemblyAI returns detected entities with type labels (PERSON_NAME, ORG, LOCATION, EVENT, etc.).",
+          "message": "Keď je `True`, AssemblyAI vracia rozpoznané entity s označeniami typov (PERSON_NAME, ORG, LOCATION, EVENT atď.)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.display_name": {
+          "source": "Entity Detection",
+          "message": "Rozpoznávanie entít"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.ZW50aXR5X2RldGVjdGlvbg.short_desc": {
+          "source": "Detect entities (people, places, organizations, etc.)",
+          "message": "Rozpoznať entity (ľudia, miesta, organizácie atď.)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.desc": {
+          "source": "Apply text formatting — capitalization, written-form numbers, dates, currency.",
+          "message": "Použiť formátovanie textu – veľké písmená, slovom písané čísla, dátumy, mena."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.display_name": {
+          "source": "Format Text",
+          "message": "Formátovať text"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.Zm9ybWF0X3RleHQ.short_desc": {
+          "source": "Apply text formatting (capitalization, numbers, etc.)",
+          "message": "Použiť formátovanie textu (veľké písmená, čísla atď.)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.desc": {
+          "source": "When `True`, AssemblyAI classifies the transcript into IAB Tech Lab topic categories.",
+          "message": "Keď je `True`, AssemblyAI zatriedi prepis do kategórií tém IAB Tech Lab."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.display_name": {
+          "source": "IAB Categories (Topic Detection)",
+          "message": "Kategórie IAB (rozpoznávanie tém)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.aWFiX2NhdGVnb3JpZXM.short_desc": {
+          "source": "Classify content into IAB topic categories",
+          "message": "Zatriediť obsah do kategórií tém IAB"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (BCP-47 or ISO-639-1, depending on model).  Omit to enable automatic detection (see `language_detection`).",
+          "message": "Kód jazyka (BCP-47 alebo ISO-639-1 podľa modelu). Vynechajte pre povolenie automatického rozpoznávania (pozri `language_detection`)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Kód jazyka"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "BCP-47 / ISO-639-1 language code (e.g., `en_us`, `de`, `fr`)",
+          "message": "Kód jazyka BCP-47 / ISO-639-1 (napr. `en_us`, `de`, `fr`)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.desc": {
+          "source": "When `True`, AssemblyAI auto-detects the spoken language and ignores `language_code`.",
+          "message": "Keď je `True`, AssemblyAI automaticky rozpozná hovorený jazyk a ignoruje `language_code`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.display_name": {
+          "source": "Auto-Detect Language",
+          "message": "Automaticky rozpoznať jazyk"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.short_desc": {
+          "source": "Auto-detect the spoken language",
+          "message": "Automaticky rozpoznať hovorený jazyk"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.desc": {
+          "source": "When `True`, AssemblyAI returns per-utterance sentiment (positive / negative / neutral).",
+          "message": "Keď je `True`, AssemblyAI vracia sentiment pre každý prehovor (pozitívny / negatívny / neutrálny)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.display_name": {
+          "source": "Sentiment Analysis",
+          "message": "Analýza sentimentu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c2VudGltZW50X2FuYWx5c2lz.short_desc": {
+          "source": "Analyze sentiment per sentence/utterance",
+          "message": "Analyzovať sentiment pre každú vetu/prehovor"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.desc": {
+          "source": "When `True`, attempts speaker diarization — labels each utterance with `speaker: \"A\"`, `\"B\"`, etc.",
+          "message": "Keď je `True`, pokúsi sa o diarizáciu rečníkov – označí každý prehovor ako `speaker: \"A\"`, `\"B\"` atď."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.display_name": {
+          "source": "Speaker Labels (Diarization)",
+          "message": "Označenia rečníkov (diarizácia)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlYWtlcl9sYWJlbHM.short_desc": {
+          "source": "Identify distinct speakers in the audio",
+          "message": "Identifikovať jednotlivých rečníkov v zvuku"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOm5hbm8.display_name": {
+          "source": "Nano (broadest language support)",
+          "message": "Nano (najširšia podpora jazykov)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnNsYW0tMQ.display_name": {
+          "source": "Slam 1",
+          "message": "Slam 1"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.allowed-value.c3RyaW5nOnVuaXZlcnNhbA.display_name": {
+          "source": "Universal (latest)",
+          "message": "Universal (najnovší)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.desc": {
+          "source": "AssemblyAI transcription model — `universal` (latest general-purpose), `slam-1` (smaller / faster), or `nano` (supports the broadest set of languages but lower accuracy).",
+          "message": "Model prepisu AssemblyAI – `universal` (najnovší univerzálny), `slam-1` (menší / rýchlejší) alebo `nano` (podporuje najširšiu sadu jazykov, ale s nižšou presnosťou)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.display_name": {
+          "source": "Speech Model",
+          "message": "Model reči"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3BlZWNoX21vZGVs.short_desc": {
+          "source": "AssemblyAI transcription model",
+          "message": "Model prepisu AssemblyAI"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.desc": {
+          "source": "When `True`, returns a summary of the transcript in addition to the words.  Combine with `summary_model` and `summary_type` for fine-grained control.",
+          "message": "Keď je `True`, okrem slov vráti aj zhrnutie prepisu. Pre detailnejšiu kontrolu skombinujte s `summary_model` a `summary_type`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.display_name": {
+          "source": "Summarization",
+          "message": "Zhrnutie"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyaXphdGlvbg.short_desc": {
+          "source": "Generate a summary of the transcript",
+          "message": "Vygenerovať zhrnutie prepisu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHM.display_name": {
+          "source": "Bullets",
+          "message": "Odrážky"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmJ1bGxldHNfdmVyYm9zZQ.display_name": {
+          "source": "Bullets (Verbose)",
+          "message": "Odrážky (podrobné)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmdpc3Q.display_name": {
+          "source": "Gist",
+          "message": "Hlavná myšlienka"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOmhlYWRsaW5l.display_name": {
+          "source": "Headline",
+          "message": "Nadpis"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.allowed-value.c3RyaW5nOnBhcmFncmFwaA.display_name": {
+          "source": "Paragraph",
+          "message": "Odsek"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.desc": {
+          "source": "Summary output style — `bullets`, `bullets_verbose`, `gist`, `headline`, or `paragraph`.",
+          "message": "Štýl výstupu zhrnutia – `bullets`, `bullets_verbose`, `gist`, `headline` alebo `paragraph`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.display_name": {
+          "source": "Summary Type",
+          "message": "Typ zhrnutia"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV90eXBl.short_desc": {
+          "source": "Summary output style",
+          "message": "Štýl výstupu zhrnutia"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmNhdGNoeQ.display_name": {
+          "source": "Catchy",
+          "message": "Pútavý"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmNvbnZlcnNhdGlvbmFs.display_name": {
+          "source": "Conversational",
+          "message": "Konverzačný"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.allowed-value.c3RyaW5nOmluZm9ybWF0aXZl.display_name": {
+          "source": "Informative",
+          "message": "Informatívny"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.desc": {
+          "source": "Summarization model name when `summarization` is `True`.",
+          "message": "Názov modelu zhrnutia, keď je `summarization` `True`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
+          "source": "Summary Model",
+          "message": "Model zhrnutia"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
+          "source": "Summarization model (used with `summarization`)",
+          "message": "Model zhrnutia (používa sa s `summarization`)"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Interval between job-status polls.  Defaults to `3s`.  Lower values fetch results sooner at the cost of more API calls.",
+          "message": "Interval medzi kontrolami stavu úlohy. Predvolená hodnota je `3s`. Nižšie hodnoty načítajú výsledky skôr za cenu väčšieho počtu volaní API."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Polling Interval",
+          "message": "Interval dopytovania"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Time between transcript status polls",
+          "message": "Čas medzi kontrolami stavu prepisu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.desc": {
+          "source": "Add punctuation to the transcript.",
+          "message": "Pridať do prepisu interpunkciu."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.display_name": {
+          "source": "Punctuate",
+          "message": "Pridať interpunkciu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cHVuY3R1YXRl.short_desc": {
+          "source": "Add punctuation to the transcript",
+          "message": "Pridať do prepisu interpunkciu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.desc": {
+          "source": "When provided, AssemblyAI POSTs to this URL once the transcript reaches a terminal state — useful for fire-and-forget submission.",
+          "message": "Ak je zadaná, AssemblyAI odošle požiadavku POST na túto URL adresu hneď, ako prepis dosiahne koncový stav – užitočné pre odoslanie bez čakania na výsledok (fire-and-forget)."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.display_name": {
+          "source": "Webhook URL",
+          "message": "Webhook URL"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.d2ViaG9va191cmw.short_desc": {
+          "source": "Optional webhook for job-completion notification",
+          "message": "Voliteľný webhook pre oznámenie o dokončení úlohy"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.desc": {
+          "source": "Maximum total wait time for the polling loop.  Defaults to `30m`.  When exceeded, the action raises `ASSEMBLYAI-ERROR`.",
+          "message": "Maximálny celkový čas čakania pre slučku dopytovania. Predvolená hodnota je `30m`. Pri prekročení akcia vyvolá `ASSEMBLYAI-ERROR`."
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.display_name": {
+          "source": "Overall Transcription Timeout",
+          "message": "Celkový časový limit prepisu"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.dHJhbnNjcmlwdGlvbl90aW1lb3V0.short_desc": {
+          "source": "Maximum total wait time for the polling loop",
+          "message": "Maximálny celkový čas čakania pre slučku dopytovania"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.short_desc": {
+          "source": "Transcribe an audio URL via AssemblyAI (async)",
+          "message": "Prepísať audio URL cez AssemblyAI (asynchrónne)"
+        },
+        "app.QXNzZW1ibHlBSQ.desc": {
+          "source": "Provides access to [AssemblyAI](https://www.assemblyai.com) — a speech AI platform offering high-accuracy transcription with the Universal-2 and Slam-1 model families plus an extensive analytics layer.\n\n**Common use cases**:\n- **Recorded transcription**: convert podcasts, meeting recordings, voicemails, and customer-service calls into searchable text\n- **Conversation intelligence**: speaker diarization, sentiment analysis, topic detection, and entity extraction from multi-party recordings\n- **Compliance and moderation**: content-safety classification for flagging sensitive material in recorded audio\n- **Automatic summarization**: generate `bullets`, `gist`, `headline`, or `paragraph` summaries alongside the transcript",
+          "message": "Poskytuje prístup k službe [AssemblyAI](https://www.assemblyai.com) – platforme umelej inteligencie pre reč, ktorá ponúka vysoko presný prepis s rodinami modelov Universal-2 a Slam-1 spolu s rozsiahlou vrstvou analýz.\n\n**Bežné prípady použitia**:\n- **Prepis nahrávok**: konverzia podcastov, záznamov stretnutí, hlasových správ a hovorov zákazníckeho servisu na prehľadávateľný text\n- **Konverzačná inteligencia**: diarizácia rečníkov, analýza sentimentu, rozpoznávanie tém a extrakcia entít zo záznamov viacerých účastníkov\n- **Súlad a moderovanie**: klasifikácia bezpečnosti obsahu na označenie citlivého materiálu v nahranom zvuku\n- **Automatické zhrnutie**: generovanie zhrnutí typu `bullets`, `gist`, `headline` alebo `paragraph` popri prepise"
+        },
+        "app.QXNzZW1ibHlBSQ.display_name": {
+          "source": "AssemblyAI",
+          "message": "AssemblyAI"
+        },
+        "app.QXNzZW1ibHlBSQ.short_desc": {
+          "source": "AssemblyAI speech-to-text with rich analytics",
+          "message": "AssemblyAI prevod reči na text s pokročilou analýzou"
+        }
+      }
+    }
+  }
+}

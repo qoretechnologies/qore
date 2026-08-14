@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.R21haWw.action.Z2V0.desc": {
+          "source": "Retrieve a message",
+          "message": "メッセージを取得"
+        },
+        "app.R21haWw.action.Z2V0.display_name": {
+          "source": "Retrieve a Message",
+          "message": "メッセージの取得"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "取得するメッセージの ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.short_desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "取得するメッセージの ID"
+        },
+        "app.R21haWw.action.Z2V0.short_desc": {
+          "source": "Retrieve a message",
+          "message": "メッセージを取得"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve an attachment",
+          "message": "添付ファイルを取得"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "添付ファイルの取得"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "取得する添付ファイルのID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.display_name": {
+          "source": "Attachment ID",
+          "message": "添付ファイルID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.short_desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "取得する添付ファイルのID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "取得する添付ファイルが含まれるメッセージのID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.short_desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "取得する添付ファイルが含まれるメッセージのID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve an attachment",
+          "message": "添付ファイルを取得"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
+          "message": "メッセージを完全に削除します。**この操作は元に戻せません**: メッセージはゴミ箱に移動せず、コピーも残りません。メッセージを直ちに破棄する必要がある場合を除き、`trash-message` を使用してください。\n\n処理が成功した後、`watch` または `watch-attachment` イベントのコンシューマーから、イベントに含まれる `message_id` を使用してこのアクションを実行してください。`delete_messages` を使用してウォッチ自体から削除すると、コンシューマーの処理が成功したかどうかに関わらず、イベントが発生するとすぐにメッセージが破棄されます。\n\nGmail APIはこの呼び出しに対してコンテンツを返しません"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "メッセージを削除"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.desc": {
+          "source": "The ID of the message to delete permanently; watch events carry this value as `message_id`",
+          "message": "完全に削除するメッセージのID。ウォッチイベントはこの値を `message_id` として渡します"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.short_desc": {
+          "source": "The ID of the message to delete permanently",
+          "message": "完全に削除するメッセージのID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Permanently delete a message; this cannot be undone",
+          "message": "メッセージを完全に削除します（元に戻すことはできません）"
+        },
+        "app.R21haWw.action.bGlzdA.desc": {
+          "source": "Search for messages in the account",
+          "message": "アカウント内のメッセージを検索"
+        },
+        "app.R21haWw.action.bGlzdA.display_name": {
+          "source": "Search for Messages",
+          "message": "メッセージの検索"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "検索に迷惑メールとゴミ箱フォルダを含めますか？"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "迷惑メールとゴミ箱を含めるか？"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "検索に迷惑メールとゴミ箱フォルダを含めますか？"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "指定されたすべてのラベルIDに一致するラベルを持つメッセージのみを返します。スレッド内のメッセージには、同じスレッド内の他のメッセージにはないラベルが付いている場合があります"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "ラベル"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "指定されたすべてのラベルIDに一致するラベルを持つメッセージのみを返す"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "最大結果数"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "リスト内の特定の結果ページを取得するためのページトークン"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "リスト内の特定の結果ページを取得するためのページトークン"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "メッセージを取得するためのGmail検索条件（例: `in:inbox to:me@gmail.com subject:hello is:unread`）"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "検索条件"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "メッセージを取得するためのGmail検索条件"
+        },
+        "app.R21haWw.action.bGlzdA.short_desc": {
+          "source": "Search for messages",
+          "message": "メッセージを検索"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Gmail** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ提供されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gmail",
+          "message": "GmailへのカスタムAPI呼び出しを実行"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message",
+          "message": "メッセージを送信"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "メッセージを送信"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "メールの1つ以上の `Cc:` アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "CCアドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "メッセージの添付ファイル"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "添付ファイル"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "メッセージの添付ファイル"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "メッセージ本文"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "メッセージボディ"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "メッセージ本文"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "コンテンツエンコーディングなし（非推奨）"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "コンテンツエンコーディングなし（非推奨）"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "バイナリデータに最適"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "バイナリデータに最適"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "文字列データには `quoted-printable`、バイナリデータには `base64`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "文字列データには「quoted-printable」、バイナリデータには「base64」"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "文字列データに最適"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "文字列データに最適"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "添付ファイルに使用するエンコーディング:\n- `default`: 文字列データには `quoted-printable`、バイナリデータには `base64`\n- `none`: コンテンツエンコーディングなし（非推奨）\n- `quoted-printable`: quoted printableエンコーディング\n- `base64`: base64エンコーディング"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "本文のエンコーディング"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "添付ファイルに使用するエンコーディング"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTMLテキスト"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "メッセージ本文のMIMEタイプ"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "本文のMIMEタイプ"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "メッセージ本文のMIMEタイプ"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "メール用の1つ以上の `Bcc:` アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "BCCアドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "メールの送信者アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "送信者"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "メールの送信者アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "メールの件名"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "メールの件名"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "メール用の1つ以上の `To:` アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.display_name": {
+          "source": "To",
+          "message": "宛先"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "メッセージの受信者アドレス"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message",
+          "message": "メッセージを送信"
+        },
+        "app.R21haWw.action.d2F0Y2g.desc": {
+          "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
+          "message": "新しいメールに応答します。新しいメールを受信すると、メッセージ本文を含むすべてのメッセージ情報が出力データとして返されます"
+        },
+        "app.R21haWw.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "新しいメール"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its event?\n\n**The message is deleted as soon as its event has been raised, whatever the event consumer then does with it.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the message, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` the event carries",
+          "message": "イベントを発生させた後、一致した各メッセージを完全に削除しますか？\n\n**イベントコンシューマーがその後どのように処理するかにかかわらず、イベントが発生するとすぐにメッセージは削除されます。** 処理の途中で失敗、タイムアウト、または再起動したコンシューマーはメッセージの唯一のコピーをすでに失っており、Gmailの削除は取り消すことができません。\n\nソースメッセージを失ってはならないワークロードの場合は、このオプションを未設定のままにし、処理が成功した後にコンシューマーからイベントに含まれる `message_id` を指定して `delete-message` または `trash-message` アクションを使用してください"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "メッセージを削除しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its event?",
+          "message": "イベントを発生させた後、一致した各メッセージを完全に削除しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "1回のポーリングサイクルで配信されるメッセージの最大数。未設定または `0` の場合は無制限を意味します。\n\n制限はバックログの**最も古い**方から適用されるため、監視カーソルは連続して進み、残りのメッセージはスキップされずに後続のサイクルで配信されます。大量のバックログが蓄積する可能性がある場合に、単一のサイクルが実行できる作業量を制限するために使用します"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "サイクルあたりの最大メッセージ数"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "1回のポーリングサイクルで配信されるメッセージの最大数"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "一致する最新のメッセージを1件のみ保持"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "全体で最新"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "各Gmailスレッド内の最新メッセージを保持"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "スレッドごとに最新"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "各グループで最新のメッセージが選択される前の、一致するメッセージのグループ化方法。`snapshot_mode` が設定されていない場合は無視されます。\n\n- `all`: 1つのグローバルグループ。各サイクルは一致する最新メッセージを含む単一のイベントを発生させます\n- `thread`: Gmailスレッドごとにグループ化。各サイクルはスレッドごとにそのスレッドの最新メッセージを含む1つのイベントを発生させます"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "スナップショットのグループ化"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "最新のメッセージが選択される前のメッセージのグループ化方法"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "バックログを再生するのではなく、最新のメッセージにまとめます。\n\n一部のフィードはログではなくスナップショットです。各メッセージは現在の状態を再記述するため、停止後は最後のメッセージのみを処理すれば十分です。このオプションを設定すると、ポーリングサイクルごとにグループ（`snapshot_key` を参照）あたり1つのイベントが発生し、一致する最新のメッセージが含まれ、省略されたメッセージはイベントの `superseded_count` および `superseded_ids` フィールドで報告されます。省略されたメッセージの全体が取得されることはないため、大量のバックログがあってもメッセージ取得はメッセージごとではなく1回で済みます。\n\nすべてのメッセージを処理する必要があるフィードの場合は、これを未設定のままにしてください"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "最新メッセージのみ？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "バックログを再生する代わりに最新のメッセージにまとめますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "一致するメッセージの開始日時を設定します"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "一致するメッセージの開始日時を設定します"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "置き換えられたメッセージを完全に削除"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "完全に削除"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "置き換えられたメッセージをメールボックスに残す"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "保持"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "置き換えられたメッセージをGmailのゴミ箱に移動"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "ゴミ箱に移動"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "`snapshot_mode` によって省略されたメッセージの処理方法。`snapshot_mode` が設定されていない場合は無視されます。\n\n- `ignore`: 監査用に保持するためメールボックスに残します。監視カーソルはそれらの先へ進んでいるため、再度イベントとして発生することはありません\n- `trash`: Gmailのゴミ箱に移動します（復元可能）\n- `delete`: 完全に削除します。**この操作は取り消せません**\n\n削除に失敗した場合はログに記録され、メッセージはその場に残されます。イベントはすでに発生しており監視カーソルもすでに進んでいるため、再試行はされません"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "置き換えられたメッセージのアクション"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "省略されたメッセージの処理方法"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "一致するメールを確認する頻度（秒単位）。下限は30で、それより小さい値を設定した場合は最小ポーリング間隔が設定されます"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "一致するメールを確認する頻度（秒単位）"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "一致するメッセージを検索するためのGmail検索条件（例: `in:inbox to:me@gmail.com subject:hello is:unread`）"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "検索条件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "一致するメッセージのGmail検索条件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "添付ファイルデータを自動的に取得しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachments?",
+          "message": "添付ファイルを取得しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "添付ファイルデータを自動的に取得しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "新しいメールに応答"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to new email attachments",
+          "message": "新しいメールの添付ファイルに応答"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "新しいメールの添付ファイル"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments; if not set, then all attachments are reported; if set, then only attachments matching the pattern are reported; by default, the glob pattern is case-insensitive; to make it case-sensitive, set the `ignore_case` option to `false`",
+          "message": "添付ファイルを照合するためのオプションのファイル名パターン（glob）。設定されていない場合はすべての添付ファイルが報告されます。設定されている場合はパターンに一致する添付ファイルのみが報告されます。デフォルトではglobパターンは大文字と小文字を区別しません。大文字と小文字を区別するには `ignore_case` オプションを `false` に設定します"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "添付ファイルパターン"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern (glob) for matching attachments",
+          "message": "添付ファイルを照合するためのオプションのファイル名パターン（glob）"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
+          "message": "イベントを発生させた後、一致した各メッセージを完全に削除しますか？すべての添付ファイルが添付条件を満たさずイベントがまったく発生しなかったメッセージも含め、一致したすべてのメッセージが削除されます。\n\n**イベントコンシューマーがその後どのように処理するかにかかわらず、イベントが発生するとすぐにメッセージは削除されます。** 処理の途中で失敗、タイムアウト、または再起動したコンシューマーは添付ファイルの唯一のコピーをすでに失っており、Gmailの削除は取り消すことができません。\n\nソースメッセージを失ってはならないワークロードの場合は、このオプションを未設定のままにし、処理が成功した後にコンシューマーから各添付ファイルイベントに含まれる `message_id` を指定して `delete-message` または `trash-message` アクションを使用してください"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "メッセージを削除しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its events?",
+          "message": "イベントを発生させた後、一致した各メッセージを完全に削除しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
+          "message": "globで大文字と小文字を区別しない。`attachment_glob` が設定されていない場合は無視されます"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Glob Case?",
+          "message": "Globの大文字と小文字を無視しますか？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Ignore case in globs",
+          "message": "globで大文字と小文字を区別しない"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "1回のポーリングサイクルで配信されるメッセージの最大数。未設定または `0` の場合は無制限を意味します。\n\n制限はバックログの**最も古い**方から適用されるため、監視カーソルは連続して進み、残りのメッセージはスキップされずに後続のサイクルで配信されます。大量のバックログが蓄積する可能性がある場合に、単一のサイクルが実行できる作業量を制限するために使用します"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "サイクルあたりの最大メッセージ数"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "1回のポーリングサイクルで配信されるメッセージの最大数"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "一致する最新のメッセージを1件のみ保持"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "全体で最新"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "各Gmailスレッド内の最新メッセージを保持"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "スレッドごとに最新"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "各グループで最新のメッセージが選択される前の、一致するメッセージのグループ化方法。`snapshot_mode` が設定されていない場合は無視されます。\n\n- `all`: 1つのグローバルグループ。各サイクルは一致する最新メッセージを含む単一のイベントを発生させます\n- `thread`: Gmailスレッドごとにグループ化。各サイクルはスレッドごとにそのスレッドの最新メッセージを含む1つのイベントを発生させます"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "スナップショットのグループ化"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "最新のメッセージが選択される前のメッセージのグループ化方法"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "バックログを再生するのではなく、最新のメッセージにまとめます。\n\n一部のフィードはログではなくスナップショットです。各メッセージは現在の状態を再記述するため、停止後は最後のメッセージのみを処理すれば十分です。このオプションを設定すると、ポーリングサイクルごとにグループ（`snapshot_key` を参照）あたり1つのイベントが発生し、一致する最新のメッセージが含まれ、省略されたメッセージはイベントの `superseded_count` および `superseded_ids` フィールドで報告されます。省略されたメッセージの全体が取得されることはないため、大量のバックログがあってもメッセージ取得はメッセージごとではなく1回で済みます。\n\nすべてのメッセージを処理する必要があるフィードの場合は、これを未設定のままにしてください"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "最新メッセージのみ？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "バックログを再生する代わりに最新のメッセージにまとめますか？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "一致するメッセージの開始日時を設定します"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "一致するメッセージの開始日時を設定します"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "置き換えられたメッセージを完全に削除"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "完全に削除"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "置き換えられたメッセージをメールボックスに残す"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "保持"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "置き換えられたメッセージをGmailのゴミ箱に移動"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "ゴミ箱に移動"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "`snapshot_mode` によって省略されたメッセージの処理方法。`snapshot_mode` が設定されていない場合は無視されます。\n\n- `ignore`: 監査用に保持するためメールボックスに残します。監視カーソルはそれらの先へ進んでいるため、再度イベントとして発生することはありません\n- `trash`: Gmailのゴミ箱に移動します（復元可能）\n- `delete`: 完全に削除します。**この操作は取り消せません**\n\n削除に失敗した場合はログに記録され、メッセージはその場に残されます。イベントはすでに発生しており監視カーソルもすでに進んでいるため、再試行はされません"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "置き換えられたメッセージのアクション"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "省略されたメッセージの処理方法"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "一致するメールを確認する頻度（秒単位）。下限は30で、それより小さい値を設定した場合は最小ポーリング間隔が設定されます"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "一致するメールを確認する頻度（秒単位）"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "一致するメッセージを検索するためのGmail検索条件（例: `in:inbox to:me@gmail.com subject:hello is:unread`）"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "検索条件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "一致するメッセージのGmail検索条件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "新しいメールの添付ファイルに応答"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "メッセージをゴミ箱に移動します。メッセージはメールボックスから移動しますが、Gmailがゴミ箱を完全に削除するまでは復元可能です。これにより、ワークフローが完了したメッセージを安全にクリアできます。\n\n処理が成功した後、`watch` または `watch-attachment` イベントのコンシューマーから、イベントに含まれる `message_id` を指定してこのアクションを使用してください。監視側で `delete_messages` を使用して直接削除すると、コンシューマーの処理が成功したかどうかにかかわらず、イベントが発生するとすぐにメッセージが破棄されます"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "メッセージをゴミ箱に移動"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.desc": {
+          "source": "The ID of the message to move to the trash; watch events carry this value as `message_id`",
+          "message": "ゴミ箱に移動するメッセージのID。監視イベントはこの値を `message_id` として保持します"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.short_desc": {
+          "source": "The ID of the message to move to the trash",
+          "message": "ゴミ箱に移動するメッセージのID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Move a message to the trash, where it can still be recovered",
+          "message": "メッセージをゴミ箱に移動します（復元可能）"
+        },
+        "app.R21haWw.desc": {
+          "source": "Gmail services",
+          "message": "Gmailサービス"
+        },
+        "app.R21haWw.display_name": {
+          "source": "Gmail",
+          "message": "Gmail"
+        },
+        "app.R21haWw.short_desc": {
+          "source": "Gmail services",
+          "message": "Gmailサービス"
+        }
+      }
+    }
+  }
+}

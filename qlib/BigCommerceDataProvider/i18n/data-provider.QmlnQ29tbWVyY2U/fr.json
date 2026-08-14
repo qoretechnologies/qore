@@ -1,0 +1,3181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.desc": {
+          "source": "Fires when a cart is abandoned. Uses polling to detect incomplete orders (status Incomplete).",
+          "message": "Se déclenche lorsqu'un panier est abandonné. Utilise le sondage pour détecter les commandes incomplètes (statut Incomplete)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.display_name": {
+          "source": "Watch Abandoned Cart",
+          "message": "Surveiller les paniers abandonnés"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.short_desc": {
+          "source": "Trigger when a cart is abandoned",
+          "message": "Déclencher lorsqu'un panier est abandonné"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.desc": {
+          "source": "Fires when a new cart is created. Uses polling to detect new incomplete orders.",
+          "message": "Se déclenche lorsqu'un nouveau panier est créé. Utilise le sondage pour détecter les nouvelles commandes incomplètes."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.display_name": {
+          "source": "Watch New Cart",
+          "message": "Surveiller les nouveaux paniers"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new cart is created",
+          "message": "Déclencher lorsqu'un nouveau panier est créé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Create a new blog post in BigCommerce",
+          "message": "Créer un nouvel article de blog dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Create a Blog Post",
+          "message": "Créer un article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.desc": {
+          "source": "Author name of the blog post",
+          "message": "Nom de l'auteur de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "Auteur"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.short_desc": {
+          "source": "Author name",
+          "message": "Nom de l'auteur"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.desc": {
+          "source": "Body content of the blog post (HTML)",
+          "message": "Corps du contenu de l'article de blog (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.short_desc": {
+          "source": "Blog post content (HTML)",
+          "message": "Contenu de l'article de blog (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.desc": {
+          "source": "Whether the blog post is published and visible",
+          "message": "Indique si l'article de blog est publié et visible"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "Est publié"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Publish the post",
+          "message": "Publier l'article"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.desc": {
+          "source": "SEO meta description",
+          "message": "Méta-description SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Meta Description",
+          "message": "Méta-description"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "SEO description",
+          "message": "Description SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.desc": {
+          "source": "SEO meta keywords",
+          "message": "Méta-mots-clés SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.display_name": {
+          "source": "Meta Keywords",
+          "message": "Méta-mots-clés"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.short_desc": {
+          "source": "SEO keywords",
+          "message": "Mots-clés SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Date/time the blog post was published",
+          "message": "Date/heure de publication de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Published Date",
+          "message": "Date de publication"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Publication date",
+          "message": "Date de publication"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.desc": {
+          "source": "Array of tag strings for categorization",
+          "message": "Tableau de chaînes de balises (tags) pour la catégorisation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Étiquettes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.short_desc": {
+          "source": "Tags for categorization",
+          "message": "Balises pour la catégorisation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.desc": {
+          "source": "Path to the thumbnail image",
+          "message": "Chemin d'accès à l'image miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.display_name": {
+          "source": "Thumbnail Path",
+          "message": "Chemin de la miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.short_desc": {
+          "source": "Thumbnail image path",
+          "message": "Chemin de l'image miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.desc": {
+          "source": "Title of the blog post",
+          "message": "Titre de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titre"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.short_desc": {
+          "source": "Blog post title",
+          "message": "Titre de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.desc": {
+          "source": "URL slug for the blog post",
+          "message": "Slug d'URL pour l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.short_desc": {
+          "source": "URL slug",
+          "message": "Slug d'URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Create a new blog post",
+          "message": "Créer un nouvel article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in BigCommerce",
+          "message": "Créer un nouveau client dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Créer un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.desc": {
+          "source": "The customer's company name",
+          "message": "Le nom de l'entreprise du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.desc": {
+          "source": "ID of the customer group to assign",
+          "message": "ID du groupe de clients à attribuer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "ID du groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Customer group ID",
+          "message": "ID du groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The customer's email address",
+          "message": "L'adresse e-mail du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Adresse e-mail du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The customer's first name",
+          "message": "Le prénom du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Prénom du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.desc": {
+          "source": "The customer's last name",
+          "message": "Le nom de famille du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "Nom de famille du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.desc": {
+          "source": "Admin notes about the customer",
+          "message": "Notes de l'administrateur concernant le client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.short_desc": {
+          "source": "Admin notes",
+          "message": "Notes d'administration"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The customer's phone number",
+          "message": "Le numéro de téléphone du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Créer un nouveau client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Create a new address for a customer in BigCommerce",
+          "message": "Créer une nouvelle adresse pour un client dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Create a Customer Address",
+          "message": "Créer une adresse client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g., US, GB, DE)",
+          "message": "Code pays ISO 3166-1 alpha-2 (ex. : US, GB, DE)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Code pays"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Country code (ISO 3166-1)",
+          "message": "Code pays (ISO 3166-1)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name for the address",
+          "message": "Nom de l'entreprise pour l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "ID of the customer to add the address to",
+          "message": "ID du client auquel ajouter l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add address to",
+          "message": "Le client auquel ajouter l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOmNvbW1lcmNpYWw.desc": {
+          "source": "Commercial address",
+          "message": "Adresse commerciale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOnJlc2lkZW50aWFs.desc": {
+          "source": "Residential address",
+          "message": "Adresse résidentielle"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.desc": {
+          "source": "Type of address",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.display_name": {
+          "source": "Address Type",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.short_desc": {
+          "source": "Type of address",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Ligne d'adresse 1"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address line 1",
+          "message": "Ligne d'adresse 1"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.desc": {
+          "source": "Second line of the street address",
+          "message": "Deuxième ligne de l'adresse postale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Ligne d'adresse 2"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.short_desc": {
+          "source": "Street address line 2",
+          "message": "Ligne d'adresse 2"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the address recipient",
+          "message": "Prénom du destinataire de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Recipient first name",
+          "message": "Prénom du destinataire"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the address recipient",
+          "message": "Nom de famille du destinataire de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Recipient last name",
+          "message": "Nom de famille du destinataire"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.desc": {
+          "source": "State or province name",
+          "message": "Nom de l'État ou de la province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.display_name": {
+          "source": "State/Province",
+          "message": "État/Province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.short_desc": {
+          "source": "State or province",
+          "message": "État ou province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal or ZIP code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number for the address",
+          "message": "Numéro de téléphone pour l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Create a new address for a customer",
+          "message": "Créer une nouvelle adresse pour un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in BigCommerce",
+          "message": "Créer un nouveau produit dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "Créer un produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New product",
+          "message": "Nouveau produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished product",
+          "message": "Produit reconditionné"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used product",
+          "message": "Produit d'occasion"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.desc": {
+          "source": "Product condition",
+          "message": "État du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "État"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Product condition",
+          "message": "État du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.desc": {
+          "source": "Cost price of the product",
+          "message": "Prix de revient du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.display_name": {
+          "source": "Cost Price",
+          "message": "Prix de revient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.short_desc": {
+          "source": "Cost price",
+          "message": "Prix de revient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "Array of category IDs this product belongs to",
+          "message": "Tableau des identifiants de catégories auxquelles ce produit appartient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "Catégories"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Category IDs",
+          "message": "Identifiants de catégories"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.desc": {
+          "source": "ID of the product brand",
+          "message": "ID de la marque du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "ID de marque"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Brand ID",
+          "message": "ID de marque"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Product description (HTML allowed)",
+          "message": "Description du produit (HTML autorisé)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Product description",
+          "message": "Description du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.desc": {
+          "source": "Current inventory level",
+          "message": "Niveau de stock actuel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.display_name": {
+          "source": "Inventory Level",
+          "message": "Niveau de stock"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.short_desc": {
+          "source": "Inventory level",
+          "message": "Niveau de stock"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No inventory tracking",
+          "message": "Aucun suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnByb2R1Y3Q.desc": {
+          "source": "Track inventory at the product level",
+          "message": "Suivre les stocks au niveau du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnZhcmlhbnQ.desc": {
+          "source": "Track inventory at the variant level",
+          "message": "Suivre les stocks au niveau de la variante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.desc": {
+          "source": "Inventory tracking method",
+          "message": "Méthode de suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.display_name": {
+          "source": "Inventory Tracking",
+          "message": "Suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.short_desc": {
+          "source": "Inventory tracking method",
+          "message": "Méthode de suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.desc": {
+          "source": "Whether the product is visible on the storefront",
+          "message": "Indique si le produit est visible sur la boutique en ligne"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "Est visible"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Storefront visibility",
+          "message": "Visibilité sur la boutique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name",
+          "message": "Nom du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Product name",
+          "message": "Nom du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
+          "source": "Sale price (overrides price when set)",
+          "message": "Prix promotionnel (remplace le prix lorsqu'il est défini)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.display_name": {
+          "source": "Sale Price",
+          "message": "Prix promotionnel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.short_desc": {
+          "source": "Sale price",
+          "message": "Prix promotionnel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Stock Keeping Unit identifier",
+          "message": "Identifiant de l'unité de gestion des stocks (SKU)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "SKU identifier",
+          "message": "Identifiant SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.desc": {
+          "source": "Product price",
+          "message": "Prix du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.display_name": {
+          "source": "Price",
+          "message": "Prix"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.short_desc": {
+          "source": "Product price",
+          "message": "Prix du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.desc": {
+          "source": "Retail price (MSRP)",
+          "message": "Prix de vente conseillé (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.display_name": {
+          "source": "Retail Price",
+          "message": "Prix de vente conseillé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.short_desc": {
+          "source": "Retail price (MSRP)",
+          "message": "Prix de vente conseillé (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Product weight",
+          "message": "Poids du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Poids"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "Poids du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmRpZ2l0YWw.desc": {
+          "source": "Digital product",
+          "message": "Produit numérique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnBoeXNpY2Fs.desc": {
+          "source": "Physical product",
+          "message": "Produit physique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Product type",
+          "message": "Type de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Type"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Product type",
+          "message": "Type de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Créer un nouveau produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment for an order in BigCommerce",
+          "message": "Créer une nouvelle expédition pour une commande dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create a Shipment",
+          "message": "Créer une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.desc": {
+          "source": "Comments about the shipment",
+          "message": "Commentaires sur l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Commentaires"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.short_desc": {
+          "source": "Shipment comments",
+          "message": "Commentaires de l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.desc": {
+          "source": "Array of items to ship, each with `order_product_id` and `quantity`",
+          "message": "Tableau des articles à expédier, chacun avec `order_product_id` et `quantity`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Éléments"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.short_desc": {
+          "source": "Items to ship",
+          "message": "Articles à expédier"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.desc": {
+          "source": "ID of the shipping address for this shipment",
+          "message": "ID de l'adresse de livraison pour cette expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.display_name": {
+          "source": "Order Address ID",
+          "message": "ID d'adresse de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.short_desc": {
+          "source": "Shipping address ID",
+          "message": "ID de l'adresse de livraison"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to create a shipment for",
+          "message": "L'ID de la commande pour laquelle créer une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to ship",
+          "message": "La commande à expédier"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Name of the shipping method",
+          "message": "Nom du mode d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Mode de livraison"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method",
+          "message": "Mode d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "Name of the shipping provider",
+          "message": "Nom du prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "Prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "Shipping provider",
+          "message": "Prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.desc": {
+          "source": "Carrier name for tracking",
+          "message": "Nom du transporteur pour le suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.display_name": {
+          "source": "Tracking Carrier",
+          "message": "Transporteur de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.short_desc": {
+          "source": "Tracking carrier",
+          "message": "Transporteur de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the shipment",
+          "message": "Numéro de suivi de l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Numéro de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number",
+          "message": "Numéro de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment for an order",
+          "message": "Créer une nouvelle expédition pour une commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in BigCommerce. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau client est créé dans BigCommerce. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "Watch New Customer",
+          "message": "Surveiller les nouveaux clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Déclencher lorsqu'un nouveau client est créé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.desc": {
+          "source": "Fires when a customer address is updated in BigCommerce. Uses polling to detect changes.",
+          "message": "Se déclenche lorsque l'adresse d'un client est mise à jour dans BigCommerce. Utilise l'interrogation pour détecter les modifications."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.display_name": {
+          "source": "Watch Updated Customer Address",
+          "message": "Surveiller les adresses de client mises à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.short_desc": {
+          "source": "Trigger when a customer address is updated",
+          "message": "Déclencher lorsqu'une adresse de client est mise à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.desc": {
+          "source": "Fires when a new customer address is created in BigCommerce. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle adresse de client est créée dans BigCommerce. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.display_name": {
+          "source": "Watch New Customer Address",
+          "message": "Surveiller les nouvelles adresses de client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new customer address is created",
+          "message": "Déclencher lorsqu'une nouvelle adresse de client est créée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is updated in BigCommerce. Uses polling to detect changes.",
+          "message": "Se déclenche lorsqu'un client est mis à jour dans BigCommerce. Utilise l'interrogation pour détecter les modifications."
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Watch Updated Customer",
+          "message": "Surveiller les clients mis à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is updated",
+          "message": "Déclencher lorsqu'un client est mis à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from BigCommerce",
+          "message": "Récupérer une commande par son ID depuis BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Obtenir une commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to retrieve",
+          "message": "L'ID de la commande à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to retrieve",
+          "message": "La commande à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Obtenir une seule commande par ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.desc": {
+          "source": "Retrieve a single blog post by ID from BigCommerce",
+          "message": "Récupérer un article de blog par son ID depuis BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.display_name": {
+          "source": "Get a Blog Post",
+          "message": "Obtenir un article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to retrieve",
+          "message": "L'ID de l'article de blog à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "ID de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to retrieve",
+          "message": "L'article de blog à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.short_desc": {
+          "source": "Get a single blog post by ID",
+          "message": "Obtenir un article de blog par son ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from BigCommerce",
+          "message": "Récupérer un client par son ID depuis BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Obtenir un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to retrieve",
+          "message": "L'ID du client à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to retrieve",
+          "message": "Le client à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Obtenir un client par son ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from BigCommerce",
+          "message": "Récupérer un produit par son ID depuis BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Obtenir un produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to retrieve",
+          "message": "L'ID du produit à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to retrieve",
+          "message": "Le produit à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Obtenir un produit par son ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve a single shipment by order ID and shipment ID from BigCommerce",
+          "message": "Récupérer une expédition par ID de commande et ID d'expédition depuis BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get a Shipment",
+          "message": "Obtenir une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "L'ID de la commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "La commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to retrieve",
+          "message": "L'ID de l'expédition à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to retrieve",
+          "message": "L'expédition à récupérer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Get a single shipment by ID",
+          "message": "Obtenir une expédition par son ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Delete a blog post from BigCommerce",
+          "message": "Supprimer un article de blog de BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Delete a Blog Post",
+          "message": "Supprimer un article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to delete",
+          "message": "L'ID de l'article de blog à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "ID de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to delete",
+          "message": "L'article de blog à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Delete a blog post",
+          "message": "Supprimer un article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from BigCommerce",
+          "message": "Supprimer un client de BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Supprimer un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "L'ID du client à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Le client à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Supprimer un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Delete a customer address from BigCommerce",
+          "message": "Supprimer une adresse de client de BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Delete a Customer Address",
+          "message": "Supprimer une adresse de client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "The ID of the customer address to delete",
+          "message": "L'ID de l'adresse de client à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "The address to delete",
+          "message": "L'adresse à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Delete a customer address",
+          "message": "Supprimer une adresse de client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.desc": {
+          "source": "Delete a product from BigCommerce",
+          "message": "Supprimer un produit de BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
+          "source": "Delete a Product",
+          "message": "Supprimer un produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to delete",
+          "message": "L'ID du produit à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to delete",
+          "message": "Le produit à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Delete a product",
+          "message": "Supprimer un produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.desc": {
+          "source": "Delete a shipment from BigCommerce",
+          "message": "Supprimer une expédition de BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.display_name": {
+          "source": "Delete a Shipment",
+          "message": "Supprimer une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "L'ID de la commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "La commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to delete",
+          "message": "L'ID de l'expédition à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to delete",
+          "message": "L'expédition à supprimer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.short_desc": {
+          "source": "Delete a shipment",
+          "message": "Supprimer une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created from the storefront. Uses polling to detect new records (V2 Orders API).",
+          "message": "Se déclenche lorsqu'une nouvelle commande est créée depuis la boutique. Utilise l'interrogation pour détecter les nouveaux enregistrements (API Orders V2)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Watch New Order",
+          "message": "Surveiller les nouvelles commandes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "Déclencher lorsqu'une nouvelle commande est créée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when the order status has changed in BigCommerce. Uses polling to detect status changes (V2 Orders API).",
+          "message": "Se déclenche lorsque le statut d'une commande a changé dans BigCommerce. Utilise l'interrogation pour détecter les changements de statut (API Orders V2)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Watch Updated Order Status",
+          "message": "Surveiller les statuts de commande mis à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when an order status changes",
+          "message": "Déclencher lorsqu'un statut de commande change"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is updated in BigCommerce. Uses polling to detect changes (V2 Orders API).",
+          "message": "Se déclenche lorsqu'une commande est mise à jour dans BigCommerce. Utilise l'interrogation pour détecter les modifications (API Orders V2)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Watch Updated Order",
+          "message": "Surveiller les commandes mises à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is updated",
+          "message": "Déclencher lorsqu'une commande est mise à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **BigCommerce** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectue un appel d'API HTTP / REST personnalisé à **BigCommerce** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'accès URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hachage contenant le code de statut, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to BigCommerce",
+          "message": "Effectuer un appel d'API personnalisé vers BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for specific orders or list all orders in BigCommerce",
+          "message": "Rechercher des commandes spécifiques ou lister toutes les commandes dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "Rechercher des commandes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrer par client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.aXNfZGVsZXRlZA.display_name": {
+          "source": "Is Deleted",
+          "message": "Est supprimé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.aXNfZGVsZXRlZA.short_desc": {
+          "source": "Filter by deletion status",
+          "message": "Filtrer par statut de suppression"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrer par identifiant de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X2RhdGVfY3JlYXRlZA.display_name": {
+          "source": "Max Date Created",
+          "message": "Date maximale de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X2RhdGVfY3JlYXRlZA.short_desc": {
+          "source": "Maximum creation date",
+          "message": "Date maximale de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X3RvdGFs.display_name": {
+          "source": "Max Total",
+          "message": "Total maximum"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X3RvdGFs.short_desc": {
+          "source": "Maximum order total",
+          "message": "Total de commande maximum"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfY3JlYXRlZA.display_name": {
+          "source": "Min Date Created",
+          "message": "Date minimale de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfY3JlYXRlZA.short_desc": {
+          "source": "Minimum creation date",
+          "message": "Date minimale de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfbW9kaWZpZWQ.display_name": {
+          "source": "Min Date Modified",
+          "message": "Date minimale de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfbW9kaWZpZWQ.short_desc": {
+          "source": "Minimum modification date",
+          "message": "Date minimale de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX3RvdGFs.display_name": {
+          "source": "Min Total",
+          "message": "Total minimum"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX3RvdGFs.short_desc": {
+          "source": "Minimum order total",
+          "message": "Total de commande minimum"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2lk.desc": {
+          "source": "Sort by customer ID",
+          "message": "Trier par ID de client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZA.desc": {
+          "source": "Sort by creation date",
+          "message": "Trier par date de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ.desc": {
+          "source": "Sort by modification date",
+          "message": "Trier par date de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Sort by order ID",
+          "message": "Trier par ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Trier"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.short_desc": {
+          "source": "Sort field",
+          "message": "Champ de tri"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjA.desc": {
+          "source": "Incomplete",
+          "message": "Incomplète"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjE.desc": {
+          "source": "Pending",
+          "message": "En attente"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjE0.desc": {
+          "source": "Partially Refunded",
+          "message": "Partiellement remboursé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEw.desc": {
+          "source": "Completed",
+          "message": "Terminée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEx.desc": {
+          "source": "Awaiting Fulfillment",
+          "message": "En attente de traitement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEy.desc": {
+          "source": "Manual Verification Required",
+          "message": "Vérification manuelle requise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEz.desc": {
+          "source": "Disputed",
+          "message": "En litige"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjI.desc": {
+          "source": "Shipped",
+          "message": "Expédié"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjM.desc": {
+          "source": "Partially Shipped",
+          "message": "Partiellement expédiée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjQ.desc": {
+          "source": "Refunded",
+          "message": "Remboursé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjU.desc": {
+          "source": "Cancelled",
+          "message": "Annulée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjY.desc": {
+          "source": "Declined",
+          "message": "Refusée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojc.desc": {
+          "source": "Awaiting Payment",
+          "message": "En attente de paiement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojg.desc": {
+          "source": "Awaiting Pickup",
+          "message": "En attente de retrait"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojk.desc": {
+          "source": "Awaiting Shipment",
+          "message": "En attente d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter orders by status ID",
+          "message": "Filtrer les commandes par ID de statut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID de statut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrer par statut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "Mode de paiement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Filter by payment method",
+          "message": "Filtrer par mode de paiement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders or list all",
+          "message": "Rechercher des commandes ou tout lister"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.desc": {
+          "source": "Search for specific blog posts or list all blog posts in BigCommerce",
+          "message": "Rechercher des articles de blog spécifiques ou lister tous les articles de blog dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.display_name": {
+          "source": "Search Blog Posts",
+          "message": "Rechercher des articles de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "Est publié"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Filter by published status",
+          "message": "Filtrer par statut de publication"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.dGFn.short_desc": {
+          "source": "Filter by tag",
+          "message": "Filtrer par étiquette"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.short_desc": {
+          "source": "Search for blog posts or list all",
+          "message": "Rechercher des articles de blog ou tout lister"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.desc": {
+          "source": "Search for specific customer addresses or list them all in BigCommerce",
+          "message": "Rechercher des adresses client spécifiques ou les lister toutes dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.display_name": {
+          "source": "Search Customer Addresses",
+          "message": "Rechercher des adresses client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Filter by company",
+          "message": "Filtrer par entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtrer par identifiant client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Filter by address ID",
+          "message": "Filtrer par ID d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filtrer par nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.short_desc": {
+          "source": "Search for customer addresses or list all",
+          "message": "Rechercher des adresses client ou tout lister"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Search for specific customers or list all customers in BigCommerce",
+          "message": "Rechercher des clients spécifiques ou lister tous les clients dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Rechercher des clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y29tcGFueQ.short_desc": {
+          "source": "Filter by company name",
+          "message": "Filtrer par nom d'entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "ID du groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Filter by customer group",
+          "message": "Filtrer par groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtrer par identifiant client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9jcmVhdGVkX21pbg.display_name": {
+          "source": "Date Created (Min)",
+          "message": "Date de création (Min)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9jcmVhdGVkX21pbg.short_desc": {
+          "source": "Minimum creation date",
+          "message": "Date minimale de création"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9tb2RpZmllZF9taW4.display_name": {
+          "source": "Date Modified (Min)",
+          "message": "Date de modification (Min)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9tb2RpZmllZF9taW4.short_desc": {
+          "source": "Minimum modification date",
+          "message": "Date minimale de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrer par e-mail"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZQ.short_desc": {
+          "source": "Filter by exact name",
+          "message": "Filtrer par nom exact"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZV9saWtl.display_name": {
+          "source": "Name (Like)",
+          "message": "Nom (approximatif)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZV9saWtl.short_desc": {
+          "source": "Filter by partial name",
+          "message": "Filtrer par nom partiel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZDphc2M.desc": {
+          "source": "Sort by creation date ascending",
+          "message": "Trier par date de création croissante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZDpkZXNj.desc": {
+          "source": "Sort by creation date descending",
+          "message": "Trier par date de création décroissante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ6YXNj.desc": {
+          "source": "Sort by modification date ascending",
+          "message": "Trier par date de modification croissante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ6ZGVzYw.desc": {
+          "source": "Sort by modification date descending",
+          "message": "Trier par date de modification décroissante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RfbmFtZTphc2M.desc": {
+          "source": "Sort by last name ascending",
+          "message": "Trier par nom de famille croissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RfbmFtZTpkZXNj.desc": {
+          "source": "Sort by last name descending",
+          "message": "Trier par nom de famille décroissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Trier"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.short_desc": {
+          "source": "Sort order",
+          "message": "Ordre de tri"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "Search for customers or list all",
+          "message": "Rechercher des clients ou tout lister"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Search for specific products or list all products in BigCommerce",
+          "message": "Rechercher des produits spécifiques ou lister tous les produits dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Rechercher des produits"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New products",
+          "message": "Nouveaux produits"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished products",
+          "message": "Produits reconditionnés"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used products",
+          "message": "Produits d'occasion"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "État"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Filter by condition",
+          "message": "Filtrer par état"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "Catégories"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Filter by category IDs",
+          "message": "Filtrer par identifiants de catégorie"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "ID de marque"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Filter by brand",
+          "message": "Filtrer par marque"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGF0ZV9tb2RpZmllZF9taW4.display_name": {
+          "source": "Date Modified (Min)",
+          "message": "Date de modification (Min)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGF0ZV9tb2RpZmllZF9taW4.short_desc": {
+          "source": "Minimum modification date",
+          "message": "Date minimale de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Ascending order",
+          "message": "Ordre croissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Descending order",
+          "message": "Ordre décroissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Direction"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Sens du tri"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Mot-clé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "Mot-clé de recherche"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "Est visible"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Filter by visibility",
+          "message": "Filtrer par visibilité"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZQ.short_desc": {
+          "source": "Filter by exact name",
+          "message": "Filtrer par nom exact"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZV9saWtl.display_name": {
+          "source": "Name (Like)",
+          "message": "Nom (approximatif)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZV9saWtl.short_desc": {
+          "source": "Filter by partial name",
+          "message": "Filtrer par nom partiel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by product name",
+          "message": "Trier par nom de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU6YXNj.desc": {
+          "source": "Sort by name ascending",
+          "message": "Trier par nom croissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU6ZGVzYw.desc": {
+          "source": "Sort by name descending",
+          "message": "Trier par nom décroissant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbGFzdF9pbXBvcnRlZA.desc": {
+          "source": "Sort by last import date",
+          "message": "Trier par date de dernière importation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ.desc": {
+          "source": "Sort by modification date",
+          "message": "Trier par date de modification"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Sort by product ID",
+          "message": "Trier par ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmludmVudG9yeV9sZXZlbA.desc": {
+          "source": "Sort by inventory level",
+          "message": "Trier par niveau d'inventaire"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmlzX3Zpc2libGU.desc": {
+          "source": "Sort by visibility",
+          "message": "Trier par visibilité"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOnByaWNl.desc": {
+          "source": "Sort by price",
+          "message": "Trier par prix"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOnNrdQ.desc": {
+          "source": "Sort by SKU",
+          "message": "Trier par SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Trier"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.short_desc": {
+          "source": "Sort field",
+          "message": "Champ de tri"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "Filtrer par SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Filtrer par ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "Search for products or list all",
+          "message": "Rechercher des produits ou tout lister"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.desc": {
+          "source": "List shipments for a specific order in BigCommerce",
+          "message": "Lister les expéditions pour une commande spécifique dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
+          "source": "Search Shipments",
+          "message": "Rechercher des expéditions"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to list shipments for",
+          "message": "Commande pour laquelle lister les expéditions"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
+          "source": "Search for shipments by order",
+          "message": "Rechercher des expéditions par commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.desc": {
+          "source": "Fires when a new shipment is created in BigCommerce. Uses polling to detect new records (V2 Orders API).",
+          "message": "Se déclenche lorsqu'une nouvelle expédition est créée dans BigCommerce. Utilise l'interrogation pour détecter les nouveaux enregistrements (API V2 Orders)."
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.display_name": {
+          "source": "Watch New Shipment",
+          "message": "Surveiller les nouvelles expéditions"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new shipment is created",
+          "message": "Déclencher lorsqu'une nouvelle expédition est créée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new product is created in BigCommerce. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau produit est créé dans BigCommerce. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
+          "source": "Watch New Product",
+          "message": "Surveiller les nouveaux produits"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new product is created",
+          "message": "Déclencher lorsqu'un nouveau produit est créé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in BigCommerce (e.g., change status, add notes)",
+          "message": "Mettre à jour une commande existante dans BigCommerce (p. ex. changer le statut, ajouter des notes)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update an Order",
+          "message": "Mettre à jour une commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.desc": {
+          "source": "Message from the customer",
+          "message": "Message du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.display_name": {
+          "source": "Customer Message",
+          "message": "Message du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.short_desc": {
+          "source": "Customer message",
+          "message": "Message du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address object for the order",
+          "message": "Objet d'adresse de facturation pour la commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Adresse de facturation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address",
+          "message": "Adresse de facturation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to update",
+          "message": "L'ID de la commande à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to update",
+          "message": "La commande à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.desc": {
+          "source": "Internal staff notes for the order",
+          "message": "Notes internes de l'équipe pour la commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.display_name": {
+          "source": "Staff Notes",
+          "message": "Notes de l'équipe"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.short_desc": {
+          "source": "Internal staff notes",
+          "message": "Notes internes de l'équipe"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjA.desc": {
+          "source": "Incomplete",
+          "message": "Incomplète"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjE.desc": {
+          "source": "Pending",
+          "message": "En attente"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjE0.desc": {
+          "source": "Partially Refunded",
+          "message": "Partiellement remboursé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEw.desc": {
+          "source": "Completed",
+          "message": "Terminée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEx.desc": {
+          "source": "Awaiting Fulfillment",
+          "message": "En attente de traitement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEy.desc": {
+          "source": "Manual Verification Required",
+          "message": "Vérification manuelle requise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEz.desc": {
+          "source": "Disputed",
+          "message": "En litige"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjI.desc": {
+          "source": "Shipped",
+          "message": "Expédié"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjM.desc": {
+          "source": "Partially Shipped",
+          "message": "Partiellement expédiée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjQ.desc": {
+          "source": "Refunded",
+          "message": "Remboursé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjU.desc": {
+          "source": "Cancelled",
+          "message": "Annulée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjY.desc": {
+          "source": "Declined",
+          "message": "Refusée"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojc.desc": {
+          "source": "Awaiting Payment",
+          "message": "En attente de paiement"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojg.desc": {
+          "source": "Awaiting Pickup",
+          "message": "En attente de retrait"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojk.desc": {
+          "source": "Awaiting Shipment",
+          "message": "En attente d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.desc": {
+          "source": "The new order status ID",
+          "message": "Le nouvel ID de statut de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID de statut"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.short_desc": {
+          "source": "New order status ID",
+          "message": "Nouvel ID de statut de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "Mettre à jour une commande existante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Update an existing blog post in BigCommerce",
+          "message": "Mettre à jour un article de blog existant dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Update a Blog Post",
+          "message": "Mettre à jour un article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.desc": {
+          "source": "Author name of the blog post",
+          "message": "Nom de l'auteur de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "Auteur"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.short_desc": {
+          "source": "Author name",
+          "message": "Nom de l'auteur"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.desc": {
+          "source": "Body content of the blog post (HTML)",
+          "message": "Corps du contenu de l'article de blog (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.short_desc": {
+          "source": "Blog post content (HTML)",
+          "message": "Contenu de l'article de blog (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to update",
+          "message": "L'ID de l'article de blog à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "ID de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to update",
+          "message": "L'article de blog à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.desc": {
+          "source": "Whether the blog post is published and visible",
+          "message": "Indique si l'article de blog est publié et visible"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "Est publié"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Publish the post",
+          "message": "Publier l'article"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.desc": {
+          "source": "SEO meta description",
+          "message": "Méta-description SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Meta Description",
+          "message": "Méta-description"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "SEO description",
+          "message": "Description SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.desc": {
+          "source": "SEO meta keywords",
+          "message": "Méta-mots-clés SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.display_name": {
+          "source": "Meta Keywords",
+          "message": "Méta-mots-clés"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.short_desc": {
+          "source": "SEO keywords",
+          "message": "Mots-clés SEO"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Date/time the blog post was published",
+          "message": "Date/heure de publication de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Published Date",
+          "message": "Date de publication"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Publication date",
+          "message": "Date de publication"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.desc": {
+          "source": "Array of tag strings for categorization",
+          "message": "Tableau de chaînes de balises (tags) pour la catégorisation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Étiquettes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.short_desc": {
+          "source": "Tags for categorization",
+          "message": "Balises pour la catégorisation"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.desc": {
+          "source": "Path to the thumbnail image",
+          "message": "Chemin d'accès à l'image miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.display_name": {
+          "source": "Thumbnail Path",
+          "message": "Chemin de la miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.short_desc": {
+          "source": "Thumbnail image path",
+          "message": "Chemin de l'image miniature"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.desc": {
+          "source": "Title of the blog post",
+          "message": "Titre de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titre"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.short_desc": {
+          "source": "Blog post title",
+          "message": "Titre de l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.desc": {
+          "source": "URL slug for the blog post",
+          "message": "Slug d'URL pour l'article de blog"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.short_desc": {
+          "source": "URL slug",
+          "message": "Slug d'URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Update an existing blog post",
+          "message": "Mettre à jour un article de blog existant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in BigCommerce",
+          "message": "Mettre à jour un client existant dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Mettre à jour un client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.desc": {
+          "source": "The customer's company name",
+          "message": "Le nom de l'entreprise du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.desc": {
+          "source": "ID of the customer group to assign",
+          "message": "ID du groupe de clients à attribuer"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "ID du groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Customer group ID",
+          "message": "ID du groupe de clients"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The customer's email address",
+          "message": "L'adresse e-mail du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Adresse e-mail du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The customer's first name",
+          "message": "Le prénom du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Prénom du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "L'ID du client à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Le client à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.desc": {
+          "source": "The customer's last name",
+          "message": "Le nom de famille du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "Nom de famille du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.desc": {
+          "source": "Admin notes about the customer",
+          "message": "Notes de l'administrateur concernant le client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.short_desc": {
+          "source": "Admin notes",
+          "message": "Notes d'administration"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The customer's phone number",
+          "message": "Le numéro de téléphone du client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Mettre à jour un client existant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Update an existing customer address in BigCommerce",
+          "message": "Mettre à jour une adresse client existante dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Update a Customer Address",
+          "message": "Mettre à jour une adresse client"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g., US, GB, DE)",
+          "message": "Code pays ISO 3166-1 alpha-2 (ex. : US, GB, DE)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Code pays"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Country code (ISO 3166-1)",
+          "message": "Code pays (ISO 3166-1)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name for the address",
+          "message": "Nom de l'entreprise pour l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOmNvbW1lcmNpYWw.desc": {
+          "source": "Commercial address",
+          "message": "Adresse commerciale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOnJlc2lkZW50aWFs.desc": {
+          "source": "Residential address",
+          "message": "Adresse résidentielle"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.desc": {
+          "source": "Type of address",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.display_name": {
+          "source": "Address Type",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.short_desc": {
+          "source": "Type of address",
+          "message": "Type d'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Ligne d'adresse 1"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address line 1",
+          "message": "Ligne d'adresse 1"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.desc": {
+          "source": "Second line of the street address",
+          "message": "Deuxième ligne de l'adresse postale"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Ligne d'adresse 2"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.short_desc": {
+          "source": "Street address line 2",
+          "message": "Ligne d'adresse 2"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the address recipient",
+          "message": "Prénom du destinataire de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Recipient first name",
+          "message": "Prénom du destinataire"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.desc": {
+          "source": "The ID of the address to update",
+          "message": "L'ID de l'adresse à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.display_name": {
+          "source": "Address ID",
+          "message": "ID de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.short_desc": {
+          "source": "The address to update",
+          "message": "L'adresse à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the address recipient",
+          "message": "Nom de famille du destinataire de l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Recipient last name",
+          "message": "Nom de famille du destinataire"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.desc": {
+          "source": "State or province name",
+          "message": "Nom de l'État ou de la province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.display_name": {
+          "source": "State/Province",
+          "message": "État/Province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.short_desc": {
+          "source": "State or province",
+          "message": "État ou province"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal or ZIP code",
+          "message": "Code postal"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number for the address",
+          "message": "Numéro de téléphone pour l'adresse"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Update an existing customer address",
+          "message": "Mettre à jour une adresse client existante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in BigCommerce",
+          "message": "Mettre à jour un produit existant dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "Mettre à jour un produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New product",
+          "message": "Nouveau produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished product",
+          "message": "Produit reconditionné"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used product",
+          "message": "Produit d'occasion"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.desc": {
+          "source": "Product condition",
+          "message": "État du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "État"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Product condition",
+          "message": "État du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.desc": {
+          "source": "Cost price of the product",
+          "message": "Prix de revient du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.display_name": {
+          "source": "Cost Price",
+          "message": "Prix de revient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.short_desc": {
+          "source": "Cost price",
+          "message": "Prix de revient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "Array of category IDs this product belongs to",
+          "message": "Tableau des identifiants de catégories auxquelles ce produit appartient"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "Catégories"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Category IDs",
+          "message": "Identifiants de catégories"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOmF2YWlsYWJsZQ.desc": {
+          "source": "Available for purchase",
+          "message": "Disponible à l'achat"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled",
+          "message": "Désactivé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOnByZW9yZGVy.desc": {
+          "source": "Available for pre-order",
+          "message": "Disponible en précommande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.desc": {
+          "source": "Product availability",
+          "message": "Disponibilité du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.display_name": {
+          "source": "Availability",
+          "message": "Disponibilité"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Product availability",
+          "message": "Disponibilité du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.desc": {
+          "source": "ID of the product brand",
+          "message": "ID de la marque du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "ID de marque"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Product brand ID",
+          "message": "ID de la marque du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Product description (HTML allowed)",
+          "message": "Description du produit (HTML autorisé)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Product description",
+          "message": "Description du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.desc": {
+          "source": "Current inventory level",
+          "message": "Niveau de stock actuel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.display_name": {
+          "source": "Inventory Level",
+          "message": "Niveau de stock"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.short_desc": {
+          "source": "Inventory level",
+          "message": "Niveau de stock"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No inventory tracking",
+          "message": "Aucun suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnByb2R1Y3Q.desc": {
+          "source": "Track at product level",
+          "message": "Suivre au niveau du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnZhcmlhbnQ.desc": {
+          "source": "Track at variant level",
+          "message": "Suivre au niveau de la variante"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.desc": {
+          "source": "Inventory tracking method",
+          "message": "Méthode de suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.display_name": {
+          "source": "Inventory Tracking",
+          "message": "Suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.short_desc": {
+          "source": "Inventory tracking method",
+          "message": "Méthode de suivi des stocks"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.desc": {
+          "source": "Whether the product is featured",
+          "message": "Indique si le produit est mis en avant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.display_name": {
+          "source": "Is Featured",
+          "message": "Est mis en avant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.short_desc": {
+          "source": "Featured product",
+          "message": "Produit mis en avant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.desc": {
+          "source": "Whether the product is visible on the storefront",
+          "message": "Indique si le produit est visible sur la boutique en ligne"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "Est visible"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Storefront visibility",
+          "message": "Visibilité sur la boutique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name",
+          "message": "Nom du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Product name",
+          "message": "Nom du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
+          "source": "Sale price (overrides price when set)",
+          "message": "Prix promotionnel (remplace le prix lorsqu'il est défini)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.display_name": {
+          "source": "Sale Price",
+          "message": "Prix promotionnel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.short_desc": {
+          "source": "Sale price",
+          "message": "Prix promotionnel"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Stock Keeping Unit identifier",
+          "message": "Identifiant de l'unité de gestion des stocks (SKU)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "SKU identifier",
+          "message": "Identifiant SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.desc": {
+          "source": "Product price",
+          "message": "Prix du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.display_name": {
+          "source": "Price",
+          "message": "Prix"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.short_desc": {
+          "source": "Product price",
+          "message": "Prix du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to update",
+          "message": "L'ID du produit à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to update",
+          "message": "Le produit à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.desc": {
+          "source": "Retail price (MSRP)",
+          "message": "Prix de vente conseillé (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.display_name": {
+          "source": "Retail Price",
+          "message": "Prix de vente conseillé"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.short_desc": {
+          "source": "Retail price (MSRP)",
+          "message": "Prix de vente conseillé (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Product weight",
+          "message": "Poids du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Poids"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "Poids du produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmRpZ2l0YWw.desc": {
+          "source": "Digital product",
+          "message": "Produit numérique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnBoeXNpY2Fs.desc": {
+          "source": "Physical product",
+          "message": "Produit physique"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Product type",
+          "message": "Type de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Type"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Product type",
+          "message": "Type de produit"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Mettre à jour un produit existant"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.desc": {
+          "source": "Update an existing shipment in BigCommerce",
+          "message": "Mettre à jour une expédition existante dans BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.display_name": {
+          "source": "Update a Shipment",
+          "message": "Mettre à jour une expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.desc": {
+          "source": "Comments about the shipment",
+          "message": "Commentaires sur l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Commentaires"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.short_desc": {
+          "source": "Shipment comments",
+          "message": "Commentaires de l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.desc": {
+          "source": "Array of items in the shipment with `order_product_id` and `quantity`",
+          "message": "Tableau des articles de l'expédition avec `order_product_id` et `quantity`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Éléments"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.short_desc": {
+          "source": "Shipment items",
+          "message": "Articles de l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.desc": {
+          "source": "ID of the shipping address for this shipment",
+          "message": "ID de l'adresse de livraison pour cette expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.display_name": {
+          "source": "Order Address ID",
+          "message": "ID d'adresse de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.short_desc": {
+          "source": "Shipping address ID",
+          "message": "ID de l'adresse de livraison"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "L'ID de la commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "La commande à laquelle appartient l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to update",
+          "message": "L'ID de l'expédition à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to update",
+          "message": "L'expédition à mettre à jour"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Name of the shipping method",
+          "message": "Nom du mode d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Mode de livraison"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method",
+          "message": "Mode d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "Name of the shipping provider",
+          "message": "Nom du prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "Prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "Shipping provider",
+          "message": "Prestataire d'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.desc": {
+          "source": "Carrier name for tracking",
+          "message": "Nom du transporteur pour le suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.display_name": {
+          "source": "Tracking Carrier",
+          "message": "Transporteur de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.short_desc": {
+          "source": "Tracking carrier",
+          "message": "Transporteur de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the shipment",
+          "message": "Numéro de suivi de l'expédition"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Numéro de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number",
+          "message": "Numéro de suivi"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Update an existing shipment",
+          "message": "Mettre à jour une expédition existante"
+        },
+        "app.QmlnQ29tbWVyY2U.desc": {
+          "source": "BigCommerce is a leading e-commerce platform for online stores.\n\nThis integration supports customers, products, orders, carts, shipments, blog posts, and customer addresses.",
+          "message": "BigCommerce est une plateforme e-commerce de premier plan pour les boutiques en ligne.\n\nCette intégration prend en charge les clients, les produits, les commandes, les paniers, les expéditions, les articles de blog et les adresses client."
+        },
+        "app.QmlnQ29tbWVyY2U.display_name": {
+          "source": "BigCommerce",
+          "message": "BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.short_desc": {
+          "source": "BigCommerce e-commerce platform",
+          "message": "Plateforme e-commerce BigCommerce"
+        }
+      }
+    }
+  }
+}

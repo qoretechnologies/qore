@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.desc": {
+          "source": "Create an incident in ServiceNow by creating a record in the `incident` table using ServiceNow's REST API",
+          "message": "ServiceNow の REST API を使用して `incident` テーブルにレコードを作成し、ServiceNow でインシデントを作成します"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.display_name": {
+          "source": "Create Incident",
+          "message": "インシデントの作成"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLWluY2lkZW50.short_desc": {
+          "source": "Create an incident in ServiceNow",
+          "message": "ServiceNow でインシデントを作成"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.desc": {
+          "source": "Create a record in a ServiceNow table using ServiceNow's REST API",
+          "message": "ServiceNow の REST API を使用して ServiceNow テーブルにレコードを作成します"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.display_name": {
+          "source": "Create Record",
+          "message": "レコードを作成"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.desc": {
+          "source": "The name of the ServiceNow table, ex: `incident`",
+          "message": "ServiceNow テーブルの名前（例: `incident`）"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.short_desc": {
+          "source": "The name of the ServiceNow table",
+          "message": "ServiceNow テーブルの名前"
+        },
+        "app.U2VydmljZU5vdw.action.Y3JlYXRlLXJlY29yZA.short_desc": {
+          "source": "Create a record in a ServiceNow table",
+          "message": "ServiceNow テーブルにレコードを作成"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.desc": {
+          "source": "Delete records in the `incident` table using ServiceNow's REST API",
+          "message": "ServiceNow の REST API を使用して `incident` テーブル内のレコードを削除します"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.display_name": {
+          "source": "Delete Incidents",
+          "message": "インシデントの削除"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLWluY2lkZW50cw.short_desc": {
+          "source": "Delete incident records in ServiceNow",
+          "message": "ServiceNow でインシデントレコードを削除"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.desc": {
+          "source": "Delete records in a ServiceNow table using ServiceNow's REST API",
+          "message": "ServiceNow の REST API を使用して ServiceNow テーブル内のレコードを削除します"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.display_name": {
+          "source": "Delete Records",
+          "message": "レコードを削除"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.desc": {
+          "source": "The name of the ServiceNow table, ex: `incident`",
+          "message": "ServiceNow テーブルの名前（例: `incident`）"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.short_desc": {
+          "source": "The name of the ServiceNow table",
+          "message": "ServiceNow テーブルの名前"
+        },
+        "app.U2VydmljZU5vdw.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
+          "source": "Delete records in ServiceNow",
+          "message": "ServiceNow のレコードを削除"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.desc": {
+          "source": "Find records in the `incident` table using ServiceNow's REST API",
+          "message": "ServiceNow の REST API を使用して `incident` テーブル内のレコードを検索します"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.display_name": {
+          "source": "Find Matching Incidents",
+          "message": "一致するインシデントの検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1pbmNpZGVudHM.short_desc": {
+          "source": "Find incident records in ServiceNow",
+          "message": "ServiceNow でインシデントレコードを検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.desc": {
+          "source": "Find records in a ServiceNow table using ServiceNow's REST API",
+          "message": "ServiceNowのREST APIを使用してServiceNowテーブル内のレコードを検索します"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.display_name": {
+          "source": "Find Records",
+          "message": "レコードの検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.option.dGFibGU.desc": {
+          "source": "The name of the ServiceNow table, ex: `incident`",
+          "message": "ServiceNow テーブルの名前（例: `incident`）"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.option.dGFibGU.short_desc": {
+          "source": "The name of the ServiceNow table",
+          "message": "ServiceNow テーブルの名前"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1yZWNvcmRz.short_desc": {
+          "source": "Find records in ServiceNow",
+          "message": "ServiceNow内のレコードを検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.desc": {
+          "source": "Find a specific record in the `incident` table using ServiceNow's REST API",
+          "message": "ServiceNowのREST APIを使用して`incident`テーブル内の特定のレコードを検索します"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.display_name": {
+          "source": "Find Single Incident",
+          "message": "単一のインシデントを検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtaW5jaWRlbnQ.short_desc": {
+          "source": "Find a specific incident in ServiceNow",
+          "message": "ServiceNow内の特定のインシデントを検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.desc": {
+          "source": "Find a specific record in a ServiceNow table using ServiceNow's REST API",
+          "message": "ServiceNowのREST APIを使用してServiceNowテーブル内の特定のレコードを検索します"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
+          "source": "Find Single Record",
+          "message": "単一レコードの検索"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.desc": {
+          "source": "The name of the ServiceNow table, ex: `incident`",
+          "message": "ServiceNow テーブルの名前（例: `incident`）"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.short_desc": {
+          "source": "The name of the ServiceNow table",
+          "message": "ServiceNow テーブルの名前"
+        },
+        "app.U2VydmljZU5vdw.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
+          "source": "Find a specific record in ServiceNow",
+          "message": "ServiceNow内の特定のレコードを検索"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ServiceNow** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して**ServiceNow**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.U2VydmljZU5vdw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ServiceNow",
+          "message": "ServiceNowへのカスタムAPI呼び出しを実行"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.desc": {
+          "source": "Update records in the `incident` table using ServiceNow's REST API",
+          "message": "ServiceNowのREST APIを使用して`incident`テーブル内のレコードを更新します"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.display_name": {
+          "source": "Update Incidents",
+          "message": "インシデントの更新"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLWluY2lkZW50cw.short_desc": {
+          "source": "Update incident records in ServiceNow",
+          "message": "ServiceNow内のインシデントレコードを更新"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.desc": {
+          "source": "Update records in a ServiceNow table using ServiceNow's REST API",
+          "message": "ServiceNowのREST APIを使用してServiceNowテーブル内のレコードを更新します"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.display_name": {
+          "source": "Update Records",
+          "message": "レコードを更新"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.desc": {
+          "source": "The name of the ServiceNow table, ex: `incident`",
+          "message": "ServiceNow テーブルの名前（例: `incident`）"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.short_desc": {
+          "source": "The name of the ServiceNow table",
+          "message": "ServiceNow テーブルの名前"
+        },
+        "app.U2VydmljZU5vdw.action.dXBkYXRlLXJlY29yZHM.short_desc": {
+          "source": "Update records in ServiceNow",
+          "message": "ServiceNow内のレコードを更新"
+        },
+        "app.U2VydmljZU5vdw.desc": {
+          "source": "ServiceNow® cloud APIs; ServiceNow is a trademark of ServiceNow, Inc.",
+          "message": "ServiceNow®クラウドAPI。ServiceNowはServiceNow, Inc.の商標です。"
+        },
+        "app.U2VydmljZU5vdw.display_name": {
+          "source": "ServiceNow",
+          "message": "ServiceNow"
+        },
+        "app.U2VydmljZU5vdw.short_desc": {
+          "source": "ServiceNow® cloud APIs; ServiceNow is a trademark of ServiceNow, Inc.",
+          "message": "ServiceNow®クラウドAPI。ServiceNowはServiceNow, Inc.の商標です。"
+        }
+      }
+    }
+  }
+}

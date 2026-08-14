@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts one or more text inputs into numerical vectors (embeddings) that capture the meaning of the text. Texts with similar meanings will have similar vectors, enabling semantic search and comparison.\n\n**Example use cases**:\n- Convert product descriptions into embeddings to power a \"find similar products\" feature\n- Embed support tickets to automatically route them to the right team\n- Build a knowledge base index for AI-powered question answering (RAG)\n\nSupports batch processing (up to 1,000 texts per request) and configurable output dimensions for balancing accuracy vs. storage cost",
+          "message": "Converte uno o più testi di input in vettori numerici (embedding) che catturano il significato del testo. I testi con significati simili avranno vettori simili, consentendo la ricerca e il confronto semantico.\n\n**Esempi di casi d'uso**:\n- Convertire le descrizioni dei prodotti in embedding per alimentare una funzionalità \"trova prodotti simili\"\n- Creare embedding dei ticket di supporto per instradarli automaticamente al team appropriato\n- Creare un indice di knowledge base per il question answering basato su IA (RAG)\n\nSupporta l'elaborazione in batch (fino a 1.000 testi per richiesta) e dimensioni di output configurabili per bilanciare l'accuratezza e i costi di archiviazione"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Crea embedding"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - Encoded Binary (efficient for compact types)",
+          "message": "Base64 - Binario codificato (efficiente per tipi compatti)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are formatted in the API response.\n\nBy default, embeddings are returned as plain number arrays. Set to `base64` to receive base64-encoded binary data, which can be more efficient for network transfer when using compact output types like `int8` or `binary`",
+          "message": "Controlla il formato dei vettori di embedding nella risposta dell'API.\n\nPer impostazione predefinita, gli embedding vengono restituiti come semplici array di numeri. Imposta su `base64` per ricevere dati binari con codifica base64, che possono risultare più efficienti per il trasferimento di rete quando si usano tipi di output compatti come `int8` o `binary`"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formato di codifica"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "Modo in cui i valori di embedding sono codificati nella risposta"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to convert into embeddings. Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nMaximum **1,000** items per request. Total token limits vary by model",
+          "message": "Il contenuto di testo da convertire in embedding. Può essere una singola stringa o un elenco di stringhe per l'elaborazione in batch.\n\n**Esempi**:\n- Testo singolo: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nMassimo **1.000** elementi per richiesta. I limiti totali di token variano a seconda del modello"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "Testo di input"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "Il testo o l'elenco di testi da convertire in embedding"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50.display_name": {
+          "source": "Document - Content to be searched (e.g., articles, products)",
+          "message": "Documento - Contenuto da cercare (es. articoli, prodotti)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnF1ZXJ5.display_name": {
+          "source": "Query - Search question (e.g., user's search input)",
+          "message": "Query - Domanda di ricerca (es. input di ricerca dell'utente)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Tells the model whether the input text is a search query or a document to be searched. This optimizes the embeddings for better search accuracy.\n\n- Use **Query** when embedding a user's search question (e.g., `\"How do I reset my password?\"`)\n- Use **Document** when embedding content that will be searched through (e.g., knowledge base articles, product descriptions)\n\nLeave empty if you're not using the embeddings for search/retrieval",
+          "message": "Indica al modello se il testo di input è una query di ricerca o un documento in cui cercare. Ciò ottimizza gli embedding per una migliore accuratezza di ricerca.\n\n- Usa **Query** quando crei l'embedding della domanda di ricerca di un utente (es. `\"How do I reset my password?\"`)\n- Usa **Documento** quando crei l'embedding di contenuti in cui eseguire ricerche (es. articoli della knowledge base, descrizioni di prodotti)\n\nLascia vuoto se non utilizzi gli embedding per la ricerca/recupero"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "Tipo di input"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Whether the text is a search query or a document to be searched",
+          "message": "Indica se il testo è una query di ricerca o un documento in cui cercare"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Binary - Minimal Storage (32x less, for large-scale search)",
+          "message": "Binario - Archiviazione minima (32 volte inferiore, per ricerche su larga scala)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - Full Precision (default, best accuracy)",
+          "message": "Float - Precisione completa (predefinito, massima accuratezza)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmludDg.display_name": {
+          "source": "Int8 - Compact (4x less storage, minimal accuracy loss)",
+          "message": "Int8 - Compatto (4 volte meno spazio, minima perdita di accuratezza)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnViaW5hcnk.display_name": {
+          "source": "Unsigned Binary - Minimal Storage (32x less)",
+          "message": "Binario senza segno - Archiviazione minima (32 volte inferiore)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnVpbnQ4.display_name": {
+          "source": "Uint8 - Compact Unsigned (4x less storage)",
+          "message": "Uint8 - Senza segno compatto (4 volte meno spazio)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.desc": {
+          "source": "Controls the numeric precision of embedding values. Lower precision uses less storage with a small accuracy trade-off.\n\n- **Float** — full precision (default), best accuracy\n- **Int8/Uint8** — 4x less storage, minimal accuracy loss\n- **Binary/Unsigned Binary** — 32x less storage, suitable for large-scale approximate search\n\nUse the default (`float`) unless you need to optimize storage for millions of embeddings",
+          "message": "Controlla la precisione numerica dei valori di embedding. Una precisione inferiore usa meno spazio di archiviazione con un lieve compromesso in termini di accuratezza.\n\n- **Float** — precisione completa (predefinito), massima accuratezza\n- **Int8/Uint8** — 4 volte meno spazio, perdita di accuratezza minima\n- **Binary/Unsigned Binary** — 32 volte meno spazio, ideale per ricerche approssimative su larga scala\n\nUsa il valore predefinito (`float`) a meno che tu non debba ottimizzare l'archiviazione per milioni di embedding"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.display_name": {
+          "source": "Output Precision",
+          "message": "Precisione di output"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.short_desc": {
+          "source": "Numeric precision of embedding values (affects storage size)",
+          "message": "Precisione numerica dei valori di embedding (influisce sulle dimensioni di archiviazione)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjEwMjQ.display_name": {
+          "source": "1024 - Default (recommended)",
+          "message": "1024 - Predefinito (consigliato)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjI1Ng.display_name": {
+          "source": "256 - Smallest (least storage)",
+          "message": "256 - Più piccolo (minor spazio di archiviazione)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjIwNDg.display_name": {
+          "source": "2048 - Largest (highest accuracy)",
+          "message": "2048 - Più grande (massima accuratezza)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjUxMg.display_name": {
+          "source": "512 - Compact (good balance)",
+          "message": "512 - Compatto (buon equilibrio)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.desc": {
+          "source": "Controls the size of the output embedding vectors. Higher dimensions give more accurate results but use more storage and memory.\n\n- **256** — smallest, ~4x less storage, good for large-scale approximate search\n- **512** — compact, good balance for most applications\n- **1024** — default, recommended for high-accuracy search\n- **2048** — highest accuracy, best when storage is not a concern\n\nNot all models support all dimensions. Default is `1024`",
+          "message": "Controlla la dimensione dei vettori di embedding di output. Dimensioni maggiori offrono risultati più precisi, ma occupano più spazio di archiviazione e memoria.\n\n- **256** — più piccolo, ~4 volte meno spazio di archiviazione, ideale per ricerche approssimative su larga scala\n- **512** — compatto, buon equilibrio per la maggior parte delle applicazioni\n- **1024** — predefinito, consigliato per ricerche ad alta precisione\n- **2048** — massima accuratezza, ottimale quando lo spazio di archiviazione non è un problema\n\nNon tutti i modelli supportano tutte le dimensioni. Il valore predefinito è `1024`"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
+          "source": "Output Dimensions",
+          "message": "Dimensioni di output"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
+          "source": "Size of the embedding vector (affects accuracy vs. storage)",
+          "message": "Dimensione del vettore di embedding (influisce su accuratezza vs. archiviazione)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00.display_name": {
+          "source": "Voyage 4 - Balanced (good quality and speed)",
+          "message": "Voyage 4 - Bilanciato (buona qualità e velocità)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxhcmdl.display_name": {
+          "source": "Voyage 4 Large - Best Quality (general-purpose, multilingual)",
+          "message": "Voyage 4 Large - Massima qualità (per scopi generali, multilingue)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxpdGU.display_name": {
+          "source": "Voyage 4 Lite - Fastest (high-volume workloads)",
+          "message": "Voyage 4 Lite - Più veloce (carichi di lavoro ad alto volume)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0z.display_name": {
+          "source": "Voyage 3 - Previous Gen (balanced)",
+          "message": "Voyage 3 - Generazione precedente (bilanciato)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0zLWxhcmdl.display_name": {
+          "source": "Voyage 3 Large - Previous Gen (general-purpose)",
+          "message": "Voyage 3 Large - Generazione precedente (per scopi generali)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1jb2RlLTM.display_name": {
+          "source": "Voyage Code 3 - Code Search (source code retrieval)",
+          "message": "Voyage Code 3 - Ricerca di codice (recupero di codice sorgente)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1maW5hbmNlLTI.display_name": {
+          "source": "Voyage Finance 2 - Finance (SEC filings, earnings)",
+          "message": "Voyage Finance 2 - Finanza (documenti depositati presso la SEC, utili)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1sYXctMg.display_name": {
+          "source": "Voyage Law 2 - Legal (contracts, case law)",
+          "message": "Voyage Law 2 - Legale (contratti, giurisprudenza)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1tdWx0aWxpbmd1YWwtMg.display_name": {
+          "source": "Voyage Multilingual 2 - Previous Gen (multilingual)",
+          "message": "Voyage Multilingual 2 - Generazione precedente (multilingue)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for converting your text into embeddings.\n\n**Recommended models**:\n- `voyage-4-large` — highest quality, best for multilingual content and complex documents\n- `voyage-4` — good balance of quality and speed for most use cases\n- `voyage-4-lite` — fastest and cheapest, good for high-volume or latency-sensitive workloads\n- `voyage-code-3` — specialized for source code search and retrieval\n\n**Domain-specific models** (trained on specialized data):\n- `voyage-finance-2` — financial documents, SEC filings, earnings reports\n- `voyage-law-2` — legal contracts, case law, regulations",
+          "message": "Scegli quale modello Voyage AI utilizzare per convertire il testo in embedding.\n\n**Modelli consigliati**:\n- `voyage-4-large` — massima qualità, ideale per contenuti multilingue e documenti complessi\n- `voyage-4` — buon equilibrio tra qualità e velocità per la maggior parte dei casi d'uso\n- `voyage-4-lite` — più veloce ed economico, ottimo per carichi di lavoro ad alto volume o sensibili alla latenza\n- `voyage-code-3` — specializzato per la ricerca e il recupero di codice sorgente\n\n**Modelli specifici per dominio** (addestrati su dati specializzati):\n- `voyage-finance-2` — documenti finanziari, report SEC, relazioni sugli utili\n- `voyage-law-2` — contratti legali, giurisprudenza, normative"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for generating embeddings",
+          "message": "Il modello di IA da utilizzare per generare embedding"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "Se abilitato (impostazione predefinita), il testo troppo lungo per il modello viene automaticamente accorciato per adattarsi. Se disabilitato, viene invece restituito un errore, utile se è necessario garantire l'elaborazione del testo completo"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "Tronca automaticamente testo lungo"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "Accorcia automaticamente il testo che supera il limite del modello"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Convert text into numerical vectors for search and comparison",
+          "message": "Converti testo in vettori numerici per la ricerca e il confronto"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Voyage AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effettua una chiamata API HTTP / REST personalizzata a **Voyage AI** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni native in questa app."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Voyage AI",
+          "message": "Effettua una chiamata API personalizzata a Voyage AI"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.desc": {
+          "source": "Takes a search query and a list of documents, then re-sorts the documents by how relevant they are to the query. This improves search quality by using AI to understand meaning rather than just keyword matching.\n\n**Example use cases**:\n- Improve search results from a basic keyword search by reranking with semantic understanding\n- Filter a large set of candidate documents down to the most relevant ones for AI processing\n- Re-sort customer support articles by relevance to a user's question\n\nReturns results sorted by relevance score (highest first). Use `top_k` to limit the number of results returned, and `return_documents` to include the document text in each result",
+          "message": "Accetta una query di ricerca e un elenco di documenti, quindi riordina i documenti in base alla loro pertinenza con la query. Ciò migliora la qualità della ricerca utilizzando l'IA per comprendere il significato anziché la semplice corrispondenza per parole chiave.\n\n**Esempi di casi d'uso**:\n- Migliorare i risultati di una ricerca per parole chiave di base eseguendo un reranking con comprensione semantica\n- Filtrare un ampio insieme di documenti candidati lasciando solo i più pertinenti per l'elaborazione tramite IA\n- Riordinare gli articoli del supporto clienti in base alla pertinenza rispetto alla domanda di un utente\n\nRestituisce i risultati ordinati per punteggio di pertinenza (i più alti per primi). Usa `top_k` per limitare il numero di risultati restituiti e `return_documents` per includere il testo del documento in ciascun risultato"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Riordina documenti"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "A list of text documents to rank by relevance to the search query. These can be full documents, paragraphs, or short text snippets.\n\n**Example**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nMaximum **1,000** documents per request",
+          "message": "Un elenco di documenti di testo da classificare in base alla pertinenza con la query di ricerca. Possono essere documenti completi, paragrafi o brevi frammenti di testo.\n\n**Esempio**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nMassimo **1.000** documenti per richiesta"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Documenti"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "The list of documents or text snippets to rank",
+          "message": "L'elenco di documenti o frammenti di testo da classificare"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0y.display_name": {
+          "source": "Rerank 2 - Previous Generation",
+          "message": "Rerank 2 - Generazione precedente"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjU.display_name": {
+          "source": "Rerank 2.5 - Best Quality (most accurate relevance scoring)",
+          "message": "Rerank 2.5 - Massima qualità (punteggio di pertinenza più accurato)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjUtbGl0ZQ.display_name": {
+          "source": "Rerank 2.5 Lite - Fastest (high-volume workloads)",
+          "message": "Rerank 2.5 Lite - Più veloce (carichi di lavoro ad alto volume)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for reranking your documents.\n\n- `rerank-2.5` — best quality, most accurate relevance scoring\n- `rerank-2.5-lite` — faster and cheaper, good for high-volume workloads\n- `rerank-2` — previous generation model",
+          "message": "Scegli quale modello Voyage AI utilizzare per riordinare i documenti.\n\n- `rerank-2.5` — massima qualità, punteggio di pertinenza più accurato\n- `rerank-2.5-lite` — più veloce ed economico, ottimo per carichi di lavoro ad alto volume\n- `rerank-2` — modello di generazione precedente"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for reranking documents",
+          "message": "Il modello di IA da utilizzare per riordinare i documenti"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "The search query or question that documents will be ranked against. Documents most relevant to this query will be ranked highest.\n\n**Example**: `\"How do I cancel my subscription?\"`",
+          "message": "La query di ricerca o la domanda rispetto alla quale verranno classificati i documenti. I documenti più pertinenti a questa query riceveranno la posizione più alta.\n\n**Esempio**: `\"How do I cancel my subscription?\"`"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "Query di ricerca"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The search question to rank documents against",
+          "message": "La domanda di ricerca rispetto alla quale classificare i documenti"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When enabled, each result includes the full text of the document alongside its relevance score. This is convenient when you want to display results directly without looking up documents by their index.\n\nDisabled by default to reduce response size",
+          "message": "Se abilitato, ogni risultato include il testo completo del documento insieme al suo punteggio di pertinenza. Ciò è utile quando si desidera visualizzare direttamente i risultati senza cercare i documenti tramite il loro indice.\n\nDisabilitato per impostazione predefinita per ridurre la dimensione della risposta"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Include Document Text",
+          "message": "Includi testo del documento"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Include the original document text in each result",
+          "message": "Includi il testo originale del documento in ogni risultato"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.desc": {
+          "source": "Limits the results to only the top most-relevant documents.\n\nFor example, set to `5` to get only the 5 most relevant documents. If not specified, all documents are returned sorted by relevance score",
+          "message": "Limita i risultati solo ai documenti più pertinenti in cima alla classifica.\n\nAd esempio, imposta su `5` per ottenere solo i 5 documenti più pertinenti. Se non specificato, vengono restituiti tutti i documenti ordinati per punteggio di pertinenza"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.display_name": {
+          "source": "Number of Results",
+          "message": "Numero di risultati"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.short_desc": {
+          "source": "How many top results to return",
+          "message": "Quanti risultati principali restituire"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "Se abilitato (impostazione predefinita), il testo troppo lungo per il modello viene automaticamente accorciato per adattarsi. Se disabilitato, viene invece restituito un errore, utile se è necessario garantire l'elaborazione del testo completo"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "Tronca automaticamente testo lungo"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "Accorcia automaticamente il testo che supera il limite del modello"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.short_desc": {
+          "source": "Re-sort search results by relevance to a query",
+          "message": "Riordina i risultati della ricerca in base alla pertinenza rispetto a una query"
+        },
+        "app.Vm95YWdlQUk.desc": {
+          "source": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into numerical representations (embeddings) and reranking search results by relevance.\n\n**Common use cases**:\n- **Semantic search**: convert product descriptions, support tickets, or documents into embeddings, then find the most similar items by comparing vectors\n- **RAG (Retrieval-Augmented Generation)**: embed your knowledge base so an AI assistant can find relevant context before answering questions\n- **Search result reranking**: take initial search results and re-sort them by true relevance to the user's query for higher-quality results",
+          "message": "Fornisce l'accesso a [Voyage AI](https://voyageai.com/) per convertire il testo in rappresentazioni numeriche (embedding) e riordinare i risultati della ricerca per pertinenza.\n\n**Casi d'uso comuni**:\n- **Ricerca semantica**: converti descrizioni di prodotti, ticket di supporto o documenti in embedding, quindi trova gli elementi più simili confrontando i vettori\n- **RAG (Retrieval-Augmented Generation)**: incorpora la tua knowledge base affinché un assistente IA possa trovare il contesto pertinente prima di rispondere alle domande\n- **Reranking dei risultati di ricerca**: prendi i risultati di ricerca iniziali e riordinali in base alla reale pertinenza rispetto alla query dell'utente per ottenere risultati di qualità superiore"
+        },
+        "app.Vm95YWdlQUk.display_name": {
+          "source": "Voyage AI",
+          "message": "Voyage AI"
+        },
+        "app.Vm95YWdlQUk.short_desc": {
+          "source": "Voyage AI text embedding and search reranking services",
+          "message": "Servizi di text embedding e reranking di ricerca di Voyage AI"
+        }
+      }
+    }
+  }
+}

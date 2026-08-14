@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.RWRpZmFjdA.action.c2NoZW1h.desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "從快取或平面檔案載入 EDIFACT 目錄結構描述"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
+          "source": "Load EDIFACT Schema",
+          "message": "載入 EDIFACT 結構描述"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "覆寫此處理序的 QORE_EDIFACT_DIRCACHE。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "快取目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "覆寫快取目錄根路徑"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "如何處理快取剖析/類型錯誤：忽略、警告或拋出錯誤。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "快取錯誤處理"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "處理快取剖析/類型錯誤"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "若為 `True`，則僅從快取載入，且未命中快取時拋出錯誤。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "僅限快取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "僅從快取載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "包含該發行版本 EDMD/EDSD/EDCD/EDED/UNCL 平面檔案的目錄。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "包含 EDIFACT 平面檔案的目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "若為 `True`，則略過讀取磁碟快取。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "略過快取讀取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "不從磁碟快取讀取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "若為 `True`，則更嚴格地驗證 EDMD 檔案（段表標頭、縮排與結構完整性）。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "嚴格 EDMD 驗證"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "啟用嚴格 EDMD 驗證"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "若為 `True`，則僅傳回計數與段索引，而不傳回完整的結構描述資料。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "僅摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "僅傳回摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "EDIFACT 發行版本識別碼（例如：D01B）。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "發行版本"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "EDIFACT 發行版本識別碼"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "若為 `True`，則忽略記憶體中的註冊表並重新載入。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "重新載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "忽略記憶體中註冊表並重新載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "從快取或平面檔案載入 EDIFACT 目錄結構描述"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "僅載入 EDIFACT 結構描述摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "Schema Summary",
+          "message": "結構描述摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "覆寫此處理序的 QORE_EDIFACT_DIRCACHE。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "快取目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "覆寫快取目錄根路徑"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "如何處理快取剖析/類型錯誤：忽略、警告或拋出錯誤。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "快取錯誤處理"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "處理快取剖析/類型錯誤"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "若為 `True`，則僅從快取載入，且未命中快取時拋出錯誤。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "僅限快取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "僅從快取載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "包含該發行版本 EDMD/EDSD/EDCD/EDED/UNCL 平面檔案的目錄。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "包含 EDIFACT 平面檔案的目錄"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "若為 `True`，則略過讀取磁碟快取。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "略過快取讀取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "不從磁碟快取讀取"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "若為 `True`，則更嚴格地驗證 EDMD 檔案（段表標頭、縮排與結構完整性）。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "嚴格 EDMD 驗證"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "啟用嚴格 EDMD 驗證"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "若為 `True`，則僅傳回計數與段索引，而不傳回完整的結構描述資料。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "僅摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "僅傳回摘要"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "EDIFACT 發行版本識別碼（例如：D01B）。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "發行版本"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "EDIFACT 發行版本識別碼"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "若為 `True`，則忽略記憶體中的註冊表並重新載入。"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "重新載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "忽略記憶體中註冊表並重新載入"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "僅載入 EDIFACT 結構描述摘要"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "從特定檔案位置讀取 EDIFACT 訊息資料"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.display_name": {
+          "source": "Read EDIFACT File",
+          "message": "讀取 EDIFACT 檔案"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII（基本）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1（Latin-1，預設值）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2（中歐語系）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5（斯拉夫語系）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9（土耳其語）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8（推薦用於 Unicode）"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used in the EDIFACT message. Common values are ISO-8859-1 (Latin-1, default for UNOC) and UTF-8 (for UNOY).",
+          "message": "EDIFACT 訊息中使用的字元編碼。常見值為 ISO-8859-1（Latin-1，UNOC 的預設值）和 UTF-8（用於 UNOY）。"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "字元編碼"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding of the EDIFACT data",
+          "message": "EDIFACT 資料的字元編碼"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.desc": {
+          "source": "If `True`, skip service segments (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) during iteration, returning only business data segments.",
+          "message": "若為 `True`，則在迭代期間略過服務區段（`UNA`、`UNB`、`UNZ`、`UNH`、`UNT`、`UNG`、`UNE`、`UNS`），僅返回業務資料區段。"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.display_name": {
+          "source": "Skip Service Segments",
+          "message": "略過服務區段"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.short_desc": {
+          "source": "Skip envelope segments during iteration",
+          "message": "在反覆運算期間略過封套區段"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "EDIFACT 檔案的絕對或相對路徑。支援標準檔案位置語法，包括 file://、sftp:// 等。"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Location",
+          "message": "檔案位置"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the EDIFACT file to read",
+          "message": "要讀取的 EDIFACT 檔案位置"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "從特定檔案位置讀取 EDIFACT 訊息資料"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "將 EDIFACT 訊息資料寫入特定檔案位置"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
+          "source": "Write EDIFACT Data",
+          "message": "寫入 EDIFACT 資料"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII（基本）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1（Latin-1，預設值）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2（中歐語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5（斯拉夫語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9（土耳其語）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8（推薦用於 Unicode）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use for the EDIFACT output. Should match the syntax identifier (e.g., ISO-8859-1 for UNOC, UTF-8 for UNOY).",
+          "message": "用於 EDIFACT 輸出的字元編碼。應與語法语法識別碼相符（例如 UNOC 為 ISO-8859-1，UNOY 為 UTF-8）。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "字元編碼"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "輸出的字元編碼"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.desc": {
+          "source": "If `True`, add a newline character after each segment terminator. This makes the output more readable but increases file size slightly.",
+          "message": "若為 `True`，則在每個區段終止符號後新增換行字元。這會使輸出更易讀，但會略微增加檔案大小。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.display_name": {
+          "source": "Add Line Breaks",
+          "message": "新增換行符號"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.short_desc": {
+          "source": "Add newlines after each segment",
+          "message": "在每個區段後新增換行符號"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0E.desc": {
+          "source": "Level A - basic Latin uppercase",
+          "message": "層級 A - 基本拉丁大寫字母"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0I.desc": {
+          "source": "Level B - Latin upper/lowercase",
+          "message": "層級 B - 拉丁大寫/小寫字母"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0M.desc": {
+          "source": "Level C - ISO 8859-1 (Latin-1, most common)",
+          "message": "層級 C - ISO 8859-1（Latin-1，最常見）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Q.desc": {
+          "source": "Level D - ISO 8859-2 (Central European)",
+          "message": "層級 D - ISO 8859-2（中歐語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0U.desc": {
+          "source": "Level E - ISO 8859-5 (Cyrillic)",
+          "message": "層級 E - ISO 8859-5（斯拉夫語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Y.desc": {
+          "source": "Level F - ISO 8859-7 (Greek)",
+          "message": "層級 F - ISO 8859-7（希臘語）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0c.desc": {
+          "source": "Level G - ISO 8859-3 (South European)",
+          "message": "層級 G - ISO 8859-3（南歐語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0g.desc": {
+          "source": "Level H - ISO 8859-4 (North European)",
+          "message": "層級 H - ISO 8859-4（北歐語系）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0k.desc": {
+          "source": "Level I - ISO 8859-6 (Arabic)",
+          "message": "層級 I - ISO 8859-6（阿拉伯語）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0o.desc": {
+          "source": "Level J - ISO 8859-8 (Hebrew)",
+          "message": "層級 J - ISO 8859-8（希伯來語）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0s.desc": {
+          "source": "Level K - ISO 8859-9 (Turkish)",
+          "message": "層級 K - ISO 8859-9（土耳其語）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1g.desc": {
+          "source": "Level X - ISO 2022 with escapes",
+          "message": "層級 X - 含跳脫字元的 ISO 2022"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1k.desc": {
+          "source": "Level Y - UTF-8 (recommended for Unicode)",
+          "message": "層級 Y - UTF-8（推薦用於 Unicode）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.desc": {
+          "source": "The syntax identifier to use in the UNB segment. Defines the character set and syntax rules. UNOC (ISO 8859-1) is most common.",
+          "message": "在 UNB 區段中使用的語法識別碼。定義字元集和語法規則。UNOC（ISO 8859-1）最為常見。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.display_name": {
+          "source": "Syntax Identifier",
+          "message": "語法識別碼"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.short_desc": {
+          "source": "EDIFACT syntax identifier for UNB",
+          "message": "用於 UNB 的 EDIFACT 語法識別碼"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjE.desc": {
+          "source": "Syntax version 1",
+          "message": "語法版本 1"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjI.desc": {
+          "source": "Syntax version 2",
+          "message": "語法版本 2"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjM.desc": {
+          "source": "Syntax version 3 (most common)",
+          "message": "語法版本 3（最常見）"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjQ.desc": {
+          "source": "Syntax version 4",
+          "message": "語法版本 4"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.desc": {
+          "source": "The syntax version number to use in the UNB segment. Version 3 is most commonly used.",
+          "message": "在 UNB 區段中使用的語法版本號碼。最常使用版本 3。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.display_name": {
+          "source": "Syntax Version",
+          "message": "語法版本"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.short_desc": {
+          "source": "EDIFACT syntax version for UNB",
+          "message": "用於 UNB 的 EDIFACT 語法版本"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to write the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "寫入 EDIFACT 檔案的絕對或相對路徑。支援標準檔案位置語法，包括 file://、sftp:// 等。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "檔案路徑"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the EDIFACT output file",
+          "message": "EDIFACT 輸出檔案的路徑"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.desc": {
+          "source": "If `True`, write the UNA segment at the beginning of the interchange to explicitly define the delimiter characters. Recommended for interoperability.",
+          "message": "若為 `True`，則在交換開頭寫入 UNA 區段以明確定義分隔字元。建議用於互通性。"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.display_name": {
+          "source": "Write UNA Segment",
+          "message": "寫入 UNA 區段"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.short_desc": {
+          "source": "Include UNA service string advice",
+          "message": "包含 UNA 服務字串建議"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "將 EDIFACT 訊息資料寫入特定檔案位置"
+        },
+        "app.RWRpZmFjdA.desc": {
+          "source": "Read and write UN/EDIFACT electronic data interchange messages",
+          "message": "讀取與寫入 UN/EDIFACT 電子資料交換訊息"
+        },
+        "app.RWRpZmFjdA.display_name": {
+          "source": "EDIFACT Messages",
+          "message": "EDIFACT 訊息"
+        },
+        "app.RWRpZmFjdA.short_desc": {
+          "source": "Read and write UN/EDIFACT EDI messages",
+          "message": "讀取與寫入 UN/EDIFACT EDI 訊息"
+        }
+      }
+    }
+  }
+}

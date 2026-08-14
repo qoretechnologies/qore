@@ -1,0 +1,1773 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file, optionally renaming it or placing the copy in a different folder.",
+          "message": "ファイルをコピーします。必要に応じて名前を変更したり、別のフォルダにコピーを配置したりできます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File",
+          "message": "ファイルのコピー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to place the copy in; if not set, the copy is placed beside the original",
+          "message": "コピーを配置するフォルダ。設定しない場合、コピーは元のファイルと同じ場所に配置されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to place the copy in",
+          "message": "コピーを配置するフォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to copy",
+          "message": "コピーするファイルの Drive 識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.desc": {
+          "source": "The name for the copy; if not set, Drive names it `Copy of <name>`",
+          "message": "コピーの名前。設定しない場合、Drive は名前を `Copy of <name>` に設定します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "新しい名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.option.bmFtZQ.short_desc": {
+          "source": "The name for the copy",
+          "message": "コピーの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file",
+          "message": "ファイルをコピー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, optionally inside another folder.",
+          "message": "フォルダを作成します。必要に応じて別のフォルダ内に作成できます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "フォルダを作成"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name for the new folder",
+          "message": "新しいフォルダの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name for the new folder",
+          "message": "新しいフォルダの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.desc": {
+          "source": "The folder to create the new folder in; if not set, the user's `My Drive` root is used",
+          "message": "新しいフォルダを作成する親フォルダ。設定しない場合、ユーザーの `My Drive` ルートが使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.display_name": {
+          "source": "Parent Folder ID",
+          "message": "親フォルダ ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2ZvbGRlcl9pZA.short_desc": {
+          "source": "The folder to create the new folder in",
+          "message": "新しいフォルダを作成する親フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "フォルダを作成"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.desc": {
+          "source": "Creates a shortcut pointing at a file or folder.\n\nA shortcut lets one file appear in several places without being copied, so the content stays in one place and every route to it stays current.  Deleting a shortcut does not affect the file it points at.",
+          "message": "ファイルまたはフォルダを指すショートカットを作成します。\n\nショートカットを使用すると、ファイルをコピーすることなく複数の場所に表示できるため、コンテンツは 1 か所に保持され、アクセス経路はすべて最新の状態に保たれます。ショートカットを削除しても、参照先のファイルには影響しません。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.display_name": {
+          "source": "Create Shortcut",
+          "message": "ショートカットを作成"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to create the shortcut in; if not set, the user's `My Drive` root is used",
+          "message": "ショートカットを作成するフォルダ。設定しない場合、ユーザーの `My Drive` ルートが使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the shortcut in",
+          "message": "ショートカットを作成するフォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.desc": {
+          "source": "The name for the shortcut; it need not match the name of the file it points at",
+          "message": "ショートカットの名前。リンク先のファイル名と一致している必要はありません"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.bmFtZQ.short_desc": {
+          "source": "The name for the shortcut",
+          "message": "ショートカットの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.desc": {
+          "source": "The Drive identifier of the file or folder the shortcut points at",
+          "message": "ショートカットが指すファイルまたはフォルダのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.display_name": {
+          "source": "Target File ID",
+          "message": "ターゲットファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.option.dGFyZ2V0X2lk.short_desc": {
+          "source": "The file or folder the shortcut points at",
+          "message": "ショートカットが指すファイルまたはフォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXNob3J0Y3V0.short_desc": {
+          "source": "Create a shortcut pointing at a file or folder",
+          "message": "ファイルまたはフォルダを指すショートカットを作成します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "ファイルを用意することなく、テキストコンテンツから直接ファイルを作成します。\n\n生成されたレポート、マニフェスト、メモの書き込みに便利です。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "テキストファイルを作成"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "新しいファイルのテキストコンテンツ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "新しいファイルのテキストコンテンツ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.desc": {
+          "source": "The Drive identifier of the folder; if not set, the user's `My Drive` root is used",
+          "message": "フォルダのDrive識別子。設定されていない場合は、ユーザーの`My Drive`ルートが使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to create the file in",
+          "message": "ファイルを作成するフォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.desc": {
+          "source": "The MIME type to store with the new file",
+          "message": "新しいファイルとともに保存するMIMEタイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bWltZV90eXBl.short_desc": {
+          "source": "The MIME type for the new file",
+          "message": "新しいファイルのMIMEタイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.desc": {
+          "source": "The name for the new file",
+          "message": "新しいファイルの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bmFtZQ.short_desc": {
+          "source": "The name for the new file",
+          "message": "新しいファイルの名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "テキストコンテンツからファイルを作成"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieves a file's metadata: its name, type, size, timestamps, parents, and links.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "ファイルの名前、タイプ、サイズ、タイムスタンプ、親、リンクなどのメタデータを取得します。\n\nコンテンツ自体を取得するには`download-file`を使用してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File Info",
+          "message": "ファイル情報の取得"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "ファイルのDrive識別子。Driveはパスではなく不変のIDによってファイルを指定するため、同じフォルダ内の2つのファイルが同じ名前を持つことができます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file's metadata",
+          "message": "ファイルのメタデータを取得します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.desc": {
+          "source": "Returns the details of one revision of a file: when it was made, how large it is, and whether Drive will keep it indefinitely.",
+          "message": "ファイルの1つのリビジョンの詳細（作成日時、サイズ、Driveが無期限に保持するかどうか）を返します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.display_name": {
+          "source": "Get File Revision",
+          "message": "ファイルのリビジョンを取得"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "リビジョンが属するファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "`list-revisions`によって返されるリビジョンの識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "リビジョンID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "指定するリビジョン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXJldmlzaW9u.short_desc": {
+          "source": "Get the details of one revision of a file",
+          "message": "ファイルの1つのリビジョンの詳細を取得します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Drive rejects one that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.  Files in the trash still count against the quota, so `usage_in_drive_trash` is what emptying it would recover.",
+          "message": "アカウントのストレージの使用量と空き容量を返します。\n\n大容量アップロードの前に役立ちます。Driveは容量制限を超えるアップロードを拒否し、容量問題としてではなく通常の書き込み失敗として報告します。ゴミ箱内のファイルも容量としてカウントされるため、`usage_in_drive_trash`はゴミ箱を空にすることで回復できる容量を示します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.display_name": {
+          "source": "Get Storage Quota",
+          "message": "ストレージ容量を取得"
+        },
+        "app.R29vZ2xlRHJpdmU.action.Z2V0LXN0b3JhZ2UtcXVvdGE.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "アカウントのストレージ使用量を取得"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nGoogle-native documents (Docs, Sheets, Slides) have no byte content of their own and cannot be downloaded; use `export-file` to convert one to a concrete format instead.",
+          "message": "ファイルのコンテンツをダウンロードします。\n\nGoogleネイティブドキュメント（ドキュメント、スプレッドシート、スライド）には独自のバイトコンテンツがなく、ダウンロードできません。代わりに`export-file`を使用して特定の形式に変換してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "ファイルのダウンロード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file; Drive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name",
+          "message": "ファイルのDrive識別子。Driveはパスではなく不変のIDによってファイルを指定するため、同じフォルダ内の2つのファイルが同じ名前を持つことができます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "ファイルの内容をダウンロード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Moves a file to the trash, where it can still be recovered.\n\nSet `permanently_delete` to remove it outright instead; **that cannot be undone**.",
+          "message": "ファイルをゴミ箱に移動します（ゴミ箱から復元可能です）。\n\n完全に削除するには`permanently_delete`を設定してください。**この操作は元に戻せません**。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "ファイルを削除"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to delete",
+          "message": "削除するファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.desc": {
+          "source": "Delete the file outright rather than moving it to the trash. **This cannot be undone**; leave it cleared to move the file to the trash, where it can still be recovered",
+          "message": "ファイルをゴミ箱に移動するのではなく、完全に削除します。**この操作は元に戻せません**。ファイルをゴミ箱に移動して後から復元できるようにするには、クリアしたままにしてください"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "完全に削除"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.option.cGVybWFuZW50bHlfZGVsZXRl.short_desc": {
+          "source": "Delete the file outright rather than moving it to the trash",
+          "message": "ゴミ箱に移動せず、ファイルを完全に削除します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or move it to the trash",
+          "message": "ファイルを削除するか、ゴミ箱に移動します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.desc": {
+          "source": "Removes one revision of a file, freeing the storage it occupied.\n\n**This cannot be undone**, and the file's current content is unaffected.  Drive refuses to remove the only remaining revision.",
+          "message": "ファイルのリビジョンを1つ削除し、それが占有していたストレージを解放します。\n\n**この操作は元に戻せません**。ファイルの現在のコンテンツには影響しません。Driveは唯一残っているリビジョンの削除を拒否します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.display_name": {
+          "source": "Delete File Revision",
+          "message": "ファイルのリビジョンを削除"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file the revision belongs to",
+          "message": "リビジョンが属するファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.desc": {
+          "source": "The identifier of the revision, as returned by `list-revisions`",
+          "message": "`list-revisions`によって返されるリビジョンの識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.display_name": {
+          "source": "Revision ID",
+          "message": "リビジョンID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.option.cmV2aXNpb25faWQ.short_desc": {
+          "source": "The revision to address",
+          "message": "指定するリビジョン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZGVsZXRlLXJldmlzaW9u.short_desc": {
+          "source": "Remove one earlier version of a file",
+          "message": "ファイルの過去のバージョンを1つ削除します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.desc": {
+          "source": "Exports a Google-native document (Docs, Sheets, Slides) to a concrete format such as PDF or a Microsoft Office format.\n\nThe formats available depend on the document type; exporting a Sheet to `text/csv` returns the first sheet only.",
+          "message": "Googleネイティブドキュメント（ドキュメント、スプレッドシート、スライド）をPDFやMicrosoft Office形式などの具体的なフォーマットにエクスポートします。\n\n利用可能なフォーマットはドキュメントの種類によって異なります。スプレッドシートを`text/csv`にエクスポートすると、最初のシートのみが返されます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.display_name": {
+          "source": "Export Document",
+          "message": "ドキュメントをエクスポート"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the Google-native document to export",
+          "message": "エクスポートするGoogleネイティブドキュメントのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.desc": {
+          "source": "Portable Document Format; available for Docs, Sheets, and Slides",
+          "message": "Portable Document Format（PDF）。ドキュメント、スプレッドシート、スライドで使用可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3BkZg.short_desc": {
+          "source": "Portable Document Format",
+          "message": "Portable Document Format"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.desc": {
+          "source": "Microsoft Word `docx` document; available for Docs",
+          "message": "Microsoft Word `docx` ドキュメント。ドキュメントで使用可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.display_name": {
+          "source": "Word Document (docx)",
+          "message": "Wordドキュメント (docx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC53b3JkcHJvY2Vzc2luZ21sLmRvY3VtZW50.short_desc": {
+          "source": "Microsoft Word document",
+          "message": "Microsoft Wordドキュメント"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.desc": {
+          "source": "Microsoft PowerPoint `pptx` presentation; available for Slides",
+          "message": "Microsoft PowerPoint `pptx` プレゼンテーション。スライドで使用可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.display_name": {
+          "source": "PowerPoint Presentation (pptx)",
+          "message": "PowerPointプレゼンテーション (pptx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5wcmVzZW50YXRpb25tbC5wcmVzZW50YXRpb24.short_desc": {
+          "source": "Microsoft PowerPoint presentation",
+          "message": "Microsoft PowerPointプレゼンテーション"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.desc": {
+          "source": "Microsoft Excel `xlsx` workbook; available for Sheets",
+          "message": "Microsoft Excel `xlsx` ワークブック。スプレッドシートで使用可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.display_name": {
+          "source": "Excel Workbook (xlsx)",
+          "message": "Excelワークブック (xlsx)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOmFwcGxpY2F0aW9uL3ZuZC5vcGVueG1sZm9ybWF0cy1vZmZpY2Vkb2N1bWVudC5zcHJlYWRzaGVldG1sLnNoZWV0.short_desc": {
+          "source": "Microsoft Excel workbook",
+          "message": "Microsoft Excelワークブック"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.desc": {
+          "source": "Comma-separated values; available for Sheets, and exports the first sheet only",
+          "message": "カンマ区切り値（CSV）。スプレッドシートで使用可能で、最初のシートのみをエクスポートします"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.display_name": {
+          "source": "CSV",
+          "message": "CSV"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvY3N2.short_desc": {
+          "source": "Comma-separated values",
+          "message": "カンマ区切り値（CSV）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text; available for Docs",
+          "message": "プレーンテキスト。ドキュメントで使用可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "プレーンテキスト"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.desc": {
+          "source": "The format to export the document to; the formats available depend on the document type",
+          "message": "ドキュメントのエクスポート先フォーマット。利用可能なフォーマットはドキュメントの種類によって異なります"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.display_name": {
+          "source": "Export Format",
+          "message": "エクスポート形式"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.option.bWltZV90eXBl.short_desc": {
+          "source": "The format to export the document to",
+          "message": "ドキュメントのエクスポート先フォーマット"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZXhwb3J0LWZpbGU.short_desc": {
+          "source": "Export a Google-native document to a concrete format",
+          "message": "Googleネイティブドキュメントを具体的なフォーマットにエクスポートします"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.desc": {
+          "source": "Searches Drive and reads the results as a stream of records.\n\nUnlike `list-files`, which answers one page and leaves the page token to the caller, this walks the whole result: pages are fetched as they are reached, so a drive holding more files than fit in one page is read without the caller knowing how Drive paginates.\n\nNarrow the search with `folder_id`, `name`, or `mime_type`; Drive applies these itself, so they reduce what is transferred rather than only what is examined.  Use `custom_query` for anything the other options cannot express.",
+          "message": "Driveを検索し、結果をレコードのストリームとして読み取ります。\n\n1ページ分のみを返してページトークンを呼び出し元に委ねる`list-files`とは異なり、このアクションは結果全体を走査します。結果に到達するにつれてページが順次取得されるため、呼び出し元がDriveのページネーションの仕組みを意識することなく、1ページに収まらない多数のファイルを保持するドライブを読み取ることができます。\n\n`folder_id`、`name`、または`mime_type`で検索を絞り込みます。これらはDrive自体によって適用されるため、調査対象だけでなく転送量も削減されます。他のオプションで表現できない条件には`custom_query`を使用してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files",
+          "message": "ファイルを検索"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "ユーザーの`My Drive`内のファイル、およびユーザーがメンバーとなっているすべての共有ドライブ内のファイル。\n\n**これは最も低速なオプションです**。検索対象のコレクションがわかっている場合は、`user`または`drive`に絞り込むことをGoogleは推奨しています"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "マイドライブとすべての共有ドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "マイドライブ内のファイルおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "ユーザーのドメイン全体と共有されているファイル。Google Workspaceアカウントが必要です"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "ユーザーのドメイン全体と共有されているファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "`drive_id`で指定された共有ドライブ（設定必須）に保存されているファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "1つの共有ドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "drive_idで指定された共有ドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "ユーザー自身が所有しているか、ユーザーに直接共有されている、自身の`My Drive`内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "マイドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "ユーザー自身のマイドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search; if not set, `drive` is used when `drive_id` is set",
+          "message": "検索対象のファイルコレクション。設定されていない場合、`drive_id` が設定されているときは `drive` が使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "コレクション"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "検索対象のファイルコレクション"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "生の Drive クエリ式。設定されている場合、他の照合オプションの代わりに使用されます。構文については Drive API の `files.list` ドキュメントを参照してください"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "カスタム クエリ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "生の Drive クエリ式"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "Read this shared drive (formerly a \"Team Drive\") rather than the user's own `My Drive`",
+          "message": "ユーザー自身の `My Drive` ではなく、この共有ドライブ（旧「チームドライブ」）を読み取ります"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive",
+          "message": "共有ドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Read this shared drive rather than My Drive",
+          "message": "マイドライブではなくこの共有ドライブを読み取る"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "Read only files held directly in this folder; if not set, files anywhere the connection can see are read",
+          "message": "このフォルダに直接保持されているファイルのみを読み取ります。設定されていない場合、接続が表示できるすべての場所のファイルが読み取られます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Read only files held in this folder",
+          "message": "このフォルダに保持されているファイルのみを読み取る"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "ゴミ箱内のファイルを含める（デフォルトでは除外）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "ゴミ箱を含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files that are in the trash",
+          "message": "ゴミ箱内のファイルを含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "共有ドライブに保持されているファイルを結果に含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "共有ドライブを含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives",
+          "message": "共有ドライブに保持されているファイルを含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "結果の並び順（Drive の `orderBy` 式として指定）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "結果の並び順"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to read folders",
+          "message": "この MIME タイプのファイルのみを照合します。フォルダを読み取るには `application/vnd.google-apps.folder` を使用します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match only files of this MIME type",
+          "message": "この MIME タイプのファイルのみを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "名前がこのテキストを含むファイルを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "名前がこのテキストを含むファイルを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many files to fetch per request; Drive caps this at `1000`.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "1 リクエストあたりに取得するファイル数。Drive では最大 `1000` に制限されています。\n\nこれはウォークがリクエストにどのように分割されるかに影響し、返されるレコード数には影響しません（イテレータは必要に応じて後続のページを取得します）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many files to fetch per request",
+          "message": "1 リクエストあたりに取得するファイル数"
+        },
+        "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Search Drive and read the results as records",
+          "message": "Drive を検索し、結果をレコードとして読み取る"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.desc": {
+          "source": "Lists or searches files and folders.\n\nSet `folder_id` to list one folder, `name` to match on name, or `custom_query` to use a raw Drive query expression when the other options are not enough.\n\nResults are paginated; when `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "ファイルおよびフォルダを一覧表示または検索します。\n\n1 つのフォルダを一覧表示するには `folder_id` を、名前で照合するには `name` を、他のオプションでは不十分な場合に生の Drive クエリ式を使用するには `custom_query` を設定します。\n\n結果はページ分割されます。`next_page_token` が返された場合は、それを `page_token` に渡して次のページを取得します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "ファイル一覧"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.desc": {
+          "source": "Files in the user's `My Drive` and on every shared drive the user is a member of.\n\n**This is the slowest option**; Google recommends narrowing to `user` or `drive` whenever the collection to search is known",
+          "message": "ユーザーの`My Drive`内のファイル、およびユーザーがメンバーとなっているすべての共有ドライブ内のファイル。\n\n**これは最も低速なオプションです**。検索対象のコレクションがわかっている場合は、`user`または`drive`に絞り込むことをGoogleは推奨しています"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.display_name": {
+          "source": "My Drive and All Shared Drives",
+          "message": "マイドライブとすべての共有ドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
+          "source": "Files in My Drive and on every shared drive the user can reach",
+          "message": "マイドライブ内のファイルおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Files shared with the user's whole domain; requires a Google Workspace account",
+          "message": "ユーザーのドメイン全体と共有されているファイル。Google Workspaceアカウントが必要です"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Files shared with the user's whole domain",
+          "message": "ユーザーのドメイン全体と共有されているファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.desc": {
+          "source": "Files held on the shared drive named in `drive_id`, which must be set",
+          "message": "`drive_id`で指定された共有ドライブ（設定必須）に保存されているファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.display_name": {
+          "source": "One Shared Drive",
+          "message": "1つの共有ドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRyaXZl.short_desc": {
+          "source": "Files on the shared drive named in drive_id",
+          "message": "drive_idで指定された共有ドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "Files the user owns or that have been shared with them directly, in their own `My Drive`",
+          "message": "ユーザー自身が所有しているか、ユーザーに直接共有されている、自身の`My Drive`内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "My Drive",
+          "message": "マイドライブ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Files in the user's own My Drive",
+          "message": "ユーザー自身のマイドライブ内のファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.desc": {
+          "source": "The collection of files to search.\n\nIf not set, `drive` is used when `drive_id` is set, and otherwise the collection Drive selects by default for the request",
+          "message": "検索対象のファイルコレクション。\n\n設定されていない場合、`drive_id` が設定されているときは `drive` が使用され、それ以外の場合は Drive がリクエストに対してデフォルトで選択するコレクションが使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.display_name": {
+          "source": "Collection",
+          "message": "コレクション"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.short_desc": {
+          "source": "The collection of files to search",
+          "message": "検索対象のファイルコレクション"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.desc": {
+          "source": "A raw Drive query expression, used instead of the other matching options when set; see the Drive API `files.list` documentation for the syntax",
+          "message": "生の Drive クエリ式。設定されている場合、他の照合オプションの代わりに使用されます。構文については Drive API の `files.list` ドキュメントを参照してください"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.display_name": {
+          "source": "Custom Query",
+          "message": "カスタム クエリ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y3VzdG9tX3F1ZXJ5.short_desc": {
+          "source": "A raw Drive query expression",
+          "message": "生の Drive クエリ式"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.desc": {
+          "source": "List only files held on this shared drive (formerly a \"Team Drive\").\n\nSetting this selects the `drive` collection unless `corpora` says otherwise, so the listing covers that shared drive rather than the user's own `My Drive`",
+          "message": "この共有ドライブ（旧「チームドライブ」）に保持されているファイルのみを一覧表示します。\n\nこれを設定すると、`corpora` で特に指定がない限り `drive` コレクションが選択されるため、ユーザー自身の `My Drive` ではなくその共有ドライブが一覧表示の対象となります"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "共有ドライブ ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "List only files held on this shared drive",
+          "message": "この共有ドライブに保持されているファイルのみを一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.desc": {
+          "source": "List only files held in this folder; if not set, files anywhere in the Drive are listed",
+          "message": "このフォルダに直接保持されているファイルのみを一覧表示します。設定されていない場合、Drive 内のすべての場所のファイルが一覧表示されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "List only files in this folder",
+          "message": "このフォルダ内のファイルのみを一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.desc": {
+          "source": "Include files that are in the trash; excluded by default",
+          "message": "ゴミ箱内のファイルを含める（デフォルトでは除外）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.display_name": {
+          "source": "Include Trashed",
+          "message": "ゴミ箱を含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV90cmFzaGVk.short_desc": {
+          "source": "Include files in the trash",
+          "message": "ゴミ箱内のファイルを含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.desc": {
+          "source": "Include files held on shared drives (formerly \"Team Drives\") in the results.\n\nWithout this a listing covers only the user's own `My Drive`, so shared-drive content is invisible even to an account that has access to it",
+          "message": "共有ドライブ（旧「チームドライブ」）に保持されているファイルを結果に含めます。\n\nこれを指定しない場合、一覧表示はユーザー自身の `My Drive` のみを対象とするため、アクセス権があるアカウントであっても共有ドライブのコンテンツは表示されません"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.display_name": {
+          "source": "Include Shared Drives",
+          "message": "共有ドライブを含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.aW5jbHVkZV9zaGFyZWRfZHJpdmVz.short_desc": {
+          "source": "Include files held on shared drives in the results",
+          "message": "共有ドライブに保持されているファイルを結果に含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results, as a Drive `orderBy` expression",
+          "message": "結果の並び順（Drive の `orderBy` 式として指定）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "結果の並び順"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.desc": {
+          "source": "Match only files of this MIME type; use `application/vnd.google-apps.folder` to list folders",
+          "message": "この MIME タイプのファイルのみを照合します。フォルダを一覧表示するには `application/vnd.google-apps.folder` を使用します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.display_name": {
+          "source": "MIME Type",
+          "message": "MIME タイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bWltZV90eXBl.short_desc": {
+          "source": "Match files of this MIME type",
+          "message": "この MIME タイプのファイルを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.desc": {
+          "source": "Match files whose name contains this text",
+          "message": "名前がこのテキストを含むファイルを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.bmFtZQ.short_desc": {
+          "source": "Match files whose name contains this text",
+          "message": "名前がこのテキストを含むファイルを照合"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing, used to retrieve the following page",
+          "message": "以前の一覧表示によって返された `next_page_token` 値。次のページを取得するために使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "前回の切り詰められた一覧表示によって返されたトークン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of files to return per page; the Drive API caps this at `1000`",
+          "message": "1 ページあたりに返すファイルの最大数。Drive API では最大 `1000` に制限されています"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of files to return per page",
+          "message": "1 ページあたりに返すファイルの最大数"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List or search files and folders",
+          "message": "ファイルおよびフォルダを一覧表示または検索"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.desc": {
+          "source": "Lists the permissions granted on a file: who has access, and at what level.\n\nEach permission carries the `id` needed to withdraw it with `remove-permission`.",
+          "message": "ファイルに付与されている権限（誰がどのレベルでアクセス権を持っているか）を一覧表示します。\n\n各権限には、`remove-permission` で権限を取り消すために必要な `id` が含まれています。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.display_name": {
+          "source": "List Permissions",
+          "message": "権限の一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose permissions are to be listed",
+          "message": "権限を一覧表示するファイルの Drive 識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1wZXJtaXNzaW9ucw.short_desc": {
+          "source": "List who has access to a file",
+          "message": "ファイルへのアクセス権を持つユーザーを一覧表示します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.desc": {
+          "source": "Lists the revisions Drive holds for a file.\n\nDrive keeps earlier versions, so a document replaced by `replace-file` is recoverable.  **Drive removes older revisions on its own** unless they are marked `keep_forever`, so a revision listed here is not guaranteed to remain indefinitely.",
+          "message": "Drive がファイルに対して保持しているリビジョンを一覧表示します。\n\nDrive は過去のバージョンを保持するため、`replace-file` によって置き換えられたドキュメントは復元可能です。**Drive は `keep_forever` としてマークされていない限り古いリビジョンを自動的に削除する**ため、ここに一覧表示されたリビジョンが無期限に残ることは保証されません。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.display_name": {
+          "source": "List File Revisions",
+          "message": "ファイルのリビジョン一覧"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose revisions are to be listed",
+          "message": "リビジョンを一覧表示するファイルの Drive 識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1yZXZpc2lvbnM.short_desc": {
+          "source": "List the earlier versions Drive holds for a file",
+          "message": "Drive がファイルに対して保持している過去のバージョンを一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.desc": {
+          "source": "Lists the shared drives (formerly \"Team Drives\") the account is a member of.\n\nA business account keeps most of its content on shared drives rather than in any one person's `My Drive`, so this is how the drive to work in is discovered.  Pass a drive's `id` as `drive_id` to `list-files` to work within it.",
+          "message": "アカウントがメンバーとなっている共有ドライブ（旧「チームドライブ」）を一覧表示します。\n\nビジネスアカウントではほとんどのコンテンツを個人の `My Drive` ではなく共有ドライブに保持するため、作業対象のドライブはここで検出されます。ドライブ内で作業するには、ドライブの `id` を `drive_id` として `list-files` に渡します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.display_name": {
+          "source": "List Shared Drives",
+          "message": "共有ドライブの一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` value returned by a previous listing",
+          "message": "以前の一覧表示によって返された `next_page_token` 値"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "The token returned by a previous truncated listing",
+          "message": "前回の切り詰められた一覧表示によって返されたトークン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.desc": {
+          "source": "The maximum number of shared drives to return per page; the Drive API caps this at `100`",
+          "message": "1 ページあたりに返す共有ドライブの最大数。Drive API では最大 `100` に制限されています"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "The maximum number of shared drives to return per page",
+          "message": "1 ページあたりに返す共有ドライブの最大数"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bGlzdC1zaGFyZWQtZHJpdmVz.short_desc": {
+          "source": "List the shared drives the account can reach",
+          "message": "アカウントがアクセスできる共有ドライブを一覧表示"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file to a different folder, removing it from the folders it is currently in.",
+          "message": "ファイルを別のフォルダに移動し、現在配置されているフォルダから削除します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.display_name": {
+          "source": "Move File",
+          "message": "ファイルの移動"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to move the file into",
+          "message": "ファイルの移動先フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to move the file into",
+          "message": "ファイルの移動先フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to move",
+          "message": "移動するファイルの Drive 識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move a file to a different folder",
+          "message": "ファイルを別のフォルダに移動"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Drive** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Google Drive** に対するカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス（接続の API ベース URL からの相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Drive",
+          "message": "Google Drive へのカスタム API 呼び出しを実行"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA file that already existed and has merely been edited is **not** reported, and neither is a folder; use `new-folder` for those.  Set `folder_id` to report only files created directly in one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "監視対象のドライブでファイルが作成されたときにトリガーされます。\n\nDrive 独自の変更フィードを使用するため、ポーリングの負荷はドライブのサイズに応じて増加しません。\n\nすでに存在し単に編集されたファイルや、フォルダは報告**されません**。それらには `new-folder` を使用してください。1 つのフォルダ内に直接作成されたファイルのみを報告するには `folder_id` を、`My Drive` の代わりに共有ドライブを監視するには `drive_id` を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "新規ファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "ユーザー自身の `My Drive` ではなく、この共有ドライブ（旧「チームドライブ」）を監視します。\n\n共有ドライブは独自の変更フィードを保持するため、監視は両方ではなくいずれか一方を対象とします"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "共有ドライブ ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "マイドライブではなくこの共有ドライブを監視"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "このフォルダに直接保持されているアイテムのみを報告します。\n\nDrive の変更フィードはドライブ全体を対象としておりサーバー側で絞り込むことができないため、これは取得する内容ではなく届いた内容をフィルタリングします。接続が表示できるすべてのものを監視するには未設定のままにしてください"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "このフォルダ内のアイテムのみを報告"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "変更を確認する頻度（秒単位、最小: `30`、デフォルト: `60`）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "変更をチェックする頻度 (秒単位)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in Drive",
+          "message": "Drive でのファイル作成に反応"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the drive being watched.\n\nUses Drive's own change feed, so the cost of a poll does not grow with the size of the drive.\n\nA folder that already existed and has merely been renamed or moved is **not** reported.  Set `folder_id` to report only folders created directly inside one folder, or `drive_id` to watch a shared drive instead of `My Drive`.",
+          "message": "監視対象のドライブでフォルダが作成されたときにトリガーされます。\n\nDrive 独自の変更フィードを使用するため、ポーリングの負荷はドライブのサイズに応じて増加しません。\n\nすでに存在し単に名前変更または移動されたフォルダは報告**されません**。1 つのフォルダ内に直接作成されたフォルダのみを報告するには `folder_id` を、`My Drive` の代わりに共有ドライブを監視するには `drive_id` を設定します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "新しいフォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "Watch this shared drive (formerly a \"Team Drive\") instead of the user's own `My Drive`.\n\nA shared drive keeps its own change feed, so a watch covers one or the other rather than both",
+          "message": "ユーザー自身の `My Drive` ではなく、この共有ドライブ（旧「チームドライブ」）を監視します。\n\n共有ドライブは独自の変更フィードを保持するため、監視は両方ではなくいずれか一方を対象とします"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Shared Drive ID",
+          "message": "共有ドライブ ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "Watch this shared drive instead of My Drive",
+          "message": "マイドライブではなくこの共有ドライブを監視"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.desc": {
+          "source": "Report only items held directly in this folder.\n\nDrive's change feed covers the whole drive and cannot be narrowed at the server, so this filters what arrives rather than what is fetched.  Leave it unset to watch everything the connection can see",
+          "message": "このフォルダに直接保持されているアイテムのみを報告します。\n\nDrive の変更フィードはドライブ全体を対象としておりサーバー側で絞り込むことができないため、これは取得する内容ではなく届いた内容をフィルタリングします。接続が表示できるすべてのものを監視するには未設定のままにしてください"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder",
+          "message": "フォルダ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "Report only items in this folder",
+          "message": "このフォルダ内のアイテムのみを報告"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "変更を確認する頻度（秒単位、最小: `30`、デフォルト: `60`）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "変更をチェックする頻度 (秒単位)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created in Drive",
+          "message": "Drive でのフォルダ作成に反応"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.desc": {
+          "source": "Grants access to a file, to a user, a group, everyone in a domain, or anyone with the link.\n\n**Granting access to `anyone` makes the file reachable without signing in**; use the narrowest grantee type that serves the purpose.",
+          "message": "ユーザー、グループ、ドメイン内の全員、またはリンクを知っている全員にファイルへのアクセス権を付与します。\n\n**`anyone` にアクセス権を付与すると、サインインなしでファイルにアクセスできるようになります**。目的に応じて最も限定的な権限付与対象タイプを使用してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.display_name": {
+          "source": "Share File",
+          "message": "ファイルを共有"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.desc": {
+          "source": "The domain to grant access to; required when `type` is `domain`",
+          "message": "アクセス権を付与するドメイン。`type` が `domain` の場合に必須です"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZG9tYWlu.short_desc": {
+          "source": "The domain to grant access to",
+          "message": "アクセス権を付与するドメイン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the user or group; required when `type` is `user` or `group`",
+          "message": "ユーザーまたはグループのメールアドレス。`type` が `user` または `group` の場合に必須です"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The email address of the user or group",
+          "message": "ユーザーまたはグループのメールアドレス"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to grant access to",
+          "message": "アクセス権を付与するファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "権限付与対象者に通知メールを送信する"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.display_name": {
+          "source": "Send Notification",
+          "message": "通知を送信"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.c2VuZF9ub3RpZmljYXRpb24.short_desc": {
+          "source": "Send a notification email to the grantee",
+          "message": "権限付与対象者に通知メールを送信する"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.desc": {
+          "source": "Can view and comment on the file but not change its content",
+          "message": "ファイルの閲覧およびコメントは可能ですが、コンテンツの変更はできません"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.display_name": {
+          "source": "Commenter",
+          "message": "閲覧者（コメント可）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbW1lbnRlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "ファイルの閲覧とコメントが可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.desc": {
+          "source": "Can view the file but not change it",
+          "message": "ファイルの閲覧は可能ですが、変更はできません"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.display_name": {
+          "source": "Reader",
+          "message": "閲覧者"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOnJlYWRlcg.short_desc": {
+          "source": "Can view the file",
+          "message": "ファイルを閲覧できます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.desc": {
+          "source": "Can view and change the file",
+          "message": "ファイルの閲覧と変更が可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.display_name": {
+          "source": "Writer",
+          "message": "編集者"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.allowed-value.c3RyaW5nOndyaXRlcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "ファイルの閲覧と変更が可能"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.desc": {
+          "source": "The level of access to grant",
+          "message": "付与するアクセス権限レベル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.cm9sZQ.short_desc": {
+          "source": "The level of access to grant",
+          "message": "付与するアクセス権限レベル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.desc": {
+          "source": "Anyone with the link, without signing in; **this makes the file publicly reachable**",
+          "message": "リンクを知っている全員（サインイン不要）。**これによりファイルが公開アクセス可能になります**"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.display_name": {
+          "source": "Anyone",
+          "message": "リンクを知っている全員"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmFueW9uZQ.short_desc": {
+          "source": "Anyone with the link",
+          "message": "リンクを知っている全員"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
+          "source": "Everyone in the domain named in `domain`",
+          "message": "`domain` で指定されたドメイン内の全員"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "ドメイン"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmRvbWFpbg.short_desc": {
+          "source": "Everyone in a domain",
+          "message": "ドメイン内の全員"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.desc": {
+          "source": "A Google group, identified by email address in `email_address`",
+          "message": "`email_address` のメールアドレスで識別されるGoogleグループ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.display_name": {
+          "source": "Group",
+          "message": "グループ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOmdyb3Vw.short_desc": {
+          "source": "A group, identified by email address",
+          "message": "メールアドレスで識別されるグループ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A single user, identified by email address in `email_address`",
+          "message": "`email_address` のメールアドレスで識別される個々のユーザー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "A single user, identified by email address",
+          "message": "メールアドレスで識別される個々のユーザー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.desc": {
+          "source": "Who the access is granted to",
+          "message": "アクセス権を付与する対象"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.display_name": {
+          "source": "Grantee Type",
+          "message": "権限付与対象タイプ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.option.dHlwZQ.short_desc": {
+          "source": "Who the access is granted to",
+          "message": "アクセス権を付与する対象"
+        },
+        "app.R29vZ2xlRHJpdmU.action.c2hhcmUtZmlsZQ.short_desc": {
+          "source": "Grant access to a file",
+          "message": "ファイルへのアクセス権を付与"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.desc": {
+          "source": "Withdraws a permission, so that whoever held it can no longer reach the file.\n\nUse `list-permissions` to find the `permission_id`.  Withdrawing the `anyone` permission is how a file that was made public is made private again.",
+          "message": "権限を取り消し、保持者がファイルにアクセスできないようにします。\n\n`permission_id` を見つけるには `list-permissions` を使用してください。公開されていたファイルを再び非公開にするには、`anyone` 権限を取り消します。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.display_name": {
+          "source": "Remove Permission",
+          "message": "権限を削除"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to withdraw access to",
+          "message": "アクセス権を取り消すファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.desc": {
+          "source": "The identifier of the permission to withdraw, as returned by `list-permissions` or `share-file`",
+          "message": "取り消す権限の識別子（`list-permissions` または `share-file` によって返される値）"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.display_name": {
+          "source": "Permission ID",
+          "message": "権限ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.option.cGVybWlzc2lvbl9pZA.short_desc": {
+          "source": "The permission to withdraw",
+          "message": "取り消す権限"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVtb3ZlLXBlcm1pc3Npb24.short_desc": {
+          "source": "Withdraw someone's access to a file",
+          "message": "ファイルへのアクセス権を取り消す"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.desc": {
+          "source": "Changes a file's name, keeping its ID, its location, and its sharing settings.\n\nDrive addresses files by an immutable ID rather than by path, so renaming a file leaves every link to it working.  Drive does not require names to be unique either, so a name already used in the same folder is accepted.",
+          "message": "ID、場所、共有設定を維持したままファイル名を変更します。\n\nDriveはパスではなく不変のIDによってファイルを指定するため、ファイル名を変更してもすべてのリンクは有効なまま維持されます。また、Driveでは名前の一意性は必須ではないため、同じフォルダー内で既に使用されている名前も受け入れられます。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.display_name": {
+          "source": "Rename File",
+          "message": "ファイル名を変更"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A new description to store with the file; the existing description is left unchanged when this is not set",
+          "message": "ファイルとともに保存する新しい説明。設定されていない場合、既存の説明は変更されません"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A new description to store with the file",
+          "message": "ファイルとともに保存する新しい説明"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to rename; the file keeps its ID, its location, and its sharing settings",
+          "message": "名前を変更するファイルのDrive識別子。ファイルのID、場所、共有設定は維持されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The new name for the file.\n\nDrive does not require names to be unique, so renaming a file to a name already used in the same folder succeeds and leaves two files sharing a name",
+          "message": "ファイルの新しい名前。\n\nDriveでは名前の一意性は必須ではないため、同じフォルダー内で既に使用されている名前に変更しても成功し、同じ名前のファイルが2つ存在することになります"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "新しい名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The new name for the file",
+          "message": "ファイルの新しい名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVuYW1lLWZpbGU.short_desc": {
+          "source": "Change a file's name",
+          "message": "ファイル名を変更する"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.desc": {
+          "source": "Replaces an existing file's content while keeping its ID, name, and sharing settings.\n\nUse this rather than uploading again when consumers hold a link to the file, since a new upload creates a new file with a new ID.",
+          "message": "ID、名前、共有設定を維持したまま、既存のファイルのコンテンツを置き換えます。\n\n新しいアップロードでは新しいIDを持つ新しいファイルが作成されるため、利用者がファイルへのリンクを保持している場合は、再アップロードではなくこれを使用してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.display_name": {
+          "source": "Replace File Content",
+          "message": "ファイルのコンテンツを置換"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.desc": {
+          "source": "The replacement content",
+          "message": "置換後のコンテンツ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZQ.short_desc": {
+          "source": "The replacement content",
+          "message": "置換後のコンテンツ"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file whose content is to be replaced; the file keeps its ID, name, and sharing settings",
+          "message": "コンテンツを置き換えるファイルのDrive識別子。ファイルのID、名前、共有設定は維持されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.cmVwbGFjZS1maWxl.short_desc": {
+          "source": "Replace an existing file's content",
+          "message": "既存のファイルのコンテンツを置換する"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.desc": {
+          "source": "Restores a file from the trash, putting it back where it was.\n\n`delete-file` moves a file to the trash by default precisely so that it can be recovered; this is what recovers it.  A file removed with `permanently_delete` cannot be restored.",
+          "message": "ゴミ箱からファイルを復元し、元の場所に戻します。\n\n後から復元できるように、`delete-file` はデフォルトでファイルをゴミ箱に移動します。これはその復元を行う操作です。`permanently_delete` で削除されたファイルは復元できません。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.display_name": {
+          "source": "Restore from Trash",
+          "message": "ゴミ箱から復元"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.desc": {
+          "source": "The Drive identifier of the file to restore from the trash",
+          "message": "ゴミ箱から復元するファイルのDrive識別子"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The Drive file ID",
+          "message": "Drive ファイル ID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dW50cmFzaA.short_desc": {
+          "source": "Restore a file from the trash",
+          "message": "ゴミ箱からファイルを復元する"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Drive.\n\nIf `name` is not set, the file's own name is used.  Drive does not require names to be unique, so uploading twice creates two files; use `replace-file` to update an existing one instead.",
+          "message": "Driveにファイルをアップロードします。\n\n`name` が設定されていない場合、ファイル自体の名前が使用されます。Driveでは名前の一意性は必須ではないため、2回アップロードすると2つのファイルが作成されます。既存のファイルを更新するには、代わりに `replace-file` を使用してください。"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "ファイルをアップロード"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description to store with the file",
+          "message": "ファイルとともに保存する説明"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A description to store with the file",
+          "message": "ファイルとともに保存する説明"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.desc": {
+          "source": "The folder to upload the file into; if not set, the user's `My Drive` root is used",
+          "message": "ファイルのアップロード先フォルダー。設定されていない場合、ユーザーの `My Drive` ルートが使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "フォルダID"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to upload the file into",
+          "message": "ファイルのアップロード先フォルダー"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name, content, and MIME type",
+          "message": "アップロードするファイル (名前、コンテンツ、MIME タイプを含む)"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "アップロードするファイル"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.desc": {
+          "source": "The name to store the file under; if not set, the file's own name is used",
+          "message": "ファイルを保存する名前。設定されていない場合、ファイル自体の名前が使用されます"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.option.bmFtZQ.short_desc": {
+          "source": "The name to store the file under",
+          "message": "ファイルを保存する名前"
+        },
+        "app.R29vZ2xlRHJpdmU.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Drive",
+          "message": "Driveにファイルをアップロードする"
+        },
+        "app.R29vZ2xlRHJpdmU.desc": {
+          "source": "Provides access to [Google Drive](https://www.google.com/drive/) for cloud file storage and sharing.\n\nDrive addresses files by an immutable ID rather than by path, so two files in the same folder may share a name and renaming a file does not change how it is addressed.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Document automation**: create, replace, and share reports and records\n- **Content extraction**: export Google Docs, Sheets, and Slides to PDF or Office formats for downstream processing\n- **Organization**: create folders, and copy, move, and remove files\n\nGoogle and Google Drive are trademarks of Google LLC",
+          "message": "クラウドファイルの保存および共有のための [Google Drive](https://www.google.com/drive/) へのアクセスを提供します。\n\nDriveはパスではなく不変のIDによってファイルを指定するため、同じフォルダー内の2つのファイルが同じ名前を持つことがあり、ファイル名を変更してもその指定方法は変わりません。\n\n**一般的なユースケース**:\n- **ファイル交換**: 生成されたドキュメントを同僚向けに配置したり、同僚がアップロードしたファイルを収集したりする\n- **ドキュメントの自動化**: レポートや記録の作成、置換、共有\n- **コンテンツの抽出**: 後続処理のためにGoogleドキュメント、スプレッドシート、スライドをPDFまたはOffice形式にエクスポートする\n- **整理**: フォルダーの作成、ファイルのコピー、移動、削除\n\nGoogleおよびGoogle DriveはGoogle LLCの商標です"
+        },
+        "app.R29vZ2xlRHJpdmU.display_name": {
+          "source": "Google Drive",
+          "message": "Google Drive"
+        },
+        "app.R29vZ2xlRHJpdmU.short_desc": {
+          "source": "Google Drive cloud file storage",
+          "message": "Google Drive クラウドファイルストレージ"
+        }
+      }
+    }
+  }
+}

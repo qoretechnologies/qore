@@ -1,0 +1,2705 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Uruchamiane po zaktualizowaniu kontaktu w Close CRM. Używa odpytywania Event Log API do wykrywania zmian."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Zaktualizowano kontakt"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Fires when a contact is updated",
+          "message": "Uruchamiane po zaktualizowaniu kontaktu"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowego kontaktu w Close CRM. Używa odpytywania Event Log API do wykrywania nowych rekordów."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "Utworzono kontakt"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "Uruchamiane po utworzeniu kontaktu"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.desc": {
+          "source": "Fires when a contact is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Uruchamiane po usunięciu kontaktu w Close CRM. Używa odpytywania Event Log API do wykrywania usunięć."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
+          "source": "Contact Deleted",
+          "message": "Kontakt usunięty"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
+          "source": "Fires when a contact is deleted",
+          "message": "Uruchamiane po usunięciu kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note activity in Close CRM",
+          "message": "Utwórz nową aktywność notatki w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "Utwórz notatkę"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this note",
+          "message": "Kontakt do powiązania z tą notatką"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Powiązany kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the note with",
+          "message": "Lead do powiązania z notatką"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The plain text content of the note",
+          "message": "Zwykła treść tekstowa notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "Treść tekstowa notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The HTML content of the note",
+          "message": "Treść HTML notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "Treść HTML notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.desc": {
+          "source": "Set to `True` to pin this note to the top",
+          "message": "Ustaw na `True`, aby przypiąć tę notatkę na górze"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.display_name": {
+          "source": "Pinned",
+          "message": "Przypięte"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.short_desc": {
+          "source": "Pin the note",
+          "message": "Przypnij notatkę"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Utwórz nową notatkę"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Close CRM",
+          "message": "Utwórz nową szansę sprzedaży w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Utwórz szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The confidence percentage of winning, from 0 to 100",
+          "message": "Procentowa pewność wygranej, od 0 do 100"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "Pewność"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "Wartość procentowa pewności"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.desc": {
+          "source": "The primary contact for this opportunity",
+          "message": "Główny kontakt dla tej szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Powiązany kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.desc": {
+          "source": "The date won in YYYY-MM-DD format",
+          "message": "Data wygrania w formacie RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.display_name": {
+          "source": "Date Won",
+          "message": "Data wygrania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.short_desc": {
+          "source": "Date the opportunity was won",
+          "message": "Data wygrania szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.desc": {
+          "source": "The date lost in YYYY-MM-DD format",
+          "message": "Data przegrania w formacie RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.display_name": {
+          "source": "Date Lost",
+          "message": "Data przegrania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.short_desc": {
+          "source": "Date the opportunity was lost",
+          "message": "Data przegrania szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the opportunity with",
+          "message": "Lead do powiązania z szansą sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "A text note with additional context about the opportunity",
+          "message": "Notatka tekstowa z dodatkowym kontekstem dotyczącym szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "Notatki dotyczące szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the opportunity status to assign",
+          "message": "Unikalny identyfikator statusu szansy sprzedaży do przypisania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "Identyfikator statusu szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.desc": {
+          "source": "The user to assign this opportunity to",
+          "message": "Użytkownik, do którego ma zostać przypisana ta szansa sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.short_desc": {
+          "source": "The assigned user",
+          "message": "Przypisany użytkownik"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The monetary value of the opportunity in cents (e.g., 10000 = $100.00)",
+          "message": "Wartość pieniężna szansy sprzedaży w centach (np. 10000 = $100.00)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Wartość"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "Wartość szansy sprzedaży w centach"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code (e.g., `USD`, `EUR`, `GBP`)",
+          "message": "Kod waluty ISO 4217 (np. `USD`, `EUR`, `GBP`)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.display_name": {
+          "source": "Value Currency",
+          "message": "Waluta wartości"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "Kod waluty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "Cykliczny miesięczny"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "Płatność jednorazowa"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "Cykliczny roczny"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The billing period for the opportunity value",
+          "message": "Okres rozliczeniowy dla wartości szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "Okres wartości"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "Okres wartości"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Utwórz nową szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.desc": {
+          "source": "Log a new call activity in Close CRM",
+          "message": "Zarejestruj nową aktywność połączenia w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
+          "source": "Create a Call",
+          "message": "Utwórz połączenie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact associated with this call",
+          "message": "Kontakt powiązany z tym połączeniem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Powiązany kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGJvdW5k.desc": {
+          "source": "Outbound call",
+          "message": "Połączenie wychodzące"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluYm91bmQ.desc": {
+          "source": "Inbound call",
+          "message": "Połączenie przychodzące"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.desc": {
+          "source": "Call direction",
+          "message": "Kierunek połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Kierunek"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Call direction",
+          "message": "Kierunek połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The disposition or outcome of the call",
+          "message": "Dyspozycja lub wynik połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "Dyspozycja"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "Dyspozycja połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.desc": {
+          "source": "Call duration in seconds",
+          "message": "Czas trwania połączenia w sekundach"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.display_name": {
+          "source": "Duration",
+          "message": "Czas trwania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.short_desc": {
+          "source": "Call duration in seconds",
+          "message": "Czas trwania połączenia w sekundach"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the call with",
+          "message": "Lead, z którym ma zostać powiązane połączenie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "A text note to associate with this call",
+          "message": "Notatka tekstowa do powiązania z tym połączeniem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "Notatka do połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.desc": {
+          "source": "An HTML-formatted note for this call",
+          "message": "Notatka w formacie HTML dla tego połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML notatki"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.short_desc": {
+          "source": "HTML note for the call",
+          "message": "Notatka HTML dla połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Call was cancelled",
+          "message": "Połączenie zostało anulowane"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Call was completed",
+          "message": "Połączenie zostało zakończone"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.desc": {
+          "source": "Call was created/logged",
+          "message": "Połączenie zostało utworzone/zarejestrowane"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.desc": {
+          "source": "The status of the call",
+          "message": "Status połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.short_desc": {
+          "source": "Call status",
+          "message": "Status połączenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.desc": {
+          "source": "The phone number associated with this call",
+          "message": "Numer telefonu powiązany z tym połączeniem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.display_name": {
+          "source": "Phone Number",
+          "message": "Numer telefonu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.short_desc": {
+          "source": "The phone number",
+          "message": "Numer telefonu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.desc": {
+          "source": "The user who made or received this call",
+          "message": "Użytkownik, który wykonał lub odebrał to połączenie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.short_desc": {
+          "source": "The user who made the call",
+          "message": "Użytkownik, który wykonał połączenie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
+          "source": "Log a new call",
+          "message": "Zarejestruj nowe połączenie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Close CRM",
+          "message": "Utwórz nowy kontakt w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Utwórz kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "A list of email address objects, each with `type` and `email` fields",
+          "message": "Lista obiektów adresów e-mail, każdy z polami `type` i `email`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "Adresy e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "Adresy e-mail kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the contact with",
+          "message": "Lead, z którym ma zostać powiązany kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The full name of the contact",
+          "message": "Imię i nazwisko kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "Nazwa kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "A list of phone number objects, each with `type` and `phone` fields",
+          "message": "Lista obiektów numerów telefonów, każdy z polami `type` i `phone`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "Numery telefonów"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "Numery telefonów kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The job title of the contact",
+          "message": "Stanowisko kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "Stanowisko kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.desc": {
+          "source": "List of URL objects for the contact",
+          "message": "Lista obiektów adresów URL dla kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "Adresy URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.short_desc": {
+          "source": "Contact URLs",
+          "message": "Adresy URL kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Utwórz nowy kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.desc": {
+          "source": "Log a new email activity in Close CRM",
+          "message": "Zarejestruj nową aktywność e-mail w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
+          "source": "Create an Email",
+          "message": "Utwórz wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this email",
+          "message": "Kontakt, z którym ma zostać powiązana ta wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Powiązany kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.desc": {
+          "source": "List of CC recipient email addresses",
+          "message": "Lista adresów e-mail odbiorców DW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "DW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "Odbiorcy DW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the email",
+          "message": "Treść wiadomości e-mail w postaci zwykłego tekstu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Treść tekstowa"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Email body as plain text",
+          "message": "Treść wiadomości e-mail jako zwykły tekst"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the email",
+          "message": "Treść wiadomości e-mail w formacie HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "Treść HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.short_desc": {
+          "source": "Email body as HTML",
+          "message": "Treść wiadomości e-mail jako HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.desc": {
+          "source": "List of BCC recipient email addresses",
+          "message": "Lista adresów e-mail odbiorców UDW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "UDW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "Odbiorcy UDW"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGdvaW5n.desc": {
+          "source": "Outgoing email",
+          "message": "Wychodząca wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluY29taW5n.desc": {
+          "source": "Incoming email",
+          "message": "Przychodząca wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.desc": {
+          "source": "The direction: `incoming` or `outgoing`",
+          "message": "Kierunek: `incoming` lub `outgoing`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Kierunek"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Email direction",
+          "message": "Kierunek wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the email with",
+          "message": "Lead, z którym ma zostać powiązana wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.desc": {
+          "source": "The sender email address",
+          "message": "Adres e-mail nadawcy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Nadawca"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.short_desc": {
+          "source": "Sender email address",
+          "message": "Adres e-mail nadawcy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOm91dGJveA.desc": {
+          "source": "Email in outbox",
+          "message": "Wiadomość e-mail w skrzynce nadawczej"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft email",
+          "message": "Wersja robocza wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent email",
+          "message": "Wysłana wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.desc": {
+          "source": "Email status",
+          "message": "Status wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.short_desc": {
+          "source": "Email status",
+          "message": "Status wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the email",
+          "message": "Temat wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Temat"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Temat wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.desc": {
+          "source": "A list of recipient email addresses",
+          "message": "Lista adresów e-mail odbiorców"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.display_name": {
+          "source": "To",
+          "message": "Do"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.short_desc": {
+          "source": "To recipients",
+          "message": "Odbiorcy (Do)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
+          "source": "Log a new email",
+          "message": "Zarejestruj nową wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead in Close CRM",
+          "message": "Utwórz nowy lead w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "Utwórz lead"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.desc": {
+          "source": "A list of contact objects to create and associate with this lead. Each contact can include `name`, `title`, `emails`, and `phones` fields",
+          "message": "Lista obiektów kontaktów do utworzenia i powiązania z tym leadem. Każdy kontakt może zawierać pola `name`, `title`, `emails` i `phones`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.short_desc": {
+          "source": "Nested contacts to create",
+          "message": "Zagnieżdżone kontakty do utworzenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.desc": {
+          "source": "List of address objects for the lead",
+          "message": "Lista obiektów adresów dla leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "Lead addresses",
+          "message": "Adresy leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the lead with additional context or notes",
+          "message": "Tekstowy opis leada z dodatkowym kontekstem lub notatkami"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "Opis leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The name of the lead (typically the company or organization name)",
+          "message": "Nazwa leada (zazwyczaj nazwa firmy lub organizacji)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "Nazwa leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the lead status to assign",
+          "message": "Unikalny identyfikator statusu leada do przypisania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "Identyfikator statusu leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "Adres URL strony internetowej powiązanej z leadem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "Adres URL leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead",
+          "message": "Utwórz nowy lead"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.desc": {
+          "source": "Send a new SMS activity in Close CRM",
+          "message": "Wyślij nową aktywność SMS w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.display_name": {
+          "source": "Create an SMS",
+          "message": "Utwórz SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.desc": {
+          "source": "The local phone number to send the SMS from",
+          "message": "Lokalny numer telefonu, z którego ma zostać wysłany SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.display_name": {
+          "source": "Local Phone",
+          "message": "Telefon lokalny"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.short_desc": {
+          "source": "Local phone number",
+          "message": "Lokalny numer telefonu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the SMS with",
+          "message": "Lead, z którym ma zostać powiązany SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft SMS",
+          "message": "Wersja robocza SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbmRpbmc.desc": {
+          "source": "Sending SMS",
+          "message": "Wysyłanie SMS-a"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent SMS",
+          "message": "Wysłany SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.desc": {
+          "source": "SMS status",
+          "message": "Status SMS-a"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.short_desc": {
+          "source": "SMS status",
+          "message": "Status SMS-a"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.desc": {
+          "source": "The remote phone number to send the SMS to",
+          "message": "Zdalny numer telefonu, na który ma zostać wysłany SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.display_name": {
+          "source": "Remote Phone",
+          "message": "Telefon zdalny"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.short_desc": {
+          "source": "Remote phone number",
+          "message": "Zdalny numer telefonu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.desc": {
+          "source": "The text content of the SMS message",
+          "message": "Treść tekstowa wiadomości SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Tekst"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.short_desc": {
+          "source": "SMS message text",
+          "message": "Treść wiadomości SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.short_desc": {
+          "source": "Send a new SMS",
+          "message": "Wyślij nowy SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Close CRM",
+          "message": "Utwórz nowe zadanie w Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Utwórz zadanie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "Zadanie połączenia wychodzącego"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "Zadanie dotyczące leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.desc": {
+          "source": "The type of the task to create",
+          "message": "Typ zadania do utworzenia"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Typ zadania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.short_desc": {
+          "source": "The task type",
+          "message": "Typ zadania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The user ID to assign this task to",
+          "message": "Identyfikator użytkownika, do którego ma zostać przypisane to zadanie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Przypisano do"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "Użytkownik, do którego ma zostać przypisane zadanie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The due date of the task in YYYY-MM-DD format",
+          "message": "Termin wykonania zadania w formacie RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "Termin wykonania zadania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the task with",
+          "message": "Lead, z którym ma zostać powiązane zadanie"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The text description or body of the task",
+          "message": "Opis tekstowy lub treść zadania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Tekst"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "Treść zadania"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Utwórz nowe zadanie"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.desc": {
+          "source": "Retrieve a single meeting activity by ID from Close CRM",
+          "message": "Pobierz pojedynczą aktywność spotkania według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
+          "source": "Get a Meeting",
+          "message": "Pobierz spotkanie"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "Identyfikator spotkania"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.short_desc": {
+          "source": "The meeting ID",
+          "message": "Identyfikator spotkania"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
+          "source": "Get a single meeting by ID",
+          "message": "Pobierz pojedyncze spotkanie według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.desc": {
+          "source": "Retrieve a single note activity by ID from Close CRM",
+          "message": "Pobierz pojedynczą aktywność notatki według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
+          "source": "Get a Note",
+          "message": "Pobierz notatkę"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "Identyfikator notatki"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note ID",
+          "message": "Identyfikator notatki"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
+          "source": "Get a single note by ID",
+          "message": "Pobierz pojedynczą notatkę według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Close CRM",
+          "message": "Pobierz pojedynczą szansę sprzedaży według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Pobierz szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "Identyfikator szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "Identyfikator szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Pobierz pojedynczą szansę sprzedaży według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.desc": {
+          "source": "Retrieve a single call activity by ID from Close CRM",
+          "message": "Pobierz pojedynczą aktywność połączenia według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
+          "source": "Get a Call",
+          "message": "Pobierz połączenie"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "Identyfikator połączenia"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call ID",
+          "message": "Identyfikator połączenia"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
+          "source": "Get a single call by ID",
+          "message": "Pobierz pojedyncze połączenie według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Close CRM",
+          "message": "Pobierz pojedynczy kontakt według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Pobierz kontakt"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "Identyfikator kontaktu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Pobierz pojedynczy kontakt według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.desc": {
+          "source": "Retrieve a single email activity by ID from Close CRM",
+          "message": "Pobierz pojedynczą aktywność e-mail według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
+          "source": "Get an Email",
+          "message": "Pobierz wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "Identyfikator wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email ID",
+          "message": "Identyfikator wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
+          "source": "Get a single email by ID",
+          "message": "Pobierz pojedynczą wiadomość e-mail według identyfikatora"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID from Close CRM",
+          "message": "Pobierz pojedynczego leada według identyfikatora z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "Pobierz leada"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "Identyfikator leada"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "Pobierz pojedynczego leada według identyfikatora ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.desc": {
+          "source": "Retrieve a single SMS activity by ID from Close CRM",
+          "message": "Pobierz pojedynczą aktywność SMS według identyfikatora ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.display_name": {
+          "source": "Get an SMS",
+          "message": "Pobierz SMS"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "Identyfikator SMS ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS ID",
+          "message": "Identyfikator SMS ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.short_desc": {
+          "source": "Get a single SMS by ID",
+          "message": "Pobierz pojedynczą wiadomość SMS według identyfikatora ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Close CRM",
+          "message": "Pobierz pojedyncze zadanie według identyfikatora ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Pobierz zadanie"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID zadania"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "Identyfikator zadania ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Pobierz pojedyncze zadanie według identyfikatora ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note activity from Close CRM",
+          "message": "Usuń notatkę z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "Usuń notatkę"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "Identyfikator notatki"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "Notatka do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Usuń notatkę"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Close CRM",
+          "message": "Usuń szansę sprzedaży z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Usuń szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "Identyfikator szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "Szansa sprzedaży do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Usuń szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.desc": {
+          "source": "Delete a call activity from Close CRM",
+          "message": "Usuń połączenie z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
+          "source": "Delete a Call",
+          "message": "Usuń połączenie"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "Identyfikator połączenia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to delete",
+          "message": "Połączenie do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
+          "source": "Delete a call",
+          "message": "Usuń połączenie"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Close CRM",
+          "message": "Usuń kontakt z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Usuń kontakt"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Kontakt do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Usuń kontakt"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.desc": {
+          "source": "Delete an email activity from Close CRM",
+          "message": "Usuń wiadomość e-mail z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
+          "source": "Delete an Email",
+          "message": "Usuń wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "Identyfikator wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email to delete",
+          "message": "Wiadomość e-mail do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
+          "source": "Delete an email",
+          "message": "Usuń wiadomość e-mail"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from Close CRM",
+          "message": "Usuń leada z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "Usuń leada"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to delete",
+          "message": "Lead do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead",
+          "message": "Usuń leada"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.desc": {
+          "source": "Delete an SMS activity from Close CRM",
+          "message": "Usuń wiadomość SMS z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.display_name": {
+          "source": "Delete an SMS",
+          "message": "Usuń wiadomość SMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "Identyfikator SMS ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS to delete",
+          "message": "Wiadomość SMS do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.short_desc": {
+          "source": "Delete an SMS",
+          "message": "Usuń wiadomość SMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Close CRM",
+          "message": "Usuń zadanie z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Usuń zadanie"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID zadania"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "Zadanie do usunięcia"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Usuń zadanie"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.desc": {
+          "source": "List tasks in Close CRM with optional filtering",
+          "message": "Wyświetl listę zadań w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Wyświetl listę zadań"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "Zadanie połączenia wychodzącego"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "Zadanie dotyczące leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.desc": {
+          "source": "Filter tasks by type",
+          "message": "Filtruj zadania według typu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Typ zadania"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.short_desc": {
+          "source": "Task type filter",
+          "message": "Filtr typu zadania"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.desc": {
+          "source": "Filter tasks by the user they are assigned to",
+          "message": "Filtruj zadania według użytkownika, do którego są przypisane"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Przypisano do"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Filtruj według przypisanego użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.desc": {
+          "source": "Filter tasks by completion status",
+          "message": "Filtruj zadania według stanu ukończenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "Czy ukończone"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Filter by completion status",
+          "message": "Filtruj według stanu ukończenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter tasks by the lead they are associated with",
+          "message": "Filtruj zadania według powiązanego leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID zadania"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtruj według identyfikatora task ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
+          "source": "List and search tasks",
+          "message": "Wyświetlaj i wyszukuj zadania"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.desc": {
+          "source": "List call activities in Close CRM with optional filtering",
+          "message": "Wyświetl listę połączeń w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
+          "source": "List Calls",
+          "message": "Wyświetl listę połączeń"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "Identyfikator połączenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.short_desc": {
+          "source": "Filter by call ID",
+          "message": "Filtruj według identyfikatora call ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.desc": {
+          "source": "Filter calls by lead ID",
+          "message": "Filtruj połączenia według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.desc": {
+          "source": "Filter calls by user ID",
+          "message": "Filtruj połączenia według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtruj według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
+          "source": "List and search calls",
+          "message": "Wyświetlaj i wyszukuj połączenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.desc": {
+          "source": "List contacts in Close CRM with optional filtering",
+          "message": "Wyświetl listę kontaktów w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Lista kontaktów"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtruj według ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.desc": {
+          "source": "Filter contacts by the lead they belong to",
+          "message": "Filtruj kontakty według leada, do którego należą"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
+          "source": "List and search contacts",
+          "message": "Wyświetlaj i wyszukuj kontakty"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.desc": {
+          "source": "List email activities in Close CRM with optional filtering",
+          "message": "Wyświetl listę wiadomości e-mail w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "Wyświetl listę wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "Identyfikator wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.short_desc": {
+          "source": "Filter by email ID",
+          "message": "Filtruj według identyfikatora email ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.desc": {
+          "source": "Filter emails by lead ID",
+          "message": "Filtruj wiadomości e-mail według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.desc": {
+          "source": "Filter emails by user ID",
+          "message": "Filtruj wiadomości e-mail według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtruj według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
+          "source": "List and search emails",
+          "message": "Wyświetlaj i wyszukuj wiadomości e-mail"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.desc": {
+          "source": "List leads in Close CRM with optional filtering",
+          "message": "Wyświetl listę leadów w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Wyświetl listę leadów"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter leads by status ID",
+          "message": "Filtruj leady według identyfikatora status ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by lead status",
+          "message": "Filtruj według statusu leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.desc": {
+          "source": "Search query text to filter leads by name, email, phone, or other fields",
+          "message": "Tekst zapytania wyszukiwania do filtrowania leadów według nazwy, adresu e-mail, telefonu lub innych pól"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Zapytanie"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.short_desc": {
+          "source": "Search query text",
+          "message": "Tekst zapytania wyszukiwania"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
+          "source": "List and search leads",
+          "message": "Wyświetlaj i wyszukuj leady"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.desc": {
+          "source": "List meeting activities in Close CRM with optional filtering",
+          "message": "Wyświetl listę spotkań w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
+          "source": "List Meetings",
+          "message": "Wyświetl listę spotkań"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.desc": {
+          "source": "Filter meetings by lead ID",
+          "message": "Filtruj spotkania według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "Identyfikator spotkania"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.short_desc": {
+          "source": "Filter by meeting ID",
+          "message": "Filtruj według identyfikatora meeting ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.desc": {
+          "source": "Filter meetings by user ID",
+          "message": "Filtruj spotkania według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtruj według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
+          "source": "List and search meetings",
+          "message": "Wyświetlaj i wyszukuj spotkania"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.desc": {
+          "source": "List note activities in Close CRM with optional filtering",
+          "message": "Wyświetl działania typu notatka w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "Wyświetl notatki"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter notes by lead ID",
+          "message": "Filtruj notatki według identyfikatora leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "Identyfikator notatki"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "Filtruj według identyfikatora notatki"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.desc": {
+          "source": "Filter notes by user ID",
+          "message": "Filtruj notatki według identyfikatora użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtruj według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
+          "source": "List and search notes",
+          "message": "Wyświetlaj i wyszukuj notatki"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Close CRM with optional filtering",
+          "message": "Wyświetl szanse sprzedaży w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "Wyświetl szanse sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "Identyfikator szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Filtruj według identyfikatora szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.desc": {
+          "source": "Filter opportunities by the lead they belong to",
+          "message": "Filtruj szanse sprzedaży według leada, do którego należą"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter by status ID",
+          "message": "Filtruj według identyfikatora statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by status ID",
+          "message": "Filtruj według identyfikatora statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active opportunities",
+          "message": "Aktywne szanse sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmxvc3Q.desc": {
+          "source": "Lost opportunities",
+          "message": "Przegrane szanse sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOndvbg.desc": {
+          "source": "Won opportunities",
+          "message": "Wygrane szanse sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.desc": {
+          "source": "Filter opportunities by status type",
+          "message": "Filtruj szanse sprzedaży według typu statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.display_name": {
+          "source": "Status Type",
+          "message": "Typ statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.short_desc": {
+          "source": "Filter by status type",
+          "message": "Filtruj według typu statusu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.desc": {
+          "source": "Text search query",
+          "message": "Zapytanie wyszukiwania tekstowego"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Zapytanie"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.short_desc": {
+          "source": "Search query",
+          "message": "Zapytanie wyszukiwania"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by assigned user ID",
+          "message": "Filtruj według identyfikatora przypisanego użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Filtruj według przypisanego użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List and search opportunities",
+          "message": "Wyświetlaj i wyszukuj szanse sprzedaży"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.desc": {
+          "source": "List SMS activities in Close CRM with optional filtering",
+          "message": "Wyświetl działania SMS w Close CRM z opcjonalnym filtrowaniem"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.display_name": {
+          "source": "List SMS",
+          "message": "Wyświetl wiadomości SMS"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.desc": {
+          "source": "Filter SMS activities by lead ID",
+          "message": "Filtruj działania SMS według identyfikatora leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtruj według identyfikatora lead ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maksymalna liczba wyników do zwrócenia"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "Identyfikator SMS ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.short_desc": {
+          "source": "Filter by SMS ID",
+          "message": "Filtruj według identyfikatora SMS"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.desc": {
+          "source": "Filter SMS activities by user ID",
+          "message": "Filtruj działania SMS według identyfikatora użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID użytkownika"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtruj według identyfikatora user ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.short_desc": {
+          "source": "List and search SMS messages",
+          "message": "Wyświetlaj i wyszukuj wiadomości SMS"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.desc": {
+          "source": "Fires when a new opportunity is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowej szansy sprzedaży w Close CRM. Używa odpytywania Event Log API do wykrywania nowych rekordów."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
+          "source": "Opportunity Created",
+          "message": "Utworzono szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is created",
+          "message": "Uruchamiane po utworzeniu szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.desc": {
+          "source": "Fires when an opportunity is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Uruchamiane po usunięciu szansy sprzedaży w Close CRM. Używa odpytywania Event Log API do wykrywania usunięć."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
+          "source": "Opportunity Deleted",
+          "message": "Usunięto szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {
+          "source": "Fires when an opportunity is deleted",
+          "message": "Uruchamiane po usunięciu szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.desc": {
+          "source": "Fires when an opportunity is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Uruchamiane po zaktualizowaniu szansy sprzedaży w Close CRM. Używa odpytywania Event Log API do wykrywania zmian."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
+          "source": "Opportunity Updated",
+          "message": "Zaktualizowano szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is updated",
+          "message": "Uruchamiane po zaktualizowaniu szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.desc": {
+          "source": "Fires when a lead is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Uruchamiane po zaktualizowaniu leada w Close CRM. Używa odpytywania Event Log API do wykrywania zmian."
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
+          "source": "Lead Updated",
+          "message": "Zaktualizowano leada"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
+          "source": "Fires when a lead is updated",
+          "message": "Uruchamiane po zaktualizowaniu leada"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.desc": {
+          "source": "Fires when a new lead is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowego leada w Close CRM. Używa odpytywania Event Log API do wykrywania nowych rekordów."
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
+          "source": "Lead Created",
+          "message": "Utworzono leada"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a lead is created",
+          "message": "Uruchamiane po utworzeniu leada"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.desc": {
+          "source": "Fires when a lead is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Uruchamiane po usunięciu leada w Close CRM. Używa odpytywania Event Log API do wykrywania usunięć."
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
+          "source": "Lead Deleted",
+          "message": "Usunięto leada"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
+          "source": "Fires when a lead is deleted",
+          "message": "Uruchamiane po usunięciu leada"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Close** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Close** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi oraz treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Close",
+          "message": "Wykonaj niestandardowe wywołanie API do Close"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note activity in Close CRM",
+          "message": "Zaktualizuj istniejące działanie typu notatka w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "Zaktualizuj notatkę"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The new plain text content of the note",
+          "message": "Nowa treść notatki w formacie zwykłego tekstu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "Treść tekstowa notatki"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The new HTML content of the note",
+          "message": "Nowa treść notatki w formacie HTML"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML notatki"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "Treść HTML notatki"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "Identyfikator notatki"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "Notatka do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Zaktualizuj istniejącą notatkę"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Close CRM",
+          "message": "Zaktualizuj istniejącą szansę sprzedaży w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Zaktualizuj szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The new confidence percentage, from 0 to 100",
+          "message": "Nowy procent prawdopodobieństwa, od 0 do 100"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "Pewność"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "Wartość procentowa pewności"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "Identyfikator szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "Szansa sprzedaży do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "The new text note for the opportunity",
+          "message": "Nowa notatka tekstowa dla szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "Notatki dotyczące szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign",
+          "message": "Nowy identyfikator statusu do przypisania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "Identyfikator statusu szansy sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The new monetary value in cents",
+          "message": "Nowa wartość pieniężna w centach"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Wartość"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "Wartość szansy sprzedaży w centach"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "Cykliczny miesięczny"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "Płatność jednorazowa"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "Cykliczny roczny"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The new billing period",
+          "message": "Nowy okres rozliczeniowy"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "Okres wartości"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "Okres wartości"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Zaktualizuj istniejącą szansę sprzedaży"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.desc": {
+          "source": "Update an existing call activity in Close CRM",
+          "message": "Zaktualizuj istniejące działanie typu połączenie w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
+          "source": "Update a Call",
+          "message": "Zaktualizuj połączenie"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "Identyfikator połączenia"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to update",
+          "message": "Połączenie do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The new disposition or outcome of the call",
+          "message": "Nowy status zakończenia lub wynik połączenia"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "Dyspozycja"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "Dyspozycja połączenia"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "The new text note for this call",
+          "message": "Nowa notatka tekstowa dla tego połączenia"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "Notatka do połączenia"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
+          "source": "Update an existing call",
+          "message": "Zaktualizuj istniejące połączenie"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Close CRM",
+          "message": "Zaktualizuj istniejący kontakt w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Zaktualizuj kontakt"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "The new list of email address objects",
+          "message": "Nowa lista obiektów adresów e-mail"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "Adresy e-mail"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "Adresy e-mail kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The new full name of the contact",
+          "message": "Nowe imię i nazwisko kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "Nazwa kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "The new list of phone number objects",
+          "message": "Nowa lista obiektów numerów telefonów"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "Numery telefonów"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "Numery telefonów kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The new job title of the contact",
+          "message": "Nowe stanowisko kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "Stanowisko kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Zaktualizuj istniejący kontakt"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update an existing lead in Close CRM",
+          "message": "Zaktualizuj istniejącego leada w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update a Lead",
+          "message": "Zaktualizuj leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new text description of the lead",
+          "message": "Nowy opis tekstowy leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "Opis leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to update",
+          "message": "Lead do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The new name of the lead",
+          "message": "Nowa nazwa leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "Nazwa leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign to the lead",
+          "message": "Nowy identyfikator statusu do przypisania do leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID statusu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "Identyfikator statusu leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The new website URL associated with the lead",
+          "message": "Nowy adres URL witryny powiązany z leadem"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "Adres URL leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "Zaktualizuj istniejącego leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Close CRM",
+          "message": "Zaktualizuj istniejące zadanie w Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Zaktualizuj zadanie"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The new user ID to assign this task to",
+          "message": "Nowy identyfikator użytkownika, do którego ma zostać przypisane to zadanie"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Przypisano do"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "Użytkownik, do którego ma zostać przypisane zadanie"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The new due date in YYYY-MM-DD format",
+          "message": "Nowy termin w formacie RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "Termin wykonania zadania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.desc": {
+          "source": "Set to `True` to mark the task as complete, or `False` for incomplete",
+          "message": "Ustaw na `True`, aby oznaczyć zadanie jako ukończone, lub `False`, aby oznaczyć jako nieukończone"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "Czy ukończone"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Whether the task is complete",
+          "message": "Czy zadanie jest ukończone"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID zadania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "Zadanie do zaktualizowania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The new text description or body of the task",
+          "message": "Nowy opis tekstowy lub treść zadania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Tekst"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "Treść zadania"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Zaktualizuj istniejące zadanie"
+        },
+        "app.Q2xvc2U.desc": {
+          "source": "Close is a CRM platform built for sales teams, offering lead management, contact tracking, opportunities, tasks, and activity logging (calls, emails, notes, meetings, SMS).\n\nThis integration supports leads, contacts, opportunities, tasks, calls, emails, notes, meetings, SMS, and event triggers.",
+          "message": "Close to platforma CRM stworzona dla zespołów sprzedaży, oferująca zarządzanie leadami, śledzenie kontaktów, szanse sprzedaży, zadania oraz rejestrowanie aktywności (połączenia, wiadomości e-mail, notatki, spotkania, SMS-y).\n\nTa integracja obsługuje leady, kontakty, szanse sprzedaży, zadania, połączenia, wiadomości e-mail, notatki, spotkania, SMS-y oraz wyzwalacze zdarzeń."
+        },
+        "app.Q2xvc2U.display_name": {
+          "source": "Close",
+          "message": "Close"
+        },
+        "app.Q2xvc2U.short_desc": {
+          "source": "Close CRM for sales teams",
+          "message": "Close CRM dla zespołów sprzedaży"
+        }
+      }
+    }
+  }
+}

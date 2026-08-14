@@ -1,0 +1,3277 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Zoho Inventory",
+          "message": "Створити новий контакт у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Створити контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Назва компанії для контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Контакт клієнта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Контакт постачальника"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the contact",
+          "message": "Валюта для контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Примітки про контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Створити новий контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Create a new contact person for a contact in Zoho Inventory",
+          "message": "Створити нову контактну особу для контакту в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Create Contact Person",
+          "message": "Створити контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Батьківський контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Посада"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Посада або звання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Адреса електронної пошти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Ім'я контактної особи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Прізвище контактної особи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Номер телефону"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Create a new contact person",
+          "message": "Створити нову контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new item in Zoho Inventory",
+          "message": "Створити нову позицію в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Створити позицію"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Sales Account",
+          "message": "Рахунок продажів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Sales account",
+          "message": "Рахунок продажів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Опис товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.display_name": {
+          "source": "Inventory Account",
+          "message": "Рахунок запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.short_desc": {
+          "source": "Inventory account",
+          "message": "Рахунок запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory item",
+          "message": "Складський товар"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase item",
+          "message": "Позиція закупівлі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales item",
+          "message": "Позиція продажу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase item",
+          "message": "Позиція продажу та закупівлі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.desc": {
+          "source": "The type of the item",
+          "message": "Тип позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Тип позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.short_desc": {
+          "source": "Type of item",
+          "message": "Тип елемента"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Назва товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Артикул (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.display_name": {
+          "source": "Purchase Account",
+          "message": "Рахунок закупівель"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.short_desc": {
+          "source": "Purchase account",
+          "message": "Рахунок закупівель"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Закупівельна ціна"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Собівартість позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Тариф"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Ціна продажу позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Одиниця"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Одиниця вимірювання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Створити новий товар"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Create a new inventory adjustment in Zoho Inventory",
+          "message": "Створити нове коригування запасів у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Create Item Adjustment",
+          "message": "Створити коригування позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnF1YW50aXR5.desc": {
+          "source": "Quantity adjustment",
+          "message": "Коригування кількості"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnZhbHVl.desc": {
+          "source": "Value adjustment",
+          "message": "Коригування вартості"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.desc": {
+          "source": "The type of inventory adjustment",
+          "message": "Тип коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.display_name": {
+          "source": "Adjustment Type",
+          "message": "Тип коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.short_desc": {
+          "source": "Type of adjustment",
+          "message": "Тип коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.short_desc": {
+          "source": "Adjustment date",
+          "message": "Дата коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Adjustment description",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, quantity_adjusted, etc.",
+          "message": "Список позицій із item_id, quantity_adjusted тощо"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Adjustment line items",
+          "message": "Позиції коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Причина"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.short_desc": {
+          "source": "Reason for the adjustment",
+          "message": "Причина коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number for the adjustment",
+          "message": "Номер посилання для коригування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new inventory adjustment",
+          "message": "Створити нове коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Create a new item group in Zoho Inventory",
+          "message": "Створити нову групу позицій у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Create Item Group",
+          "message": "Створити групу позицій"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Бренд"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Назва бренду"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Назва групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Назва групи позицій"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Опис групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.desc": {
+          "source": "List of items in the group with attributes",
+          "message": "Список позицій у групі з атрибутами"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Елементи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Позиції в групі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Виробник"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Назва виробника"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Одиниця"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Одиниця вимірювання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Create a new item group",
+          "message": "Створити нову групу позицій"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Inventory",
+          "message": "Створити новий рахунок-фактуру в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Створити рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Клієнт для цього рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Сума або відсоток знижки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Номер рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Користувацький номер рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, rate, quantity, etc.",
+          "message": "Список позицій із item_id, rate, quantity тощо"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Позиції рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Примітки до рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Associated sales order",
+          "message": "Пов'язане замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Створити новий рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Create a new purchase order in Zoho Inventory",
+          "message": "Створити нове замовлення на купівлю в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Create Purchase Order",
+          "message": "Створити замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Дата замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Дата доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Очікувана дата доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Позиції замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Примітки до замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.display_name": {
+          "source": "Purchase Order Number",
+          "message": "Номер замовлення на закупівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom purchase order number",
+          "message": "Користувацький номер замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Постачальник для цього замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Create a new purchase order",
+          "message": "Створити нове замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.desc": {
+          "source": "Create a new package for a sales order in Zoho Inventory",
+          "message": "Створити нове пакування для замовлення на продаж у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
+          "source": "Create Package",
+          "message": "Створити пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Дата пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of items with so_line_item_id and quantity",
+          "message": "Список позицій із so_line_item_id та quantity"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Позиції пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Примітки до пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this package",
+          "message": "Замовлення на продаж для цього пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Номер відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Custom package number",
+          "message": "Користувацький номер пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Create a new package",
+          "message": "Створити нове пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Zoho Inventory",
+          "message": "Створити нове замовлення на продаж у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "Створити замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Клієнт для цього замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Дата замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Позиції замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Примітки до замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.display_name": {
+          "source": "Sales Order Number",
+          "message": "Номер замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom sales order number",
+          "message": "Користувацький номер замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Очікувана дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Створити нове замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Create a new shipment order in Zoho Inventory",
+          "message": "Створити нове замовлення на відвантаження в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Create Shipment Order",
+          "message": "Створити замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Примітки до відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this shipment",
+          "message": "Замовлення на продаж для цього відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Номер відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Номер замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Сума вартості доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.desc": {
+          "source": "List of package IDs to include",
+          "message": "Список ID пакувань для включення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.display_name": {
+          "source": "Package IDs",
+          "message": "ID пакувань"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.short_desc": {
+          "source": "Packages to include in shipment",
+          "message": "Пакування для включення у відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Номер відстеження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Номер відстеження відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Create a new shipment order",
+          "message": "Створити нове замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact from Zoho Inventory",
+          "message": "Отримати відомості про конкретний контакт із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Отримати контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Контакт, який потрібно отримати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get contact details",
+          "message": "Отримати відомості про контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Retrieve details of a specific contact person from Zoho Inventory",
+          "message": "Отримати відомості про конкретну контактну особу із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Get Contact Person",
+          "message": "Отримати контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Контактна особа"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to retrieve",
+          "message": "Контактна особа для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Get contact person details",
+          "message": "Отримати дані контактної особи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item from Zoho Inventory",
+          "message": "Отримати дані конкретного товару із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Отримати елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "Елемент для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get item details",
+          "message": "Отримати дані товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
+          "message": "Отримати дані конкретного коригування запасів із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Get Item Adjustment",
+          "message": "Отримати коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to retrieve",
+          "message": "Коригування запасів для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Get inventory adjustment details",
+          "message": "Отримати дані коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Retrieve details of a specific item group from Zoho Inventory",
+          "message": "Отримати дані конкретної групи товарів із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Get Item Group",
+          "message": "Отримати групу товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Група товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to retrieve",
+          "message": "Група товарів для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Get item group details",
+          "message": "Отримати дані групи товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice from Zoho Inventory",
+          "message": "Отримати дані конкретного рахунка-фактури із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Отримати рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Рахунок-фактура для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Отримати відомості про рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific purchase order from Zoho Inventory",
+          "message": "Отримати дані конкретного замовлення на купівлю із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Отримати замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Замовлення на купівлю для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Get purchase order details",
+          "message": "Отримати дані замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.desc": {
+          "source": "Retrieve details of a specific package from Zoho Inventory",
+          "message": "Отримати дані конкретного пакунка із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
+          "source": "Get Package",
+          "message": "Отримати пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to retrieve",
+          "message": "Пакунок для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
+          "source": "Get package details",
+          "message": "Отримати дані пакунка"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific sales order from Zoho Inventory",
+          "message": "Отримати дані конкретного замовлення на продаж із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "Отримати замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Замовлення на продаж для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get sales order details",
+          "message": "Отримати дані замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Retrieve details of a specific shipment order from Zoho Inventory",
+          "message": "Отримати дані конкретного замовлення на відвантаження із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Get Shipment Order",
+          "message": "Отримати замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to retrieve",
+          "message": "Замовлення на відвантаження для отримання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Get shipment order details",
+          "message": "Отримати дані замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Zoho Inventory",
+          "message": "Видалити контакт із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Видалити контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Контакт для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Видалити контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Delete a contact person from Zoho Inventory",
+          "message": "Видалити контактну особу із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Delete Contact Person",
+          "message": "Видалити контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Контактна особа"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to delete",
+          "message": "Контактна особа для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Delete a contact person",
+          "message": "Видалити контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete an item from Zoho Inventory",
+          "message": "Видалити товар із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "Видалити елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to delete",
+          "message": "Елемент для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "Видалити номенклатуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Delete an inventory adjustment from Zoho Inventory",
+          "message": "Видалити коригування запасів із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Delete Item Adjustment",
+          "message": "Видалити коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "Коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to delete",
+          "message": "Коригування запасів для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an inventory adjustment",
+          "message": "Видалити коригування запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Delete an item group from Zoho Inventory",
+          "message": "Видалити групу товарів із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Delete Item Group",
+          "message": "Видалити групу товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Група товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to delete",
+          "message": "Група товарів для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Delete an item group",
+          "message": "Видалити групу товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Inventory",
+          "message": "Видалити рахунок-фактуру із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Видалити рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Рахунок-фактура для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Видалити рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Delete a purchase order from Zoho Inventory",
+          "message": "Видалити замовлення на купівлю із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Delete Purchase Order",
+          "message": "Видалити замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to delete",
+          "message": "Замовлення на купівлю для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Delete a purchase order",
+          "message": "Видалити замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.desc": {
+          "source": "Delete a package from Zoho Inventory",
+          "message": "Видалити пакунок із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
+          "source": "Delete Package",
+          "message": "Видалити пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to delete",
+          "message": "Пакунок для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
+          "source": "Delete a package",
+          "message": "Видалити пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Zoho Inventory",
+          "message": "Видалити замовлення на продаж із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Видалити замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Замовлення на продаж для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Видалити замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Delete a shipment order from Zoho Inventory",
+          "message": "Видалити замовлення на відвантаження із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Delete Shipment Order",
+          "message": "Видалити замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to delete",
+          "message": "Замовлення на відвантаження для видалення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Delete a shipment order",
+          "message": "Видалити замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.desc": {
+          "source": "Retrieve a list of contact persons for a specific contact in Zoho Inventory",
+          "message": "Отримати список контактних осіб для конкретного контакту в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
+          "source": "List Contact Persons",
+          "message": "Список контактних осіб"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "Батьківський контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
+          "source": "List contact persons for a contact",
+          "message": "Отримати список контактних осіб для контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Search and retrieve a list of contacts from Zoho Inventory with optional filtering",
+          "message": "Знайти та отримати список контактів із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "Search Contacts",
+          "message": "Пошук контактів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Контакт клієнта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Контакт постачальника"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Фільтр за типом контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Filter by contact name",
+          "message": "Фільтрувати за іменем контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Фільтрувати за адресою електронної пошти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "Активні контакти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive contacts",
+          "message": "Неактивні контакти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "Фільтрувати за статусом контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.short_desc": {
+          "source": "Filter by phone number",
+          "message": "Фільтрувати за номером телефону"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "Search and list contacts",
+          "message": "Пошук і перегляд списку контактів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Zoho Inventory with optional filtering",
+          "message": "Отримати список рахунків-фактур із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Список рахунків-фактур"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Фільтрувати за клієнтом"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Фільтрувати за ID рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Прострочені рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Чернетки рахунків-фактур"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Оплачені рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Частково сплачені рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Надіслані рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Несплачені рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void invoices",
+          "message": "Анульовані рахунки-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Фільтрувати за статусом рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List and search invoices",
+          "message": "Список і пошук рахунків-фактур"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of inventory adjustments from Zoho Inventory",
+          "message": "Отримати список коригувань запасів із Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
+          "source": "List Item Adjustments",
+          "message": "Список коригувань товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List inventory adjustments",
+          "message": "Список коригувань запасів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.desc": {
+          "source": "Retrieve a list of item groups from Zoho Inventory with optional filtering",
+          "message": "Отримати список груп товарів із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
+          "source": "List Item Groups",
+          "message": "Список груп товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Назва групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Filter by group name",
+          "message": "Фільтрувати за назвою групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
+          "source": "List and search item groups",
+          "message": "Список і пошук груп товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items from Zoho Inventory with optional filtering",
+          "message": "Отримати список товарів із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Список елементів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory items",
+          "message": "Товари на складі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase items",
+          "message": "Товари для закупівлі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales items",
+          "message": "Товари для продажу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase items",
+          "message": "Товари для продажу та закупівлі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "Тип позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.short_desc": {
+          "source": "Filter by item type",
+          "message": "Фільтрувати за типом товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by item name",
+          "message": "Фільтрувати за назвою елемента"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "Фільтрувати за SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List and search items",
+          "message": "Список і пошук товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.desc": {
+          "source": "Retrieve a list of packages from Zoho Inventory with optional filtering",
+          "message": "Отримати список пакунків із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
+          "source": "List Packages",
+          "message": "Список пакувань"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Фільтрувати за замовленням на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Номер відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Filter by package number",
+          "message": "Фільтрувати за номером пакунка"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
+          "source": "List packages",
+          "message": "Список пакунків"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.desc": {
+          "source": "Retrieve a list of purchase orders from Zoho Inventory with optional filtering",
+          "message": "Отримати список замовлень на купівлю із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Список замовлень на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open purchase orders",
+          "message": "Відкриті замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.desc": {
+          "source": "Billed purchase orders",
+          "message": "Оплачені замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled purchase orders",
+          "message": "Скасовані замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.desc": {
+          "source": "Closed purchase orders",
+          "message": "Закриті замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmlzc3VlZA.desc": {
+          "source": "Issued purchase orders",
+          "message": "Виставлені замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "Фільтрувати за статусом замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Фільтрувати за постачальником"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
+          "source": "List and search purchase orders",
+          "message": "Список і пошук замовлень на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.desc": {
+          "source": "Retrieve a list of sales orders from Zoho Inventory with optional filtering",
+          "message": "Отримати список замовлень на продаж із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
+          "source": "List Sales Orders",
+          "message": "Список замовлень на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Фільтрувати за клієнтом"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open sales orders",
+          "message": "Відкриті замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbmZpcm1lZA.desc": {
+          "source": "Confirmed sales orders",
+          "message": "Підтверджені замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1bGZpbGxlZA.desc": {
+          "source": "Fulfilled sales orders",
+          "message": "Виконані замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void sales orders",
+          "message": "Анульовані замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by sales order status",
+          "message": "Фільтрувати за статусом замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Список та пошук замовлень на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of shipment orders from Zoho Inventory with optional filtering",
+          "message": "Отримати список замовлень на відправлення із Zoho Inventory з необов'язковою фільтрацією"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
+          "source": "List Shipment Orders",
+          "message": "Список замовлень на відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "Фільтрувати за замовленням на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by shipment status",
+          "message": "Фільтрувати за статусом відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
+          "source": "List and search shipment orders",
+          "message": "Список і пошук замовлень на відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Inventory** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати користувацький виклик HTTP / REST API до **Zoho Inventory**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код статусу, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Inventory",
+          "message": "Зробити користувацький виклик API до Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.desc": {
+          "source": "Mark a contact as active or inactive in Zoho Inventory",
+          "message": "Позначити контакт як активний або неактивний у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
+          "source": "Mark Contact Active/Inactive",
+          "message": "Позначити контакт як активний/неактивний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to mark",
+          "message": "Контакт для позначення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.desc": {
+          "source": "`True` to mark active, `False` to mark inactive",
+          "message": "`True`, щоб позначити як активний, `False`, щоб позначити як неактивний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Активний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Статус активності"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
+          "source": "Mark a contact as active or inactive",
+          "message": "Позначити контакт як активний або неактивний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.desc": {
+          "source": "Mark a contact person as the primary contact person in Zoho Inventory",
+          "message": "Позначити контактну особу як основну контактну особу в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
+          "source": "Mark Contact Person Primary",
+          "message": "Позначити контактну особу як основну"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Контактна особа"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to mark as primary",
+          "message": "Контактна особа для позначення як основної"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
+          "source": "Mark a contact person as primary",
+          "message": "Позначити контактну особу як основну"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.desc": {
+          "source": "Mark an item as active or inactive in Zoho Inventory",
+          "message": "Позначити товар як активний або неактивний у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
+          "source": "Mark Item Active/Inactive",
+          "message": "Позначити товар як активний/неактивний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "Активний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "Статус активності"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to mark",
+          "message": "Товар для позначення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
+          "source": "Mark an item as active or inactive",
+          "message": "Позначити товар як активний або неактивний"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.desc": {
+          "source": "Mark a shipment order as delivered in Zoho Inventory",
+          "message": "Позначити замовлення на відправлення як доставлене в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
+          "source": "Mark Shipment Delivered",
+          "message": "Позначити відправлення як доставлене"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to mark as delivered",
+          "message": "Замовлення на відправлення для позначення як доставленого"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Mark a shipment as delivered",
+          "message": "Позначити відправлення як доставлене"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує при створенні нового контакту в Zoho Inventory. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Новий контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new contacts (seconds)",
+          "message": "Як часто перевіряти наявність нових контактів (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Запускати, коли створюється новий контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new item is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує при створенні нового товару в Zoho Inventory. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Новий елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Як часто перевіряти наявність нових товарів/послуг (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Запускати, коли створюється новий товар/послуга"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Fires when a new item adjustment is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує при створенні нового коригування товару в Zoho Inventory. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "New Item Adjustment",
+          "message": "Нове коригування товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item adjustments (seconds)",
+          "message": "Як часто перевіряти наявність нових коригувань товарів (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Trigger when a new item adjustment is created",
+          "message": "Запускати, коли створюється нове коригування товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Fires when a new item group is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Inventory створюється нова група товарів. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "New Item Group",
+          "message": "Нова група товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item groups (seconds)",
+          "message": "Як часто перевіряти наявність нових груп товарів (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Trigger when a new item group is created",
+          "message": "Запускати, коли створюється нова група товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Inventory створюється новий рахунок-фактура. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Новий рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Як часто перевіряти наявність нових рахунків-фактур (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Запускати, коли створюється новий рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Inventory створюється нове замовлення на купівлю. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "Нове замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Як часто перевіряти наявність нових замовлень на купівлю (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Запускати, коли створюється нове замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.desc": {
+          "source": "Fires when a new package is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Inventory створюється нове пакування. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
+          "source": "New Package",
+          "message": "Нове пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new packages (seconds)",
+          "message": "Як часто перевіряти наявність нових пакувань (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
+          "source": "Trigger when a new package is created",
+          "message": "Запускати, коли створюється нове пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Inventory створюється нове замовлення на продаж. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "Нове замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Як часто перевіряти наявність нових замовлень на продаж (у секундах)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Запускати, коли створюється нове замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Zoho Inventory",
+          "message": "Оновити наявний контакт у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Оновити контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "Назва компанії для контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Контакт клієнта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Контакт постачальника"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Контакт для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "Примітки про контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Оновити існуючий контакт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Update an existing contact person in Zoho Inventory",
+          "message": "Оновити наявну контактну особу в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Update Contact Person",
+          "message": "Оновити контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "Контактна особа"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to update",
+          "message": "Контактна особа для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "Посада"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "Посада або звання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Адреса електронної пошти"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "Ім'я контактної особи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "Прізвище контактної особи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Номер телефону"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Update an existing contact person",
+          "message": "Оновити наявну контактну особу"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in Zoho Inventory",
+          "message": "Оновити наявний товар у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "Оновити елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Опис товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "Елемент"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to update",
+          "message": "Елемент для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Назва товару"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Артикул (SKU)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "Закупівельна ціна"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "Собівартість позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Тариф"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "Ціна продажу позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Одиниця"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Одиниця вимірювання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "Оновити наявний товар"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Update an existing item group in Zoho Inventory",
+          "message": "Оновити наявну групу товарів у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Update Item Group",
+          "message": "Оновити групу товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "Бренд"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "Назва бренду"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "Група товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to update",
+          "message": "Група товарів для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Назва групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "Назва групи позицій"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Опис групи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Елементи"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "Позиції в групі"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Виробник"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Назва виробника"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Одиниця"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Одиниця вимірювання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Update an existing item group",
+          "message": "Оновити наявну групу товарів"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Inventory",
+          "message": "Оновити наявний рахунок-фактуру в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Оновити рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "Клієнт для цього рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "Сума або відсоток знижки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to update",
+          "message": "Рахунок-фактура для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Позиції рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Примітки до рахунка-фактури"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Оновити наявний рахунок-фактуру"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Update an existing purchase order in Zoho Inventory",
+          "message": "Оновити наявне замовлення на купівлю в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Update Purchase Order",
+          "message": "Оновити замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "Дата замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "Дата доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Очікувана дата доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "Позиції замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "Примітки до замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "Замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to update",
+          "message": "Замовлення на купівлю для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "Постачальник для цього замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Update an existing purchase order",
+          "message": "Оновити наявне замовлення на купівлю"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.desc": {
+          "source": "Update an existing package in Zoho Inventory",
+          "message": "Оновити наявне пакування в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
+          "source": "Update Package",
+          "message": "Оновити пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "Дата пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "Позиції пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "Примітки до пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "Пакунок"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to update",
+          "message": "Пакування для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Update an existing package",
+          "message": "Оновити наявне пакування"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Zoho Inventory",
+          "message": "Оновити наявне замовлення на продаж у Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "Оновити замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "Клієнт для цього замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Дата замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Позиції замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "Примітки до замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "Замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Замовлення на продаж для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Очікувана дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Оновити наявне замовлення на продаж"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Update an existing shipment order in Zoho Inventory",
+          "message": "Оновити наявне замовлення на відправлення в Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Update Shipment Order",
+          "message": "Оновити замовлення на відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Організація Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "Примітки до відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "Замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to update",
+          "message": "Замовлення на відправлення для оновлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "Номер відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "Номер замовлення на відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "Сума вартості доставки"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Номер відстеження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "Номер відстеження відвантаження"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Update an existing shipment order",
+          "message": "Оновити наявне замовлення на відправлення"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.desc": {
+          "source": "Zoho Inventory is an online inventory management software that helps businesses manage orders, warehousing, and shipping.\n\nThis integration supports contacts, items, item groups, item adjustments, packages, purchase orders, sales orders, and shipment orders.",
+          "message": "Zoho Inventory — це онлайн-програма для керування запасами, яка допомагає бізнесу керувати замовленнями, складським обліком і доставкою.\n\nЦя інтеграція підтримує контакти, товари, групи товарів, коригування товарів, пакування, замовлення на купівлю, замовлення на продаж і замовлення на відправлення."
+        },
+        "app.Wm9ob0ludmVudG9yeQ.display_name": {
+          "source": "Zoho Inventory",
+          "message": "Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.short_desc": {
+          "source": "Zoho Inventory management software",
+          "message": "Програмне забезпечення для керування запасами Zoho Inventory"
+        }
+      }
+    }
+  }
+}

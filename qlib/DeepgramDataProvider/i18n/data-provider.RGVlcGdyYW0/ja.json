@@ -1,0 +1,637 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deepgram** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して**Deepgram**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してはこのアクションを使用します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deepgram",
+          "message": "DeepgramへのカスタムAPI呼び出しを実行"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.desc": {
+          "source": "Posts text to Deepgram's `/v1/speak` endpoint and returns the audio bytes in the requested encoding.  Uses the Aura voice model family (12+ voices in English plus other languages).",
+          "message": "Deepgramの`/v1/speak`エンドポイントにテキストをPOSTし、要求されたエンコーディングで音声バイトを返します。Aura音声モデルファミリー（英語の12以上の音声およびその他の言語）を使用します。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
+          "source": "Synthesize Speech",
+          "message": "音声の合成"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None (raw)",
+          "message": "なし (raw)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm9nZw.display_name": {
+          "source": "OGG",
+          "message": "OGG"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOndhdg.display_name": {
+          "source": "WAV",
+          "message": "WAV"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.desc": {
+          "source": "Container format wrapping the audio (e.g., `wav`, `ogg`, `none`).  Defaults to a sensible value for each encoding.",
+          "message": "音声をラップするコンテナ形式（例: `wav`、`ogg`、`none`）。各エンコーディングに応じた適切な値がデフォルトになります。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "コンテナ"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container format wrapping the audio",
+          "message": "音声をラップするコンテナ形式"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.desc": {
+          "source": "Output bit rate in bits/second.  Applies to compressed encodings (`mp3`, `opus`, `aac`).  Typical values: `32000`, `48000`, `64000`, `128000`.",
+          "message": "出力ビットレート（ビット/秒）。圧縮エンコーディング（`mp3`、`opus`、`aac`）に適用されます。代表的な値: `32000`、`48000`、`64000`、`128000`。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.display_name": {
+          "source": "Bit Rate",
+          "message": "ビットレート"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.short_desc": {
+          "source": "Output bit rate (for compressed encodings)",
+          "message": "出力ビットレート（圧縮エンコーディング用）"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm11bGF3.display_name": {
+          "source": "Mu-law",
+          "message": "μ-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm1wMw.display_name": {
+          "source": "MP3",
+          "message": "MP3"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm9wdXM.display_name": {
+          "source": "Opus",
+          "message": "Opus"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFhYw.display_name": {
+          "source": "AAC",
+          "message": "AAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFsYXc.display_name": {
+          "source": "A-law",
+          "message": "A-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmZsYWM.display_name": {
+          "source": "FLAC",
+          "message": "FLAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmxpbmVhcjE2.display_name": {
+          "source": "Linear 16 (PCM)",
+          "message": "Linear 16 (PCM)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.desc": {
+          "source": "Output audio encoding.  `mp3` (default), `linear16` (16-bit PCM), `flac`, `mulaw`, `alaw`, `opus`, or `aac`.",
+          "message": "出力オーディオエンコーディング。`mp3`（デフォルト）、`linear16`（16ビットPCM）、`flac`、`mulaw`、`alaw`、`opus`、または`aac`。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Audio Encoding",
+          "message": "オーディオエンコーディング"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output audio encoding",
+          "message": "出力オーディオエンコーディング"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.desc": {
+          "source": "The Deepgram TTS voice model — e.g. `aura-asteria-en` (female, English), `aura-luna-en`, `aura-stella-en`, `aura-athena-en`, `aura-hera-en`, `aura-orion-en` (male), `aura-arcas-en`, `aura-perseus-en`, `aura-angus-en` (Irish English), `aura-orpheus-en`, `aura-helios-en`, `aura-zeus-en`.",
+          "message": "Deepgram TTS音声モデル — 例: `aura-asteria-en`（女性、英語）、`aura-luna-en`、`aura-stella-en`、`aura-athena-en`、`aura-hera-en`、`aura-orion-en`（男性）、`aura-arcas-en`、`aura-perseus-en`、`aura-angus-en`（アイルランド英語）、`aura-orpheus-en`、`aura-helios-en`、`aura-zeus-en`。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.display_name": {
+          "source": "Voice Model",
+          "message": "音声モデル"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.short_desc": {
+          "source": "Deepgram TTS voice model",
+          "message": "Deepgram TTS音声モデル"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.desc": {
+          "source": "Output sample rate in Hz.  Valid values depend on the selected encoding — e.g. `8000`, `16000`, `24000`, `32000`, `48000` for linear16.",
+          "message": "出力サンプリングレート（Hz）。有効な値は選択したエンコーディングによって異なります（例: linear16の場合は`8000`、`16000`、`24000`、`32000`、`48000`）。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.display_name": {
+          "source": "Sample Rate",
+          "message": "サンプリングレート"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.short_desc": {
+          "source": "Output sample rate in Hz (encoding-specific)",
+          "message": "出力サンプリングレート（Hz、エンコーディング固有）"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to synthesize into speech.  Maximum length depends on the model — typically up to ~2000 characters per request.",
+          "message": "音声に合成するテキスト。最大長はモデルによって異なりますが、通常は1リクエストあたり最大約2000文字です。"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "Text to synthesize",
+          "message": "合成するテキスト"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {
+          "source": "Synthesize speech from text via Deepgram TTS (Aura models)",
+          "message": "Deepgram TTS（Auraモデル）を介してテキストから音声を合成"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
+          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
+          "message": "公開音声URLをDeepgramの`/v1/listen`エンドポイントに送信し、JSON文字起こし結果を返します。スマートフォーマット、話者分離、要約、言語検出を備えたNovaモデルファミリーをサポートしています。\n\n**注意**: このアクションはURL経由での送信のみ行います。RAW音声のアップロードやリアルタイムWebSocketストリーミングには、@ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"を直接使用してください。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
+          "source": "Transcribe File",
+          "message": "ファイルの文字起こし"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.desc": {
+          "source": "When provided, Deepgram returns immediately and POSTs the final transcript to this URL when ready.  Use for long files.",
+          "message": "指定した場合、Deepgramは即座に応答を返し、準備ができ次第このURLに最終的な文字起こし結果をPOSTします。長時間のファイルに使用してください。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.display_name": {
+          "source": "Callback URL",
+          "message": "コールバックURL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
+          "source": "Webhook URL for async transcript delivery",
+          "message": "非同期文字起こし配信用のWebhook URL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
+          "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
+          "message": "`True`の場合、`language`パラメータを無視して言語を自動検出します。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.display_name": {
+          "source": "Detect Language",
+          "message": "言語の検出"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.short_desc": {
+          "source": "Auto-detect the spoken language",
+          "message": "話されている言語を自動検出"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.desc": {
+          "source": "When `True`, attempts speaker diarization — labels segments with `speaker: 0`, `speaker: 1`, etc.",
+          "message": "`True`の場合、話者分離を試行し、セグメントに`speaker: 0`、`speaker: 1`などのラベルを付けます。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "話者分離"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Identify distinct speakers in the audio",
+          "message": "音声内の個別の話者を識別"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.desc": {
+          "source": "List of keywords to boost during recognition.  Each entry may also include a `:<intensity>` suffix (e.g., `Qore:2`).",
+          "message": "認識時に重み付けするキーワードのリスト。各エントリには`:<intensity>`サフィックス（例: `Qore:2`）を含めることもできます。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.display_name": {
+          "source": "Keywords",
+          "message": "キーワード"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.short_desc": {
+          "source": "Keywords to boost during recognition (list of strings)",
+          "message": "認識時に重み付けするキーワード（文字列のリスト）"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.desc": {
+          "source": "BCP-47 language code.  Pass `multi` to enable Nova-3's multilingual mode.  Default is `en` (English).",
+          "message": "BCP-47言語コード。Nova-3の多言語モードを有効にするには`multi`を渡します。デフォルトは`en`（英語）です。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)",
+          "message": "BCP-47言語コード（例: `en-US`、`de`、`fr`）"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmE.display_name": {
+          "source": "Nova",
+          "message": "Nova"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMg.display_name": {
+          "source": "Nova 2",
+          "message": "Nova 2"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMw.display_name": {
+          "source": "Nova 3 (latest)",
+          "message": "Nova 3（最新）"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmJhc2U.display_name": {
+          "source": "Base",
+          "message": "ベース"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Enhanced"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.desc": {
+          "source": "The Deepgram ASR model — one of `nova-3` (latest), `nova-2`, `nova`, `enhanced`, or `base`.  `nova-3` offers the best accuracy for general-purpose transcription.",
+          "message": "Deepgram ASRモデル — `nova-3`（最新）、`nova-2`、`nova`、`enhanced`、または`base`のいずれか。汎用的な文字起こしには`nova-3`が最も高い精度を提供します。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.short_desc": {
+          "source": "Deepgram ASR model name",
+          "message": "Deepgram ASRモデル名"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.desc": {
+          "source": "When `True`, applies smart formatting (punctuation, capitalization, dates, currency, etc.) to the transcript.",
+          "message": "`True`の場合、文字起こし結果にスマートフォーマット（句読点、大文字小文字、日付、通貨など）を適用します。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.display_name": {
+          "source": "Smart Format",
+          "message": "スマートフォーマット"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.short_desc": {
+          "source": "Apply punctuation, capitalization, and number formatting",
+          "message": "句読点、大文字小文字、数値のフォーマットを適用"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.allowed-value.c3RyaW5nOnYy.display_name": {
+          "source": "v2 (abstractive)",
+          "message": "v2（生成要約）"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.desc": {
+          "source": "When set to `v2`, returns an abstractive summary of the transcript in addition to the words.",
+          "message": "`v2`に設定すると、テキストに加えて文字起こしの生成要約を返します。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.display_name": {
+          "source": "Summarize",
+          "message": "要約"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.short_desc": {
+          "source": "Return a summary of the transcript",
+          "message": "文字起こしの要約を返す"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.desc": {
+          "source": "Add punctuation to the transcript.  Implied by `smart_format`.",
+          "message": "文字起こしに句読点を追加します。`smart_format`によって暗黙的に有効になります。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.display_name": {
+          "source": "Punctuate",
+          "message": "句読点の追加"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.short_desc": {
+          "source": "Add punctuation to the transcript",
+          "message": "文字起こし結果に句読点を追加"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
+          "message": "文字起こしする音声ファイルの公開URL。DeepgramはこのURLからファイルを取得します。パブリックインターネットからアクセス可能である必要があります。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
+          "source": "Audio URL",
+          "message": "音声URL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.short_desc": {
+          "source": "Public URL of the audio file to transcribe",
+          "message": "文字起こしを行う音声ファイルのパブリックURL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.desc": {
+          "source": "When `True`, groups words into utterances based on natural speech pauses.",
+          "message": "`True`の場合、自然な発話のポーズに基づいて単語を発話単位にグループ化します。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.display_name": {
+          "source": "Utterances",
+          "message": "発話単位"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.short_desc": {
+          "source": "Group transcript words into utterances",
+          "message": "文字起こしの単語を発話単位にグループ化"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
+          "source": "Transcribe an audio file by URL via Deepgram ASR",
+          "message": "Deepgram ASRを介してURLから音声ファイルを文字起こし"
+        },
+        "app.RGVlcGdyYW0.desc": {
+          "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",
+          "message": "[Deepgram](https://deepgram.com) へのアクセスを提供します。Deepgramは自動音声認識（ASR）および音声合成（TTS）APIを提供する音声AIプラットフォームです。\n\n**一般的なユースケース**:\n- **文字起こし**: Novaモデルファミリーを使用して、録音された音声（PSTN通話、会議の録音、ポッドキャスト）を検索可能なテキストに変換\n- **音声合成**: Aura音声モデルを介してテキストから自然な音声を生成（ボイスエージェント、IVR、アクセシビリティ向け）\n- **会話型AI**: Deepgram TTSを任意のLLMと組み合わせて、エンドツーエンドの音声会話パイプラインを構築"
+        },
+        "app.RGVlcGdyYW0.display_name": {
+          "source": "Deepgram",
+          "message": "Deepgram"
+        },
+        "app.RGVlcGdyYW0.short_desc": {
+          "source": "Deepgram speech (ASR + TTS) services",
+          "message": "Deepgram音声（ASR + TTS）サービス"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,3237 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.desc": {
+          "source": "Create a new order in BaseLinker via `addOrder`. Returns the new `order_id` on success.",
+          "message": "Crea un nuovo ordine in BaseLinker tramite `addOrder`. Restituisce il nuovo `order_id` in caso di successo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
+          "source": "Add Order",
+          "message": "Aggiungi ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+          "message": "Codice valuta ISO 4217, es. `PLN`, `EUR`, `USD`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "3-letter ISO 4217 currency code",
+          "message": "Codice valuta ISO 4217 a 3 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}`. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Mappa di `{\"<extra_field_id>\": <value>}`. I campi di testo accettano stringhe; i campi file accettano un hash `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` in cui il file codificato in base64 non deve superare i 2 MB."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Campi extra personalizzati"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Mappa dell'ID del campo extra personalizzato al valore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.desc": {
+          "source": "Identifier of a custom personal order source (see `list-order-sources`).",
+          "message": "Identificatore di una sorgente ordine personale personalizzata (vedere `list-order-sources`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.display_name": {
+          "source": "Custom Source ID",
+          "message": "ID sorgente personalizzata"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.short_desc": {
+          "source": "Custom personal source ID",
+          "message": "ID sorgente personale personalizzata"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Commenti amministratore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Commenti amministratore interni"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.desc": {
+          "source": "When the order was created. Sent to the BaseLinker `addOrder` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Data e ora di creazione dell'ordine. Inviato all'API BaseLinker `addOrder` come secondi Unix (la conversione viene eseguita all'interno di `doRequestImpl()`); il campo è esposto come data in modo che l'interfaccia utente possa mostrare un selettore di data/ora anziché richiedere all'utente un valore epoch grezzo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.display_name": {
+          "source": "Date Added",
+          "message": "Data di aggiunta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.short_desc": {
+          "source": "Order creation timestamp",
+          "message": "Timestamp di creazione dell'ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Codice paese ISO 3166-1 alpha-2 (es. `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Codice paese di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Azienda di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Recipient company name",
+          "message": "Nome dell'azienda del destinatario"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Città di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Indirizzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Nome completo per la consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Recipient full name",
+          "message": "Nome completo del destinatario"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Metodo di pubblicazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Shipping method name",
+          "message": "Nome del metodo di spedizione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Stato/Provincia di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.display_name": {
+          "source": "Delivery Point City",
+          "message": "Città del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.short_desc": {
+          "source": "Pickup-point city",
+          "message": "Città del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.display_name": {
+          "source": "Delivery Point Address",
+          "message": "Indirizzo del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.short_desc": {
+          "source": "Pickup-point street address",
+          "message": "Indirizzo stradale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.desc": {
+          "source": "Identifier of the pickup point / parcel locker (e.g. InPost locker code).",
+          "message": "Identificatore del punto di ritiro / locker per pacchi (es. codice locker InPost)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.display_name": {
+          "source": "Delivery Point ID",
+          "message": "ID del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.short_desc": {
+          "source": "Pickup-point identifier",
+          "message": "Identificatore del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.display_name": {
+          "source": "Delivery Point Name",
+          "message": "Nome del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.short_desc": {
+          "source": "Pickup-point display name",
+          "message": "Nome visualizzato del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Point Postcode",
+          "message": "Codice postale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.short_desc": {
+          "source": "Pickup-point postal code",
+          "message": "Codice postale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Codice postale di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Prezzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Shipping cost (gross)",
+          "message": "Costo di spedizione (lordo)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Indirizzo email del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Campo extra 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Campo extra 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9hZGRyZXNz.display_name": {
+          "source": "Invoice Address",
+          "message": "Indirizzo di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9hZGRyZXNz.short_desc": {
+          "source": "Billing street address",
+          "message": "Indirizzo stradale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jaXR5.display_name": {
+          "source": "Invoice City",
+          "message": "Città di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jaXR5.short_desc": {
+          "source": "Billing city",
+          "message": "Città di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb21wYW55.display_name": {
+          "source": "Invoice Company",
+          "message": "Azienda di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb21wYW55.short_desc": {
+          "source": "Billing company name",
+          "message": "Nome dell'azienda di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.display_name": {
+          "source": "Invoice Country Code",
+          "message": "Codice paese di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.short_desc": {
+          "source": "Billing 2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9mdWxsbmFtZQ.display_name": {
+          "source": "Invoice Full Name",
+          "message": "Nome completo di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9mdWxsbmFtZQ.short_desc": {
+          "source": "Billing recipient full name",
+          "message": "Nome completo del destinatario di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9uaXA.display_name": {
+          "source": "Invoice Tax ID",
+          "message": "ID fiscale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9uaXA.short_desc": {
+          "source": "NIP / VAT / tax identifier",
+          "message": "NIP / P. IVA / identificatore fiscale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9wb3N0Y29kZQ.display_name": {
+          "source": "Invoice Postcode",
+          "message": "CAP di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9wb3N0Y29kZQ.short_desc": {
+          "source": "Billing postal code",
+          "message": "Codice postale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9zdGF0ZQ.display_name": {
+          "source": "Invoice State/Province",
+          "message": "Stato/Provincia di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9zdGF0ZQ.short_desc": {
+          "source": "Billing state or province",
+          "message": "Stato o provincia di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.desc": {
+          "source": "Initial order status; see `list-order-statuses`.",
+          "message": "Stato iniziale dell'ordine; vedi `list-order-statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.display_name": {
+          "source": "Order Status ID",
+          "message": "ID stato ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.short_desc": {
+          "source": "Initial order status identifier",
+          "message": "Identificatore dello stato iniziale dell'ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "Metodo di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method description",
+          "message": "Descrizione del metodo di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.desc": {
+          "source": "`True` marks the order as cash-on-delivery.",
+          "message": "`True` contrassegna l'ordine come pagamento in contrassegno."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.display_name": {
+          "source": "Cash On Delivery",
+          "message": "Contrassegno"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.short_desc": {
+          "source": "Whether this is a COD order",
+          "message": "Indica se si tratta di un ordine in contrassegno"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.desc": {
+          "source": "`True` marks the order as paid in full at creation time.",
+          "message": "`True` contrassegna l'ordine come interamente pagato al momento della creazione."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.display_name": {
+          "source": "Paid",
+          "message": "Pagato"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.short_desc": {
+          "source": "Whether the order is fully paid",
+          "message": "Indica se l'ordine è interamente pagato"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Numero di telefono del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.desc": {
+          "source": "Line items on the order.",
+          "message": "Voci dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.short_desc": {
+          "source": "Ordered line items",
+          "message": "Voci ordinate"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.d2FudF9pbnZvaWNl.display_name": {
+          "source": "Wants Invoice",
+          "message": "Richiede fattura"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.d2FudF9pbnZvaWNl.short_desc": {
+          "source": "Whether the customer requested an invoice",
+          "message": "Indica se il cliente ha richiesto una fattura"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9jb21tZW50cw.display_name": {
+          "source": "Customer Comments",
+          "message": "Commenti del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9jb21tZW50cw.short_desc": {
+          "source": "Free-text comments from the buyer",
+          "message": "Commenti in testo libero dell'acquirente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Login utente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Login cliente (nome utente marketplace)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Crea un nuovo ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.desc": {
+          "source": "Add a product line item to an existing BaseLinker order via `addOrderProduct`.",
+          "message": "Aggiunge una voce di prodotto a un ordine BaseLinker esistente tramite `addOrderProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
+          "source": "Add Order Product",
+          "message": "Aggiungi prodotto all'ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.desc": {
+          "source": "Comma-separated list of variant attributes, e.g. `Size: L, Color: Red`.",
+          "message": "Elenco separato da virgole di attributi della variante, ad es. `Size: L, Color: Red`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Attributi"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Free-text variant attributes",
+          "message": "Attributi della variante in testo libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.desc": {
+          "source": "Marketplace auction or listing ID (eBay, Allegro, Amazon, etc.).",
+          "message": "ID dell'asta o dell'inserzione sul marketplace (eBay, Allegro, Amazon, ecc.)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.display_name": {
+          "source": "Marketplace Listing ID",
+          "message": "ID inserzione marketplace"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.short_desc": {
+          "source": "Marketplace auction/listing ID",
+          "message": "ID asta/inserzione marketplace"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.desc": {
+          "source": "Product EAN (barcode).",
+          "message": "EAN del prodotto (codice a barre)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / codice a barre"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to append the product to",
+          "message": "Ordine a cui aggiungere il prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.desc": {
+          "source": "Warehouse location code.",
+          "message": "Codice di ubicazione in magazzino."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.display_name": {
+          "source": "Warehouse Location",
+          "message": "Ubicazione in magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.short_desc": {
+          "source": "Storage location identifier",
+          "message": "Identificatore dell'ubicazione di stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name shown on the order line.",
+          "message": "Nome del prodotto mostrato nella riga dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Product Name",
+          "message": "Nome prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of the product",
+          "message": "Nome del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Product SKU.",
+          "message": "SKU del prodotto."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Unità di gestione delle scorte"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOmRi.display_name": {
+          "source": "BaseLinker Inventory",
+          "message": "Inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOnNob3A.display_name": {
+          "source": "External Shop",
+          "message": "Negozio esterno"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOndhcmVob3VzZQ.display_name": {
+          "source": "Legacy Warehouse",
+          "message": "Magazzino legacy"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.desc": {
+          "source": "The storage the product originates from. One of `db`, `shop`, `warehouse`.",
+          "message": "Lo stoccaggio da cui proviene il prodotto. Uno tra `db`, `shop`, `warehouse`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.display_name": {
+          "source": "Storage",
+          "message": "Stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.short_desc": {
+          "source": "Storage identifier for product origin",
+          "message": "Identificatore dello stoccaggio per l'origine del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.desc": {
+          "source": "Identifier of the storage (inventory ID for `db`, shop ID for `shop`, warehouse ID for `warehouse`).",
+          "message": "Identificatore dello stoccaggio (ID inventario per `db`, ID negozio per `shop`, ID magazzino per `warehouse`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.display_name": {
+          "source": "Storage ID",
+          "message": "ID stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.short_desc": {
+          "source": "Storage-specific ID (inventory/shop/warehouse ID)",
+          "message": "ID specifico dello stoccaggio (ID inventario/negozio/magazzino)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.desc": {
+          "source": "Unit price (gross, including tax).",
+          "message": "Prezzo unitario (lordo, imposte incluse)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.display_name": {
+          "source": "Price (Gross)",
+          "message": "Prezzo (lordo)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.short_desc": {
+          "source": "Unit price including tax",
+          "message": "Prezzo unitario imposte incluse"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Product identifier inside the chosen `storage`.",
+          "message": "Identificativo del prodotto all'interno di `storage` scelto."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product identifier in the chosen storage",
+          "message": "Identificativo del prodotto nello stoccaggio scelto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.desc": {
+          "source": "Quantity of the product on the order line.",
+          "message": "Quantità del prodotto sulla riga dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Quantità"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Numero di unità"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.desc": {
+          "source": "BaseLinker warehouse ID from which this item is shipped.",
+          "message": "ID del magazzino BaseLinker da cui viene spedito questo articolo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.display_name": {
+          "source": "Warehouse ID",
+          "message": "ID magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.short_desc": {
+          "source": "BaseLinker warehouse ID",
+          "message": "ID magazzino BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Weight per unit in kilograms.",
+          "message": "Peso per unità in chilogrammi."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Peso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Unit weight (kg)",
+          "message": "Peso unitario (kg)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Aliquota fiscale in percentuale (ad es. `23` per il 23%). Valori speciali: `-1` = esente da imposte, `-0.02` = 0% inversione contabile, `-0.03` = 0% IVA-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Aliquota fiscale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Percentuale imposta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.desc": {
+          "source": "Optional product-variant identifier.",
+          "message": "Identificativo opzionale della variante del prodotto."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variante"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Variant identifier",
+          "message": "Identificativo variante"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
+          "source": "Add a product line to an order",
+          "message": "Aggiungi una riga di prodotto a un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.desc": {
+          "source": "Create a new BaseLinker order return via `addOrderReturn`. Returns the new `return_id` on success.",
+          "message": "Crea un nuovo reso d'ordine BaseLinker tramite `addOrderReturn`. Restituisce il nuovo `return_id` in caso di successo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
+          "source": "Add Order Return",
+          "message": "Aggiungi reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+          "message": "Codice valuta ISO 4217, es. `PLN`, `EUR`, `USD`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.short_desc": {
+          "source": "3-letter ISO 4217 currency code",
+          "message": "Codice valuta ISO 4217 a 3 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra fields configured in BaseLinker. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Mappa di `{\"<extra_field_id>\": <value>}` per i campi personalizzati aggiuntivi del reso d'ordine configurati in BaseLinker. I campi di testo accettano stringhe; i campi file accettano un hash `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` in cui il file con codifica base64 non deve superare 2 MB."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Campi extra personalizzati"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Mappa dell'ID del campo extra personalizzato al valore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.desc": {
+          "source": "Identifier of a custom personal order source (see `list-order-sources`).",
+          "message": "Identificatore di una sorgente ordine personale personalizzata (vedere `list-order-sources`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.display_name": {
+          "source": "Custom Source ID",
+          "message": "ID sorgente personalizzata"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.short_desc": {
+          "source": "Custom personal source ID",
+          "message": "ID sorgente personale personalizzata"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Commenti amministratore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Commenti amministratore interni"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.desc": {
+          "source": "When the return was created. Sent to the BaseLinker `addOrderReturn` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Data/ora di creazione del reso. Inviato all'API `addOrderReturn` di BaseLinker come secondi Unix (la conversione viene eseguita all'interno di `doRequestImpl()`); il campo è esposto come data in modo che l'interfaccia utente possa mostrare un selettore data/ora anziché richiedere all'utente un valore epoch non elaborato."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.display_name": {
+          "source": "Date Added",
+          "message": "Data di aggiunta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.short_desc": {
+          "source": "Return creation timestamp",
+          "message": "Timestamp di creazione del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Codice paese ISO 3166-1 alpha-2 (es. `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Codice paese di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Azienda di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Sender company name",
+          "message": "Nome dell'azienda del mittente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Città di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Indirizzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Nome completo per la consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Sender full name",
+          "message": "Nome completo del mittente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Stato/Provincia di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Codice postale di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Prezzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Return shipping cost",
+          "message": "Costo di spedizione del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Indirizzo email del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Campo extra 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Campo extra 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.desc": {
+          "source": "Identifier of the original order this return is associated with.",
+          "message": "Identificativo dell'ordine originale a cui è associato questo reso."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.display_name": {
+          "source": "Source Order ID",
+          "message": "ID ordine di origine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Original order being returned (if any)",
+          "message": "Ordine originale restituito (se presente)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.desc": {
+          "source": "Return status identifier; values are drawn from BaseLinker's `getOrderReturnStatusList` endpoint and surfaced via the `order_return_statuses` reference data.",
+          "message": "Identificativo dello stato del reso; i valori vengono recuperati dall'endpoint `getOrderReturnStatusList` di BaseLinker ed esposti tramite i dati di riferimento `order_return_statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.display_name": {
+          "source": "Return Status ID",
+          "message": "ID stato del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Initial return status",
+          "message": "Stato iniziale del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Numero di telefono del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.desc": {
+          "source": "Line items being returned.",
+          "message": "Articoli restituiti."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.short_desc": {
+          "source": "Returned line items",
+          "message": "Articoli restituiti"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numero di riferimento"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External reference number for the return",
+          "message": "Numero di riferimento esterno per il reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2FjY291bnRfbnVtYmVy.display_name": {
+          "source": "Refund Account Number",
+          "message": "Numero di conto per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2FjY291bnRfbnVtYmVy.short_desc": {
+          "source": "Bank account for the refund",
+          "message": "Conto bancario per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2liYW4.display_name": {
+          "source": "Refund IBAN",
+          "message": "IBAN per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2liYW4.short_desc": {
+          "source": "IBAN for the refund",
+          "message": "IBAN per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX3N3aWZ0.display_name": {
+          "source": "Refund SWIFT",
+          "message": "SWIFT per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX3N3aWZ0.short_desc": {
+          "source": "SWIFT/BIC code for the refund",
+          "message": "Codice SWIFT/BIC per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.desc": {
+          "source": "`True` marks the return as refunded.",
+          "message": "`True` contrassegna il reso come rimborsato."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.display_name": {
+          "source": "Refunded",
+          "message": "Rimborsato"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.short_desc": {
+          "source": "Whether the return has been refunded",
+          "message": "Indica se il reso è stato rimborsato"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Login utente"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Login cliente (nome utente marketplace)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
+          "source": "Create a new order return",
+          "message": "Crea un nuovo reso d'ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit `product_id` to create a new product; supply it (together with `inventory_id`) to update an existing product.",
+          "message": "Esegui l'upsert di un prodotto di inventario BaseLinker tramite `addInventoryProduct`. Ometti `product_id` per creare un nuovo prodotto; forniscilo (insieme a `inventory_id`) per aggiornare un prodotto esistente."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Add / Update Inventory Product",
+          "message": "Aggiungi / Aggiorna prodotto inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.desc": {
+          "source": "Category identifier; see `list-inventory-categories`. Scoped to the selected `inventory_id`.",
+          "message": "Identificativo della categoria; vedi `list-inventory-categories`. Limitato a `inventory_id` selezionato."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "ID categoria"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Category identifier",
+          "message": "Identificativo categoria"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXNpbg.display_name": {
+          "source": "ASIN",
+          "message": "ASIN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXNpbg.short_desc": {
+          "source": "Amazon Standard Identification Number",
+          "message": "Amazon Standard Identification Number"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXZlcmFnZV9jb3N0.display_name": {
+          "source": "Average Cost",
+          "message": "Costo medio"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXZlcmFnZV9jb3N0.short_desc": {
+          "source": "Average purchase cost",
+          "message": "Costo medio di acquisto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.desc": {
+          "source": "Map of `{\"<product_id>\": <quantity>}` where each key is the identifier of a product included in this bundle and the value is the number of pieces.",
+          "message": "Mappa di `{\"<product_id>\": <quantity>}` in cui ciascuna chiave è l'identificativo di un prodotto incluso in questo bundle e il valore è il numero di pezzi."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.display_name": {
+          "source": "Bundle Products",
+          "message": "Prodotti del bundle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.short_desc": {
+          "source": "Products included in this bundle",
+          "message": "Prodotti inclusi in questo bundle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / codice a barre"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.desc": {
+          "source": "List of additional EANs. Each entry is a hash `{\"ean\": \"<ean>\", \"quantity\": <n>}`.",
+          "message": "Elenco di EAN aggiuntivi. Ogni voce è un hash `{\"ean\": \"<ean>\", \"quantity\": <n>}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.display_name": {
+          "source": "Additional EANs",
+          "message": "EAN aggiuntivi"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.short_desc": {
+          "source": "List of additional EANs with quantities",
+          "message": "Elenco di EAN aggiuntivi con quantità"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aGVpZ2h0.display_name": {
+          "source": "Height (cm)",
+          "message": "Altezza (cm)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aGVpZ2h0.short_desc": {
+          "source": "Product height",
+          "message": "Altezza del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.desc": {
+          "source": "Map keyed by slot index (`0`-`15`) to slot value. Values: `url:<https-url>`, `data:<base64>`, or empty string to clear.",
+          "message": "Mappa indicizzata in base all'indice dello slot (`0`-`15`) al valore dello slot. Valori: `url:<https-url>`, `data:<base64>` o stringa vuota per cancellare."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "Immagini"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.short_desc": {
+          "source": "Image slots (0-15)",
+          "message": "Slot immagini (0-15)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.desc": {
+          "source": "Identifier of the inventory (catalog); see `list-inventories`.",
+          "message": "Identificatore dell'inventario (catalogo); vedere `list-inventories`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory (catalog)",
+          "message": "Inventario (catalogo) di destinazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aXNfYnVuZGxl.display_name": {
+          "source": "Is Bundle",
+          "message": "È un bundle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aXNfYnVuZGxl.short_desc": {
+          "source": "Whether this product is a bundle",
+          "message": "Indica se questo prodotto è un bundle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.desc": {
+          "source": "Map of `{\"<warehouse_id>\": \"<location>\"}`.",
+          "message": "Mappa di `{\"<warehouse_id>\": \"<location>\"}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.display_name": {
+          "source": "Locations",
+          "message": "Posizioni"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.short_desc": {
+          "source": "Per-warehouse location codes",
+          "message": "Codici di ubicazione per magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGVuZ3Ro.display_name": {
+          "source": "Length (cm)",
+          "message": "Lunghezza (cm)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGVuZ3Ro.short_desc": {
+          "source": "Product length",
+          "message": "Lunghezza del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.desc": {
+          "source": "Map of external-system product links. Keys are of the form `<type>_<id>` (where `<type>` identifies the external system, e.g. `shop`, `amazon`, and `<id>` is the BaseLinker-side identifier of that system). Each value is a hash `{\"product_id\": \"<external-id>\", \"variant_id\": \"<external-variant-id>\"}` where `variant_id` is optional.",
+          "message": "Mappa dei collegamenti ai prodotti dei sistemi esterni. Le chiavi hanno il formato `<type>_<id>` (dove `<type>` identifica il sistema esterno, ad es. `shop`, `amazon`, e `<id>` è l'identificatore lato BaseLinker di quel sistema). Ciascun valore è un hash `{\"product_id\": \"<external-id>\", \"variant_id\": \"<external-variant-id>\"}` in cui `variant_id` è facoltativo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Link"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.short_desc": {
+          "source": "External-system product links",
+          "message": "Collegamenti prodotto a sistemi esterni"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.desc": {
+          "source": "Manufacturer identifier; see `list-inventory-manufacturers`.",
+          "message": "Identificatore del produttore; vedere `list-inventory-manufacturers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.display_name": {
+          "source": "Manufacturer ID",
+          "message": "ID produttore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.short_desc": {
+          "source": "Manufacturer identifier",
+          "message": "Identificatore produttore"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Unità di gestione delle scorte"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjA.display_name": {
+          "source": "No Rating",
+          "message": "Nessuna valutazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjE.display_name": {
+          "source": "1 Star",
+          "message": "1 stella"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjI.display_name": {
+          "source": "2 Stars",
+          "message": "2 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjM.display_name": {
+          "source": "3 Stars",
+          "message": "3 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjQ.display_name": {
+          "source": "4 Stars",
+          "message": "4 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjU.display_name": {
+          "source": "5 Stars",
+          "message": "5 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.desc": {
+          "source": "Internal product rating in the range `0`-`5`, where `0` means no rating.",
+          "message": "Valutazione interna del prodotto compresa nell'intervallo `0`-`5`, dove `0` indica nessuna valutazione."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.display_name": {
+          "source": "Rating",
+          "message": "Valutazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.short_desc": {
+          "source": "Internal 0-5 rating",
+          "message": "Valutazione interna da 0 a 5"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.desc": {
+          "source": "Map of `{\"<warehouse_id>\": <qty>}` (warehouse IDs use prefixes like `bl_<id>` for BaseLinker warehouses or `shop_<id>` for shops).",
+          "message": "Mappa di `{\"<warehouse_id>\": <qty>}` (gli ID magazzino utilizzano prefissi come `bl_<id>` per i magazzini BaseLinker o `shop_<id>` per i negozi)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Stock"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.short_desc": {
+          "source": "Per-warehouse stock quantities",
+          "message": "Quantità di giacenza per magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.desc": {
+          "source": "Identifier of the parent product when this product is a variant or bundle component.",
+          "message": "Identificatore del prodotto principale quando questo prodotto è una variante o un componente di un bundle."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Product ID",
+          "message": "ID prodotto principale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.short_desc": {
+          "source": "Parent product (for bundles / variants)",
+          "message": "Prodotto principale (per bundle / varianti)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.desc": {
+          "source": "Map of `{\"<price_group_id>\": <price>}`; keys are the IDs of price groups configured in BaseLinker.",
+          "message": "Mappa di `{\"<price_group_id>\": <price>}`; le chiavi sono gli ID dei gruppi di prezzo configurati in BaseLinker."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.display_name": {
+          "source": "Prices",
+          "message": "Prezzi"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.short_desc": {
+          "source": "Per-price-group prices",
+          "message": "Prezzi per gruppo di prezzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.desc": {
+          "source": "If omitted, a new product is created. If provided, the existing product is updated in place.",
+          "message": "Se omesso, viene creato un nuovo prodotto. Se fornito, il prodotto esistente viene aggiornato direttamente."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Existing product ID (omit to create new)",
+          "message": "ID del prodotto esistente (omettere per crearne uno nuovo)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "Peso (kg)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "Peso del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2lkdGg.display_name": {
+          "source": "Width (cm)",
+          "message": "Larghezza (cm)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2lkdGg.short_desc": {
+          "source": "Product width",
+          "message": "Larghezza del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Aliquota fiscale in percentuale (ad es. `23` per il 23%). Valori speciali: `-1` = esente da imposte, `-0.02` = 0% inversione contabile, `-0.03` = 0% IVA-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Aliquota fiscale"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Percentuale imposta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.desc": {
+          "source": "List of tag names (strings) to associate with this product.",
+          "message": "Elenco di nomi di tag (stringhe) da associare a questo prodotto."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.short_desc": {
+          "source": "List of tag names",
+          "message": "Elenco di nomi di tag"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.desc": {
+          "source": "Multilang text fields keyed as `<field>|<lang>|<source_id>` (e.g. `name`, `name|en`, `description|de|0`). The special key `features` holds a hash of `{param_name: param_value}`.",
+          "message": "Campi di testo multilingua indicizzati come `<field>|<lang>|<source_id>` (ad es. `name`, `name|en`, `description|de|0`). La chiave speciale `features` contiene un hash di `{param_name: param_value}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.display_name": {
+          "source": "Text Fields",
+          "message": "Campi di testo"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.short_desc": {
+          "source": "Multilang text fields",
+          "message": "Campi di testo multilingua"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Create or update a BaseLinker inventory product",
+          "message": "Crea o aggiorna un prodotto dell'inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.desc": {
+          "source": "Create a courier package for a BaseLinker order via `createPackage`. Returns the courier package identifier on success.",
+          "message": "Crea un pacco corriere per un ordine BaseLinker tramite `createPackage`. Restituisce l'identificatore del pacco corriere in caso di successo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
+          "source": "Add Courier Package",
+          "message": "Aggiungi pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier identifier code; see `list-couriers`.",
+          "message": "Codice identificatore del corriere; vedere `list-couriers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Codice corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier to use",
+          "message": "Corriere da utilizzare"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "Courier account identifier; see `list-courier-accounts`.",
+          "message": "Identificatore dell'account del corriere; vedere `list-courier-accounts`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID account"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Courier account to charge",
+          "message": "Account del corriere a cui addebitare"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.desc": {
+          "source": "Courier-specific field values; see `list-courier-fields` for definitions. Omit or pass an empty list (`[]`) if the selected courier has no form fields.",
+          "message": "Valori dei campi specifici del corriere; vedere `list-courier-fields` per le definizioni. Omettere o passare un elenco vuoto (`[]`) se il corriere selezionato non ha campi modulo."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.display_name": {
+          "source": "Courier Fields",
+          "message": "Campi corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Courier-specific field values",
+          "message": "Valori dei campi specifici del corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to ship",
+          "message": "Ordine da spedire"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.desc": {
+          "source": "One entry per physical parcel being shipped.",
+          "message": "Una voce per ogni collo fisico spedito."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.display_name": {
+          "source": "Packages",
+          "message": "Pacchi"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.short_desc": {
+          "source": "Parcel dimensions / insurance",
+          "message": "Dimensioni / assicurazione del collo"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
+          "source": "Create a courier package (shipment)",
+          "message": "Crea un pacco corriere (spedizione)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.desc": {
+          "source": "Fires when a buyer is added to the blacklist. (Polled from `getJournalList` `log_type` 15.)",
+          "message": "Si attiva quando un acquirente viene aggiunto alla blacklist. (Eseguito tramite polling da `getJournalList` `log_type` 15.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
+          "source": "Blacklist Entry Added",
+          "message": "Voce blacklist aggiunta"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
+          "source": "Trigger when a buyer is added to the blacklist",
+          "message": "Attiva quando un acquirente viene aggiunto alla blacklist"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single BaseLinker order by its `order_id` via `getOrders`.",
+          "message": "Recupera un singolo ordine BaseLinker tramite il relativo `order_id` mediante `getOrders`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Ottieni ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "BaseLinker order identifier",
+          "message": "Identificatore ordine BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Ottieni un singolo ordine per ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.desc": {
+          "source": "Retrieve a single BaseLinker order return by its `return_id`.",
+          "message": "Recupera un singolo reso di ordine BaseLinker tramite il suo `return_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
+          "source": "Get Order Return",
+          "message": "Ottieni reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "ID reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.option.cmV0dXJuX2lk.short_desc": {
+          "source": "BaseLinker order return identifier",
+          "message": "Identificatore del reso ordine BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
+          "source": "Get a single order return by ID",
+          "message": "Ottieni un singolo reso ordine tramite ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Retrieve a single BaseLinker inventory product by its `product_id`.",
+          "message": "Recupera un singolo prodotto di inventario BaseLinker tramite il suo `product_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Get Inventory Product",
+          "message": "Ottieni prodotto inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "BaseLinker inventory identifier",
+          "message": "Identificatore inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "BaseLinker inventory product identifier",
+          "message": "Identificatore del prodotto di inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Get a single inventory product by ID",
+          "message": "Ottieni un singolo prodotto di inventario tramite ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.desc": {
+          "source": "Retrieve a shipping label for a courier package via `getLabel`. The label is returned as a base64-encoded blob (typically a PDF).",
+          "message": "Recupera un'etichetta di spedizione per un pacco corriere tramite `getLabel`. L'etichetta viene restituita come blob con codifica base64 (in genere un PDF)."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
+          "source": "Get Courier Label",
+          "message": "Ottieni etichetta corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Codice corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier issuing the label",
+          "message": "Corriere che emette l'etichetta"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.desc": {
+          "source": "Internal BaseLinker package ID. Supply either this or `package_number`.",
+          "message": "ID pacco BaseLinker interno. Fornisci questo o `package_number`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package ID",
+          "message": "ID pacco"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "BaseLinker package ID (alternative to package number)",
+          "message": "ID pacco BaseLinker (in alternativa al numero di pacco)"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.desc": {
+          "source": "Carrier-assigned tracking/package number. Supply either this or `package_id`.",
+          "message": "Numero di tracciamento/pacco assegnato dal corriere. Fornisci questo o `package_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Numero pacco"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Carrier-assigned tracking number (alternative to package ID)",
+          "message": "Numero di tracciamento assegnato dal corriere (in alternativa all'ID pacco)"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
+          "source": "Retrieve a shipping label",
+          "message": "Recupera un'etichetta di spedizione"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.desc": {
+          "source": "Delete a BaseLinker order (or list of orders) via `deleteOrders`.",
+          "message": "Elimina un ordine (o un elenco di ordini) BaseLinker tramite `deleteOrders`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
+          "source": "Delete Order",
+          "message": "Elimina ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.desc": {
+          "source": "Array of BaseLinker order IDs to delete (up to 1000 per call).",
+          "message": "Array di ID ordine BaseLinker da eliminare (fino a 1000 per chiamata)."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "ID ordini"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.short_desc": {
+          "source": "Orders to delete (max 1000 per call)",
+          "message": "Ordini da eliminare (max 1000 per chiamata)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
+          "source": "Delete one or more orders",
+          "message": "Elimina uno o più ordini"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.desc": {
+          "source": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
+          "message": "Rimuovi una riga di prodotto da un ordine BaseLinker tramite `deleteOrderProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
+          "source": "Delete Order Product",
+          "message": "Elimina prodotto ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order containing the line item",
+          "message": "Ordine contenente la voce"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfcHJvZHVjdF9pZA.display_name": {
+          "source": "Order Product ID",
+          "message": "ID prodotto ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfcHJvZHVjdF9pZA.short_desc": {
+          "source": "Line-item identifier to delete",
+          "message": "Identificatore della voce da eliminare"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
+          "source": "Remove a product line from an order",
+          "message": "Rimuovi una riga di prodotto da un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.desc": {
+          "source": "Delete a courier package (shipment) via `deleteCourierPackage`.",
+          "message": "Elimina un pacco corriere (spedizione) tramite `deleteCourierPackage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
+          "source": "Delete Courier Package",
+          "message": "Elimina pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Codice corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier that owns the package",
+          "message": "Corriere proprietario del pacco"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.desc": {
+          "source": "When `True`, removes the package from BaseLinker even if the carrier refuses the cancellation.",
+          "message": "Quando `True`, rimuove il pacco da BaseLinker anche se il corriere rifiuta l'annullamento."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.display_name": {
+          "source": "Force Delete",
+          "message": "Forza eliminazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.short_desc": {
+          "source": "Delete locally even if the carrier call fails",
+          "message": "Elimina localmente anche se la chiamata al corriere non riesce"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.desc": {
+          "source": "Internal BaseLinker package ID. Supply either this or `package_number`.",
+          "message": "ID pacco BaseLinker interno. Fornisci questo o `package_number`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package ID",
+          "message": "ID pacco"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "BaseLinker package ID (alternative to package number)",
+          "message": "ID pacco BaseLinker (in alternativa al numero di pacco)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.desc": {
+          "source": "Carrier-assigned tracking/package number. Supply either this or `package_id`.",
+          "message": "Numero di tracciamento/pacco assegnato dal corriere. Fornisci questo o `package_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Numero pacco"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Carrier-assigned tracking number (alternative to package ID)",
+          "message": "Numero di tracciamento assegnato dal corriere (in alternativa all'ID pacco)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
+          "source": "Delete a courier package",
+          "message": "Elimina un pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
+          "message": "Elimina un prodotto di inventario BaseLinker tramite `deleteInventoryProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Delete Inventory Product",
+          "message": "Elimina prodotto inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Inventory containing the product",
+          "message": "Inventario contenente il prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product to delete",
+          "message": "Prodotto da eliminare"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Delete a BaseLinker inventory product",
+          "message": "Elimina un prodotto di inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.desc": {
+          "source": "Fires when delivery data on an order is edited. (Polled from `getJournalList` `log_type` 11.)",
+          "message": "Si attiva quando i dati di consegna di un ordine vengono modificati. (Interrogato da `getJournalList` `log_type` 11.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
+          "source": "Delivery Data Edited",
+          "message": "Dati di consegna modificati"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when delivery data on an order is edited",
+          "message": "Attiva quando i dati di consegna di un ordine vengono modificati"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.desc": {
+          "source": "Fires when an invoice is deleted. (Polled from `getJournalList` `log_type` 19.)",
+          "message": "Si attiva quando una fattura viene eliminata. (Interrogato da `getJournalList` `log_type` 19.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
+          "source": "Invoice Deleted",
+          "message": "Fattura eliminata"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when an invoice is deleted",
+          "message": "Attiva quando una fattura viene eliminata"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.desc": {
+          "source": "Fires when an invoice is edited. (Polled from `getJournalList` `log_type` 21.)",
+          "message": "Si attiva quando una fattura viene modificata. (Interrogato da `getJournalList` `log_type` 21.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
+          "source": "Invoice Edited",
+          "message": "Fattura modificata"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when an invoice is edited",
+          "message": "Attiva quando una fattura viene modificata"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.desc": {
+          "source": "Fires when an invoice is issued. (Polled from `getJournalList` `log_type` 7.)",
+          "message": "Si attiva quando viene emessa una fattura. (Interrogato da `getJournalList` `log_type` 7.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
+          "source": "Invoice Issued",
+          "message": "Fattura emessa"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
+          "source": "Trigger when an invoice is issued",
+          "message": "Attiva quando viene emessa una fattura"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.desc": {
+          "source": "Fires when an order is copied. (Polled from `getJournalList` `log_type` 17.)",
+          "message": "Si attiva quando un ordine viene copiato. (Interrogato da `getJournalList` `log_type` 17.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
+          "source": "Order Copied",
+          "message": "Ordine copiato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
+          "source": "Trigger when an order is copied",
+          "message": "Attiva quando un ordine viene copiato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created in BaseLinker. (Polled from `getJournalList` `log_type` 1.)",
+          "message": "Si attiva quando viene creato un nuovo ordine in BaseLinker. (Interrogato da `getJournalList` `log_type` 1.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Order Created",
+          "message": "Ordine creato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "Attiva quando viene creato un nuovo ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.desc": {
+          "source": "Fires when an order is downloaded from a connected shop. (Polled from `getJournalList` `log_type` 2.)",
+          "message": "Si attiva quando un ordine viene scaricato da un negozio connesso. (Interrogato da `getJournalList` `log_type` 2.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
+          "source": "Order Downloaded",
+          "message": "Ordine scaricato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
+          "source": "Trigger when an order is downloaded from a shop",
+          "message": "Attiva quando un ordine viene scaricato da un negozio"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.desc": {
+          "source": "Fires when general order data is edited. (Polled from `getJournalList` `log_type` 16.)",
+          "message": "Si attiva quando i dati generali dell'ordine vengono modificati. (Interrogato da `getJournalList` `log_type` 16.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
+          "source": "Order Data Edited",
+          "message": "Dati ordine modificati"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when general order data is edited",
+          "message": "Si attiva quando i dati generali dell'ordine vengono modificati"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.desc": {
+          "source": "Fires when an order is split. (Polled from `getJournalList` `log_type` 6.)",
+          "message": "Si attiva quando un ordine viene suddiviso. (Interrogato da `getJournalList` `log_type` 6.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
+          "source": "Order Split",
+          "message": "Ordine suddiviso"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
+          "source": "Trigger when an order is split",
+          "message": "Si attiva quando un ordine viene suddiviso"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Fires when an order's status changes. (Polled from `getJournalList` `log_type` 18.)",
+          "message": "Si attiva quando lo stato di un ordine cambia. (Interrogato da `getJournalList` `log_type` 18.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Order Status Changed",
+          "message": "Stato dell'ordine modificato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Trigger when the status of an order changes",
+          "message": "Si attiva quando lo stato di un ordine cambia"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.desc": {
+          "source": "Fires when an order is marked paid. (Polled from `getJournalList` `log_type` 3.)",
+          "message": "Si attiva quando un ordine viene contrassegnato come pagato. (Interrogato da `getJournalList` `log_type` 3.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
+          "source": "Order Paid",
+          "message": "Ordine pagato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
+          "source": "Trigger when an order is paid",
+          "message": "Si attiva quando un ordine viene pagato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.desc": {
+          "source": "Fires when a product is added to an order. (Polled from `getJournalList` `log_type` 12.)",
+          "message": "Si attiva quando un prodotto viene aggiunto a un ordine. (Interrogato da `getJournalList` `log_type` 12.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
+          "source": "Order Product Added",
+          "message": "Prodotto dell'ordine aggiunto"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
+          "source": "Trigger when a product is added to an order",
+          "message": "Si attiva quando un prodotto viene aggiunto a un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.desc": {
+          "source": "Fires when a product line on an order is edited. (Polled from `getJournalList` `log_type` 13.)",
+          "message": "Si attiva quando una riga di prodotto in un ordine viene modificata. (Interrogato da `getJournalList` `log_type` 13.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
+          "source": "Order Product Edited",
+          "message": "Prodotto dell'ordine modificato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when an order product is edited",
+          "message": "Si attiva quando un prodotto dell'ordine viene modificato"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.desc": {
+          "source": "Fires when a product line is removed from an order. (Polled from `getJournalList` `log_type` 14.)",
+          "message": "Si attiva quando una riga di prodotto viene rimossa da un ordine. (Interrogato da `getJournalList` `log_type` 14.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
+          "source": "Order Product Removed",
+          "message": "Prodotto dell'ordine rimosso"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
+          "source": "Trigger when a product is removed from an order",
+          "message": "Si attiva quando un prodotto viene rimosso da un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.desc": {
+          "source": "Fires when an order is removed. (Polled from `getJournalList` `log_type` 4.)",
+          "message": "Si attiva quando un ordine viene rimosso. (Interrogato da `getJournalList` `log_type` 4.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
+          "source": "Order Removed",
+          "message": "Ordine rimosso"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
+          "source": "Trigger when an order is removed",
+          "message": "Si attiva quando un ordine viene rimosso"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.desc": {
+          "source": "Fires when two or more orders are merged. (Polled from `getJournalList` `log_type` 5.)",
+          "message": "Si attiva quando due o più ordini vengono uniti. (Interrogato da `getJournalList` `log_type` 5.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
+          "source": "Orders Merged",
+          "message": "Ordini uniti"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
+          "source": "Trigger when two or more orders are merged",
+          "message": "Si attiva quando due o più ordini vengono uniti"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.desc": {
+          "source": "List the courier-account credentials configured for a given courier via `getCourierAccounts`.",
+          "message": "Elenca le credenziali dell'account corriere configurate per un determinato corriere tramite `getCourierAccounts`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
+          "source": "List Courier Accounts",
+          "message": "Elenca account corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
+          "source": "List courier-account credentials",
+          "message": "Elenca le credenziali dell'account corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.desc": {
+          "source": "List the custom-field schema (required/optional inputs) for a given courier via `getCourierFields`. Useful when programmatically constructing `createPackage` payloads.",
+          "message": "Elenca lo schema dei campi personalizzati (input obbligatori/opzionali) per un determinato corriere tramite `getCourierFields`. Utile quando si creano programmaticamente payload `createPackage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
+          "source": "List Courier Fields",
+          "message": "Elenca campi corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
+          "source": "List the custom-field schema for a courier",
+          "message": "Elenca lo schema dei campi personalizzati per un corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.desc": {
+          "source": "List available services (product/tier options) for a given courier via `getCourierServices`.",
+          "message": "Elenca i servizi disponibili (opzioni di prodotto/livello) per un determinato corriere tramite `getCourierServices`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
+          "source": "List Courier Services",
+          "message": "Elenca servizi corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
+          "source": "List services for a courier",
+          "message": "Elenca i servizi per un corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "List the couriers configured for this BaseLinker account via `getCouriersList`.",
+          "message": "Elenca i corrieri configurati per questo account BaseLinker tramite `getCouriersList`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Elenca corrieri"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List configured couriers",
+          "message": "Elenca i corrieri configurati"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.desc": {
+          "source": "List all BaseLinker inventories (catalogs) via `getInventories`.",
+          "message": "Elenca tutti gli inventari (cataloghi) BaseLinker tramite `getInventories`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
+          "source": "List Inventories",
+          "message": "Elenca inventari"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
+          "source": "List BaseLinker inventories (catalogs)",
+          "message": "Elenca inventari (cataloghi) BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.desc": {
+          "source": "List BaseLinker inventory categories via `getInventoryCategories`. When `inventory_id` is supplied, results are scoped to that catalog.",
+          "message": "Elenca le categorie di inventario BaseLinker tramite `getInventoryCategories`. Quando viene fornito `inventory_id`, i risultati sono limitati a quel catalogo."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
+          "source": "List Inventory Categories",
+          "message": "Elenca categorie inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
+          "source": "List inventory categories",
+          "message": "Elenca categorie inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.desc": {
+          "source": "List BaseLinker inventory manufacturers via `getInventoryManufacturers`.",
+          "message": "Elenca i produttori dell'inventario BaseLinker tramite `getInventoryManufacturers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
+          "source": "List Inventory Manufacturers",
+          "message": "Elenca produttori inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
+          "source": "List inventory manufacturers",
+          "message": "Elenca produttori inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.desc": {
+          "source": "List BaseLinker inventory product stock levels via `getInventoryProductsStock`. Each row contains a `product_id` keyed hash of warehouse → quantity.",
+          "message": "Elenca i livelli di scorte dei prodotti dell'inventario BaseLinker tramite `getInventoryProductsStock`. Ogni riga contiene un hash con chiave `product_id` di magazzino → quantità."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
+          "source": "List Inventory Stock",
+          "message": "Elenca giacenze inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
+          "source": "List stock levels for inventory products",
+          "message": "Elenca i livelli di scorte per i prodotti dell'inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.desc": {
+          "source": "List BaseLinker inventory product prices via `getInventoryProductsPrices`. Each row contains a `product_id` keyed hash of price-group → price.",
+          "message": "Elenca i prezzi dei prodotti dell'inventario BaseLinker tramite `getInventoryProductsPrices`. Ogni riga contiene un hash con chiave `product_id` di gruppo di prezzo → prezzo."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
+          "source": "List Inventory Prices",
+          "message": "Elenca prezzi inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
+          "source": "List prices for inventory products",
+          "message": "Elenca i prezzi per i prodotti dell'inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.desc": {
+          "source": "List products in a BaseLinker inventory via `getInventoryProductsList`. Supports page-number pagination and filters by category, EAN, SKU, name, price range, and stock range.",
+          "message": "Elenca i prodotti in un inventario BaseLinker tramite `getInventoryProductsList`. Supporta l'impaginazione per numero di pagina e filtri per categoria, EAN, SKU, nome, intervallo di prezzo e intervallo di scorte."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
+          "source": "List Inventory Products",
+          "message": "Elenca prodotti inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
+          "source": "List products in a BaseLinker inventory",
+          "message": "Elenca i prodotti in un inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.desc": {
+          "source": "List courier packages (shipments) associated with a BaseLinker order via `getOrderPackages`.",
+          "message": "Elenca i colli del corriere (spedizioni) associati a un ordine BaseLinker tramite `getOrderPackages`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
+          "source": "List Order Packages",
+          "message": "Elenca colli ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
+          "source": "List courier packages for an order",
+          "message": "Elenca i colli del corriere per un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.desc": {
+          "source": "Returns a stream of BaseLinker order returns via `getOrderReturns`. Supports cursor pagination through `id_from` and filters by status and confirmation date.",
+          "message": "Restituisce un flusso di resi di ordini BaseLinker tramite `getOrderReturns`. Supporta l'impaginazione basata su cursore tramite `id_from` e filtri per stato e data di conferma."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
+          "source": "List Order Returns",
+          "message": "Elenca resi ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
+          "source": "List BaseLinker order returns",
+          "message": "Elenca i resi degli ordini BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.desc": {
+          "source": "List the order sources (marketplaces/shops) configured in BaseLinker via `getOrderSources`.",
+          "message": "Elenca le origini degli ordini (marketplace/negozi) configurate in BaseLinker tramite `getOrderSources`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
+          "source": "List Order Sources",
+          "message": "Elenca origini ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
+          "source": "List BaseLinker order sources",
+          "message": "Elenca le origini degli ordini BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.desc": {
+          "source": "List the order statuses configured in BaseLinker via `getOrderStatusList`.",
+          "message": "Elenca gli stati degli ordini configurati in BaseLinker tramite `getOrderStatusList`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
+          "source": "List Order Statuses",
+          "message": "Elenca stati ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
+          "source": "List BaseLinker order statuses",
+          "message": "Elenca gli stati degli ordini di BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Returns a stream of BaseLinker orders via `getOrders`. Supports cursor pagination through `id_from`/`date_from` and filters by status, email, and source channel. Page size is fixed by BaseLinker at 100 orders per call.",
+          "message": "Restituisce uno stream di ordini di BaseLinker tramite `getOrders`. Supporta la paginazione basata su cursore tramite `id_from`/`date_from` e filtra per stato, email e canale di origine. La dimensione della pagina è fissata da BaseLinker a 100 ordini per chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Elenca ordini"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List BaseLinker orders with cursor pagination",
+          "message": "Elenca ordini di BaseLinker con paginazione basata su cursore"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **BaseLinker (Base.com)** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effettua una chiamata API HTTP / REST personalizzata a **BaseLinker (Base.com)** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni di primo livello in questa app."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to BaseLinker (Base.com)",
+          "message": "Effettua una chiamata API personalizzata a BaseLinker (Base.com)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.desc": {
+          "source": "Update one or more fields on an existing BaseLinker order via `setOrderFields`. Only supplied fields are modified.",
+          "message": "Aggiorna uno o più campi di un ordine BaseLinker esistente tramite `setOrderFields`. Vengono modificati solo i campi forniti."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
+          "source": "Set Order Fields",
+          "message": "Imposta campi ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}`. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Mappa di `{\"<extra_field_id>\": <value>}`. I campi di testo accettano stringhe; i campi file accettano un hash `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` in cui il file codificato in base64 non deve superare i 2 MB."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Campi extra personalizzati"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Mappa dell'ID del campo extra personalizzato al valore"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Commenti amministratore"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Commenti amministratore interni"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Codice paese ISO 3166-1 alpha-2 (es. `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Codice paese di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Azienda di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Recipient company name",
+          "message": "Nome dell'azienda del destinatario"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Città di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Indirizzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Nome completo per la consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Recipient full name",
+          "message": "Nome completo del destinatario"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Metodo di pubblicazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Shipping method name",
+          "message": "Nome del metodo di spedizione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Stato/Provincia di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.display_name": {
+          "source": "Delivery Point City",
+          "message": "Città del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.short_desc": {
+          "source": "Pickup-point city",
+          "message": "Città del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.display_name": {
+          "source": "Delivery Point Address",
+          "message": "Indirizzo del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.short_desc": {
+          "source": "Pickup-point street address",
+          "message": "Indirizzo stradale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.desc": {
+          "source": "Identifier of the pickup point / parcel locker (e.g. InPost locker code).",
+          "message": "Identificatore del punto di ritiro / locker per pacchi (es. codice locker InPost)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.display_name": {
+          "source": "Delivery Point ID",
+          "message": "ID del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.short_desc": {
+          "source": "Pickup-point identifier",
+          "message": "Identificatore del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.display_name": {
+          "source": "Delivery Point Name",
+          "message": "Nome del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.short_desc": {
+          "source": "Pickup-point display name",
+          "message": "Nome visualizzato del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Point Postcode",
+          "message": "Codice postale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.short_desc": {
+          "source": "Pickup-point postal code",
+          "message": "Codice postale del punto di ritiro"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Codice postale di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Prezzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Shipping cost (gross)",
+          "message": "Costo di spedizione (lordo)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Indirizzo email del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Campo extra 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Campo extra 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9hZGRyZXNz.display_name": {
+          "source": "Invoice Address",
+          "message": "Indirizzo di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9hZGRyZXNz.short_desc": {
+          "source": "Billing street address",
+          "message": "Indirizzo stradale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jaXR5.display_name": {
+          "source": "Invoice City",
+          "message": "Città di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jaXR5.short_desc": {
+          "source": "Billing city",
+          "message": "Città di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb21wYW55.display_name": {
+          "source": "Invoice Company",
+          "message": "Azienda di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb21wYW55.short_desc": {
+          "source": "Billing company name",
+          "message": "Nome dell'azienda di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.display_name": {
+          "source": "Invoice Country Code",
+          "message": "Codice paese di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.short_desc": {
+          "source": "Billing 2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9mdWxsbmFtZQ.display_name": {
+          "source": "Invoice Full Name",
+          "message": "Nome completo di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9mdWxsbmFtZQ.short_desc": {
+          "source": "Billing recipient full name",
+          "message": "Nome completo del destinatario di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9uaXA.display_name": {
+          "source": "Invoice Tax ID",
+          "message": "ID fiscale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9uaXA.short_desc": {
+          "source": "NIP / VAT / tax identifier",
+          "message": "NIP / P. IVA / identificatore fiscale"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9wb3N0Y29kZQ.display_name": {
+          "source": "Invoice Postcode",
+          "message": "CAP di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9wb3N0Y29kZQ.short_desc": {
+          "source": "Billing postal code",
+          "message": "Codice postale di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9zdGF0ZQ.display_name": {
+          "source": "Invoice State/Province",
+          "message": "Stato/Provincia di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9zdGF0ZQ.short_desc": {
+          "source": "Billing state or province",
+          "message": "Stato o provincia di fatturazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.desc": {
+          "source": "Identifier of the order to update.",
+          "message": "Identificatore dell'ordine da aggiornare."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to update",
+          "message": "Ordine da aggiornare"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjA.display_name": {
+          "source": "No Star",
+          "message": "Nessuna stella"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjE.display_name": {
+          "source": "1 Star",
+          "message": "1 stella"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjI.display_name": {
+          "source": "2 Stars",
+          "message": "2 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjM.display_name": {
+          "source": "3 Stars",
+          "message": "3 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjQ.display_name": {
+          "source": "4 Stars",
+          "message": "4 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjU.display_name": {
+          "source": "5 Stars",
+          "message": "5 stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.desc": {
+          "source": "Star rating in the range `0`-`5`, where `0` means no star.",
+          "message": "Valutazione a stelle compresa nell'intervallo `0`-`5`, dove `0` indica nessuna stella."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.display_name": {
+          "source": "Star Rating",
+          "message": "Valutazione a stelle"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.short_desc": {
+          "source": "Star rating (0-5)",
+          "message": "Valutazione a stelle (0-5)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "Metodo di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method description",
+          "message": "Descrizione del metodo di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.desc": {
+          "source": "`True` marks the order as cash-on-delivery.",
+          "message": "`True` contrassegna l'ordine come pagamento in contrassegno."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.display_name": {
+          "source": "Cash On Delivery",
+          "message": "Contrassegno"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.short_desc": {
+          "source": "Whether this is a COD order",
+          "message": "Indica se si tratta di un ordine in contrassegno"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.allowed-value.aW50OjA.display_name": {
+          "source": "Not Packed",
+          "message": "Non imballato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.allowed-value.aW50OjE.display_name": {
+          "source": "Packed",
+          "message": "Imballato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.desc": {
+          "source": "Product-packing workflow flag. `0` = not all products packed; `1` = all products packed.",
+          "message": "Flag del flusso di lavoro per l'imballaggio dei prodotti. `0` = non tutti i prodotti sono imballati; `1` = tutti i prodotti sono imballati."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.display_name": {
+          "source": "Pack State",
+          "message": "Stato imballaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.short_desc": {
+          "source": "Product-packing workflow flag",
+          "message": "Flag del flusso di lavoro per l'imballaggio dei prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Numero di telefono del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.allowed-value.aW50OjA.display_name": {
+          "source": "Not Collected",
+          "message": "Non prelevato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.allowed-value.aW50OjE.display_name": {
+          "source": "Collected",
+          "message": "Prelevato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.desc": {
+          "source": "Product-collection (picking) workflow flag. `0` = not all products collected; `1` = all products collected.",
+          "message": "Flag del flusso di lavoro per il prelievo dei prodotti (picking). `0` = non tutti i prodotti sono stati prelevati; `1` = tutti i prodotti sono stati prelevati."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.display_name": {
+          "source": "Pick State",
+          "message": "Stato prelievo"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.short_desc": {
+          "source": "Product-collection workflow flag",
+          "message": "Flag del flusso di lavoro per il prelievo dei prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.d2FudF9pbnZvaWNl.display_name": {
+          "source": "Wants Invoice",
+          "message": "Richiede fattura"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.d2FudF9pbnZvaWNl.short_desc": {
+          "source": "Whether the customer requested an invoice",
+          "message": "Indica se il cliente ha richiesto una fattura"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9jb21tZW50cw.display_name": {
+          "source": "Customer Comments",
+          "message": "Commenti del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9jb21tZW50cw.short_desc": {
+          "source": "Free-text comments from the buyer",
+          "message": "Commenti in testo libero dell'acquirente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Login utente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Login cliente (nome utente marketplace)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
+          "source": "Update fields on an existing order",
+          "message": "Aggiorna i campi di un ordine esistente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.desc": {
+          "source": "Record a payment for a BaseLinker order via `setOrderPayment`.",
+          "message": "Registra un pagamento per un ordine BaseLinker tramite `setOrderPayment`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
+          "source": "Set Order Payment",
+          "message": "Imposta pagamento ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.ZXh0ZXJuYWxfcGF5bWVudF9pZA.display_name": {
+          "source": "External Payment ID",
+          "message": "ID pagamento esterno"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.ZXh0ZXJuYWxfcGF5bWVudF9pZA.short_desc": {
+          "source": "Identifier assigned by the payment gateway",
+          "message": "Identificatore assegnato dal gateway di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order whose payment is being recorded",
+          "message": "Ordine di cui si sta registrando il pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9jb21tZW50.display_name": {
+          "source": "Payment Comment",
+          "message": "Commento pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9jb21tZW50.short_desc": {
+          "source": "Free-text payment note",
+          "message": "Nota di pagamento a testo libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.desc": {
+          "source": "When the payment was received. Sent to the BaseLinker `setOrderPayment` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Data e ora di ricezione del pagamento. Inviato all'API BaseLinker `setOrderPayment` in secondi Unix (la conversione viene eseguita all'interno di `doRequestImpl()`); il campo è esposto come data in modo che l'interfaccia utente possa visualizzare un selettore di data/ora anziché richiedere all'utente un valore numerico timestamp epoch."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.display_name": {
+          "source": "Payment Date",
+          "message": "Data di pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.short_desc": {
+          "source": "Payment timestamp",
+          "message": "Timestamp pagamento"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.desc": {
+          "source": "Cumulative amount paid so far in the order's currency.",
+          "message": "Importo cumulativo pagato finora nella valuta dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.display_name": {
+          "source": "Amount Paid",
+          "message": "Importo pagato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.short_desc": {
+          "source": "Total amount paid (order currency)",
+          "message": "Importo totale pagato (valuta dell'ordine)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
+          "source": "Record a payment against an order",
+          "message": "Registra un pagamento a fronte di un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.desc": {
+          "source": "Update fields on a specific product line of a BaseLinker order via `setOrderProductFields`.",
+          "message": "Aggiorna i campi di una riga di prodotto specifica di un ordine BaseLinker tramite `setOrderProductFields`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
+          "source": "Set Order Product Fields",
+          "message": "Imposta campi prodotto ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.desc": {
+          "source": "Comma-separated list of variant attributes, e.g. `Size: L, Color: Red`.",
+          "message": "Elenco separato da virgole di attributi della variante, ad es. `Size: L, Color: Red`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Attributi"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Free-text variant attributes",
+          "message": "Attributi della variante in testo libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.desc": {
+          "source": "Marketplace auction or listing ID (eBay, Allegro, Amazon, etc.).",
+          "message": "ID dell'asta o dell'inserzione sul marketplace (eBay, Allegro, Amazon, ecc.)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.display_name": {
+          "source": "Marketplace Listing ID",
+          "message": "ID inserzione marketplace"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.short_desc": {
+          "source": "Marketplace auction/listing ID",
+          "message": "ID asta/inserzione marketplace"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.desc": {
+          "source": "Product EAN (barcode).",
+          "message": "EAN del prodotto (codice a barre)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / codice a barre"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order containing the line item",
+          "message": "Ordine contenente la voce"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfcHJvZHVjdF9pZA.display_name": {
+          "source": "Order Product ID",
+          "message": "ID prodotto ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfcHJvZHVjdF9pZA.short_desc": {
+          "source": "Line-item identifier to update",
+          "message": "Identificatore della riga da aggiornare"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.desc": {
+          "source": "Warehouse location code.",
+          "message": "Codice di ubicazione in magazzino."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.display_name": {
+          "source": "Warehouse Location",
+          "message": "Ubicazione in magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.short_desc": {
+          "source": "Storage location identifier",
+          "message": "Identificatore dell'ubicazione di stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.desc": {
+          "source": "Product name shown on the order line.",
+          "message": "Nome del prodotto mostrato nella riga dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.display_name": {
+          "source": "Product Name",
+          "message": "Nome prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.short_desc": {
+          "source": "Name of the product",
+          "message": "Nome del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.desc": {
+          "source": "Product SKU.",
+          "message": "SKU del prodotto."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Unità di gestione delle scorte"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOmRi.display_name": {
+          "source": "BaseLinker Inventory",
+          "message": "Inventario BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOnNob3A.display_name": {
+          "source": "External Shop",
+          "message": "Negozio esterno"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOndhcmVob3VzZQ.display_name": {
+          "source": "Legacy Warehouse",
+          "message": "Magazzino legacy"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.desc": {
+          "source": "The storage the product originates from. One of `db`, `shop`, `warehouse`.",
+          "message": "Lo stoccaggio da cui proviene il prodotto. Uno tra `db`, `shop`, `warehouse`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.display_name": {
+          "source": "Storage",
+          "message": "Stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.short_desc": {
+          "source": "Storage identifier for product origin",
+          "message": "Identificatore dello stoccaggio per l'origine del prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.desc": {
+          "source": "Identifier of the storage (inventory ID for `db`, shop ID for `shop`, warehouse ID for `warehouse`).",
+          "message": "Identificatore dello stoccaggio (ID inventario per `db`, ID negozio per `shop`, ID magazzino per `warehouse`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.display_name": {
+          "source": "Storage ID",
+          "message": "ID stoccaggio"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.short_desc": {
+          "source": "Storage-specific ID (inventory/shop/warehouse ID)",
+          "message": "ID specifico dello stoccaggio (ID inventario/negozio/magazzino)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.desc": {
+          "source": "Unit price (gross, including tax).",
+          "message": "Prezzo unitario (lordo, imposte incluse)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.display_name": {
+          "source": "Price (Gross)",
+          "message": "Prezzo (lordo)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.short_desc": {
+          "source": "Unit price including tax",
+          "message": "Prezzo unitario imposte incluse"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Product identifier inside the chosen `storage`.",
+          "message": "Identificativo del prodotto all'interno di `storage` scelto."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID prodotto"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product identifier in the chosen storage",
+          "message": "Identificativo del prodotto nello stoccaggio scelto"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.desc": {
+          "source": "Quantity of the product on the order line.",
+          "message": "Quantità del prodotto sulla riga dell'ordine."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Quantità"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Numero di unità"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.desc": {
+          "source": "BaseLinker warehouse ID from which this item is shipped.",
+          "message": "ID del magazzino BaseLinker da cui viene spedito questo articolo."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.display_name": {
+          "source": "Warehouse ID",
+          "message": "ID magazzino"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.short_desc": {
+          "source": "BaseLinker warehouse ID",
+          "message": "ID magazzino BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.desc": {
+          "source": "Weight per unit in kilograms.",
+          "message": "Peso per unità in chilogrammi."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Peso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.short_desc": {
+          "source": "Unit weight (kg)",
+          "message": "Peso unitario (kg)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Aliquota fiscale in percentuale (ad es. `23` per il 23%). Valori speciali: `-1` = esente da imposte, `-0.02` = 0% inversione contabile, `-0.03` = 0% IVA-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Aliquota fiscale"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Percentuale imposta"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.desc": {
+          "source": "Optional product-variant identifier.",
+          "message": "Identificativo opzionale della variante del prodotto."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variante"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Variant identifier",
+          "message": "Identificativo variante"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
+          "source": "Update a product line on an order",
+          "message": "Aggiorna una riga di prodotto di un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.desc": {
+          "source": "Update one or more fields on a BaseLinker order return via `setOrderReturnFields`.",
+          "message": "Aggiorna uno o più campi di un reso ordine BaseLinker tramite `setOrderReturnFields`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
+          "source": "Set Order Return Fields",
+          "message": "Imposta campi reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra fields configured in BaseLinker. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Mappa di `{\"<extra_field_id>\": <value>}` per i campi personalizzati aggiuntivi del reso d'ordine configurati in BaseLinker. I campi di testo accettano stringhe; i campi file accettano un hash `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` in cui il file con codifica base64 non deve superare 2 MB."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Campi extra personalizzati"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Mappa dell'ID del campo extra personalizzato al valore"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Commenti amministratore"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Commenti amministratore interni"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Codice paese ISO 3166-1 alpha-2 (es. `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Codice paese di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "Codice paese ISO a 2 lettere"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Azienda di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Sender company name",
+          "message": "Nome dell'azienda del mittente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Città di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Città"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Indirizzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Indirizzo"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Nome completo per la consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Sender full name",
+          "message": "Nome completo del mittente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Stato/Provincia di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stato o provincia"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Codice postale di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Codice postale"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Prezzo di consegna"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Return shipping cost",
+          "message": "Costo di spedizione del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Indirizzo email del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Campo extra 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Campo extra 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Campo extra a formato libero"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Numero di telefono del cliente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "ID reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return to update",
+          "message": "Reso da aggiornare"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Login utente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Login cliente (nome utente marketplace)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
+          "source": "Update fields on an existing order return",
+          "message": "Aggiorna i campi di un reso ordine esistente"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.desc": {
+          "source": "Record a refund on a BaseLinker order return via `setOrderReturnRefund`.",
+          "message": "Registra un rimborso su un reso ordine BaseLinker tramite `setOrderReturnRefund`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
+          "source": "Set Order Return Refund",
+          "message": "Imposta rimborso reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.ZXh0ZXJuYWxfcmVmdW5kX2lk.display_name": {
+          "source": "External Refund ID",
+          "message": "ID rimborso esterno"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.ZXh0ZXJuYWxfcmVmdW5kX2lk.short_desc": {
+          "source": "Identifier assigned by the refund provider",
+          "message": "Identificatore assegnato dal provider del rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.desc": {
+          "source": "Cumulative refunded amount in the return's currency. Replaces the current refund value (not added to it).",
+          "message": "Importo rimborsato cumulativo nella valuta del reso. Sostituisce il valore del rimborso attuale (non viene sommato ad esso)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.display_name": {
+          "source": "Refund Amount",
+          "message": "Importo del rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.short_desc": {
+          "source": "Total amount refunded (return currency)",
+          "message": "Importo totale rimborsato (valuta del reso)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "ID reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return being refunded",
+          "message": "Reso per cui viene emesso il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.desc": {
+          "source": "Short free-text comment attached to the refund (max 50 characters).",
+          "message": "Breve commento a testo libero allegato al rimborso (massimo 50 caratteri)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.display_name": {
+          "source": "Refund Comment",
+          "message": "Commento rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.short_desc": {
+          "source": "Short comment for the refund",
+          "message": "Breve commento per il rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.desc": {
+          "source": "When the refund was issued. Sent to the BaseLinker `setOrderReturnRefund` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Data e ora di emissione del rimborso. Inviato all'API BaseLinker `setOrderReturnRefund` in secondi Unix (la conversione viene eseguita all'interno di `doRequestImpl()`); il campo è esposto come data in modo che l'interfaccia utente possa visualizzare un selettore di data/ora anziché richiedere all'utente un valore numerico timestamp epoch."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.display_name": {
+          "source": "Refund Date",
+          "message": "Data rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.short_desc": {
+          "source": "Refund timestamp",
+          "message": "Timestamp rimborso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
+          "source": "Record a refund against an order return",
+          "message": "Registra un rimborso a fronte di un reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.desc": {
+          "source": "Change the status of a BaseLinker order return via `setOrderReturnStatus`.",
+          "message": "Modifica lo stato di un reso ordine BaseLinker tramite `setOrderReturnStatus`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
+          "source": "Set Order Return Status",
+          "message": "Imposta stato reso ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.desc": {
+          "source": "Target return status identifier; values are drawn from BaseLinker's `getOrderReturnStatusList` endpoint and surfaced via the `order_return_statuses` reference data.",
+          "message": "Identificatore dello stato di destinazione del reso; i valori vengono recuperati dall'endpoint `getOrderReturnStatusList` di BaseLinker ed esposti tramite i dati di riferimento `order_return_statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.display_name": {
+          "source": "Return Status ID",
+          "message": "ID stato del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Target return status",
+          "message": "Stato di destinazione del reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "ID reso"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return to transition",
+          "message": "Reso di cui modificare lo stato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
+          "source": "Change the status of an order return",
+          "message": "Modifica lo stato del reso di un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.desc": {
+          "source": "Change the status of a BaseLinker order via `setOrderStatus`. The new `status_id` must be one of the statuses configured in BaseLinker.",
+          "message": "Modifica lo stato di un ordine BaseLinker tramite `setOrderStatus`. Il nuovo `status_id` deve essere uno degli stati configurati in BaseLinker."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
+          "source": "Set Order Status",
+          "message": "Imposta stato ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to transition",
+          "message": "Ordine di cui modificare lo stato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.desc": {
+          "source": "New order status identifier; see `list-order-statuses`.",
+          "message": "Nuovo identificatore di stato dell'ordine; vedi `list-order-statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stato"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Target order status",
+          "message": "Stato ordine di destinazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
+          "source": "Change the status of an order",
+          "message": "Modifica lo stato di un ordine"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.desc": {
+          "source": "Fires when a courier package is created. (Polled from `getJournalList` `log_type` 9.)",
+          "message": "Si attiva quando viene creato un pacco corriere. (Recuperato da `getJournalList` `log_type` 9.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
+          "source": "Package Created",
+          "message": "Pacco creato"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a courier package is created",
+          "message": "Attiva quando viene creato un pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.desc": {
+          "source": "Fires when a courier package is deleted. (Polled from `getJournalList` `log_type` 10.)",
+          "message": "Si attiva quando viene eliminato un pacco corriere. (Recuperato da `getJournalList` `log_type` 10.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
+          "source": "Package Deleted",
+          "message": "Pacco eliminato"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when a courier package is deleted",
+          "message": "Attiva quando viene eliminato un pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.desc": {
+          "source": "Fires when a courier package's status changes. (Polled from `getJournalList` `log_type` 22.)",
+          "message": "Si attiva quando cambia lo stato di un pacco corriere. (Recuperato da `getJournalList` `log_type` 22.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
+          "source": "Package Status Changed",
+          "message": "Stato pacco modificato"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {
+          "source": "Trigger when a courier package status changes",
+          "message": "Attiva quando cambia lo stato di un pacco corriere"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.desc": {
+          "source": "Fires when a receipt is deleted. (Polled from `getJournalList` `log_type` 20.)",
+          "message": "Si attiva quando viene eliminata una ricevuta. (Recuperato da `getJournalList` `log_type` 20.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
+          "source": "Receipt Deleted",
+          "message": "Ricevuta eliminata"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
+          "source": "Trigger when a receipt is deleted",
+          "message": "Attiva quando viene eliminata una ricevuta"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.desc": {
+          "source": "Fires when a receipt is issued. (Polled from `getJournalList` `log_type` 8.)",
+          "message": "Si attiva quando viene emessa una ricevuta. (Recuperato da `getJournalList` `log_type` 8.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
+          "source": "Receipt Issued",
+          "message": "Ricevuta emessa"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
+          "source": "Trigger when a receipt is issued",
+          "message": "Attiva quando viene emessa una ricevuta"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.desc": {
+          "source": "Bulk-update BaseLinker inventory prices via `updateInventoryProductsPrices`. Accepts up to 1000 product entries per call.",
+          "message": "Aggiorna in blocco i prezzi di inventario BaseLinker tramite `updateInventoryProductsPrices`. Accetta fino a 1000 voci di prodotto per chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
+          "source": "Update Inventory Prices",
+          "message": "Aggiorna prezzi inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory",
+          "message": "Inventario di destinazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.desc": {
+          "source": "Nested map of the shape `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. Up to 1000 products per call.",
+          "message": "Mappa nidificata della forma `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. Fino a 1000 prodotti per chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.short_desc": {
+          "source": "Per-product price updates (max 1000 products)",
+          "message": "Aggiornamenti di prezzo per prodotto (max 1000 prodotti)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
+          "source": "Bulk update prices (up to 1000 products per call)",
+          "message": "Aggiorna prezzi in blocco (fino a 1000 prodotti per chiamata)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.desc": {
+          "source": "Bulk-update BaseLinker inventory stock via `updateInventoryProductsStock`. Accepts up to 1000 product entries per call.",
+          "message": "Aggiorna in blocco le scorte di inventario BaseLinker tramite `updateInventoryProductsStock`. Accetta fino a 1000 voci di prodotto per chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
+          "source": "Update Inventory Stock",
+          "message": "Aggiorna scorte inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID inventario"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory",
+          "message": "Inventario di destinazione"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.desc": {
+          "source": "Nested map of the shape `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. For non-variant products use the product ID as the inner key prefix (e.g. `0|bl_123`). Up to 1000 products per call.",
+          "message": "Mappa nidificata della forma `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. Per i prodotti senza varianti utilizzare l'ID prodotto come prefisso della chiave interna (es. `0|bl_123`). Fino a 1000 prodotti per chiamata."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Prodotti"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.short_desc": {
+          "source": "Per-product stock updates (max 1000 products)",
+          "message": "Aggiornamenti di scorte per prodotto (max 1000 prodotti)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
+          "source": "Bulk update stock levels (up to 1000 products per call)",
+          "message": "Aggiorna livelli di scorte in blocco (fino a 1000 prodotti per chiamata)"
+        },
+        "app.QmFzZUxpbmtlcg.desc": {
+          "source": "BaseLinker is a Polish multichannel e-commerce platform that unifies orders, inventory, shipping labels, and courier packages across marketplaces such as Allegro, Amazon, eBay, and Shopify.\n\n**Features:**\n- Manage orders across all connected marketplaces and shops\n- Update order statuses, payments, and line items\n- Handle order returns with refunds\n- Maintain inventory catalogs, products, stock levels, and prices\n- Create courier packages and retrieve shipping labels\n- Poll BaseLinker's journal for event-based workflow triggers\n\n**Authentication:**\nBaseLinker uses a static API token passed in the `X-BLToken` HTTP header. Tokens can be generated in the BaseLinker panel under *My Account → API → Generate a new token*.\n\n**Rate limit:** 100 requests per minute per token. The module retries rate-limited calls with exponential backoff (up to 3 attempts).",
+          "message": "BaseLinker è una piattaforma e-commerce multicanale polacca che unifica ordini, inventario, etichette di spedizione e pacchi corriere su vari marketplace come Allegro, Amazon, eBay e Shopify.\n\n**Caratteristiche:**\n- Gestione degli ordini su tutti i marketplace e negozi collegati\n- Aggiornamento di stati ordine, pagamenti e voci di riga\n- Gestione dei resi degli ordini con rimborsi\n- Gestione dei cataloghi di inventario, prodotti, livelli di scorte e prezzi\n- Creazione di pacchi corriere e recupero delle etichette di spedizione\n- Polling del journal di BaseLinker per i trigger di workflow basati su eventi\n\n**Autenticazione:**\nBaseLinker utilizza un token API statico passato nell'intestazione HTTP `X-BLToken`. I token possono essere generati nel pannello BaseLinker in *Il mio account → API → Genera un nuovo token*.\n\n**Limite di frequenza:** 100 richieste al minuto per token. Il modulo ritenta le chiamate soggette a limitazione di frequenza con backoff esponenziale (fino a 3 tentativi)."
+        },
+        "app.QmFzZUxpbmtlcg.display_name": {
+          "source": "BaseLinker (Base.com)",
+          "message": "BaseLinker (Base.com)"
+        },
+        "app.QmFzZUxpbmtlcg.short_desc": {
+          "source": "BaseLinker multichannel e-commerce integration",
+          "message": "Integrazione e-commerce multicanale BaseLinker"
+        }
+      }
+    }
+  }
+}

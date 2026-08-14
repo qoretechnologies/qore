@@ -1,0 +1,2933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note attached to a contact, account, or deal",
+          "message": "연락처, 계정 또는 거래에 첨부된 새 메모 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create Note",
+          "message": "노트 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The content/body of the note",
+          "message": "메모 내용/본문"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "메모 내용"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "딜"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "연결할 레코드 유형: `Contact`, `SalesAccount` 또는 `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "대상 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "연결된 레코드 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "연결할 연락처, 계정 또는 거래의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "대상 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "연결된 레코드 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "새 노트 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Freshsales CRM",
+          "message": "Freshsales CRM에서 새 계정 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "계정 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "계정의 국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "국가 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "계정의 도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "계정의 연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "계정의 도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "이 계정의 비즈니스 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "비즈니스 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "비즈니스 분류"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "계정의 Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "이 계정의 업종 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "업종 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "업종 분류"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "계정의 LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "계정/회사 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "계정의 직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "계정의 주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "주 또는 도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "상위 계정/회사 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "상위 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "상위 회사 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "계정의 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "계정의 웹사이트 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "웹사이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "회사 웹사이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "이 계정이 속한 지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "계정의 Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "계정의 우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "새 계정 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Create a new appointment in Freshsales CRM",
+          "message": "Freshsales CRM에서 새 약속 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Create Appointment",
+          "message": "약속 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "약속에 대한 상세 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "약속 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "종료 날짜 및 시간(형식: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "종료 날짜"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "종료 날짜 및 시간"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "시작 날짜 및 시간(형식: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "시작일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "시작 날짜 및 시간"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "약속 장소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "위치"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "회의 장소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "딜"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "연결할 레코드 유형: `Contact`, `SalesAccount` 또는 `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "대상 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "연결된 레코드 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "연결할 연락처, 계정 또는 거래의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "대상 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "연결된 레코드 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "약속 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "약속 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "약속 표준 시간대(예: `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "표준 시간대"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Create a new appointment",
+          "message": "새 약속 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Freshsales CRM",
+          "message": "Freshsales CRM에서 새 연락처 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "연락처 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "연락처의 국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "국가 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "연락처의 상태 분류 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "연락처 상태 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "상태 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "이 연락처와 연결된 캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "캠페인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "연락처의 도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "연락처의 도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "연락처의 기본 이메일 주소입니다. `email`, `mobile_number` 또는 `twitter` 중 하나 이상을 지정하는 것이 좋습니다"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "주 이메일 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "연락처의 외부 참조 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "외부 참조 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "연락처의 Facebook 사용자 이름 또는 프로필 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "연락처의 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "연락처의 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "연락처의 직책 또는 직함"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "직책"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "직책"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "연락처의 성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "연락처의 성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "리드 소스의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "리드 소스 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "연락처 라이프사이클 단계의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "라이프사이클 단계 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "라이프사이클 단계 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "연락처의 LinkedIn 프로필 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "연락처의 휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "연락처의 주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "주 또는 도"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "연락처의 직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "이 연락처가 속한 지역의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "연락처의 Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "연락처의 우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "새 연락처 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal in Freshsales CRM",
+          "message": "Freshsales CRM에서 새 거래 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create Deal",
+          "message": "딜 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "이 거래와 연결된 캠페인의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "캠페인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "거래가 종료된 실제 날짜(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "종료일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "실제 종료일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "이 거래의 통화 ID입니다. 지정하지 않으면 계정의 기본 통화가 사용됩니다"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "통화 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "거래 통화"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "딜의 금전적 가치"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "딜 가치"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "거래 유형/카테고리의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "거래 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "거래 카테고리"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "거래 결제 상태의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "결제 상태 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "결제 상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "거래 파이프라인의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "파이프라인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "거래 성공 또는 실패 사유의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "거래 사유 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "성공/실패 사유"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "파이프라인 내 거래 단계의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "거래 단계 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "파이프라인 단계"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "예상 마감 날짜(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "예상 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "예상 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "이 거래의 리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "리드 소스 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "거래의 이름 또는 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "거래 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "연결된 영업 계정의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "관련 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "거래 성공 확률(`0` ~ `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "확률"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "성공 확률"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "이 거래의 지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "새 딜 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Freshsales CRM",
+          "message": "Freshsales CRM에서 새 작업 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "작업 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "작업에 대한 상세 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "작업 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "작업 마감일(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "완료 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "작업 결과의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "결과 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "작업 결과"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "이 작업에 배정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "작업 상태: 미결은 `0`, 완료는 `1`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "작업 상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "딜"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "연결할 레코드 유형: `Contact`, `SalesAccount` 또는 `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "대상 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "연결된 레코드 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "연결할 연락처, 계정 또는 거래의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "대상 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "연결된 레코드 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "작업 유형의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "작업 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "작업 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "작업 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "작업 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "새 작업 생성"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by its ID",
+          "message": "ID로 단일 계정 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "계정 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "ID로 단일 계정 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.desc": {
+          "source": "Retrieve a single appointment by its ID",
+          "message": "ID로 단일 약속 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.display_name": {
+          "source": "Get Appointment",
+          "message": "약속 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID",
+          "message": "약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Get a single appointment by ID",
+          "message": "ID로 단일 약속 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "ID로 단일 연락처 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "연락처 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "ID로 단일 연락처 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by its ID",
+          "message": "ID로 단일 거래 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get Deal",
+          "message": "딜 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "딜 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID",
+          "message": "거래 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "ID로 단일 거래 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by its ID",
+          "message": "ID로 단일 작업 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "작업 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID",
+          "message": "작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "ID로 단일 작업 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Freshsales CRM",
+          "message": "Freshsales CRM에서 메모 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete Note",
+          "message": "메모 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to delete",
+          "message": "삭제할 메모의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "노트 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to delete",
+          "message": "삭제할 메모 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "노트 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.desc": {
+          "source": "Delete an account from Freshsales CRM",
+          "message": "Freshsales CRM에서 계정 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.display_name": {
+          "source": "Delete Account",
+          "message": "계정 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to delete",
+          "message": "삭제할 계정의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to delete",
+          "message": "삭제할 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFjY291bnQ.short_desc": {
+          "source": "Delete an account",
+          "message": "계정 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Delete an appointment from Freshsales CRM",
+          "message": "Freshsales CRM에서 약속 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Delete Appointment",
+          "message": "약속 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to delete",
+          "message": "삭제할 약속의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to delete",
+          "message": "삭제할 약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Delete an appointment",
+          "message": "약속 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Freshsales CRM",
+          "message": "Freshsales CRM에서 연락처 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "연락처 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "삭제할 연락처의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "삭제할 연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "연락처 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.desc": {
+          "source": "Delete a deal from Freshsales CRM",
+          "message": "Freshsales CRM에서 거래 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.display_name": {
+          "source": "Delete Deal",
+          "message": "거래 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to delete",
+          "message": "삭제할 거래의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "딜 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to delete",
+          "message": "삭제할 거래 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLWRlYWw.short_desc": {
+          "source": "Delete a deal",
+          "message": "거래 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Freshsales CRM",
+          "message": "Freshsales CRM에서 작업 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "작업 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "삭제할 작업의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to delete",
+          "message": "삭제할 작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "작업 삭제"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks from Freshsales CRM with optional status filtering",
+          "message": "선택적 상태 필터링을 사용하여 Freshsales CRM의 작업 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "작업 목록 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm92ZXJkdWU.display_name": {
+          "source": "Overdue",
+          "message": "기한 지남"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b21vcnJvdw.display_name": {
+          "source": "Due Tomorrow",
+          "message": "내일 마감"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.allowed-value.c3RyaW5nOmR1ZSB0b2RheQ.display_name": {
+          "source": "Due Today",
+          "message": "오늘 마감"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by status",
+          "message": "상태별 필터"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.aWQ.short_desc": {
+          "source": "Get a specific task",
+          "message": "특정 작업 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filter",
+          "message": "선택적 필터로 작업 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List accounts from Freshsales CRM with optional filtering by view",
+          "message": "선택적 보기 필터링을 사용하여 Freshsales CRM의 계정 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "계정 목록"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific account",
+          "message": "특정 계정 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "보기 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "보기별 필터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List accounts from a view",
+          "message": "보기에서 계정 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.desc": {
+          "source": "List appointments from Freshsales CRM with optional time period filtering",
+          "message": "선택적 기간 필터링을 사용하여 Freshsales CRM의 약속 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.display_name": {
+          "source": "List Appointments",
+          "message": "약속 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhc3Q.display_name": {
+          "source": "Past",
+          "message": "지난 항목"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.allowed-value.c3RyaW5nOnVwY29taW5n.display_name": {
+          "source": "Upcoming",
+          "message": "예정됨"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "필터"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by time period",
+          "message": "기간별 필터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.aWQ.short_desc": {
+          "source": "Get a specific appointment",
+          "message": "특정 약속 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1hcHBvaW50bWVudHM.short_desc": {
+          "source": "List appointments with optional filter",
+          "message": "선택적 필터로 약속 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Freshsales CRM with optional filtering by view or email",
+          "message": "선택적 보기 또는 이메일 필터링을 사용하여 Freshsales CRM의 연락처 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "연락처 목록"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Search by email",
+          "message": "이메일로 검색"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "특정 연락처 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "보기 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "보기별 필터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts from a view",
+          "message": "보기에서 연락처 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals from Freshsales CRM with optional filtering by view",
+          "message": "선택적 보기 필터링을 사용하여 Freshsales CRM의 거래 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "거래 목록 조회"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "딜 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.aWQ.short_desc": {
+          "source": "Get a specific deal",
+          "message": "특정 거래 가져오기"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.display_name": {
+          "source": "View ID",
+          "message": "보기 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.option.dmlld19pZA.short_desc": {
+          "source": "Filter by view",
+          "message": "보기별 필터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals from a view",
+          "message": "보기에서 거래 목록 표시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Freshsales** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Freshsales**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에 기본 액션으로 아직 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.RnJlc2hzYWxlcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Freshsales",
+          "message": "Freshsales에 사용자 지정 API 호출 수행"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.desc": {
+          "source": "Poll for new accounts created in Freshsales",
+          "message": "Freshsales에서 생성된 새 계정 폴링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.display_name": {
+          "source": "New Account Event",
+          "message": "새 계정 이벤트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFjY291bnQ.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "새 계정 모니터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Poll for new appointments created in Freshsales",
+          "message": "Freshsales에서 생성된 새 약속 폴링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment Event",
+          "message": "새 약속 이벤트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Watch for new appointments",
+          "message": "새 약속 감시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Poll for new contacts created in Freshsales",
+          "message": "Freshsales에서 생성된 새 연락처 폴링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact Event",
+          "message": "새 연락처 이벤트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "새 연락처 감시"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.desc": {
+          "source": "Poll for new deals created in Freshsales",
+          "message": "Freshsales에서 생성된 새 거래 폴링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.display_name": {
+          "source": "New Deal Event",
+          "message": "새 거래 이벤트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LWRlYWw.short_desc": {
+          "source": "Watch for new deals",
+          "message": "새 거래 모니터링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.desc": {
+          "source": "Poll for new tasks created in Freshsales",
+          "message": "Freshsales에서 생성된 새 작업 폴링"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.display_name": {
+          "source": "New Task Event",
+          "message": "새 작업 이벤트"
+        },
+        "app.RnJlc2hzYWxlcw.action.bmV3LXRhc2s.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "새 작업 감시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 메모 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update Note",
+          "message": "메모 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated content/body of the note",
+          "message": "업데이트된 메모 내용/본문"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Note content",
+          "message": "메모 내용"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.desc": {
+          "source": "The unique identifier of the note to update",
+          "message": "업데이트할 메모의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.display_name": {
+          "source": "Note ID",
+          "message": "노트 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.option.aWQ.short_desc": {
+          "source": "The note ID to update",
+          "message": "업데이트할 메모 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "기존 노트 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 계정 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "계정 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.desc": {
+          "source": "The country of the account",
+          "message": "계정의 국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "국가 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.desc": {
+          "source": "The city of the account",
+          "message": "계정의 도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.desc": {
+          "source": "The annual revenue of the account",
+          "message": "계정의 연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.display_name": {
+          "source": "Annual Revenue",
+          "message": "연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YW5udWFsX3JldmVudWU.short_desc": {
+          "source": "Yearly revenue",
+          "message": "연간 수익"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the account",
+          "message": "계정의 도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.desc": {
+          "source": "The ID of the business type for this account",
+          "message": "이 계정의 비즈니스 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.display_name": {
+          "source": "Business Type ID",
+          "message": "비즈니스 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.YnVzaW5lc3NfdHlwZV9pZA.short_desc": {
+          "source": "Business classification",
+          "message": "비즈니스 분류"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook profile of the account",
+          "message": "계정의 Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.desc": {
+          "source": "The ID of the industry type for this account",
+          "message": "이 계정의 업종 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.display_name": {
+          "source": "Industry Type ID",
+          "message": "업종 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aW5kdXN0cnlfdHlwZV9pZA.short_desc": {
+          "source": "Industry category",
+          "message": "업종 분류"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the account to update",
+          "message": "업데이트할 계정의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.aWQ.short_desc": {
+          "source": "The account ID to update",
+          "message": "업데이트할 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile of the account",
+          "message": "계정의 LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account/company",
+          "message": "계정/회사 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.desc": {
+          "source": "The number of employees at the account",
+          "message": "계정의 직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.display_name": {
+          "source": "Number of Employees",
+          "message": "직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.bnVtYmVyX29mX2VtcGxveWVlcw.short_desc": {
+          "source": "Employee count",
+          "message": "직원 수"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.desc": {
+          "source": "The state or province of the account",
+          "message": "계정의 주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "주 또는 도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.desc": {
+          "source": "The ID of the parent account/company",
+          "message": "상위 계정/회사 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.display_name": {
+          "source": "Parent Account ID",
+          "message": "상위 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGFyZW50X3NhbGVzX2FjY291bnRfaWQ.short_desc": {
+          "source": "Parent company ID",
+          "message": "상위 회사 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the account",
+          "message": "계정의 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the account",
+          "message": "계정의 웹사이트 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "웹사이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "회사 웹사이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this account belongs to",
+          "message": "이 계정이 속한 지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the account",
+          "message": "계정의 Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the account",
+          "message": "계정의 우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "기존 계정 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.desc": {
+          "source": "Update an existing appointment in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 약속 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.display_name": {
+          "source": "Update Appointment",
+          "message": "약속 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the appointment",
+          "message": "약속에 대한 상세 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Appointment description",
+          "message": "약속 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.desc": {
+          "source": "The end date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "종료 날짜 및 시간(형식: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "종료 날짜"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZW5kX2RhdGU.short_desc": {
+          "source": "End date and time",
+          "message": "종료 날짜 및 시간"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.desc": {
+          "source": "The start date and time (format: `YYYY-MM-DDTHH:MM:SSZ`)",
+          "message": "시작 날짜 및 시간(형식: `YYYY-MM-DDTHH:MM:SSZ`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.display_name": {
+          "source": "Start Date",
+          "message": "시작일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.ZnJvbV9kYXRl.short_desc": {
+          "source": "Start date and time",
+          "message": "시작 날짜 및 시간"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the appointment to update",
+          "message": "업데이트할 약속의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.display_name": {
+          "source": "Appointment ID",
+          "message": "약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.aWQ.short_desc": {
+          "source": "The appointment ID to update",
+          "message": "업데이트할 약속 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.desc": {
+          "source": "The location of the appointment",
+          "message": "약속 장소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "위치"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.bG9jYXRpb24.short_desc": {
+          "source": "Meeting location",
+          "message": "회의 장소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "딜"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "연결할 레코드 유형: `Contact`, `SalesAccount` 또는 `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "대상 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "연결된 레코드 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "연결할 연락처, 계정 또는 거래의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "대상 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "연결된 레코드 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.desc": {
+          "source": "The title of the appointment",
+          "message": "약속 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGl0bGU.short_desc": {
+          "source": "Appointment title",
+          "message": "약속 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.desc": {
+          "source": "The time zone for the appointment (e.g., `America/New_York`)",
+          "message": "약속 표준 시간대(예: `America/New_York`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.option.dGltZV96b25l.short_desc": {
+          "source": "Time zone",
+          "message": "표준 시간대"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWFwcG9pbnRtZW50.short_desc": {
+          "source": "Update an existing appointment",
+          "message": "기존 약속 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 연락처 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "연락처 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "The country of the contact",
+          "message": "연락처의 국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "국가 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.desc": {
+          "source": "The ID of the contact's status classification",
+          "message": "연락처의 상태 분류 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.display_name": {
+          "source": "Contact Status ID",
+          "message": "연락처 상태 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9zdGF0dXNfaWQ.short_desc": {
+          "source": "Status identifier",
+          "message": "상태 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this contact",
+          "message": "이 연락처와 연결된 캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "캠페인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "The city of the contact",
+          "message": "연락처의 도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.desc": {
+          "source": "The street address of the contact",
+          "message": "연락처의 도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The primary email address of the contact. At least one of `email`, `mobile_number`, or `twitter` is recommended",
+          "message": "연락처의 기본 이메일 주소입니다. `email`, `mobile_number` 또는 `twitter` 중 하나 이상을 지정하는 것이 좋습니다"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Primary email address",
+          "message": "주 이메일 주소"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external reference identifier for the contact",
+          "message": "연락처의 외부 참조 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External reference ID",
+          "message": "외부 참조 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.desc": {
+          "source": "The Facebook username or profile URL of the contact",
+          "message": "연락처의 Facebook 사용자 이름 또는 프로필 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFjZWJvb2s.short_desc": {
+          "source": "Facebook profile",
+          "message": "Facebook 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "연락처의 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact's first name",
+          "message": "연락처의 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "업데이트할 연락처의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "업데이트할 연락처 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "The job title or professional designation of the contact",
+          "message": "연락처의 직책 또는 직함"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "직책"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Professional title",
+          "message": "직책"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "연락처의 성"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact's last name",
+          "message": "연락처의 성"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source",
+          "message": "리드 소스의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "리드 소스 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.desc": {
+          "source": "The ID of the contact's lifecycle stage",
+          "message": "연락처 라이프사이클 단계의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.display_name": {
+          "source": "Lifecycle Stage ID",
+          "message": "라이프사이클 단계 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlmZWN5Y2xlX3N0YWdlX2lk.short_desc": {
+          "source": "Lifecycle stage identifier",
+          "message": "라이프사이클 단계 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "연락처의 LinkedIn 프로필 URL"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW4.short_desc": {
+          "source": "LinkedIn profile",
+          "message": "LinkedIn 프로필"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.desc": {
+          "source": "The mobile phone number of the contact",
+          "message": "연락처의 휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.display_name": {
+          "source": "Mobile Number",
+          "message": "휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.bW9iaWxlX251bWJlcg.short_desc": {
+          "source": "Mobile phone number",
+          "message": "휴대폰 번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "The state or province of the contact",
+          "message": "연락처의 주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "주 또는 도"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.desc": {
+          "source": "The work phone number of the contact",
+          "message": "연락처의 직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.display_name": {
+          "source": "Work Number",
+          "message": "직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya19udW1iZXI.short_desc": {
+          "source": "Work phone number",
+          "message": "직장 전화번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory this contact belongs to",
+          "message": "이 연락처가 속한 지역의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.desc": {
+          "source": "The Twitter handle of the contact",
+          "message": "연락처의 Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcg.short_desc": {
+          "source": "Twitter handle",
+          "message": "Twitter 핸들"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.desc": {
+          "source": "The postal or zip code of the contact",
+          "message": "연락처의 우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.display_name": {
+          "source": "Zip Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.option.emlwY29kZQ.short_desc": {
+          "source": "Postal code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "기존 연락처 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 거래 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update Deal",
+          "message": "거래 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign associated with this deal",
+          "message": "이 거래와 연결된 캠페인의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Campaign identifier",
+          "message": "캠페인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "The actual date the deal was closed (format: `YYYY-MM-DD`)",
+          "message": "거래가 종료된 실제 날짜(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Closed Date",
+          "message": "종료일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Actual close date",
+          "message": "실제 종료일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "The ID of the currency for this deal. If not specified, the account's default currency is used",
+          "message": "이 거래의 통화 ID입니다. 지정하지 않으면 계정의 기본 통화가 사용됩니다"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency ID",
+          "message": "통화 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the deal",
+          "message": "거래 통화"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.desc": {
+          "source": "The monetary value of the deal",
+          "message": "딜의 금전적 가치"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal value",
+          "message": "딜 가치"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.desc": {
+          "source": "The ID of the deal type/category",
+          "message": "거래 유형/카테고리의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.display_name": {
+          "source": "Deal Type ID",
+          "message": "거래 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF90eXBlX2lk.short_desc": {
+          "source": "Deal category",
+          "message": "거래 카테고리"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.desc": {
+          "source": "The ID of the deal payment status",
+          "message": "거래 결제 상태의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.display_name": {
+          "source": "Payment Status ID",
+          "message": "결제 상태 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9wYXltZW50X3N0YXR1c19pZA.short_desc": {
+          "source": "Payment status",
+          "message": "결제 상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.desc": {
+          "source": "The ID of the deal pipeline",
+          "message": "거래 파이프라인의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "파이프라인 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9waXBlbGluZV9pZA.short_desc": {
+          "source": "Pipeline identifier",
+          "message": "파이프라인 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.desc": {
+          "source": "The ID of the reason for winning or losing the deal",
+          "message": "거래 성공 또는 실패 사유의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.display_name": {
+          "source": "Deal Reason ID",
+          "message": "거래 사유 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9yZWFzb25faWQ.short_desc": {
+          "source": "Win/loss reason",
+          "message": "성공/실패 사유"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.desc": {
+          "source": "The ID of the deal stage in the pipeline",
+          "message": "파이프라인 내 거래 단계의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.display_name": {
+          "source": "Deal Stage ID",
+          "message": "거래 단계 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZGVhbF9zdGFnZV9pZA.short_desc": {
+          "source": "Pipeline stage",
+          "message": "파이프라인 단계"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.desc": {
+          "source": "The anticipated closure date (format: `YYYY-MM-DD`)",
+          "message": "예상 마감 날짜(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.display_name": {
+          "source": "Expected Close",
+          "message": "예상 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.ZXhwZWN0ZWRfY2xvc2U.short_desc": {
+          "source": "Expected close date",
+          "message": "예상 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.desc": {
+          "source": "The unique identifier of the deal to update",
+          "message": "업데이트할 거래의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.display_name": {
+          "source": "Deal ID",
+          "message": "딜 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.aWQ.short_desc": {
+          "source": "The deal ID to update",
+          "message": "업데이트할 거래 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign as owner",
+          "message": "소유자로 지정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.desc": {
+          "source": "The ID of the lead source for this deal",
+          "message": "이 거래의 리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.display_name": {
+          "source": "Lead Source ID",
+          "message": "리드 소스 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bGVhZF9zb3VyY2VfaWQ.short_desc": {
+          "source": "Lead source identifier",
+          "message": "리드 소스 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name or title of the deal",
+          "message": "거래의 이름 또는 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "거래 이름"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.desc": {
+          "source": "The ID of the associated sales account",
+          "message": "연결된 영업 계정의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.c2FsZXNfYWNjb3VudF9pZA.short_desc": {
+          "source": "Related account ID",
+          "message": "관련 계정 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.desc": {
+          "source": "The probability of winning the deal (`0` to `100`)",
+          "message": "거래 성공 확률(`0` ~ `100`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.display_name": {
+          "source": "Probability",
+          "message": "확률"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.cHJvYmFiaWxpdHk.short_desc": {
+          "source": "Win probability",
+          "message": "성공 확률"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.desc": {
+          "source": "The ID of the territory for this deal",
+          "message": "이 거래의 지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.display_name": {
+          "source": "Territory ID",
+          "message": "지역 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.option.dGVycml0b3J5X2lk.short_desc": {
+          "source": "Territory identifier",
+          "message": "지역 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "기존 거래 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Freshsales CRM",
+          "message": "Freshsales CRM에서 기존 작업 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "작업 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A detailed description of the task",
+          "message": "작업에 대한 상세 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "작업 설명"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.desc": {
+          "source": "The due date for the task (format: `YYYY-MM-DD`)",
+          "message": "작업 마감일(형식: `YYYY-MM-DD`)"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Completion deadline",
+          "message": "완료 마감일"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "업데이트할 작업의 고유 식별자"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.aWQ.short_desc": {
+          "source": "The task ID to update",
+          "message": "업데이트할 작업 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.desc": {
+          "source": "The ID of the task outcome",
+          "message": "작업 결과의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.display_name": {
+          "source": "Outcome ID",
+          "message": "결과 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3V0Y29tZV9pZA.short_desc": {
+          "source": "Task outcome",
+          "message": "작업 결과"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user to assign to this task",
+          "message": "이 작업에 배정할 사용자의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "소유자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.b3duZXJfaWQ.short_desc": {
+          "source": "Assigned user ID",
+          "message": "지정된 사용자 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjA.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.aW50OjE.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The status of the task: `0` for open, `1` for completed",
+          "message": "작업 상태: 미결은 `0`, 완료는 `1`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "Task status",
+          "message": "작업 상태"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOkRlYWw.display_name": {
+          "source": "Deal",
+          "message": "딜"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.allowed-value.c3RyaW5nOlNhbGVzQWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.desc": {
+          "source": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+          "message": "연결할 레코드 유형: `Contact`, `SalesAccount` 또는 `Deal`"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.display_name": {
+          "source": "Target Type",
+          "message": "대상 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV90eXBl.short_desc": {
+          "source": "Associated record type",
+          "message": "연결된 레코드 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.desc": {
+          "source": "The ID of the contact, account, or deal to associate",
+          "message": "연결할 연락처, 계정 또는 거래의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.display_name": {
+          "source": "Target ID",
+          "message": "대상 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFyZ2V0YWJsZV9pZA.short_desc": {
+          "source": "Associated record ID",
+          "message": "연결된 레코드 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.desc": {
+          "source": "The ID of the task type",
+          "message": "작업 유형의 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.display_name": {
+          "source": "Task Type ID",
+          "message": "작업 유형 ID"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGFza190eXBlX2lk.short_desc": {
+          "source": "Task type",
+          "message": "작업 유형"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "The title of the task",
+          "message": "작업 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "작업 제목"
+        },
+        "app.RnJlc2hzYWxlcw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "기존 작업 업데이트"
+        },
+        "app.RnJlc2hzYWxlcw.desc": {
+          "source": "Freshsales is a CRM platform by Freshworks for managing contacts, accounts, deals, tasks, appointments, and notes.\n\nThis integration supports full CRUD operations on core CRM objects and polling-based triggers for new records.",
+          "message": "Freshsales는 연락처, 계정, 거래, 작업, 약속 및 메모를 관리하기 위한 Freshworks의 CRM 플랫폼입니다.\n\n이 연동은 핵심 CRM 객체에 대한 전체 CRUD 작업과 새 레코드에 대한 폴링 기반 트리거를 지원합니다."
+        },
+        "app.RnJlc2hzYWxlcw.display_name": {
+          "source": "Freshsales",
+          "message": "Freshsales"
+        },
+        "app.RnJlc2hzYWxlcw.short_desc": {
+          "source": "Freshsales CRM integration",
+          "message": "Freshsales CRM 연동"
+        }
+      }
+    }
+  }
+}

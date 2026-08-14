@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.U01UUA.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Надіслати електронний лист через загальний SMTP-сервер"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send an Email With SMTP",
+          "message": "Надіслати електронний лист за допомогою SMTP"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Одна або кілька адрес `Cc:` для електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Адреси для копії"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Будь-які вкладення для повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Вкладення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Вкладення повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Тіло повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Тіло повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Тіло повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Без кодування вмісту (не рекомендовано)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Base64 encoding",
+          "message": "Кодування Base64"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` для рядкових даних, `base64` для двійкових даних"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Quoted printable encoding",
+          "message": "Кодування Quoted-printable"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the message body",
+          "message": "Кодування для тіла повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Кодування тіла"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the body",
+          "message": "Кодування для тіла"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME-тип тіла повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "MIME-тип тіла"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME-тип тіла повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Одна або кілька адрес `Bcc:` для електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Адреси прихованої копії"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "Адреса відправника електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Відправник"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "Адреса відправника електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "Тема електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "Тема електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Одна або кілька адрес `To:` для електронного листа"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Адреси одержувачів повідомлення"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Надіслати електронний лист через загальний SMTP-сервер"
+        },
+        "app.U01UUA.desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Загальний SMTP-сервер для надсилання електронних листів"
+        },
+        "app.U01UUA.display_name": {
+          "source": "SMTP Server",
+          "message": "Сервер SMTP"
+        },
+        "app.U01UUA.short_desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Загальний SMTP-сервер для надсилання електронних листів"
+        }
+      }
+    }
+  }
+}

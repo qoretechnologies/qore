@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.R21haWw.action.Z2V0.desc": {
+          "source": "Retrieve a message",
+          "message": "擷取郵件"
+        },
+        "app.R21haWw.action.Z2V0.display_name": {
+          "source": "Retrieve a Message",
+          "message": "擷取郵件"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "要擷取的訊息 ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.short_desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "要擷取的訊息 ID"
+        },
+        "app.R21haWw.action.Z2V0.short_desc": {
+          "source": "Retrieve a message",
+          "message": "擷取郵件"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve an attachment",
+          "message": "擷取附件"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "擷取附件"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "要擷取的附件 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.display_name": {
+          "source": "Attachment ID",
+          "message": "附件 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.short_desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "要擷取的附件 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "包含要擷取之附件的郵件 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.short_desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "包含要擷取之附件的郵件 ID"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve an attachment",
+          "message": "擷取附件"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
+          "message": "永久刪除郵件。**此操作無法復原**：郵件不會移至垃圾桶且不會保留任何複本，因此除非必須立即銷毀郵件，否則請使用 `trash-message`。\n\n在處理成功後，從 `watch` 或 `watch-attachment` 事件的取用端使用此動作，並傳入事件所攜帶的 `message_id`。使用 `delete_messages` 直接從監看中刪除會在引發事件時立即銷毀郵件，無論取用端後續是否成功。\n\nGmail API 對於此呼叫不傳回任何內容"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "刪除訊息"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.desc": {
+          "source": "The ID of the message to delete permanently; watch events carry this value as `message_id`",
+          "message": "要永久刪除的郵件 ID；監看事件會將此值以 `message_id` 攜帶"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.short_desc": {
+          "source": "The ID of the message to delete permanently",
+          "message": "要永久刪除的郵件 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Permanently delete a message; this cannot be undone",
+          "message": "永久刪除郵件；此操作無法復原"
+        },
+        "app.R21haWw.action.bGlzdA.desc": {
+          "source": "Search for messages in the account",
+          "message": "在帳戶中搜尋郵件"
+        },
+        "app.R21haWw.action.bGlzdA.display_name": {
+          "source": "Search for Messages",
+          "message": "搜尋郵件"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "搜尋時是否包含垃圾郵件和垃圾桶資料夾？"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "包含垃圾郵件和垃圾桶？"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "搜尋時是否包含垃圾郵件和垃圾桶資料夾？"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "僅傳回標籤符合所有指定標籤 ID 的郵件。討論串中的郵件可能包含同一討論串中其他郵件所沒有的標籤"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "標籤"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "僅傳回標籤符合所有指定標籤 ID 的郵件"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "要傳回的結果數量上限"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "最大結果數"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "要傳回的結果數量上限"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "用於擷取清單中特定結果頁面的頁面權杖"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "頁面 Token"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "用於擷取清單中特定結果頁面的頁面權杖"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "用於擷取郵件的 Gmail 搜尋條件；例如：`in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "用於擷取郵件的 Gmail 搜尋條件"
+        },
+        "app.R21haWw.action.bGlzdA.short_desc": {
+          "source": "Search for messages",
+          "message": "搜尋郵件"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Gmail** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選用的查詢參數、標頭與請求內文。回應將以包含狀態碼、回應標頭和回應內文的雜湊形式傳回。\n\n將此動作運用於此應用程式中尚未公開為第一級動作的端點。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gmail",
+          "message": "向 Gmail 發出自訂 API 呼叫"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message",
+          "message": "傳送郵件"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "發送訊息"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "電子郵件的一或多個 `Cc:` 位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "副本"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "副本 (CC) 位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "郵件的任何附件"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "附件"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "郵件附件"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "郵件內文"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "訊息內文"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "郵件內文"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "無內容編碼（不建議）"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "無內容編碼（不建議）"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "適合二進位資料"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "適合二進位資料"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "字串資料使用 `quoted-printable`，二進位資料使用 `base64`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "字串資料使用 'quoted-printable'，二進位資料使用 'base64'"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "適合字串資料"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "適合字串資料"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "用於附件的編碼：\n- `default`：字串資料使用 `quoted-printable`，二進位資料使用 `base64`\n- `none`：無內容編碼（不建議）\n- `quoted-printable`：quoted printable 編碼\n- `base64`：base64 編碼"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "本文編碼"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "用於附件的編碼"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML 文字"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML 文字"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "純文字"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "純文字"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "郵件本文的 MIME 類型"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "本文 MIME 類型"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "郵件本文的 MIME 類型"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "電子郵件的一或多個 `Bcc:` 位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "密件副本"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "密件副本位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "電子郵件的寄件者位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "發送者"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "電子郵件的寄件者位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "電子郵件主旨"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "主題"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "電子郵件主旨"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "電子郵件的一或多個 `To:` 位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.display_name": {
+          "source": "To",
+          "message": "收件者"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "郵件收件者位址"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message",
+          "message": "傳送郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.desc": {
+          "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
+          "message": "對新電子郵件做出反應；當有新郵件送達時，包括郵件本文在內的所有郵件資訊都會作為輸出資料傳回"
+        },
+        "app.R21haWw.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "新電子郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its event?\n\n**The message is deleted as soon as its event has been raised, whatever the event consumer then does with it.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the message, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` the event carries",
+          "message": "在觸發事件後永久刪除每封相符的郵件？\n\n**郵件在觸發事件後會立即被刪除，無論事件取用者後續如何處理。**如果取用者在處理過程中失敗、逾時或重新啟動，將會遺失該郵件唯一的複本，且 Gmail 的刪除操作無法復原。\n\n對於任何絕不能遺失來源郵件的工作負載，請不要設定此選項，而是在取用者處理成功後，使用事件所攜帶的 `message_id` 執行 `delete-message` 或 `trash-message` 動作"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "刪除郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its event?",
+          "message": "在觸發事件後永久刪除每封相符的郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "單一輪詢週期中傳遞的郵件數量上限；未設定或 `0` 表示無限制。\n\n此限制從積壓郵件中**最舊**的開始套用，因此監視游標仍會連續推進，其餘郵件將由後續週期傳遞而非被略過。當可能累積大量積壓郵件時，可用此選項限制單一週期的工作量"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "每個週期的郵件數量上限"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "單一輪詢週期中傳遞的郵件數量上限"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "僅保留最新的一封相符郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "全部最新"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "保留每個 Gmail 討論串中的最新郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "每個討論串最新"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "在選取各組最新郵件前相符郵件的分組方式；除非設定了 `snapshot_mode`，否則將予忽略。\n\n- `all`：單一全域群組，因此每個週期會觸發單一事件並攜帶最新的相符郵件\n- `thread`：依 Gmail 討論串分組，因此每個週期會針對每個討論串觸發一個事件並攜帶該討論串的最新郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "快照分組"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "在選取最新郵件前郵件的分組方式"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "將積壓郵件摺疊為最新郵件，而非逐一重新播放。\n\n部分動態是快照而非日誌：每封郵件皆重新陳述當前狀態，因此中斷發生後只有最後一封值得處理。設定此選項後，每個輪詢週期會針對每個群組（請參閱 `snapshot_key`）觸發一個事件並攜帶最新的相符郵件，並在事件的 `superseded_count` 和 `superseded_ids` 欄位中回報已摺疊略過的郵件。已摺疊的郵件永遠不會完整擷取，因此龐大的積壓量只需擷取一封郵件，而非每封都擷取。\n\n若動態中的每封郵件都必須處理，請不要設定此選項"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "僅限最新郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "將積壓郵件摺疊為最新郵件，而非逐一重新播放？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "設定比對郵件的開始日期與時間"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "開始日期"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "設定比對郵件的開始日期與時間"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "永久刪除已被取代的郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "永久刪除"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "將已被取代的郵件保留在信箱中"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "保留"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "將已被取代的郵件移至 Gmail 垃圾桶"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "移至垃圾桶"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "如何處理被 `snapshot_mode` 摺疊略過的郵件；除非設定了 `snapshot_mode`，否則將予忽略。\n\n- `ignore`：保留在信箱中，以便供稽核使用；由於監視游標已移過這些郵件，因此不會再次觸發為事件\n- `trash`：將它們移至 Gmail 垃圾桶，仍可在該處復原\n- `delete`：永久刪除；**此操作無法復原**\n\n若移除失敗，將會記錄日誌並將郵件保留在原處；不會重試，因為其事件已觸發且監視游標已移過該郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "已被取代郵件的處理動作"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "如何處理已摺疊略過的郵件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "檢查相符電子郵件的頻率（秒）；下限為 30；較小的數值將設定為最小輪詢週期"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "檢查相符電子郵件的頻率（秒）"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "用於比對郵件的 Gmail 搜尋準則；例如：`in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "用於比對郵件的 Gmail 搜尋準則"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "是否自動擷取附件資料？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachments?",
+          "message": "擷取附件？"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "是否自動擷取附件資料？"
+        },
+        "app.R21haWw.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "對新電子郵件做出反應"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to new email attachments",
+          "message": "對新電子郵件附件做出反應"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "新電子郵件附件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments; if not set, then all attachments are reported; if set, then only attachments matching the pattern are reported; by default, the glob pattern is case-insensitive; to make it case-sensitive, set the `ignore_case` option to `false`",
+          "message": "用於比對附件的選填檔案名稱模式 (glob)；若未設定，則會回報所有附件；若已設定，則僅回報符合該模式的附件；預設情況下，glob 模式不區分大小寫；若要區分大小寫，請將 `ignore_case` 選項設定為 `false`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "附件檔案模式"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern (glob) for matching attachments",
+          "message": "用於比對附件的選填檔案名稱模式 (glob)"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
+          "message": "在觸發事件後永久刪除每封相符的郵件？每封相符的郵件都會被刪除，即使其所有附件皆不符合附件條件因而完全未觸發任何事件也是如此。\n\n**郵件在觸發事件後會立即被刪除，無論事件取用者後續如何處理。**如果取用者在處理過程中失敗、逾時或重新啟動，將會遺失該附件唯一的複本，且 Gmail 的刪除操作無法復原。\n\n對於任何絕不能遺失來源郵件的工作負載，請不要設定此選項，而是在取用者處理成功後，使用每個附件事件所攜帶的 `message_id` 執行 `delete-message` 或 `trash-message` 動作"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "刪除郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its events?",
+          "message": "在觸發事件後永久刪除每封相符的郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
+          "message": "忽略 glob 中的大小寫；若未設定 `attachment_glob` 則予以忽略"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Glob Case?",
+          "message": "忽略 Glob 大小寫？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Ignore case in globs",
+          "message": "忽略 glob 中的大小寫"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "單一輪詢週期中傳遞的郵件數量上限；未設定或 `0` 表示無限制。\n\n此限制從積壓郵件中**最舊**的開始套用，因此監視游標仍會連續推進，其餘郵件將由後續週期傳遞而非被略過。當可能累積大量積壓郵件時，可用此選項限制單一週期的工作量"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "每個週期的郵件數量上限"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "單一輪詢週期中傳遞的郵件數量上限"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "僅保留最新的一封相符郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "全部最新"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "保留每個 Gmail 討論串中的最新郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "每個討論串最新"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "在選取各組最新郵件前相符郵件的分組方式；除非設定了 `snapshot_mode`，否則將予忽略。\n\n- `all`：單一全域群組，因此每個週期會觸發單一事件並攜帶最新的相符郵件\n- `thread`：依 Gmail 討論串分組，因此每個週期會針對每個討論串觸發一個事件並攜帶該討論串的最新郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "快照分組"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "在選取最新郵件前郵件的分組方式"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "將積壓郵件摺疊為最新郵件，而非逐一重新播放。\n\n部分動態是快照而非日誌：每封郵件皆重新陳述當前狀態，因此中斷發生後只有最後一封值得處理。設定此選項後，每個輪詢週期會針對每個群組（請參閱 `snapshot_key`）觸發一個事件並攜帶最新的相符郵件，並在事件的 `superseded_count` 和 `superseded_ids` 欄位中回報已摺疊略過的郵件。已摺疊的郵件永遠不會完整擷取，因此龐大的積壓量只需擷取一封郵件，而非每封都擷取。\n\n若動態中的每封郵件都必須處理，請不要設定此選項"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "僅限最新郵件？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "將積壓郵件摺疊為最新郵件，而非逐一重新播放？"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "設定比對郵件的開始日期與時間"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "開始日期"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "設定比對郵件的開始日期與時間"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "永久刪除已被取代的郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "永久刪除"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "將已被取代的郵件保留在信箱中"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "保留"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "將已被取代的郵件移至 Gmail 垃圾桶"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "移至垃圾桶"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "如何處理被 `snapshot_mode` 摺疊略過的郵件；除非設定了 `snapshot_mode`，否則將予忽略。\n\n- `ignore`：保留在信箱中，以便供稽核使用；由於監視游標已移過這些郵件，因此不會再次觸發為事件\n- `trash`：將它們移至 Gmail 垃圾桶，仍可在該處復原\n- `delete`：永久刪除；**此操作無法復原**\n\n若移除失敗，將會記錄日誌並將郵件保留在原處；不會重試，因為其事件已觸發且監視游標已移過該郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "已被取代郵件的處理動作"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "如何處理已摺疊略過的郵件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "檢查相符電子郵件的頻率（秒）；下限為 30；較小的數值將設定為最小輪詢週期"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "檢查相符電子郵件的頻率（秒）"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "用於比對郵件的 Gmail 搜尋準則；例如：`in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "搜尋條件"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "用於比對郵件的 Gmail 搜尋準則"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "對新電子郵件附件做出反應"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "將郵件移至垃圾桶。郵件會離開信箱，但在 Gmail 清理垃圾桶前仍可復原，因此這是在工作流程處理完成後清除郵件的安全方式。\n\n在處理成功後，從 `watch` 或 `watch-attachment` 事件的取用端使用此動作，並附上事件所攜帶的 `message_id`。使用 `delete_messages` 直接從監看中刪除會在引發事件時立即銷毀郵件，無論取用端後續是否成功"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "將郵件移至垃圾桶"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.desc": {
+          "source": "The ID of the message to move to the trash; watch events carry this value as `message_id`",
+          "message": "要移至垃圾桶的郵件 ID；監看事件會將此值作為 `message_id` 攜帶"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.short_desc": {
+          "source": "The ID of the message to move to the trash",
+          "message": "要移至垃圾桶的郵件 ID"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Move a message to the trash, where it can still be recovered",
+          "message": "將郵件移至垃圾桶（仍可復原）"
+        },
+        "app.R21haWw.desc": {
+          "source": "Gmail services",
+          "message": "Gmail 服務"
+        },
+        "app.R21haWw.display_name": {
+          "source": "Gmail",
+          "message": "Gmail"
+        },
+        "app.R21haWw.short_desc": {
+          "source": "Gmail services",
+          "message": "Gmail 服務"
+        }
+      }
+    }
+  }
+}

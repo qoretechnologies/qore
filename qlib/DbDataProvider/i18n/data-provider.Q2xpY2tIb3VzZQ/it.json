@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.Q2xpY2tIb3VzZQ.desc": {
+          "source": "Create and manage connections to a ClickHouse analytics database",
+          "message": "Crea e gestisci connessioni a un database analitico ClickHouse"
+        },
+        "app.Q2xpY2tIb3VzZQ.display_name": {
+          "source": "ClickHouse",
+          "message": "ClickHouse"
+        },
+        "app.Q2xpY2tIb3VzZQ.short_desc": {
+          "source": "ClickHouse analytics database",
+          "message": "Database analitico ClickHouse"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RlRQ.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve a file from an FTP server",
+          "message": "Отримати файл із сервера FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
+          "source": "Retrieve File With FTP",
+          "message": "Отримати файл через FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "Кодування рядка для використання, якщо `text` = `True` (за замовчуванням: `UTF-8`)"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "Кодування рядка для використання, якщо 'text' = 'True' (за замовчуванням: 'UTF-8')"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Якщо `True`, файл буде повернено як рядок, `False` (за замовчуванням) — як бінарні дані"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Якщо 'True', файл буде повернуто як рядок, якщо 'False' (за замовчуванням) — як двійкові дані"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file from an FTP server",
+          "message": "Отримати файл із FTP-сервера"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Видаляє файл на FTP-сервері"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File With FTP",
+          "message": "Видалити файл через FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Видаляє файл на FTP-сервері"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Надсилає файл на FTP-сервер"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.display_name": {
+          "source": "Send File With FTP",
+          "message": "Надіслати файл через FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "Кодування рядка для використання, якщо `text` = `True` (за замовчуванням: `UTF-8`)"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Кодування"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "Кодування рядка для використання, якщо 'text' = 'True' (за замовчуванням: 'UTF-8')"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "Шлях на FTP-сервері"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Якщо `True`, файл буде повернено як рядок, `False` (за замовчуванням) — як бінарні дані"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Якщо 'True', файл буде повернуто як рядок, якщо 'False' (за замовчуванням) — як двійкові дані"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Надсилає файл на FTP-сервер"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP-сервер"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
+        }
+      }
+    }
+  }
+}

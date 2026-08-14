@@ -1,0 +1,761 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.VGF2aWx5.action.Y3Jhd2w.desc": {
+          "source": "Multi-page web crawl starting from a seed URL via Tavily's `/crawl` endpoint.  Returns a tree of discovered pages with their extracted content.",
+          "message": "Tavily의 `/crawl` 엔드포인트를 통해 시드 URL에서 시작하는 다중 페이지 웹 크롤링입니다. 추출된 콘텐츠와 함께 발견된 페이지의 트리를 반환합니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
+          "source": "Crawl Site",
+          "message": "사이트 크롤링"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "고급"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "기본"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth applied to each crawled page.",
+          "message": "크롤링된 각 페이지에 적용되는 추출 깊이입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "추출 깊이"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Per-page extraction depth",
+          "message": "페이지별 추출 깊이"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "제외할 URL 경로 패턴 목록입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "제외할 경로"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "제외할 URL 경로 패턴"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints to guide the crawler (e.g. \"focus on API reference pages\").",
+          "message": "크롤러를 안내하기 위한 선택적 자연어 힌트입니다(예: \"API 참조 페이지에 집중\")."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the crawl agent",
+          "message": "크롤링 에이전트를 위한 자연어 지침"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum total pages to fetch across the crawl.",
+          "message": "크롤링 전체에서 가져올 최대 총 페이지 수입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Overall page limit",
+          "message": "전체 페이지 제한"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum number of outgoing links to follow per page.",
+          "message": "페이지당 따라갈 최대 아웃고잉 링크 수입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "최대 너비"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "페이지당 따라갈 최대 링크 수"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth from the seed URL.",
+          "message": "시드 URL로부터의 최대 링크 그래프 깊이입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "최대 깊이"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum crawl depth from the seed",
+          "message": "시드로부터의 최대 크롤링 깊이"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "포함할 URL 경로 패턴 목록입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "경로 선택"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "포함할 URL 경로 패턴"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "Seed URL the crawl begins at.",
+          "message": "크롤링이 시작되는 시드 URL입니다."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "시드 URL"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "URL to start the crawl from",
+          "message": "크롤링을 시작할 URL"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a site starting from a seed URL",
+          "message": "시드 URL에서 시작하여 사이트 크롤링"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts the main readable content from a list of URLs via Tavily's `/extract` endpoint.  Useful as a follow-up to a `search` result when the agent decides to read specific pages in full.",
+          "message": "Tavily의 `/extract` 엔드포인트를 통해 URL 목록에서 읽을 수 있는 주요 콘텐츠를 추출합니다. 에이전트가 특정 페이지 전체를 읽기로 결정했을 때 `search` 결과의 후속 작업으로 유용합니다."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract URLs",
+          "message": "URL 추출"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "고급"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "기본"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth.",
+          "message": "추출 깊이."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "추출 깊이"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Extraction depth: 'basic' or 'advanced'",
+          "message": "추출 깊이: 'basic' 또는 'advanced'"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, each result includes image URLs found on the page.",
+          "message": "`True`인 경우 각 결과에 페이지에서 발견된 이미지 URL이 포함됩니다."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "이미지 포함"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside extracted text",
+          "message": "추출된 텍스트와 함께 이미지 URL 반환"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "Absolute URLs whose main content should be extracted.",
+          "message": "주요 콘텐츠를 추출할 절대 URL입니다."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "List of URLs to extract content from",
+          "message": "콘텐츠를 추출할 URL 목록"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract main content from URLs via Tavily",
+          "message": "Tavily를 통해 URL에서 주요 콘텐츠 추출"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tavily** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Tavily**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL에 상대적), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tavily",
+          "message": "Tavily에 사용자 지정 API 호출 수행"
+        },
+        "app.VGF2aWx5.action.bWFw.desc": {
+          "source": "Enumerates URLs reachable from a seed URL via Tavily's `/map` endpoint without fetching page content.  Useful for site discovery before a targeted `/extract` or `/crawl` call.",
+          "message": "페이지 콘텐츠를 가져오지 않고 Tavily의 `/map` 엔드포인트를 통해 시드 URL에서 연결 가능한 URL을 나열합니다. 대상화된 `/extract` 또는 `/crawl` 호출 전 사이트 탐색에 유용합니다."
+        },
+        "app.VGF2aWx5.action.bWFw.display_name": {
+          "source": "Map Site URLs",
+          "message": "사이트 URL 매핑"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "제외할 URL 경로 패턴 목록입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "제외할 경로"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "제외할 URL 경로 패턴"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints.",
+          "message": "선택적 자연어 힌트입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the mapper",
+          "message": "매퍼를 위한 자연어 지침"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum total URLs to enumerate.",
+          "message": "열거할 최대 총 URL 수입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Overall URL limit",
+          "message": "전체 URL 제한"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum links per page.",
+          "message": "페이지당 최대 링크 수입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "최대 너비"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "페이지당 따라갈 최대 링크 수"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth.",
+          "message": "최대 링크 그래프 깊이입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "최대 깊이"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum link-graph depth",
+          "message": "최대 링크 그래프 깊이"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "포함할 URL 경로 패턴 목록입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "경로 선택"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "포함할 URL 경로 패턴"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.desc": {
+          "source": "Seed URL.",
+          "message": "시드 URL입니다."
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "시드 URL"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.short_desc": {
+          "source": "URL to start the URL map from",
+          "message": "URL 맵 생성을 시작할 URL"
+        },
+        "app.VGF2aWx5.action.bWFw.short_desc": {
+          "source": "Enumerate URLs reachable from a seed URL",
+          "message": "시드 URL에서 연결 가능한 URL 열거"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.desc": {
+          "source": "Performs a real-time web search via Tavily's `/search` endpoint and returns ranked results with title, url, content snippet, and relevance score.  Optionally includes an AI-summarized answer over the top results.",
+          "message": "Tavily의 `/search` 엔드포인트를 통해 실시간 웹 검색을 수행하고 제목, URL, 콘텐츠 스니펫 및 관련성 점수가 포함된 순위 지정 결과를 반환합니다. 선택적으로 상위 결과에 대한 AI 요약 답변을 포함합니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "웹 검색"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.desc": {
+          "source": "For `topic: news`, restrict results to the last N days.",
+          "message": "`topic: news`의 경우 최근 N일 이내의 결과로 제한합니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.display_name": {
+          "source": "Days (news topic)",
+          "message": "일수 (news 주제)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.short_desc": {
+          "source": "Restrict 'news' searches to the last N days",
+          "message": "'news' 검색을 최근 N일로 제한"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude.",
+          "message": "제외할 도메인 목록입니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "도메인 제외"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude specific domains from results",
+          "message": "결과에서 특정 도메인 제외"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.desc": {
+          "source": "When `True`, Tavily generates an AI-summarized answer over the top results and includes it in the response under the `answer` field.",
+          "message": "`True`인 경우 Tavily가 상위 결과에 대해 AI 요약 답변을 생성하고 응답의 `answer` 필드에 포함합니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.display_name": {
+          "source": "Include Answer",
+          "message": "답변 포함"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.short_desc": {
+          "source": "AI-summarize the top results into a single answer",
+          "message": "상위 결과를 단일 답변으로 AI 요약"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict the search to (e.g. `(\"docs.qore.org\",)`).",
+          "message": "검색을 제한할 도메인 목록입니다 (예: `(\"docs.qore.org\",)`)."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "도메인 포함"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict search to specific domains",
+          "message": "특정 도메인으로 검색 제한"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, response includes a list of image URLs.",
+          "message": "`True`인 경우 응답에 이미지 URL 목록이 포함됩니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "이미지 포함"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside text results",
+          "message": "텍스트 결과와 함께 이미지 URL 반환"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.desc": {
+          "source": "When `True`, each result includes `raw_content` with the full scraped HTML/text.  Larger response, useful for downstream parsing.",
+          "message": "`True`인 경우 각 결과에 스크랩된 전체 HTML/텍스트가 포함된 `raw_content`이(가) 포함됩니다. 응답 크기가 커지며 다운스트림 파싱에 유용합니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.display_name": {
+          "source": "Include Raw Content",
+          "message": "원시 콘텐츠 포함"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.short_desc": {
+          "source": "Include raw scraped HTML in each result",
+          "message": "각 결과에 스크랩된 원시 HTML 포함"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of results to return.  Range 1-20.  Default 5.",
+          "message": "반환할 최대 결과 수입니다. 범위는 1-20입니다. 기본값은 5입니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of search results (1-20)",
+          "message": "최대 검색 결과 수 (1-20)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "고급"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "기본"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.desc": {
+          "source": "Search depth.  `basic` returns faster, `advanced` does more iterative refinement at higher cost.",
+          "message": "검색 깊이입니다. `basic`은(는) 더 빠르게 반환되며, `advanced`은(는) 더 높은 비용으로 더 반복적인 개선을 수행합니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.display_name": {
+          "source": "Search Depth",
+          "message": "검색 깊이"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.short_desc": {
+          "source": "Search depth: 'basic' (fast) or 'advanced' (higher recall)",
+          "message": "검색 깊이: 'basic'(빠름) 또는 'advanced'(높은 재현율)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "Natural-language search query — what the agent wants to find on the web.",
+          "message": "자연어 검색어 — 에이전트가 웹에서 찾고자 하는 내용입니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "쿼리"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "Natural-language search query",
+          "message": "자연어 검색어"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "뉴스"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOmdlbmVyYWw.display_name": {
+          "source": "General",
+          "message": "일반"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.desc": {
+          "source": "Topic-aware search.  `news` biases toward recent news sources.",
+          "message": "주제 인식 검색입니다. `news`은(는) 최근 뉴스 소스에 가중치를 둡니다."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "토픽"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.short_desc": {
+          "source": "Search topic: 'general' or 'news'",
+          "message": "검색 주제: 'general' 또는 'news'"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
+          "source": "Search the web via Tavily",
+          "message": "Tavily를 통해 웹 검색"
+        },
+        "app.VGF2aWx5.desc": {
+          "source": "Provides access to [Tavily](https://www.tavily.com) — the agentic web-search API used by AI agents to retrieve real-time information.\n\n**Common use cases**:\n- **Agent tools**: register `tavily_search` / `tavily_extract` as tools an LLM can invoke (see @ref tavilyrestclientintro \"TavilyRestClient\" docs)\n- **RAG ingestion**: fetch fresh sources before embedding\n- **Background research** in workflows: get current information about products, competitors, news, regulations",
+          "message": "[Tavily](https://www.tavily.com)에 대한 액세스를 제공합니다. Tavily는 AI 에이전트가 실시간 정보를 검색하는 데 사용하는 에이전트형 웹 검색 API입니다.\n\n**일반적인 사용 사례**:\n- **에이전트 도구**: LLM이 호출할 수 있는 도구로 `tavily_search` / `tavily_extract` 등록 (@ref tavilyrestclientintro \"TavilyRestClient\" 문서 참조)\n- **RAG 수집**: 임베딩 전 최신 소스 가져오기\n- 워크플로의 **배경 조사**: 제품, 경쟁사, 뉴스, 규정에 대한 최신 정보 얻기"
+        },
+        "app.VGF2aWx5.display_name": {
+          "source": "Tavily",
+          "message": "Tavily"
+        },
+        "app.VGF2aWx5.short_desc": {
+          "source": "Tavily real-time web search for AI agents",
+          "message": "AI 에이전트를 위한 Tavily 실시간 웹 검색"
+        }
+      }
+    }
+  }
+}

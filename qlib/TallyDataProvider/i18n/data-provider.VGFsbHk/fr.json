@@ -1,0 +1,1329 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form with content blocks and settings, optionally based on a template or within a specific workspace",
+          "message": "Créer un nouveau formulaire avec des blocs de contenu et des paramètres, éventuellement basé sur un modèle ou dans un espace de travail spécifique"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create Form",
+          "message": "Créer un formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "List of form content blocks defining the form structure (questions, text, images, etc.); a `FORM_TITLE` block is automatically prepended from the `title` field",
+          "message": "Liste des blocs de contenu du formulaire définissant sa structure (questions, texte, images, etc.) ; un bloc `FORM_TITLE` est automatiquement ajouté au début à partir du champ `title`"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "Blocs"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Form content blocks",
+          "message": "Blocs de contenu du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Form configuration including closure, notifications, and display options",
+          "message": "Configuration du formulaire incluant la fermeture, les notifications et les options d'affichage"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Paramètres"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Form settings",
+          "message": "Paramètres du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "Vierge"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Brouillon"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "Publié"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The initial status of the form",
+          "message": "Le statut initial du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Initial form status",
+          "message": "Statut initial du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The workspace to create the form in; defaults to the user's default workspace",
+          "message": "L'espace de travail dans lequel créer le formulaire ; utilise par défaut l'espace de travail par défaut de l'utilisateur"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "Target workspace",
+          "message": "Espace de travail cible"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.desc": {
+          "source": "Optional template ID to use as a base for the new form",
+          "message": "ID de modèle facultatif à utiliser comme base pour le nouveau formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.display_name": {
+          "source": "Template ID",
+          "message": "ID du modèle"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.short_desc": {
+          "source": "Template to base form on",
+          "message": "Modèle sur lequel baser le formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.desc": {
+          "source": "The title displayed at the top of the form; automatically creates the required `FORM_TITLE` block as the first block",
+          "message": "Le titre affiché en haut du formulaire ; crée automatiquement le bloc `FORM_TITLE` requis comme premier bloc"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.display_name": {
+          "source": "Form Title",
+          "message": "Titre du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.short_desc": {
+          "source": "The title of the form",
+          "message": "Le titre du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "Créer un nouveau formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook for a form to receive events when forms are submitted",
+          "message": "Créer un nouveau webhook pour un formulaire afin de recevoir des événements lors de la soumission de formulaires"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "Créer un webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "Réponse au formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "Liste des types d'événements auxquels s'abonner ; la seule valeur valide est `FORM_RESPONSE`"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "Types d'événements"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "Types d'événements auxquels s'abonner"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.desc": {
+          "source": "Optional identifier for the external subscriber",
+          "message": "Identifiant facultatif pour l'abonné externe"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.display_name": {
+          "source": "External Subscriber",
+          "message": "Abonné externe"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.short_desc": {
+          "source": "External subscriber identifier",
+          "message": "Identifiant de l'abonné externe"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "L'ID du formulaire qui déclenche ce webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form to attach the webhook to",
+          "message": "Le formulaire auquel associer le webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Optional list of custom HTTP header objects (name/value pairs) sent with webhook requests",
+          "message": "Liste facultative d'objets d'en-tête HTTP personnalisés (paires nom/valeur) envoyés avec les requêtes webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "En-têtes HTTP"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Optional secret used to sign webhook payloads for verification",
+          "message": "Secret facultatif utilisé pour signer les charges utiles de webhook à des fins de vérification"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "Secret de signature"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Secret for payload signing",
+          "message": "Secret pour la signature de charge utile"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "L'URL de destination où les événements de webhook seront remis"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook endpoint URL",
+          "message": "URL du point de terminaison du webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a new webhook",
+          "message": "Créer un nouveau webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Create a new workspace and assign the authenticated user as a member; requires a Tally Pro or higher subscription",
+          "message": "Créer un nouvel espace de travail et attribuer l'utilisateur authentifié en tant que membre ; nécessite un abonnement Tally Pro ou supérieur"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Create Workspace",
+          "message": "Créer un espace de travail"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The display name for the new workspace",
+          "message": "Le nom d'affichage du nouvel espace de travail"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Workspace name",
+          "message": "Nom de l'espace de travail"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Create a new workspace",
+          "message": "Créer un nouvel espace de travail"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieve information about the currently authenticated user",
+          "message": "Récupérer les informations sur l'utilisateur actuellement authentifié"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "Obtenir l'utilisateur actuel"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the current authenticated user",
+          "message": "Obtenir l'utilisateur actuellement authentifié"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by its ID, including all blocks and settings",
+          "message": "Récupérer un formulaire unique par son ID, y compris tous les blocs et paramètres"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "Obtenir le formulaire"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to retrieve",
+          "message": "L'identifiant unique du formulaire à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "L'identifiant du formulaire à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a form by ID",
+          "message": "Obtenir un formulaire par ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific form submission with all its responses and the form questions",
+          "message": "Récupérer une soumission de formulaire spécifique avec toutes ses réponses et les questions du formulaire"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "Obtenir la soumission"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "L'ID du formulaire contenant la soumission"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "L'ID du formulaire"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to retrieve",
+          "message": "L'identifiant unique de la soumission à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "Identifiant de la soumission"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "L'identifiant de la soumission à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a submission by ID",
+          "message": "Obtenir une soumission par ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.desc": {
+          "source": "Retrieve a single workspace by its ID, including its members and pending invites",
+          "message": "Récupérer un espace de travail unique par son ID, y compris ses membres et les invitations en attente"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
+          "source": "Get Workspace",
+          "message": "Obtenir l'espace de travail"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to retrieve",
+          "message": "L'identifiant unique de l'espace de travail à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to retrieve",
+          "message": "L'ID de l'espace de travail à récupérer"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
+          "source": "Get a workspace by ID",
+          "message": "Obtenir un espace de travail par ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form by its ID and move it to the trash",
+          "message": "Supprimer un formulaire par son ID et le déplacer vers la corbeille"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete Form",
+          "message": "Supprimer le formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to delete (moves to trash)",
+          "message": "L'identifiant unique du formulaire à supprimer (déplace vers la corbeille)"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to delete",
+          "message": "L'ID du formulaire à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "Supprimer un formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Delete a specific submission from a form",
+          "message": "Supprimer une soumission spécifique d'un formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "Supprimer la soumission"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "L'ID du formulaire contenant la soumission"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "L'ID du formulaire"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to delete",
+          "message": "L'identifiant unique de la soumission à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "Identifiant de la soumission"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to delete",
+          "message": "L'ID de la soumission à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a submission",
+          "message": "Supprimer une soumission"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook by its ID",
+          "message": "Supprimer un webhook par son ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "Supprimer le webhook"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to delete",
+          "message": "L'identifiant unique du webhook à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to delete",
+          "message": "L'ID du webhook à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "Supprimer un webhook"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Delete a workspace and all its associated forms",
+          "message": "Supprimer un espace de travail et tous ses formulaires associés"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Delete Workspace",
+          "message": "Supprimer l'espace de travail"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to delete; this also deletes all forms in the workspace",
+          "message": "L'identifiant unique de l'espace de travail à supprimer ; cela supprime également tous les formulaires dans l'espace de travail"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to delete",
+          "message": "L'ID de l'espace de travail à supprimer"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Delete a workspace",
+          "message": "Supprimer un espace de travail"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.desc": {
+          "source": "Fires when a new form submission is received for the specified form",
+          "message": "Se déclenche lorsqu'une nouvelle soumission de formulaire est reçue pour le formulaire spécifié"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
+          "source": "New Form Submission",
+          "message": "Nouvelle soumission de formulaire"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to watch for new submissions",
+          "message": "L'ID du formulaire à surveiller pour de nouvelles soumissions"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "Le formulaire à surveiller pour les soumissions"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Polling interval in seconds (minimum `30`, default `60`)",
+          "message": "Intervalle d'interrogation en secondes (minimum `30`, par défaut `60`)"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {
+          "source": "Trigger when a new form submission is received",
+          "message": "Déclencher lorsqu'une nouvelle soumission de formulaire est reçue"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tally** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuer un appel d'API HTTP / REST personnalisé à **Tally** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hachage contenant le code de statut, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tally",
+          "message": "Effectuer un appel d'API personnalisé à Tally"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.desc": {
+          "source": "Search and list forms with optional pagination and workspace filtering",
+          "message": "Rechercher et lister les formulaires avec pagination optionnelle et filtrage par espace de travail"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
+          "source": "Search Forms",
+          "message": "Rechercher des formulaires"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Number of forms per page (1-500, default `50`)",
+          "message": "Nombre de formulaires par page (1-500, par défaut `50`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Nombre de résultats par page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Numéro de page pour la pagination (par défaut `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.desc": {
+          "source": "List of workspace IDs to filter results",
+          "message": "Liste des ID d'espaces de travail pour filtrer les résultats"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.display_name": {
+          "source": "Workspace IDs",
+          "message": "ID d'espaces de travail"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.short_desc": {
+          "source": "Filter by workspace IDs",
+          "message": "Filtrer par ID d'espaces de travail"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
+          "source": "Search and list forms",
+          "message": "Rechercher et lister les formulaires"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.desc": {
+          "source": "List all questions in a specific form",
+          "message": "Lister toutes les questions d'un formulaire spécifique"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
+          "source": "Search Questions",
+          "message": "Rechercher des questions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve questions from",
+          "message": "L'ID du formulaire duquel récupérer les questions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list questions for",
+          "message": "Le formulaire pour lequel lister les questions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
+          "source": "List form questions",
+          "message": "Lister les questions du formulaire"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.desc": {
+          "source": "Search and list submissions for a specific form with optional filtering by status, date range, and pagination",
+          "message": "Rechercher et lister les soumissions pour un formulaire spécifique avec filtrage optionnel par statut, plage de dates et pagination"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
+          "source": "Search Submissions",
+          "message": "Rechercher des soumissions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.desc": {
+          "source": "Get submissions after a specific submission ID",
+          "message": "Obtenir les soumissions après un ID de soumission spécifique"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.display_name": {
+          "source": "After ID",
+          "message": "ID après"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.short_desc": {
+          "source": "Cursor-based pagination",
+          "message": "Pagination basée sur curseur"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.desc": {
+          "source": "Filter submissions submitted on or before this date",
+          "message": "Filtrer les soumissions soumises au plus tard à cette date"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.display_name": {
+          "source": "End Date",
+          "message": "Date de fin"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.short_desc": {
+          "source": "Filter by end date",
+          "message": "Filtrer par date de fin"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve submissions from",
+          "message": "L'ID du formulaire duquel récupérer les soumissions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list submissions for",
+          "message": "Le formulaire pour lequel lister les soumissions"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Tous"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Terminée"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhcnRpYWw.display_name": {
+          "source": "Partial",
+          "message": "Partiel"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions by completion status",
+          "message": "Filtrer les soumissions par statut d'achèvement"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.short_desc": {
+          "source": "Submission status filter",
+          "message": "Filtre de statut de soumission"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.desc": {
+          "source": "Number of submissions per page (1-500, default `50`)",
+          "message": "Nombre de soumissions par page (1-500, par défaut `50`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Nombre de résultats par page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.desc": {
+          "source": "Filter submissions submitted on or after this date",
+          "message": "Filtrer les soumissions soumises à partir de cette date"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Date de début"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.short_desc": {
+          "source": "Filter by start date",
+          "message": "Filtrer par date de début"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Numéro de page pour la pagination (par défaut `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "Search and list form submissions",
+          "message": "Rechercher et lister les soumissions de formulaire"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.desc": {
+          "source": "List webhook delivery events (status, status code, response, retry count, payload) for a specific webhook; useful for debugging failed deliveries",
+          "message": "Lister les événements de distribution de webhook (statut, code de statut, réponse, nombre de tentatives, charge utile) pour un webhook spécifique ; utile pour déboguer les échecs de distribution"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
+          "source": "Search Webhook Events",
+          "message": "Rechercher des événements de webhook"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Numéro de page pour la pagination (par défaut `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook to retrieve delivery events for",
+          "message": "L'ID du webhook pour lequel récupérer les événements de distribution"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook to list events for",
+          "message": "Le webhook pour lequel lister les événements"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
+          "source": "List delivery events for a webhook",
+          "message": "Lister les événements de distribution pour un webhook"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.desc": {
+          "source": "List all webhooks across your accessible forms with optional pagination",
+          "message": "Lister tous les webhooks parmi vos formulaires accessibles avec pagination optionnelle"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
+          "source": "Search Webhooks",
+          "message": "Rechercher des webhooks"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.desc": {
+          "source": "Number of webhooks per page (1-100, default `25`)",
+          "message": "Nombre de webhooks par page (1-100, valeur par défaut : `25`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Nombre de résultats par page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Numéro de page pour la pagination (par défaut `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
+          "source": "Search and list webhooks",
+          "message": "Rechercher et lister les webhooks"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.desc": {
+          "source": "List all workspaces with their members and pending invites; supports page-based pagination",
+          "message": "Lister tous les espaces de travail avec leurs membres et invitations en attente ; prend en charge la pagination par page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
+          "source": "Search Workspaces",
+          "message": "Rechercher des espaces de travail"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Numéro de page pour la pagination (par défaut `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numéro de page"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
+          "source": "Search and list workspaces",
+          "message": "Rechercher et lister les espaces de travail"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.desc": {
+          "source": "Retry sending a previously failed webhook event delivery",
+          "message": "Réessayer l'envoi d'une distribution d'événement webhook ayant échoué"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
+          "source": "Retry Webhook Event",
+          "message": "Réessayer l'événement webhook"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.desc": {
+          "source": "The ID of the failed webhook event to retry",
+          "message": "L'identifiant de l'événement webhook en échec à réessayer"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID d'événement"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "The webhook event to retry",
+          "message": "L'événement webhook à réessayer"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook that originally produced the event",
+          "message": "L'identifiant du webhook ayant initialement généré l'événement"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook owning the event",
+          "message": "Le webhook propriétaire de l'événement"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
+          "source": "Retry a failed webhook event",
+          "message": "Réessayer un événement webhook ayant échoué"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update a form's settings, blocks, or status",
+          "message": "Mettre à jour les paramètres, les blocs ou le statut d'un formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update Form",
+          "message": "Mettre à jour le formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "Updated list of form content blocks",
+          "message": "Liste mise à jour des blocs de contenu du formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "Blocs"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Updated form blocks",
+          "message": "Blocs de formulaire mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "L'identifiant unique du formulaire à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to update",
+          "message": "L'identifiant du formulaire à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new display name for the form",
+          "message": "Le nouveau nom d'affichage pour le formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "Updated form name",
+          "message": "Nom de formulaire mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Updated form configuration",
+          "message": "Configuration de formulaire mise à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Paramètres"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated form settings",
+          "message": "Paramètres de formulaire mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "Vierge"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "Deleted",
+          "message": "Supprimé"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Brouillon"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "Publié"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The new status for the form",
+          "message": "Le nouveau statut pour le formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Updated form status",
+          "message": "Statut de formulaire mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update a form",
+          "message": "Mettre à jour un formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook configuration. The Tally API requires `formId`, `url`, `eventTypes`, and `isEnabled` to be supplied on every update; supply the current value for any field that should not change",
+          "message": "Mettre à jour la configuration d'un webhook existant. L'API Tally requiert que `formId`, `url`, `eventTypes` et `isEnabled` soient fournis à chaque mise à jour ; fournissez la valeur actuelle pour tout champ qui ne doit pas changer"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "Mettre à jour le webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "Réponse au formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "Liste des types d'événements auxquels s'abonner ; la seule valeur valide est `FORM_RESPONSE`"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "Types d'événements"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "Types d'événements auxquels s'abonner"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "L'ID du formulaire qui déclenche ce webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "ID du formulaire"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form this webhook is attached to",
+          "message": "Le formulaire auquel ce webhook est associé"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Updated list of custom HTTP header objects",
+          "message": "Liste mise à jour d'objets d'en-tête HTTP personnalisés"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "En-têtes HTTP"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Updated HTTP headers",
+          "message": "En-têtes HTTP mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to update",
+          "message": "L'identifiant unique du webhook à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to update",
+          "message": "L'identifiant du webhook à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.desc": {
+          "source": "Set to `True` to enable or `False` to disable the webhook",
+          "message": "Définir sur `True` pour activer ou `False` pour désactiver le webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.display_name": {
+          "source": "Is Enabled",
+          "message": "Est activé"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.short_desc": {
+          "source": "Enable or disable the webhook",
+          "message": "Activer ou désactiver le webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Updated secret for payload signing",
+          "message": "Secret mis à jour pour la signature de charge utile"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "Secret de signature"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Updated signing secret",
+          "message": "Secret de signature mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "L'URL de destination où les événements de webhook seront remis"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Endpoint URL",
+          "message": "URL du point de terminaison"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "Mettre à jour un webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Update a workspace's information by its ID",
+          "message": "Mettre à jour les informations d'un espace de travail via son identifiant"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Update Workspace",
+          "message": "Mettre à jour l'espace de travail"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to update",
+          "message": "L'identifiant unique de l'espace de travail à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to update",
+          "message": "L'identifiant de l'espace de travail à mettre à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the workspace",
+          "message": "Le nouveau nom d'affichage pour l'espace de travail"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated workspace name",
+          "message": "Nom d'espace de travail mis à jour"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Update a workspace",
+          "message": "Mettre à jour un espace de travail"
+        },
+        "app.VGFsbHk.desc": {
+          "source": "Provides access to [Tally.so](https://tally.so/) for programmatic form creation, submission management, and webhook configuration.\n\n**Common use cases**:\n- **Form management**: create, update, and publish forms programmatically\n- **Submission processing**: retrieve and filter form submissions for data analysis\n- **Automation**: set up webhooks to trigger workflows when forms are submitted\n- **User management**: retrieve authenticated user information",
+          "message": "Fournit un accès à [Tally.so](https://tally.so/) pour la création programmatique de formulaires, la gestion des soumissions et la configuration des webhooks.\n\n**Cas d'utilisation courants** :\n- **Gestion des formulaires** : créer, mettre à jour et publier des formulaires par programmation\n- **Traitement des soumissions** : récupérer et filtrer les soumissions de formulaires pour l'analyse des données\n- **Automatisation** : configurer des webhooks pour déclencher des flux de travail lors de la soumission de formulaires\n- **Gestion des utilisateurs** : récupérer les informations de l'utilisateur authentifié"
+        },
+        "app.VGFsbHk.display_name": {
+          "source": "Tally",
+          "message": "Tally"
+        },
+        "app.VGFsbHk.short_desc": {
+          "source": "Tally.so form builder and management",
+          "message": "Créateur et gestionnaire de formulaires Tally.so"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2477 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.desc": {
+          "source": "Create or index a document in OpenSearch. Use optional pipeline and refresh controls when ingested data must be transformed or made immediately visible to search.",
+          "message": "Créer ou indexer un document dans OpenSearch. Utilisez les contrôles optionnels de pipeline et de rafraîchissement lorsque les données ingérées doivent être transformées ou rendues immédiatement visibles pour la recherche."
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
+          "source": "Add Document",
+          "message": "Ajouter un document"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.desc": {
+          "source": "The name of the index to use",
+          "message": "Le nom de l'index à utiliser"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.short_desc": {
+          "source": "Target index name",
+          "message": "Nom de l'index cible"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.desc": {
+          "source": "Only perform the operation if the document has this sequence number",
+          "message": "Exécuter l'opération uniquement si le document possède ce numéro de séquence"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.display_name": {
+          "source": "If Seq No",
+          "message": "Si Seq No"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.short_desc": {
+          "source": "Required sequence number",
+          "message": "Numéro de séquence requis"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.desc": {
+          "source": "Only perform the operation if the document has this primary term",
+          "message": "Exécuter l'opération uniquement si le document possède ce terme principal"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.display_name": {
+          "source": "If Primary Term",
+          "message": "Si terme principal"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.short_desc": {
+          "source": "Required primary term",
+          "message": "Terme principal requis"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.desc": {
+          "source": "Set to create to only index the document if it does not already exist (put if absent). If a document with the specified `_id` already exists, the indexing operation will fail. Same as using the `<index>/_create` endpoint. Valid values: `index`, `create`. If document id is specified, it defaults to `index`. Otherwise, it defaults to `create`",
+          "message": "Définir sur create pour indexer le document uniquement s'il n'existe pas déjà (put if absent). Si un document avec l'identifiant `_id` spécifié existe déjà, l'opération d'indexation échouera. Identique à l'utilisation du point de terminaison `<index>/_create`. Valeurs valides : `index`, `create`. Si l'identifiant du document est spécifié, la valeur par défaut est `index`. Sinon, la valeur par défaut est `create`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.display_name": {
+          "source": "Operation Type",
+          "message": "Type d'opération"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.short_desc": {
+          "source": "Index or create operation",
+          "message": "Opération d'indexation ou de création"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.desc": {
+          "source": "ID of the pipeline to use to preprocess incoming documents. If the index has a default ingest pipeline specified, then setting the value to _none disables the default ingest pipeline for this request. If a final pipeline is configured it will always run, regardless of the value of this parameter",
+          "message": "Identifiant du pipeline à utiliser pour prétraiter les documents entrants. Si l'index possède un pipeline d'ingestion par défaut spécifié, définir la valeur sur _none désactive le pipeline d'ingestion par défaut pour cette requête. Si un pipeline final est configuré, il s'exécutera toujours, quelle que soit la valeur de ce paramètre"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "Pipeline"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.short_desc": {
+          "source": "Ingest pipeline ID",
+          "message": "Identifiant du pipeline d'ingestion"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.desc": {
+          "source": "Custom value used to route operations to a specific shard",
+          "message": "Valeur personnalisée utilisée pour router les opérations vers un shard spécifique"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.desc": {
+          "source": "If `true` (default: `false`), OpenSearch refreshes the affected shards to make this operation visible to search, if `wait_for` then wait for a refresh to make this operation visible to search, if `false` do nothing with refreshes. Valid values: `true`, `false`, `wait_for`",
+          "message": "Si `true` (valeur par défaut : `false`), OpenSearch rafraîchit les shards affectés pour rendre cette opération visible pour la recherche ; si `wait_for`, attendre un rafraîchissement pour rendre cette opération visible pour la recherche ; si `false`, ne rien faire concernant les rafraîchissements. Valeurs valides : `true`, `false`, `wait_for`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "Rafraîchissement"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "Paramètre de rafraîchissement"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If `true` (default `false`), the destination must be an index alias",
+          "message": "Si `true` (valeur par défaut : `false`), la destination doit être un alias d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "Exiger un alias ?"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "La destination doit être un alias"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation (default `1`). Set to `all` or any positive integer up to the total number of shards in the index (number_of_replicas+1)",
+          "message": "Nombre de copies de shard devant être actives avant de poursuivre l'opération (valeur par défaut : `1`). Définir sur `all` ou sur tout entier positif jusqu'au nombre total de shards dans l'index (number_of_replicas+1)"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "Attendre les shards actifs"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "Shards actifs requis"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: `1m`). If no response is received before the timeout expires, the request fails and returns an error",
+          "message": "Durée d'attente d'une réponse (valeur par défaut : `1m`). Si aucune réponse n'est reçue avant l'expiration du délai d'attente, la requête échoue et renvoie une erreur"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "Délai d'attente de la réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.desc": {
+          "source": "Explicit version number for concurrency control. The specified version must match the current version of the document for the request to succeed",
+          "message": "Numéro de version explicite pour le contrôle de simultanéité. La version spécifiée doit correspondre à la version actuelle du document pour que la requête réussisse"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.short_desc": {
+          "source": "Document version for concurrency",
+          "message": "Version du document pour la simultanéité"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.desc": {
+          "source": "Specific version type: `external`, `external_gte`",
+          "message": "Type de version spécifique : `external`, `external_gte`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.display_name": {
+          "source": "Version Type",
+          "message": "Type de version"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.short_desc": {
+          "source": "Version type",
+          "message": "Type de version"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
+          "source": "Add a document to OpenSearch",
+          "message": "Ajouter un document à OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.desc": {
+          "source": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add optional text and keyword metadata fields for combined lexical, structured, and vector search.",
+          "message": "Créer un index OpenSearch avec `index.knn` activé et un mappage de champ `knn_vector`. Ajoutez des champs de métadonnées texte et mot-clé facultatifs pour une recherche combinée lexicale, structurée et vectorielle."
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
+          "source": "Create Vector Index",
+          "message": "Créer un index vectoriel"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.desc": {
+          "source": "Number of dimensions in the vector field",
+          "message": "Nombre de dimensions dans le champ vectoriel"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.display_name": {
+          "source": "Dimension",
+          "message": "Dimension"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.short_desc": {
+          "source": "Vector dimensions",
+          "message": "Dimensions vectorielles"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOm5tc2xpYg.display_name": {
+          "source": "NMSLIB",
+          "message": "NMSLIB"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmZhaXNz.display_name": {
+          "source": "Faiss",
+          "message": "Faiss"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmx1Y2VuZQ.display_name": {
+          "source": "Lucene",
+          "message": "Lucene"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.desc": {
+          "source": "Optional approximate nearest-neighbor engine, such as `lucene`, `faiss`, or `nmslib`",
+          "message": "Moteur facultatif de plus proches voisins approximatifs, tel que `lucene`, `faiss` ou `nmslib`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.display_name": {
+          "source": "Engine",
+          "message": "Moteur"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.short_desc": {
+          "source": "ANN engine",
+          "message": "Moteur ANN"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.desc": {
+          "source": "Optional method parameter controlling HNSW construction search depth",
+          "message": "Paramètre de méthode facultatif contrôlant la profondeur de recherche lors de la construction HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.display_name": {
+          "source": "EF Construction",
+          "message": "EF Construction"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.short_desc": {
+          "source": "HNSW construction depth",
+          "message": "Profondeur de construction HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.desc": {
+          "source": "Optional default `knn.algo_param.ef_search` index setting",
+          "message": "Paramètre d'index `knn.algo_param.ef_search` par défaut facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.display_name": {
+          "source": "EF Search",
+          "message": "EF Search"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.short_desc": {
+          "source": "Default search depth",
+          "message": "Profondeur de recherche par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.desc": {
+          "source": "The name of the vector index to create",
+          "message": "Le nom de l'index vectoriel à créer"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.short_desc": {
+          "source": "Index name to create",
+          "message": "Nom de l'index à créer"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.desc": {
+          "source": "Optional method parameter controlling HNSW graph degree",
+          "message": "Paramètre de méthode facultatif contrôlant le degré du graphe HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.display_name": {
+          "source": "M",
+          "message": "M"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.short_desc": {
+          "source": "HNSW graph degree",
+          "message": "Degré du graphe HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.desc": {
+          "source": "Optional additional mappings; the vector field mapping is added automatically",
+          "message": "Mappages supplémentaires facultatifs ; le mappage du champ vectoriel est ajouté automatiquement"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "Mappages"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.short_desc": {
+          "source": "Additional mappings",
+          "message": "Mappages supplémentaires"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.desc": {
+          "source": "Period to wait for a connection to the master node",
+          "message": "Délai d'attente d'une connexion au nœud maître"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.display_name": {
+          "source": "Master Timeout",
+          "message": "Délai d'expiration du maître"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.short_desc": {
+          "source": "Master node timeout",
+          "message": "Délai d'expiration du nœud maître"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.desc": {
+          "source": "Optional list of keyword metadata fields to add to the index mapping",
+          "message": "Liste facultative de champs de métadonnées de type mot-clé à ajouter au mappage d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.display_name": {
+          "source": "Metadata Fields",
+          "message": "Champs de métadonnées"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.short_desc": {
+          "source": "Keyword metadata fields",
+          "message": "Champs de métadonnées de type mot-clé"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmZsYXQ.display_name": {
+          "source": "Flat",
+          "message": "Plat"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmhuc3c.display_name": {
+          "source": "HNSW",
+          "message": "HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOml2Zg.display_name": {
+          "source": "IVF",
+          "message": "IVF"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.desc": {
+          "source": "Optional approximate nearest-neighbor method name, such as `hnsw`, `ivf`, or `flat`",
+          "message": "Nom de méthode facultatif de plus proches voisins approximatifs, tel que `hnsw`, `ivf` ou `flat`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.display_name": {
+          "source": "Method Name",
+          "message": "Nom de la méthode"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.short_desc": {
+          "source": "ANN method",
+          "message": "Méthode ANN"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.desc": {
+          "source": "Optional additional index settings; `index.knn` is set automatically",
+          "message": "Paramètres d'index supplémentaires facultatifs ; `index.knn` est défini automatiquement"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Paramètres"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.short_desc": {
+          "source": "Additional index settings",
+          "message": "Paramètres d'index supplémentaires"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvc2luZXNpbWls.display_name": {
+          "source": "Cosine Similarity",
+          "message": "Similarité cosinus"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmlubmVycHJvZHVjdA.display_name": {
+          "source": "Inner Product",
+          "message": "Produit scalaire"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwx.display_name": {
+          "source": "L1",
+          "message": "L1"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwy.display_name": {
+          "source": "L2",
+          "message": "L2"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmxpbmY.display_name": {
+          "source": "L-Infinity",
+          "message": "L-infini"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "Vector space type, such as `l2`, `cosinesimil`, or `innerproduct`",
+          "message": "Type d'espace vectoriel, tel que `l2`, `cosinesimil` ou `innerproduct`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "Type d'espace"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Vector distance space",
+          "message": "Espace de distance vectorielle"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation",
+          "message": "Le nombre de copies de fragments devant être actives avant de procéder à l'opération"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "Attendre les shards actifs"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "Shards actifs requis"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.desc": {
+          "source": "Optional list of text fields to add to the index mapping",
+          "message": "Liste facultative de champs de texte à ajouter au mappage d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.display_name": {
+          "source": "Text Fields",
+          "message": "Champs de texte"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.short_desc": {
+          "source": "Text fields to add",
+          "message": "Champs de texte à ajouter"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response",
+          "message": "Délai d'attente d'une réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.short_desc": {
+          "source": "Response timeout",
+          "message": "Délai d'expiration de la réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.desc": {
+          "source": "The `knn_vector` field to create in the index mapping",
+          "message": "Le champ `knn_vector` à créer dans le mappage d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.display_name": {
+          "source": "Vector Field",
+          "message": "Champ de vecteur"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.short_desc": {
+          "source": "Vector field name",
+          "message": "Nom du champ vectoriel"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
+          "source": "Create an OpenSearch vector index",
+          "message": "Créer un index vectoriel OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.desc": {
+          "source": "Compute analytics and aggregations over OpenSearch search results, including terms, histogram, and metric aggregations. Use this action when the output is grouped or summarized data rather than individual hits.",
+          "message": "Calculer des analyses et des agrégations sur les résultats de recherche OpenSearch, y compris des agrégations de termes, d'histogrammes et de métriques. Utilisez cette action lorsque la sortie correspond à des données regroupées ou résumées plutôt qu'à des résultats individuels."
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregations",
+          "message": "Agrégations"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.desc": {
+          "source": "Alias for 'aggs' - the aggregations to compute",
+          "message": "Alias de « aggs » - les agrégations à calculer"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.display_name": {
+          "source": "Aggregations (Alias)",
+          "message": "Agrégations (alias)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.short_desc": {
+          "source": "Alias for aggs field",
+          "message": "Alias pour le champ aggs"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.desc": {
+          "source": "The aggregations to compute. Each key is the aggregation name, value is the aggregation definition. Example:\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```",
+          "message": "Les agrégations à calculer. Chaque clé est le nom de l'agrégation, la valeur est la définition de l'agrégation. Exemple :\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.display_name": {
+          "source": "Aggregations",
+          "message": "Agrégations"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.short_desc": {
+          "source": "Aggregation definitions",
+          "message": "Définitions d'agrégation"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "Whether to allow wildcards that match no indices",
+          "message": "Indique s'il faut autoriser les caractères génériques ne correspondant à aucun index"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "Autoriser l'absence d'index ?"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "Autoriser l'absence d'index correspondants"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "How to expand wildcards: 'open', 'closed', 'hidden', 'none', 'all'",
+          "message": "Comment développer les caractères génériques : 'open', 'closed', 'hidden', 'none', 'all'"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "Développer les caractères génériques"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "Mode d'extension des caractères génériques"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (can include wildcards or comma-separated list)",
+          "message": "Nom de l'index dans lequel effectuer la recherche (peut inclure des caractères génériques ou une liste séparée par des virgules)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.display_name": {
+          "source": "Index Name",
+          "message": "Nom de l'index"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.short_desc": {
+          "source": "Target index for aggregation",
+          "message": "Index cible pour l'agrégation"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "Whether to ignore unavailable indices",
+          "message": "Indique s'il faut ignorer les index indisponibles"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "Ignorer les indisponibles ?"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore unavailable indices",
+          "message": "Ignorer les index indisponibles"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.desc": {
+          "source": "Number of hits to return. Default: 0 (aggregation-only, no documents returned)",
+          "message": "Nombre de résultats à renvoyer. Valeur par défaut : 0 (agrégation uniquement, aucun document renvoyé)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "Taille des résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "Nombre de résultats à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "Sur quelles répliques de partition exécuter la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "Préférence de réplique de partition"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.desc": {
+          "source": "Optional query to filter documents before aggregation (OpenSearch Query DSL)",
+          "message": "Requête facultative pour filtrer les documents avant l'agrégation (Query DSL OpenSearch)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.display_name": {
+          "source": "Query Filter",
+          "message": "Filtre de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.short_desc": {
+          "source": "Filter documents before aggregation",
+          "message": "Filtrer les documents avant l'agrégation"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "Valeur de routage personnalisée pour limiter la recherche à des partitions spécifiques"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request",
+          "message": "Indique si la requête doit être mise en cache"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "Mettre la requête en cache ?"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "Mettre la requête en cache"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.desc": {
+          "source": "Search timeout (e.g., '10s' for 10 seconds)",
+          "message": "Délai d'expiration de la recherche (par ex. « 10s » pour 10 secondes)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "Délai d'expiration de la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.short_desc": {
+          "source": "Compute aggregations over search results",
+          "message": "Calculer des agrégations sur les résultats de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.desc": {
+          "source": "Perform bulk `index`, `create`, `update`, and `delete` operations with OpenSearch's NDJSON bulk API. Use this action for high-throughput ingestion and batch maintenance workloads.",
+          "message": "Exécutez des opérations en masse de type `index`, `create`, `update` et `delete` avec l'API bulk NDJSON d'OpenSearch. Utilisez cette action pour les charges de travail d'ingestion à haut débit et de maintenance par lots."
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
+          "source": "Bulk Operations",
+          "message": "Opérations en bloc"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.desc": {
+          "source": "List of bulk operations to perform",
+          "message": "Liste des opérations en bloc à exécuter"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.display_name": {
+          "source": "Operations",
+          "message": "Opérations"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.short_desc": {
+          "source": "List of bulk operations",
+          "message": "Liste des opérations en bloc"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.desc": {
+          "source": "The default ingest pipeline to use for all operations",
+          "message": "Pipeline d'ingestion par défaut à utiliser pour toutes les opérations"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "Pipeline"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.short_desc": {
+          "source": "Default ingest pipeline",
+          "message": "Pipeline d'ingestion par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.desc": {
+          "source": "Default routing value for all operations",
+          "message": "Valeur de routage par défaut pour toutes les opérations"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.short_desc": {
+          "source": "Default routing value",
+          "message": "Valeur de routage par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.desc": {
+          "source": "Refresh setting: 'true', 'false', or 'wait_for'",
+          "message": "Paramètre d'actualisation : 'true', 'false' ou 'wait_for'"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "Rafraîchissement"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "Paramètre de rafraîchissement"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If true, the destination must be an index alias",
+          "message": "Si la valeur est true, la destination doit être un alias d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "Exiger un alias ?"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "La destination doit être un alias"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "Number of shard copies that must be active before proceeding",
+          "message": "Nombre de copies de partitions qui doivent être actives avant de continuer"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "Attendre les shards actifs"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "Shards actifs requis"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: 1m)",
+          "message": "Délai d'attente d'une réponse (par défaut : 1m)"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "Délai d'attente de la réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
+          "source": "Perform bulk document operations",
+          "message": "Effectuer des opérations de documents en bloc"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a raw query vector against a `knn_vector` field. Use optional filters, method parameters, or radial-search thresholds when supported by the target index and OpenSearch version.",
+          "message": "Recherchez dans un index OpenSearch avec un vecteur de requête brut sur un champ `knn_vector`. Utilisez des filtres facultatifs, des paramètres de méthode ou des seuils de recherche radiale lorsqu'ils sont pris en charge par l'index cible et la version d'OpenSearch."
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
+          "source": "k-NN Search",
+          "message": "Recherche k-NN"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "Sélection facultative de `_source` pour les documents renvoyés ; accepte les valeurs booléennes, chaînes, listes ou tables de hachage compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "Champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "Sélection des champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The `knn_vector` field to search",
+          "message": "Le champ `knn_vector` dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "Champ de vecteur"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector field to search",
+          "message": "Champ vectoriel dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "Filtre Query DSL OpenSearch facultatif appliqué aux documents candidats"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "Filtre de requête facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "Décalage de départ des documents pour les résultats de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "De"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "Décalage de document de départ"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "Index OpenSearch dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "Nom de l'index dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "Nombre de plus proches voisins à récupérer"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "Plus proches voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "Nombre de voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "Seuil maximal facultatif de distance vectorielle"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "Distance max."
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "Distance vectorielle maximale"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "Paramètres de méthode facultatifs tels que `ef_search` pour la recherche approximative des plus proches voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "Paramètres de méthode"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "Paramètres de la méthode k-NN"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "Seuil de score minimal facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "Score min."
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "Seuil de score minimal"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "Pipeline de recherche facultatif à utiliser lors de l'exécution de la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "Pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "Nom du pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "Nombre de résultats de recherche à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "Taille des résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "Nombre de résultats à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "Sur quelles répliques de partition exécuter la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "Préférence de réplique de partition"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "Valeur de routage personnalisée pour limiter la recherche à des partitions spécifiques"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "Contrôle facultatif du suivi du nombre total de résultats ; accepte les valeurs booléennes ou entières compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "Suivre le nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "Suivi du nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.desc": {
+          "source": "The query vector to compare against vectors stored in `field`",
+          "message": "Vecteur de requête à comparer aux vecteurs stockés dans `field`"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.display_name": {
+          "source": "Query Vector",
+          "message": "Vecteur de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.short_desc": {
+          "source": "Vector to compare",
+          "message": "Vecteur à comparer"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with a query vector",
+          "message": "Rechercher dans un index OpenSearch avec un vecteur de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a hybrid query that combines keyword, vector, neural, or other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is needed.",
+          "message": "Rechercher dans un index OpenSearch à l'aide d'une requête hybride combinant des clauses de requête par mot-clé, vectorielles, neuronales ou autres clauses OpenSearch. Utilisez un pipeline de recherche lorsqu'une normalisation de score ou une fusion de rangs est requise."
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
+          "source": "Hybrid Search",
+          "message": "Recherche hybride"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "Sélection facultative de `_source` pour les documents renvoyés ; accepte les valeurs booléennes, chaînes, listes ou tables de hachage compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "Champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "Sélection des champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to all hybrid subqueries",
+          "message": "Filtre DSL de requête OpenSearch facultatif appliqué à toutes les sous-requêtes hybrides"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "Filtre de requête facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "Décalage de départ des documents pour les résultats de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "De"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "Décalage de document de départ"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "Index OpenSearch dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "Nom de l'index dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "Pipeline de recherche facultatif à utiliser lors de l'exécution de la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "Pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "Nom du pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "Nombre de résultats de recherche à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "Taille des résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "Nombre de résultats à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.desc": {
+          "source": "Maximum number of search results to retrieve from each shard for each hybrid subquery",
+          "message": "Nombre maximal de résultats de recherche à récupérer depuis chaque shard pour chaque sous-requête hybride"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.display_name": {
+          "source": "Pagination Depth",
+          "message": "Profondeur de pagination"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.short_desc": {
+          "source": "Hybrid pagination depth",
+          "message": "Profondeur de pagination hybride"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "Sur quelles répliques de partition exécuter la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "Préférence de réplique de partition"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.desc": {
+          "source": "A list of OpenSearch query clauses to combine in a hybrid query",
+          "message": "Liste de clauses de requête OpenSearch à combiner dans une requête hybride"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Requêtes"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.short_desc": {
+          "source": "Query clauses to combine",
+          "message": "Clauses de requête à combiner"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "Valeur de routage personnalisée pour limiter la recherche à des partitions spécifiques"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "Contrôle facultatif du suivi du nombre total de résultats ; accepte les valeurs booléennes ou entières compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "Suivre le nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "Suivi du nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
+          "source": "Combine multiple OpenSearch query clauses",
+          "message": "Combiner plusieurs clauses de requête OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **OpenSearch Server** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Passez un appel d'API HTTP / REST personnalisé à **OpenSearch Server** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête facultatifs, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hachage contenant le code d'état, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre dans cette application."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to OpenSearch Server",
+          "message": "Passer un appel d'API personnalisé à OpenSearch Server"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch vector or semantic field with OpenSearch neural search. Use this action when the cluster is configured with the required model, semantic field, or neural-search plugin support.",
+          "message": "Rechercher dans un champ vectoriel ou sémantique OpenSearch avec la recherche neuronale OpenSearch. Utilisez cette action lorsque le cluster est configuré avec le modèle requis, le champ sémantique ou la prise en charge du plugin neural-search."
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
+          "source": "Neural Search",
+          "message": "Recherche neuronale"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "Sélection facultative de `_source` pour les documents renvoyés ; accepte les valeurs booléennes, chaînes, listes ou tables de hachage compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "Champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "Sélection des champs sources"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.desc": {
+          "source": "When true, retrieves scores for nested field documents within each parent document",
+          "message": "Si la valeur est true, récupère les scores pour les documents de champs imbriqués au sein de chaque document parent"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.display_name": {
+          "source": "Expand Nested Docs?",
+          "message": "Développer les documents imbriqués ?"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.short_desc": {
+          "source": "Return nested scores",
+          "message": "Renvoyer les scores imbriqués"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The vector or semantic field to search",
+          "message": "Champ vectoriel ou sémantique à rechercher"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "Champ de vecteur"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector or semantic field",
+          "message": "Champ vectoriel ou sémantique"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "Filtre Query DSL OpenSearch facultatif appliqué aux documents candidats"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "Filtre de requête facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "Décalage de départ des documents pour les résultats de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "De"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "Décalage de document de départ"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "Index OpenSearch dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "Nom de l'index dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "Nombre de plus proches voisins à récupérer"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "Plus proches voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "Nombre de voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The OpenSearch model ID used to generate query embeddings; optional for semantic fields",
+          "message": "ID du modèle OpenSearch utilisé pour générer les embeddings de requête ; facultatif pour les champs sémantiques"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID du modèle"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Embedding model ID",
+          "message": "ID du modèle d'embedding"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "Seuil maximal facultatif de distance vectorielle"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "Distance max."
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "Distance vectorielle maximale"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "Paramètres de méthode facultatifs tels que `ef_search` pour la recherche approximative des plus proches voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "Paramètres de méthode"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "Paramètres de la méthode k-NN"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "Seuil de score minimal facultatif"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "Score min."
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "Seuil de score minimal"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "Pipeline de recherche facultatif à utiliser lors de l'exécution de la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "Pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "Nom du pipeline de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.desc": {
+          "source": "Analyzer for tokenizing `query_text` when using a sparse encoding model",
+          "message": "Analyseur pour la tokenisation de `query_text` lors de l'utilisation d'un modèle d'encodage épars"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.display_name": {
+          "source": "Semantic Field Analyzer",
+          "message": "Analyseur de champ sémantique"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.short_desc": {
+          "source": "Semantic field analyzer",
+          "message": "Analyseur de champ sémantique"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "Nombre de résultats de recherche à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "Taille des résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "Nombre de résultats à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "Sur quelles répliques de partition exécuter la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "Préférence de réplique de partition"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.desc": {
+          "source": "Base64-encoded image data used by OpenSearch to generate query embeddings",
+          "message": "Données d'image encodées en Base64 utilisées par OpenSearch pour générer des embeddings de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.display_name": {
+          "source": "Query Image",
+          "message": "Image de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.short_desc": {
+          "source": "Base64 image data",
+          "message": "Données d'image en Base64"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.desc": {
+          "source": "Sparse-vector query tokens and weights",
+          "message": "Tokens et poids de requête vectorielle éparse"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.display_name": {
+          "source": "Query Tokens",
+          "message": "Tokens de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.short_desc": {
+          "source": "Sparse query tokens",
+          "message": "Tokens de requête épars"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.desc": {
+          "source": "Text used by OpenSearch to generate query embeddings",
+          "message": "Texte utilisé par OpenSearch pour générer des embeddings de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.display_name": {
+          "source": "Query Text",
+          "message": "Texte de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.short_desc": {
+          "source": "Text to embed",
+          "message": "Texte à vectoriser"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "Valeur de routage personnalisée pour limiter la recherche à des partitions spécifiques"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.desc": {
+          "source": "Optional OpenSearch-compatible rescore setting for neural search",
+          "message": "Paramètre de rescore facultatif compatible avec OpenSearch pour la recherche neuronale"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.display_name": {
+          "source": "Rescore",
+          "message": "Rescore"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.short_desc": {
+          "source": "Vector rescore control",
+          "message": "Contrôle du rescore vectoriel"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "Contrôle facultatif du suivi du nombre total de résultats ; accepte les valeurs booléennes ou entières compatibles avec OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "Suivre le nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "Suivi du nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with text or sparse tokens",
+          "message": "Rechercher dans un index OpenSearch avec du texte ou des tokens épars"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. Use this action when ordinary `from` and `size` pagination is not appropriate.",
+          "message": "Rechercher dans un index OpenSearch à l'aide de la Scroll API pour une itération efficace sur de grands ensembles de résultats. Utilisez cette action lorsque la pagination standard `from` et `size` n'est pas appropriée."
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
+          "source": "Scroll Search",
+          "message": "Recherche Scroll"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.desc": {
+          "source": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling to free up resources.",
+          "message": "Si true, efface le contexte de défilement (nécessite scroll_id). Utilisez cette option à la fin du défilement pour libérer des ressources."
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.display_name": {
+          "source": "Clear Scroll?",
+          "message": "Effacer le scroll ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.short_desc": {
+          "source": "Clear scroll context",
+          "message": "Effacer le contexte de défilement"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (required for initial scroll, not needed for continue/clear)",
+          "message": "Nom de l'index dans lequel effectuer la recherche (obligatoire pour le défilement initial, non requis pour continuer/effacer)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index to search",
+          "message": "Index dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.desc": {
+          "source": "How long to keep the scroll context alive (e.g., '1m' for 1 minute, '5m' for 5 minutes). Default: '1m'",
+          "message": "Durée pendant laquelle conserver le contexte de défilement actif (par ex., '1m' pour 1 minute, '5m' pour 5 minutes). Par défaut : '1m'"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.display_name": {
+          "source": "Scroll Timeout",
+          "message": "Délai d'expiration du scroll"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context lifetime",
+          "message": "Durée de vie du contexte de défilement"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.desc": {
+          "source": "The scroll ID from a previous scroll response. If provided, continues the scroll. If not provided, starts a new scroll.",
+          "message": "Identifiant de défilement (scroll ID) d'une réponse de défilement précédente. S'il est fourni, poursuit le défilement. S'il n'est pas fourni, démarre un nouveau défilement."
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.display_name": {
+          "source": "Scroll ID",
+          "message": "Scroll ID"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.short_desc": {
+          "source": "Previous scroll ID",
+          "message": "ID de scroll précédent"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return per scroll page. Default: 1000",
+          "message": "Nombre de résultats à renvoyer par page de défilement. Par défaut : 1000"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Hits per scroll page",
+          "message": "Résultats par page de défilement"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Specifies which shard replicas to execute the search request on (for initial scroll only)",
+          "message": "Spécifie sur quelles répliques de shard exécuter la requête de recherche (uniquement pour le défilement initial)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "Préférence de shard"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.desc": {
+          "source": "The query to execute using OpenSearch Query DSL (for initial scroll only)",
+          "message": "Requête à exécuter à l'aide de l'OpenSearch Query DSL (uniquement pour le défilement initial)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.short_desc": {
+          "source": "Search query DSL",
+          "message": "DSL de requête de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value (for initial scroll only)",
+          "message": "Valeur de routage personnalisée (uniquement pour le défilement initial)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "Valeur de routage personnalisée"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request (for initial scroll only)",
+          "message": "Indique si la requête doit être mise en cache (uniquement pour le défilement initial)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "Mettre la requête en cache ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "Mettre la requête en cache"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {
+          "source": "Search with scroll API for large result sets",
+          "message": "Rechercher avec l'API Scroll pour de grands ensembles de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.desc": {
+          "source": "Search an OpenSearch index with the query DSL and optional query-string parameters. Use this action for precise document lookup, log search, analytics inputs, and pagination through ordinary search results.",
+          "message": "Rechercher dans un index OpenSearch avec le Query DSL et des paramètres de chaîne de requête facultatifs. Utilisez cette action pour la recherche précise de documents, la recherche de journaux, les entrées analytiques et la pagination dans les résultats de recherche ordinaires."
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
+          "source": "Search Index",
+          "message": "Rechercher dans l'index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response.\n\nValid values for `_source`:\n- `true`: (Boolean - the default) The entire document source is returned\n- `false`: (Boolean) The document source is not returned\n- `<wildcard_pattern>`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n- `<object>`: (object) Object containing a list of source fields to include or exclude\n  Properties for `<object>`:\n  - `excludes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to exclude from the response\n\n    You can also use this property to exclude fields from the subset specified in the `includes` property\n  - `includes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n\n    If this property is specified, only these source fields are returned. You can exclude fields from this subset using the `excludes` property",
+          "message": "Indique quels champs source sont renvoyés pour les documents correspondants. Ces champs sont renvoyés dans la propriété `hits._source` de la réponse de recherche.\n\nValeurs valides pour `_source` :\n- `true` : (Booléen - valeur par défaut) La source complète du document est renvoyée\n- `false` : (Booléen) La source du document n'est pas renvoyée\n- `<wildcard_pattern>` : (chaîne ou tableau de chaînes) Motif générique (*) ou tableau de motifs contenant les champs source à renvoyer\n- `<object>` : (objet) Objet contenant une liste de champs source à inclure ou à exclure\n  Propriétés pour `<object>` :\n  - `excludes` : (chaîne ou tableau de chaînes) Motif générique (*) ou tableau de motifs contenant les champs source à exclure de la réponse\n\n    Vous pouvez également utiliser cette propriété pour exclure des champs du sous-ensemble spécifié dans la propriété `includes`\n  - `includes` : (chaîne ou tableau de chaînes) Motif générique (*) ou tableau de motifs contenant les champs source à renvoyer\n\n    Si cette propriété est spécifiée, seuls ces champs source sont renvoyés. Vous pouvez exclure des champs de ce sous-ensemble à l'aide de la propriété `excludes`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.display_name": {
+          "source": "Source",
+          "message": "Source"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field control",
+          "message": "Contrôle des champs source"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to exclude from the response.\n\nYou can also use this parameter to exclude fields from the subset specified in `_source_includes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "Liste séparée par des virgules de champs source à exclure de la réponse.\n\nVous pouvez également utiliser ce paramètre pour exclure des champs du sous-ensemble spécifié dans le paramètre de requête `_source_includes`.\n\nSi le paramètre `_source` vaut `false`, ce paramètre est ignoré"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.display_name": {
+          "source": "Source Excludes",
+          "message": "Exclusions de source"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.short_desc": {
+          "source": "Fields to exclude",
+          "message": "Champs à exclure"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to include in the response.\n\nIf this parameter is specified, only these source fields are returned. You can exclude fields from this subset using the `_source_excludes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "Liste séparée par des virgules de champs source à inclure dans la réponse.\n\nSi ce paramètre est spécifié, seuls ces champs source sont renvoyés. Vous pouvez exclure des champs de ce sous-ensemble en utilisant le paramètre de requête `_source_excludes`.\n\nSi le paramètre `_source` vaut `false`, ce paramètre est ignoré"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.display_name": {
+          "source": "Source Includes",
+          "message": "Inclusions de source"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.short_desc": {
+          "source": "Fields to include",
+          "message": "Champs à inclure"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response. Defaults to `true`.\n\nValid values for `_source`:\n- `true`: The entire document source is returned\n- `false`: The document source is not returned\n- `<string>`: Comma-separated list of source fields to return. Wildcard (*) patterns are supported",
+          "message": "Indique quels champs source sont renvoyés pour les documents correspondants. Ces champs sont renvoyés dans la propriété `hits._source` de la réponse de recherche. La valeur par défaut est `true`.\n\nValeurs valides pour `_source` :\n- `true` : la source entière du document est renvoyée\n- `false` : la source du document n'est pas renvoyée\n- `<string>` : liste séparée par des virgules de champs source à renvoyer. Les modèles avec caractères génériques (*) sont pris en charge"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.display_name": {
+          "source": "Source Query",
+          "message": "Requête de source"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.short_desc": {
+          "source": "Source fields to return",
+          "message": "Champs source à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.desc": {
+          "source": "If `true` (the default), network round-trips between the coordinating node and the remote clusters are minimized when executing cross-cluster search (CCS) requests",
+          "message": "Si `true` (valeur par défaut), les allers-retours réseau entre le nœud coordinateur et les clusters distants sont minimisés lors de l'exécution de requêtes de recherche entre clusters (CCS)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.display_name": {
+          "source": "CCS Minimize Roundtrips?",
+          "message": "Minimiser les allers-retours CCS ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.short_desc": {
+          "source": "Minimize CCS roundtrips",
+          "message": "Minimiser les allers-retours CCS"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.desc": {
+          "source": "If `true` (default `false`), wildcard and prefix queries are analyzed.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "Si `true` (`false` par défaut), les requêtes avec caractères génériques et préfixes sont analysées.\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `q` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.display_name": {
+          "source": "Analyze Wildcard?",
+          "message": "Analyser les caractères génériques ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.short_desc": {
+          "source": "Analyze wildcards",
+          "message": "Analyser les caractères génériques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.desc": {
+          "source": "Analyzer to use for the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "Analyseur à utiliser pour la chaîne de requête.\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `q` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.display_name": {
+          "source": "Analyzer",
+          "message": "Analyseur"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.short_desc": {
+          "source": "Query string analyzer",
+          "message": "Analyseur de chaîne de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "If `false` (default `true`), the request returns an error if any wildcard expression, index alias, or `_all` value targets only missing or closed indices. This behavior applies even if the request targets other open indices. For example, a request targeting `foo*,bar*` returns an error if an index starts with `foo` but no index starts with `bar`",
+          "message": "Si `false` (`true` par défaut), la requête renvoie une erreur si une expression générique, un alias d'index ou une valeur `_all` cible uniquement des index manquants ou fermés. Ce comportement s'applique même si la requête cible d'autres index ouverts. Par exemple, une requête ciblant `foo*,bar*` renvoie une erreur si un index commence par `foo` mais qu'aucun index ne commence par `bar`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "Autoriser l'absence d'index ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "Autoriser l'absence d'index correspondants"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.desc": {
+          "source": "If `true`, returns partial results if there are shard request timeouts or shard failures. If `false`, returns an error with no partial results.\n\nTo override the default for this field, set the `search.default_allow_partial_results` cluster setting to `false`",
+          "message": "Si `true`, renvoie des résultats partiels en cas de délais d'attente dépassés pour les requêtes de shard ou d'échecs de shard. Si `false`, renvoie une erreur sans résultats partiels.\n\nPour remplacer la valeur par défaut de ce champ, définissez le paramètre de cluster `search.default_allow_partial_results` sur `false`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.display_name": {
+          "source": "Allow Partial Results?",
+          "message": "Autoriser les résultats partiels ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.short_desc": {
+          "source": "Return partial results",
+          "message": "Renvoyer des résultats partiels"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.desc": {
+          "source": "The number of shard results (default `512`) that should be reduced at once on the coordinating node. This value should be used as a protection mechanism to reduce the memory overhead per search request if the potential number of shards in the request can be large",
+          "message": "Nombre de résultats de shards (`512` par défaut) qui doivent être réduits en une seule fois sur le nœud coordinateur. Cette valeur doit être utilisée comme mécanisme de protection pour réduire la surcharge mémoire par requête de recherche si le nombre potentiel de shards dans la requête peut être important"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.display_name": {
+          "source": "Batched Reduce Size",
+          "message": "Taille de réduction par lots"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.short_desc": {
+          "source": "Shard results batch size",
+          "message": "Taille de lot des résultats de shards"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of docvalue_fields objects:\n- `field`: (Required, string) Wildcard pattern. The request returns doc values for field names matching this pattern.\n- `format`: (Optional, string) Format in which the doc values are returned.\n\nFor date fields, you can specify a date date format. For numeric fields fields, you can specify a DecimalFormat pattern.\n\nFor other field data types, this parameter is not supported",
+          "message": "Tableau de modèles de champs. La requête renvoie les valeurs pour les noms de champs correspondant à ces modèles dans la propriété `hits.fields` de la réponse.\n\nVous pouvez spécifier les éléments du tableau sous forme de chaîne ou d'objet.\n\nPropriétés des objets docvalue_fields :\n- `field` : (Obligatoire, chaîne) Modèle avec caractères génériques. La requête renvoie les doc values pour les noms de champs correspondant à ce modèle.\n- `format` : (Facultatif, chaîne) Format dans lequel les doc values sont renvoyées.\n\nPour les champs de date, vous pouvez spécifier un format de date. Pour les champs numériques, vous pouvez spécifier un modèle DecimalFormat.\n\nPour les autres types de données de champs, ce paramètre n'est pas pris en charge"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.display_name": {
+          "source": "Doc Value Fields",
+          "message": "Champs Doc Value"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.short_desc": {
+          "source": "Doc value fields array",
+          "message": "Tableau de champs doc value"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.desc": {
+          "source": "A comma-separated list of fields to return as the docvalue representation of a field for each hit",
+          "message": "Liste séparée par des virgules de champs à renvoyer sous forme de représentation docvalue d'un champ pour chaque résultat"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.display_name": {
+          "source": "Doc Value Fields Query",
+          "message": "Requête de champs Doc Value"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.short_desc": {
+          "source": "Doc value fields list",
+          "message": "Liste de champs doc value"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.desc": {
+          "source": "The default operator for query string query: `AND` or `OR`\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "Opérateur par défaut pour la requête de chaîne de requête : `AND` ou `OR`\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `q` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.display_name": {
+          "source": "Default Operator",
+          "message": "Opérateur par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.short_desc": {
+          "source": "Query string operator",
+          "message": "Opérateur de chaîne de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.desc": {
+          "source": "Field to use as default where no field prefix is given in the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "Champ à utiliser par défaut lorsqu'aucun préfixe de champ n'est fourni dans la chaîne de requête.\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `q` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.display_name": {
+          "source": "Default Field",
+          "message": "Champ par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.short_desc": {
+          "source": "Default query field",
+          "message": "Champ de requête par défaut"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "Type of index that wildcard patterns can match. If the request can target data streams, this argument determines whether wildcard expressions match hidden data streams. Supports comma-separated values, such as open,hidden. Valid values are:\n- `all`: Match any data stream or index, including hidden ones\n- `open`: (default) Match open, non-hidden indices. Also matches any non-hidden data stream\n- `closed`: Match closed, non-hidden indices. Also matches any non-hidden data stream. Data streams cannot be closed\n- `hidden`: Match hidden data streams and hidden indices. Must be combined with `open`, `closed`, or both\n- `none`: Wildcard patterns are not accepted",
+          "message": "Type d'index que les modèles de caractères génériques peuvent faire correspondre. Si la requête peut cibler des flux de données, cet argument détermine si les expressions génériques correspondent aux flux de données masqués. Prend en charge les valeurs séparées par des virgules, telles que open,hidden. Les valeurs valides sont :\n- `all` : fait correspondre n'importe quel flux de données ou index, y compris ceux qui sont masqués\n- `open` : (valeur par défaut) fait correspondre les index ouverts et non masqués. Fait également correspondre tout flux de données non masqué\n- `closed` : fait correspondre les index fermés et non masqués. Fait également correspondre tout flux de données non masqué. Les flux de données ne peuvent pas être fermés\n- `hidden` : fait correspondre les flux de données masqués et les index masqués. Doit être combiné avec `open`, `closed`, ou les deux\n- `none` : les modèles avec caractères génériques ne sont pas acceptés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "Développer les caractères génériques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "Mode d'extension des caractères génériques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "Si `true` (`false` par défaut), renvoie des informations détaillées sur le calcul du score dans le cadre d'un résultat"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.display_name": {
+          "source": "Explain?",
+          "message": "Expliquer ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.short_desc": {
+          "source": "Explain scoring",
+          "message": "Expliquer le score"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "Si `true` (`false` par défaut), renvoie des informations détaillées sur le calcul du score dans le cadre d'un résultat"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.display_name": {
+          "source": "Explain Query?",
+          "message": "Expliquer la requête ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.short_desc": {
+          "source": "Return score details",
+          "message": "Renvoyer les détails du score"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of fields objects:\n- `field`: (Required, string) Field to return. Supports wildcards (*)\n- `format`: (Optional, string) Format for date and geospatial fields. Other field data types do not support this parameter.\n\n  `date` and `date_nanos` fields accept a date format.\n\n  `geo_point` and `geo_shape` fields accept:\n  - `geojson (default)`: GeoJSON\n  - `wkt`: Well Known Text\n  - `mvt(<spec>)`: Binary Mapbox vector tile. The API returns the tile as a base64-encoded     string. `<spec>` has the format `<zoom>/<x>/<y>` with two optional suffixes:     `@<extent>` and/or `:<buffer>`. For example, `2/0/1` or `2/0/1@4096:5`.\n\n    mvt parameters:\n    - `<zoom>`: (Required, integer) Zoom level for the tile. Accepts `0-29`\n    - `<x>`: (Required, integer) X coordinate for the tile\n    - `<y>`: (Required, integer) Y coordinate for the tile\n    - `<extent>`: (Optional, integer) Size, in pixels, of a side of the tile. Vector tiles are       square with equal sides. Defaults to `4096`\n    - `<buffer>`: (Optional, integer) Size, in pixels, of a clipping buffer outside the tile.       This allows renderers to avoid outline artifacts from geometries that extend past the       extent of the tile. Defaults to `5`",
+          "message": "Tableau de modèles de champs. La requête renvoie les valeurs pour les noms de champs correspondant à ces modèles dans la propriété `hits.fields` de la réponse.\n\nVous pouvez spécifier les éléments du tableau sous forme de chaîne ou d'objet.\n\nPropriétés des objets fields :\n- `field` : (Obligatoire, chaîne) Champ à renvoyer. Prend en charge les caractères génériques (*)\n- `format` : (Facultatif, chaîne) Format pour les champs de date et géospatiaux. Les autres types de données de champs ne prennent pas en charge ce paramètre.\n\n  Les champs `date` et `date_nanos` acceptent un format de date.\n\n  Les champs `geo_point` et `geo_shape` acceptent :\n  - `geojson (default)` : GeoJSON\n  - `wkt` : Well Known Text\n  - `mvt(<spec>)` : tuile vectorielle binaire Mapbox. L'API renvoie la tuile sous forme de chaîne encodée en base64. `<spec>` a le format `<zoom>/<x>/<y>` avec deux suffixes facultatifs : `@<extent>` et/ou `:<buffer>`. Par exemple, `2/0/1` ou `2/0/1@4096:5`.\n\n    Paramètres mvt :\n    - `<zoom>` : (Obligatoire, entier) Niveau de zoom pour la tuile. Accepte `0-29`\n    - `<x>` : (Obligatoire, entier) Coordonnée X de la tuile\n    - `<y>` : (Obligatoire, entier) Coordonnée Y de la tuile\n    - `<extent>` : (Facultatif, entier) Taille, en pixels, d'un côté de la tuile. Les tuiles vectorielles sont carrées avec des côtés égaux. La valeur par défaut est `4096`\n    - `<buffer>` : (Facultatif, entier) Taille, en pixels, d'un tampon de découpage à l'extérieur de la tuile. Cela permet aux moteurs de rendu d'éviter les artefacts de contour provenant de géométries qui s'étendent au-delà de l'étendue de la tuile. La valeur par défaut est `5`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "Champs"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.short_desc": {
+          "source": "Fields to return",
+          "message": "Champs à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.desc": {
+          "source": "Starting document offset (default `0`). Needs to be non-negative and defaults to `0`.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "Décalage de document initial (`0` par défaut). Doit être non négatif et vaut par défaut `0`.\n\nPar défaut, vous ne pouvez pas paginer sur plus de 10 000 résultats en utilisant les paramètres from et size. Pour parcourir davantage de résultats, utilisez le paramètre `search_after`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "De"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.short_desc": {
+          "source": "Starting offset",
+          "message": "Décalage initial"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.desc": {
+          "source": "Starting document offset. Needs to be non-negative and defaults to 0.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "Décalage de document initial. Doit être non négatif et vaut 0 par défaut.\n\nPar défaut, vous ne pouvez pas paginer sur plus de 10 000 résultats en utilisant les paramètres from et size. Pour parcourir davantage de résultats, utilisez le paramètre `search_after`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.display_name": {
+          "source": "From Query",
+          "message": "Requête From"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "Décalage de document de départ"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.desc": {
+          "source": "Defines the kNN query to run.\n\nProperties of `knn` object:\n- `field`: (Required, string) The name of the vector field to search against. Must be a `dense_vector` field with indexing enabled\n- `filter`: (Optional, Query DSL object) Query to filter the documents that can match. The kNN search will return the top k documents that also match this filter. The value can be a single query or a list of queries. If filter is not provided, all documents are allowed to match.\n- `k`: (Required, integer) Number of nearest neighbors to return as top hits. This value must be less than `num_candidates`\n- `num_candidates`: (Required, integer) The number of nearest neighbor candidates to consider per shard. Cannot exceed 10,000. OpenSearch collects `num_candidates` results from each shard, then merges them to find the top k results. Increasing `num_candidates` tends to improve the accuracy of the final k results\n- `query_vector`: (Optional, array of floats) Query vector. Must have the same number of dimensions as the vector field you are searching against\n- `query_vector_builder`: (Optional, object) A configuration object indicating how to build a `query_vector` before executing the request. You must provide a `query_vector_builder` or `query_vector`, but not both\n- `similarity`: (Optional, float) The minimum similarity required for a document to be considered a match. The similarity value calculated relates to the raw similarity used. Not the document score. The matched documents are then scored according to similarity and the provided boost is applied\n\n  The similarity parameter is the direct vector similarity calculation.\n\n  - `l2_norm`: also known as Euclidean, will include documents where the vector is within the     dims dimensional hypersphere with radius similarity with origin at query_vector\n  - `cosine` & `dot_product`: Only return vectors where the cosine similarity or dot-product     are at least the provided similarity",
+          "message": "Définit la requête kNN à exécuter.\n\nPropriétés de l'objet `knn` :\n- `field` : (Obligatoire, chaîne) Nom du champ vectoriel sur lequel effectuer la recherche. Doit être un champ `dense_vector` avec l'indexation activée\n- `filter` : (Facultatif, objet Query DSL) Requête pour filtrer les documents pouvant correspondre. La recherche kNN renverra les k documents principaux qui correspondent également à ce filtre. La valeur peut être une requête unique ou une liste de requêtes. Si le filtre n'est pas fourni, tous les documents peuvent correspondre.\n- `k` : (Obligatoire, entier) Nombre de plus proches voisins à renvoyer parmi les meilleurs résultats. Cette valeur doit être inférieure à `num_candidates`\n- `num_candidates` : (Obligatoire, entier) Nombre de candidats plus proches voisins à prendre en compte par shard. Ne peut pas dépasser 10 000. OpenSearch collecte `num_candidates` résultats de chaque shard, puis les fusionne pour trouver les k meilleurs résultats. L'augmentation de `num_candidates` a tendance à améliorer la précision des k résultats finaux\n- `query_vector` : (Facultatif, tableau de flottants) Vecteur de requête. Doit avoir le même nombre de dimensions que le champ vectoriel sur lequel vous effectuez la recherche\n- `query_vector_builder` : (Facultatif, objet) Objet de configuration indiquant comment construire un `query_vector` avant d'exécuter la requête. Vous devez fournir un `query_vector_builder` ou un `query_vector`, mais pas les deux\n- `similarity` : (Facultatif, flottant) Similarité minimale requise pour qu'un document soit considéré comme correspondant. La valeur de similarité calculée concerne la similarité brute utilisée, et non le score du document. Les documents correspondants sont ensuite notés selon leur similarité et le boost fourni est appliqué\n\n  Le paramètre similarity est le calcul direct de similarité vectorielle.\n\n  - `l2_norm` : également appelé Euclidien, inclura les documents où le vecteur se trouve dans l'hypersphère à dims dimensions de rayon similarity dont l'origine est query_vector\n  - `cosine` & `dot_product` : renvoie uniquement les vecteurs dont la similarité cosinus ou le produit scalaire est au moins égal à la similarité fournie"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.display_name": {
+          "source": "kNN Query",
+          "message": "Requête kNN"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.short_desc": {
+          "source": "k-Nearest neighbors",
+          "message": "k plus proches voisins"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.desc": {
+          "source": "The name of the index to search",
+          "message": "Nom de l'index dans lequel rechercher"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "Index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "Nom de l'index dans lequel effectuer la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.desc": {
+          "source": "Boosts the `_score` of documents from specified indices.\n\nProperties of `indices_boost` objects:\n- `<index>: <boost-value>`: (Required, float)\n  - `<index>` is the name of the index or index alias. Wildcard (*) expressions are supported\n  - `<boost-value>` is the factor by which scores are multiplied. A boost value greater than     `1.0` increases the score. A boost value between `0` and `1.0` decreases the score",
+          "message": "Augmente le `_score` des documents provenant des index spécifiés.\n\nPropriétés des objets `indices_boost` :\n- `<index>: <boost-value>` : (Obligatoire, flottant)\n  - `<index>` est le nom de l'index ou de l'alias d'index. Les expressions avec caractères génériques (*) sont prises en charge\n  - `<boost-value>` est le facteur par lequel les scores sont multipliés. Une valeur de boost supérieure à `1.0` augmente le score. Une valeur de boost comprise entre `0` et `1.0` diminue le score"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.display_name": {
+          "source": "Indices Boost",
+          "message": "Boost des index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.short_desc": {
+          "source": "Index score boost",
+          "message": "Boost du score d'index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.desc": {
+          "source": "If `true` (the default), concrete, expanded or aliased indices will be ignored when frozen",
+          "message": "Si `true` (valeur par défaut), les index concrets, développés ou aliasés seront ignorés lorsqu'ils sont gelés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.display_name": {
+          "source": "Ignore Throttled?",
+          "message": "Ignorer les index gelés ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.short_desc": {
+          "source": "Ignore frozen indices",
+          "message": "Ignorer les index gelés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "If `false` (the default), the request returns an error if it targets a missing or closed index",
+          "message": "Si `false` (valeur par défaut), la requête renvoie une erreur si elle cible un index manquant ou fermé"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "Ignorer les indisponibles ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore missing indices",
+          "message": "Ignorer les index manquants"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.desc": {
+          "source": "If `true` (default `false`), format-based query failures (such as providing text to a numeric field) in the query string will be ignored.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "Si `true` (`false` par défaut), les échecs de requête liés au format (comme la fourniture de texte pour un champ numérique) dans la chaîne de requête seront ignorés.\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `q` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.display_name": {
+          "source": "Lenient?",
+          "message": "Indulgent ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.short_desc": {
+          "source": "Ignore format errors",
+          "message": "Ignorer les erreurs de format"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.desc": {
+          "source": "Defines the number of concurrent shard requests per node this search executes concurrently (default `5`). This value should be used to limit the impact of the search on the cluster in order to limit the number of concurrent shard requests",
+          "message": "Définit le nombre de requêtes de partition simultanées par nœud que cette recherche exécute simultanément (par défaut `5`). Cette valeur doit être utilisée pour limiter l'impact de la recherche sur le cluster afin de limiter le nombre de requêtes de partition simultanées"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.display_name": {
+          "source": "Max Concurrent Shards",
+          "message": "Partitions simultanées max."
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.short_desc": {
+          "source": "Max concurrent requests",
+          "message": "Nombre max. de requêtes simultanées"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.desc": {
+          "source": "Minimum `_score` for matching documents. Documents with a lower `_score` are not included in the search results",
+          "message": "`_score` minimal pour les documents correspondants. Les documents ayant un `_score` inférieur ne sont pas inclus dans les résultats de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "Score min."
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score filter",
+          "message": "Filtre de score minimal"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.desc": {
+          "source": "A comma-separated list of `<field>:<direction>` pairs",
+          "message": "Une liste de paires `<field>:<direction>` séparées par des virgules"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Trier"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.short_desc": {
+          "source": "Sort order",
+          "message": "Ordre de tri"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.desc": {
+          "source": "Period to retain the search context for scrolling.\n\nBy default, this value cannot exceed `1d` (24 hours). You can change this limit using the `search.max_keep_alive` cluster-level setting",
+          "message": "Durée de conservation du contexte de recherche pour le défilement.\n\nPar défaut, cette valeur ne peut pas dépasser `1d` (24 heures). Vous pouvez modifier cette limite à l'aide du paramètre au niveau du cluster `search.max_keep_alive`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.display_name": {
+          "source": "Scroll",
+          "message": "Scroll"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context timeout",
+          "message": "Délai d'expiration du contexte de défilement"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.desc": {
+          "source": "How distributed term frequencies are calculated for relevance scoring.\n\nValid values for search_type:\n- `query_then_fetch`: (Default) Distributed term frequencies are calculated locally for each shard running the search. We recommend this option for faster searches with potentially less accurate scoring\n- `dfs_query_then_fetch`: Distributed term frequencies are calculated globally, using information gathered from all shards running the search. While this option increases the accuracy of scoring, it adds a round-trip to each shard, which can result in slower searches",
+          "message": "Manière dont les fréquences de termes distribuées sont calculées pour le calcul du score de pertinence.\n\nValeurs valides pour search_type :\n- `query_then_fetch` : (Par défaut) Les fréquences de termes distribuées sont calculées localement pour chaque partition exécutant la recherche. Nous recommandons cette option pour des recherches plus rapides avec un score potentiellement moins précis\n- `dfs_query_then_fetch` : Les fréquences de termes distribuées sont calculées globalement, à l'aide des informations recueillies auprès de toutes les partitions exécutant la recherche. Bien que cette option augmente la précision du score, elle ajoute un aller-retour vers chaque partition, ce qui peut ralentir les recherches"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.display_name": {
+          "source": "Search Type",
+          "message": "Type de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.short_desc": {
+          "source": "Search type",
+          "message": "Type de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "Si `true`, renvoie le numéro de séquence et le terme principal de la dernière modification de chaque résultat"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "Seq No Primary Term ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "Renvoyer seq_no/primary_term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "Si `true`, renvoie le numéro de séquence et le terme principal de la dernière modification de chaque résultat"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "Seq No Primary Term ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "Renvoyer seq_no/primary_term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return. Needs to be non-negative and defaults to `10`.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "Le nombre de résultats à renvoyer. Doit être non négatif et vaut par défaut `10`.\n\nPar défaut, vous ne pouvez pas parcourir plus de 10 000 résultats à l'aide des paramètres `from` et `size`. Pour parcourir plus de résultats, utilisez le paramètre `search_after`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Taille"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits",
+          "message": "Nombre de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.desc": {
+          "source": "Defines the number of hits to return.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "Définit le nombre de résultats à renvoyer.\n\nPar défaut, vous ne pouvez pas parcourir plus de 10 000 résultats à l'aide des paramètres `from` et `size`. Pour parcourir plus de résultats, utilisez le paramètre `search_after`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.display_name": {
+          "source": "Size Query",
+          "message": "Requête de taille"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.short_desc": {
+          "source": "Number of hits",
+          "message": "Nombre de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.desc": {
+          "source": "Stats groups to associate with the search. Each group maintains a statistics aggregation for its associated searches",
+          "message": "Groupes de statistiques à associer à la recherche. Chaque groupe conserve une agrégation statistique pour ses recherches associées"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.display_name": {
+          "source": "Stats",
+          "message": "Statistiques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.short_desc": {
+          "source": "Stats groups",
+          "message": "Groupes de statistiques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.desc": {
+          "source": "Specific tag of the request for logging and statistical purposes",
+          "message": "Balise spécifique de la requête à des fins de journalisation et de statistiques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.display_name": {
+          "source": "Stats Query",
+          "message": "Requête de statistiques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.short_desc": {
+          "source": "Stats tag",
+          "message": "Balise de statistiques"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this field is specified, the `_source` parameter defaults to `false`. You can pass `_source=true` to return both source fields and stored fields in the search response",
+          "message": "Une liste de champs stockés séparés par des virgules à renvoyer avec chaque résultat. Si aucun champ n'est spécifié, aucun champ stocké n'est inclus dans la réponse.\n\nSi ce champ est spécifié, le paramètre `_source` prend par défaut la valeur `false`. Vous pouvez transmettre `_source=true` pour renvoyer à la fois les champs source et les champs stockés dans la réponse de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.display_name": {
+          "source": "Stored Fields Query",
+          "message": "Requête de champs stockés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.short_desc": {
+          "source": "Stored fields to return",
+          "message": "Champs stockés à renvoyer"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this option is specified, the `_source` parameter defaults to `false`. You can pass `_source: true` to return both source fields and stored fields in the search response",
+          "message": "Une liste de champs stockés séparés par des virgules à renvoyer avec chaque résultat. Si aucun champ n'est spécifié, aucun champ stocké n'est inclus dans la réponse.\n\nSi cette option est spécifiée, le paramètre `_source` prend par défaut la valeur `false`. Vous pouvez transmettre `_source: true` pour renvoyer à la fois les champs source et les champs stockés dans la réponse de recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.display_name": {
+          "source": "Stored Fields",
+          "message": "Champs stockés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.short_desc": {
+          "source": "Stored fields list",
+          "message": "Liste des champs stockés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.desc": {
+          "source": "The source text for which the suggestions should be returned.\n\nThis parameter can only be used when the `suggest_field` query string parameter is specified",
+          "message": "Le texte source pour lequel les suggestions doivent être renvoyées.\n\nCe paramètre ne peut être utilisé que lorsque le paramètre de chaîne de requête `suggest_field` est spécifié"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.display_name": {
+          "source": "Suggest Text",
+          "message": "Texte de suggestion"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.short_desc": {
+          "source": "Text for suggestions",
+          "message": "Texte pour les suggestions"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.desc": {
+          "source": "Specifies which field to use for suggestions",
+          "message": "Spécifie le champ à utiliser pour les suggestions"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.display_name": {
+          "source": "Suggest Field",
+          "message": "Champ de suggestion"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.short_desc": {
+          "source": "Field for suggestions",
+          "message": "Champ pour les suggestions"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.desc": {
+          "source": "Specifies the suggest mode. Available options:\n- `always`\n- `missing`\n- `popular`\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "Spécifie le mode de suggestion. Options disponibles :\n- `always`\n- `missing`\n- `popular`\n\nCe paramètre ne peut être utilisé que lorsque les paramètres de chaîne de requête `suggest_field` et `suggest_text` sont spécifiés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.display_name": {
+          "source": "Suggest Mode",
+          "message": "Mode de suggestion"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.short_desc": {
+          "source": "Suggestion mode",
+          "message": "Mode de suggestion"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.desc": {
+          "source": "Number of suggestions to return.\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "Nombre de suggestions à renvoyer.\n\nCe paramètre ne peut être utilisé que lorsque les paramètres de chaîne de requête `suggest_field` et `suggest_text` sont spécifiés"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.display_name": {
+          "source": "Suggest Size",
+          "message": "Taille de suggestion"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.short_desc": {
+          "source": "Number of suggestions",
+          "message": "Nombre de suggestions"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.desc": {
+          "source": "Limits the search to a point in time (PIT). If you provide a `pit`, you cannot specify a `<target>` in the request path.\n\nProperties of `pit`:\n- `id`: (Required*, string) ID for the PIT to search. If you provide a `pit` object, this   parameter is required\n- `keep_alive`: (Optional, time value) Period of time used to extend the life of the PIT",
+          "message": "Limite la recherche à un point dans le temps (PIT). Si vous fournissez un `pit`, vous ne pouvez pas spécifier de `<target>` dans le chemin de la requête.\n\nPropriétés de `pit` :\n- `id` : (Requis*, chaîne) ID du PIT dans lequel effectuer la recherche. Si vous fournissez un objet `pit`, ce paramètre est requis\n- `keep_alive` : (Facultatif, valeur temporelle) Période utilisée pour prolonger la durée de vie du PIT"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.display_name": {
+          "source": "Point in Time",
+          "message": "Point in Time"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.short_desc": {
+          "source": "PIT for search",
+          "message": "PIT pour la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.desc": {
+          "source": "Defines a threshold that enforces a pre-filter roundtrip to prefilter search shards based on query rewriting if the number of shards the search request expands to exceeds the threshold. This filter roundtrip can limit the number of shards significantly if for instance a shard can not match any documents based on its rewrite method ie. if date filters are mandatory to match but the shard bounds and the query are disjoint. When unspecified, the pre-filter phase is executed if any of these conditions is met:\n- The request targets more than 128 shards\n- The request targets one or more read-only index\n- The primary sort of the query targets an indexed field",
+          "message": "Définit un seuil qui impose un aller-retour de préfiltrage pour préfiltrer les partitions de recherche sur la base de la réécriture de requête si le nombre de partitions auquel la requête de recherche s'étend dépasse le seuil. Cet aller-retour de filtrage peut limiter considérablement le nombre de partitions si, par exemple, une partition ne peut correspondre à aucun document en fonction de sa méthode de réécriture, c.-à-d. si des filtres de date sont obligatoires pour correspondre mais que les limites de la partition et la requête sont disjointes. Lorsqu'il n'est pas spécifié, la phase de préfiltrage est exécutée si l'une des conditions suivantes est remplie :\n- La requête cible plus de 128 partitions\n- La requête cible un ou plusieurs index en lecture seule\n- Le tri principal de la requête cible un champ indexé"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.display_name": {
+          "source": "Pre-filter Shard Size",
+          "message": "Taille de partition de préfiltrage"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.short_desc": {
+          "source": "Pre-filter threshold",
+          "message": "Seuil de préfiltrage"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Nodes and shards used for the search. By default, OpenSearch selects from eligible nodes and shards using adaptive replica selection, accounting for allocation awareness.\n\nValid values for preference:\n- `_only_local`: Run the search only on shards on the local node\n- `_local`: If possible, run the search on shards on the local node. If not, select shards using the default method\n- `_only_nodes:<node-id>,<node-id>`: Run the search on only the specified nodes IDs. If suitable shards exist on more than one selected node, use shards on those nodes using the default method. If none of the specified nodes are available, select shards from any available node using the default method\n- `_prefer_nodes:<node-id>,<node-id>`: If possible, run the search on the specified nodes IDs. If not, select shards using the default method.\n- `_shards:<shard>,<shard>`: Run the search only on the specified shards. You can combine this value with other preference values. However, the `_shards` value must come first. For example: `_shards:2,3|_local`\n- `<custom-string>`: Any string that does not start with `_`. If the cluster state and selected shards do not change, searches using the same `<custom-string>` value are routed to the same shards in the same order",
+          "message": "Nœuds et partitions utilisés pour la recherche. Par défaut, OpenSearch effectue une sélection parmi les nœuds et partitions éligibles à l'aide de la sélection adaptative de réplica, en tenant compte de la prise en compte de l'allocation.\n\nValeurs valides pour preference :\n- `_only_local` : Exécute la recherche uniquement sur les partitions du nœud local\n- `_local` : Si possible, exécute la recherche sur les partitions du nœud local. Sinon, sélectionne les partitions selon la méthode par défaut\n- `_only_nodes:<node-id>,<node-id>` : Exécute la recherche uniquement sur les ID de nœuds spécifiés. Si des partitions appropriées existent sur plusieurs nœuds sélectionnés, utilise les partitions de ces nœuds selon la méthode par défaut. Si aucun des nœuds spécifiés n'est disponible, sélectionne les partitions de n'importe quel nœud disponible selon la méthode par défaut\n- `_prefer_nodes:<node-id>,<node-id>` : Si possible, exécute la recherche sur les ID de nœuds spécifiés. Sinon, sélectionne les partitions selon la méthode par défaut.\n- `_shards:<shard>,<shard>` : Exécute la recherche uniquement sur les partitions spécifiées. Vous pouvez combiner cette valeur avec d'autres valeurs de préférence. Toutefois, la valeur `_shards` doit être placée en premier. Par exemple : `_shards:2,3|_local`\n- `<custom-string>` : Toute chaîne ne commençant pas par `_`. Si l'état du cluster et les partitions sélectionnées ne changent pas, les recherches utilisant la même valeur `<custom-string>` sont acheminées vers les mêmes partitions dans le même ordre"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "Préférence"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "Préférence de shard"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.desc": {
+          "source": "Query in the Lucene query string syntax.\n\nYou can use the `q` parameter to run a query parameter search. Query parameter searches do not support the full OpenSearch Query DSL but are handy for testing.\n\nThe `q` parameter overrides the query parameter in the request body",
+          "message": "Requête dans la syntaxe de chaîne de requête Lucene.\n\nVous pouvez utiliser le paramètre `q` pour exécuter une recherche par paramètre de requête. Les recherches par paramètre de requête ne prennent pas en charge l'intégralité du Query DSL OpenSearch mais sont pratiques pour les tests.\n\nLe paramètre `q` remplace le paramètre de requête dans le corps de la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.display_name": {
+          "source": "Query String",
+          "message": "Chaîne de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.short_desc": {
+          "source": "Lucene query string",
+          "message": "Chaîne de requête Lucene"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.desc": {
+          "source": "Specifies the search using the Query DSL",
+          "message": "Spécifie la recherche à l'aide du Query DSL"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.short_desc": {
+          "source": "Query DSL object",
+          "message": "Objet Query DSL"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.desc": {
+          "source": "Value used to route indexing and search operations to a specific shard",
+          "message": "Valeur utilisée pour acheminer les opérations d'indexation et de recherche vers une partition spécifique"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "Routage"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.short_desc": {
+          "source": "Routing value",
+          "message": "Valeur de routage"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.desc": {
+          "source": "Defines a method for combining and ranking result sets from either:\n- 1 query and 1 or more kNN searches\n- 2 or more kNN searches\n\nRanking methods:\n- `rrf`: (Optional, object) Sets the ranking method to reciprocal rank fusion (RRF)",
+          "message": "Définit une méthode pour combiner et classer les ensembles de résultats provenant soit de :\n- 1 requête et 1 ou plusieurs recherches kNN\n- 2 recherches kNN ou plus\n\nMéthodes de classement :\n- `rrf` : (Facultatif, objet) Définit la méthode de classement sur Reciprocal Rank Fusion (RRF)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.display_name": {
+          "source": "Rank",
+          "message": "Rang"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.short_desc": {
+          "source": "Ranking method",
+          "message": "Méthode de classement"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "If `true`, the caching of search results is enabled for requests where size is `0`. Defaults to index level settings",
+          "message": "Si `true`, la mise en cache des résultats de recherche est activée pour les requêtes où size est `0`. Reprend par défaut les paramètres au niveau de l'index"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "Mettre la requête en cache ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Enable result caching",
+          "message": "Activer la mise en cache des résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.desc": {
+          "source": "Indicates whether `hits.total` should be rendered as an integer or an object in the rest search response (default `false`)",
+          "message": "Indique si `hits.total` doit être renvoyé sous la forme d'un entier ou d'un objet dans la réponse de recherche REST (par défaut `false`)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.display_name": {
+          "source": "Total Hits as Int?",
+          "message": "Total des résultats en entier ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.short_desc": {
+          "source": "Return total as integer",
+          "message": "Renvoyer le total sous forme d'entier"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.desc": {
+          "source": "Defines one or more runtime fields in the search request. These fields take precedence over mapped fields with the same name.\n\nProperties of `runtime_mappings` objects:\n- `<field-name>`: (Required, object) Configuration for the runtime field. The key is the field name.\n\n  Properties of <field-name>:\n  - `type`: (Required, string) Field type, which can be any of the following:\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script`: (Optional, string) Painless script executed at query time. The script has access to the entire context of a document, including the original `_source` and any mapped fields plus their values.\n\n    This script must include emit to return calculated values. For example:\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`",
+          "message": "Définit un ou plusieurs champs d'exécution (runtime fields) dans la requête de recherche. Ces champs ont la priorité sur les champs mappés portant le même nom.\n\nPropriétés des objets `runtime_mappings` :\n- `<field-name>` : (Requis, objet) Configuration pour le champ d'exécution. La clé est le nom du champ.\n\n  Propriétés de <field-name> :\n  - `type` : (Requis, chaîne) Type de champ, qui peut être l'un des suivants :\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script` : (Facultatif, chaîne) Script Painless exécuté au moment de la requête. Le script a accès à l'ensemble du contexte d'un document, y compris le `_source` d'origine et tous les champs mappés ainsi que leurs valeurs.\n\n    Ce script doit inclure emit pour renvoyer des valeurs calculées. Par exemple :\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.display_name": {
+          "source": "Runtime Mappings",
+          "message": "Mappages runtime"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.short_desc": {
+          "source": "Runtime field mappings",
+          "message": "Mappages de champs runtime"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "Nombre maximal de documents à collecter pour chaque shard. Si une requête atteint cette limite, OpenSearch termine la requête de manière anticipée. OpenSearch collecte les documents avant le tri.\n\nÀ utiliser avec précaution. OpenSearch applique ce paramètre à chaque shard traitant la requête. Lorsque cela est possible, laissez OpenSearch effectuer une interruption anticipée automatiquement. Évitez de spécifier ce paramètre pour les requêtes ciblant des flux de données avec des index sous-jacents répartis sur plusieurs niveaux de données.\n\nLa valeur par défaut est `0`, ce qui n'interrompt pas l'exécution de la requête de manière anticipée"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.display_name": {
+          "source": "Terminate After",
+          "message": "Terminate After"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.short_desc": {
+          "source": "Max docs to collect",
+          "message": "Nombre max de docs à collecter"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "Nombre maximal de documents à collecter pour chaque shard. Si une requête atteint cette limite, OpenSearch termine la requête de manière anticipée. OpenSearch collecte les documents avant le tri.\n\nÀ utiliser avec précaution. OpenSearch applique ce paramètre à chaque shard traitant la requête. Lorsque cela est possible, laissez OpenSearch effectuer une interruption anticipée automatiquement. Évitez de spécifier ce paramètre pour les requêtes ciblant des flux de données avec des index sous-jacents répartis sur plusieurs niveaux de données.\n\nLa valeur par défaut est `0`, ce qui n'interrompt pas l'exécution de la requête de manière anticipée"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.display_name": {
+          "source": "Terminate After Query",
+          "message": "Requête Terminate After"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.short_desc": {
+          "source": "Max docs per shard",
+          "message": "Nombre max de docs par shard"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "Spécifie la durée d'attente d'une réponse de chaque shard. Si aucune réponse n'est reçue avant l'expiration du délai d'attente, la requête échoue et renvoie une erreur. Par défaut, aucun délai d'attente n'est défini"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "Délai d'expiration de la recherche"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "Spécifie la durée d'attente d'une réponse de chaque shard. Si aucune réponse n'est reçue avant l'expiration du délai d'attente, la requête échoue et renvoie une erreur. Par défaut, aucun délai d'attente n'est défini"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.display_name": {
+          "source": "Timeout Query",
+          "message": "Délai d'attente de requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.short_desc": {
+          "source": "Shard response timeout",
+          "message": "Délai d'attente de réponse du shard"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.desc": {
+          "source": "If `true` (default `false`), calculate and return document scores, even if the scores are not used for sorting",
+          "message": "Si `true` (`false` par défaut), calcule et renvoie les scores des documents, même s'ils ne sont pas utilisés pour le tri"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.display_name": {
+          "source": "Track Scores?",
+          "message": "Suivre les scores ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.short_desc": {
+          "source": "Calculate scores",
+          "message": "Calculer les scores"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Number of hits matching the query to count accurately (default `\"10000\"`).\n\nIf `true`, the exact number of hits is returned at the cost of some performance. If `false`, the response does not include the total number of hits matching the query",
+          "message": "Nombre de résultats correspondant à la requête à compter précisément (par défaut `\"10000\"`).\n\nSi `true`, le nombre exact de résultats est renvoyé au détriment des performances. Si `false`, la réponse n'inclut pas le nombre total de résultats correspondant à la requête"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "Suivre le nombre total de résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Count matching docs",
+          "message": "Compter les docs correspondants"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.desc": {
+          "source": "If `true` (the default), aggregation and suggester names are be prefixed by their respective types in the response",
+          "message": "Si `true` (par défaut), les noms d'agrégation et de suggesteur sont préfixés par leurs types respectifs dans la réponse"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.display_name": {
+          "source": "Typed Keys?",
+          "message": "Clés typées ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.short_desc": {
+          "source": "Prefix agg names",
+          "message": "Préfixer les noms d'agrégation"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.desc": {
+          "source": "If `true` (default `false`), returns document version as part of a hit",
+          "message": "Si `true` (`false` par défaut), renvoie la version du document dans les résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.display_name": {
+          "source": "Version?",
+          "message": "Version ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.short_desc": {
+          "source": "Return doc version",
+          "message": "Renvoyer la version du doc"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.desc": {
+          "source": "If `true`, returns document version as part of a hit",
+          "message": "Si `true`, renvoie la version du document dans les résultats"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.display_name": {
+          "source": "Version Query?",
+          "message": "Version de la requête ?"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.short_desc": {
+          "source": "Return doc version",
+          "message": "Renvoyer la version du doc"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
+          "source": "Search for data in an OpenSearch index",
+          "message": "Rechercher des données dans un index OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.desc": {
+          "source": "OpenSearch is an Apache 2.0-licensed search, analytics, and observability platform.\n\nUse this app to work with:\n- **Document indexes** for search and analytics workloads\n- **Bulk ingestion** for high-volume document writes\n- **Pipelines** for document ingestion and search result processing\n- **Vector, neural, and hybrid search** when the OpenSearch cluster is configured with the required plugins and models",
+          "message": "OpenSearch est une plateforme de recherche, d'analytique et d'observabilité sous licence Apache 2.0.\n\nUtilisez cette application pour travailler avec :\n- Les **index de documents** pour les charges de travail de recherche et d'analytique\n- L'**ingestion en bloc** pour les écritures de documents à volume élevé\n- Les **pipelines** pour l'ingestion de documents et le traitement des résultats de recherche\n- La **recherche vectorielle, neuronale et hybride** lorsque le cluster OpenSearch est configuré avec les plug-ins et modèles requis"
+        },
+        "app.T3BlblNlYXJjaA.display_name": {
+          "source": "OpenSearch Server",
+          "message": "Serveur OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.short_desc": {
+          "source": "OpenSearch search and analytics server",
+          "message": "Serveur de recherche et d'analytique OpenSearch"
+        }
+      }
+    }
+  }
+}

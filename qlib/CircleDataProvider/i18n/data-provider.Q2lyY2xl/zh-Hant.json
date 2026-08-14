@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Creates a new comment on a post in Circle",
+          "message": "在 Circle 的貼文中建立新留言"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create a Comment",
+          "message": "建立留言"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`",
+          "message": "留言的內文內容（HTML 格式）。範例：`<p>Great post!</p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "Comment content",
+          "message": "留言內容"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.desc": {
+          "source": "The ID of the post to add the comment to",
+          "message": "要新增留言的貼文 ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.short_desc": {
+          "source": "Post to comment on",
+          "message": "要留言的貼文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Create a new comment",
+          "message": "建立新留言"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.desc": {
+          "source": "Creates a new post in a Circle space",
+          "message": "在 Circle 空間中建立新貼文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
+          "source": "Create a Post",
+          "message": "建立貼文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "貼文的內文內容（HTML 格式）。範例：`<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "貼文內容"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post. Default: `True`",
+          "message": "是否在貼文中啟用留言功能。預設值：`True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "已啟用留言"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "在貼文中啟用留言功能"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post. Default: `True`",
+          "message": "是否在貼文中啟用按讚功能。預設值：`True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "已啟用按讚"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "在貼文中啟用按讚功能"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "是否將貼文置頂於該空間頂端"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "已置頂"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "將貼文置頂於空間頂端"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "貼文的標題"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "貼文標題"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent to members about this post",
+          "message": "若為 `True`，則不會向成員傳送有關此貼文的通知"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "跳過通知"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "略過傳送通知"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to create the post in",
+          "message": "要在其中建立貼文的空間 ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to create the post in",
+          "message": "要在其中建立貼文的空間"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "已發布"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "排程"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "貼文的發布狀態"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "貼文狀態"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`",
+          "message": "以 ISO 8601 格式發布貼文的日期和時間。與設為 `scheduled` 的 `status` 一起使用，以排程貼文於將來發布。範例：`2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "發布時間"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date for scheduling",
+          "message": "用於排程的發布日期"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
+          "source": "Create a new post",
+          "message": "建立新貼文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Creates a new space in a Circle community",
+          "message": "在 Circle 社群中建立新空間"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create a Space",
+          "message": "建立空間"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "用作空間圖示的表情符號"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "表情符號"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "空間表情符號圖示"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "空間是否完全隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "是否隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "空間是否隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "空間是否對非其成員的使用者隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "對非成員隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "空間是否對非成員隱藏"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "此空間是否已停用成員發文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "已停用發文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "是否停用發文"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private. Default: `False`",
+          "message": "空間是否應設為私密。預設值：`False`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "是否為私人"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "空間是否為私密"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "空間名稱"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "空間名稱"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOm1lbWJlcnM.display_name": {
+          "source": "Members",
+          "message": "成員"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "基本"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "即時通訊"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvdXJzZQ.display_name": {
+          "source": "Course",
+          "message": "課程"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmV2ZW50.display_name": {
+          "source": "Event",
+          "message": "活動"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmltYWdl.display_name": {
+          "source": "Image",
+          "message": "圖片"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "The type of space to create",
+          "message": "要建立的空間類型"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "空間類型"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Type of space",
+          "message": "空間類型"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new space",
+          "message": "建立新空間"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.desc": {
+          "source": "Adds a member to a certain space in Circle",
+          "message": "將成員新增至 Circle 中的特定空間"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
+          "source": "Add a Member to a Space",
+          "message": "新增成員至空間"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space",
+          "message": "要新增至空間的成員電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "成員電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to add the member to",
+          "message": "要將成員新增至其中的空間 ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to add the member to",
+          "message": "要將成員新增至其中的空間"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
+          "source": "Add a member to a certain space",
+          "message": "將成員新增至特定空間"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.desc": {
+          "source": "Adds a member to a specific space group in Circle",
+          "message": "將成員新增至 Circle 中的特定空間群組"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
+          "source": "Add a Member to a Space Group",
+          "message": "新增成員至空間群組"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space group",
+          "message": "要新增至空間群組的成員電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "成員電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to add the member to",
+          "message": "要將成員新增至其中的空間群組 ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "空間群組 ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to add the member to",
+          "message": "要將成員新增至其中的空間群組"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
+          "source": "Add a member to a specific space group",
+          "message": "將成員新增至特定空間群組"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.desc": {
+          "source": "Retrieve a single community by its ID",
+          "message": "依 ID 擷取單一社群"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
+          "source": "Get a Community",
+          "message": "取得社群"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "社群 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.short_desc": {
+          "source": "The community ID",
+          "message": "社群 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
+          "source": "Retrieve a specific community",
+          "message": "擷取特定社群"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.desc": {
+          "source": "Retrieve a single comment by its ID",
+          "message": "依 ID 擷取單一留言"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
+          "source": "Get a Comment",
+          "message": "取得留言"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "留言 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "The comment ID",
+          "message": "留言 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
+          "source": "Retrieve a specific comment",
+          "message": "擷取特定留言"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieve a single post by its ID",
+          "message": "依 ID 擷取單一貼文"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get a Post",
+          "message": "取得貼文"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.short_desc": {
+          "source": "The post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a specific post",
+          "message": "擷取特定貼文"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve a single space by its ID",
+          "message": "依 ID 擷取單一空間"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get a Space",
+          "message": "取得空間"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.short_desc": {
+          "source": "The space ID",
+          "message": "空間 ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Retrieve a specific space",
+          "message": "擷取特定空間"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.desc": {
+          "source": "Permanently deletes a comment from Circle",
+          "message": "從 Circle 永久刪除留言"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
+          "source": "Delete a Comment",
+          "message": "刪除留言"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the comment to delete",
+          "message": "要刪除的留言之唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "留言 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "ID of the comment to delete",
+          "message": "要刪除的留言 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Delete a specific comment",
+          "message": "刪除特定留言"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Permanently deletes a post from Circle",
+          "message": "從 Circle 永久刪除貼文"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete a Post",
+          "message": "刪除貼文"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to delete",
+          "message": "要刪除的貼文之唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to delete",
+          "message": "要刪除的貼文 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a specific post",
+          "message": "刪除特定貼文"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Permanently deletes a space from Circle",
+          "message": "從 Circle 永久刪除空間"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete a Space",
+          "message": "刪除空間"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to delete",
+          "message": "要刪除的空間之唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to delete",
+          "message": "要刪除的空間 ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a specific space",
+          "message": "刪除特定空間"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.desc": {
+          "source": "Invites a member to a Circle community by email",
+          "message": "透過電子郵件邀請成員加入 Circle 社群"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
+          "source": "Invite a Member",
+          "message": "邀請成員"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the person to invite to the community",
+          "message": "要邀請加入社群的人員電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.short_desc": {
+          "source": "Email address to invite",
+          "message": "要邀請的電子郵件地址"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.desc": {
+          "source": "The headline or tagline for the member's profile",
+          "message": "成員個人檔案的標題或標語"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.display_name": {
+          "source": "Headline",
+          "message": "標題"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.short_desc": {
+          "source": "Member headline",
+          "message": "成員標題"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.desc": {
+          "source": "The name of the person being invited",
+          "message": "受邀人員的姓名"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.short_desc": {
+          "source": "Member name",
+          "message": "成員姓名"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.desc": {
+          "source": "If `True`, the member will be added without sending an invitation email",
+          "message": "若為 `True`，將直接新增成員而不發送邀請電子郵件"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.display_name": {
+          "source": "Skip Invitation",
+          "message": "略過邀請"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.short_desc": {
+          "source": "Skip sending the invitation email",
+          "message": "略過發送邀請電子郵件"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.desc": {
+          "source": "List of space IDs to add the member to upon invitation",
+          "message": "邀請時要將成員加入的空間 ID 清單"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.display_name": {
+          "source": "Space IDs",
+          "message": "空間 ID"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.short_desc": {
+          "source": "Spaces to add the member to",
+          "message": "要將成員加入的空間"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
+          "source": "Invite a member to the community",
+          "message": "邀請成員加入社群"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "List comments with optional filtering by post",
+          "message": "列出留言，可選擇依貼文篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "列出評論"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "留言 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific comment",
+          "message": "取得特定留言"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.short_desc": {
+          "source": "Filter by post",
+          "message": "依貼文篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List comments in the community",
+          "message": "列出社群中的留言"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities accessible to the current API token",
+          "message": "列出目前 API 權杖可存取的社群"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "列出社群"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "社群 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "取得特定社群"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities in the account",
+          "message": "列出帳號中的社群"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.desc": {
+          "source": "List community members with optional filtering by email",
+          "message": "列出社群成員，可選擇依電子郵件篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
+          "source": "List Members",
+          "message": "列出成員"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "依電子郵件篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.short_desc": {
+          "source": "Get a specific member",
+          "message": "取得特定成員"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "全部"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.display_name": {
+          "source": "Inactive",
+          "message": "非使用中"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by member status",
+          "message": "依成員狀態篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
+          "source": "List community members",
+          "message": "列出社群成員"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.desc": {
+          "source": "List posts in the community with optional filtering by space and status",
+          "message": "列出社群中的貼文，可選擇依空間和狀態篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "列出貼文"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.short_desc": {
+          "source": "Get a specific post",
+          "message": "取得特定貼文"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Filter by space",
+          "message": "依空間篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "已發布"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "排程"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "依狀態篩選"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List posts in the community",
+          "message": "列出社群中的貼文"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List spaces in the community with optional sorting",
+          "message": "列出社群中的空間，可選擇排序方式"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "列出空間"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.short_desc": {
+          "source": "Get a specific space",
+          "message": "取得特定空間"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOm9sZGVzdA.display_name": {
+          "source": "Oldest",
+          "message": "最舊"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "作用中"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFscGhhYmV0aWNhbA.display_name": {
+          "source": "Alphabetical",
+          "message": "依字母順序"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhdGVzdF91cGRhdGVk.display_name": {
+          "source": "Latest Updated",
+          "message": "最新更新"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort Order",
+          "message": "排序順序"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Sort order for spaces",
+          "message": "空間的排序順序"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List spaces in the community",
+          "message": "列出社群中的空間"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Circle** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、可選的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n當端點尚未在此應用程式中公開為一級動作時，請使用此動作。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Circle",
+          "message": "對 Circle 發出自訂 API 呼叫"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.desc": {
+          "source": "Fires when a member accepts an invitation to the Circle community",
+          "message": "當成員接受加入 Circle 社群的邀請時觸發"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
+          "source": "Member Accepted an Invitation",
+          "message": "成員已接受邀請"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
+          "source": "Trigger when a member accepts an invitation",
+          "message": "當成員接受邀請時觸發"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.desc": {
+          "source": "Fires when a member is tagged in the Circle community",
+          "message": "當成員在 Circle 社群中被標記時觸發"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
+          "source": "Member Tagged",
+          "message": "成員已被標記"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
+          "source": "Trigger when a member is tagged",
+          "message": "當成員被標記時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.desc": {
+          "source": "Fires when new communities are created in Circle",
+          "message": "在 Circle 中建立新社群時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
+          "source": "New Community",
+          "message": "新社群"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
+          "source": "Trigger when new communities are created",
+          "message": "建立新社群時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.desc": {
+          "source": "Fires when new comments are posted in the Circle community",
+          "message": "在 Circle 社群中發布新留言時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
+          "source": "New Comment",
+          "message": "新留言"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
+          "source": "Trigger when new comments are posted",
+          "message": "發布新留言時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when new posts are created in the Circle community",
+          "message": "在 Circle 社群中建立新貼文時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "新貼文"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Trigger when new posts are created",
+          "message": "建立新貼文時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.desc": {
+          "source": "Fires when new spaces are created in the Circle community",
+          "message": "在 Circle 社群中建立新空間時觸發"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
+          "source": "New Space",
+          "message": "新空間"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
+          "source": "Trigger when new spaces are created",
+          "message": "建立新空間時觸發"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Sends a message to a specific user on behalf of the current user in Circle",
+          "message": "在 Circle 中代表目前使用者傳送訊息給特定使用者"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "傳送訊息"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The body content of the message",
+          "message": "訊息的正文內容"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "Message content",
+          "message": "訊息內容"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.desc": {
+          "source": "The ID of the community member to send the message to",
+          "message": "要傳送訊息的社群成員 ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.display_name": {
+          "source": "Recipient ID",
+          "message": "收件者 ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.short_desc": {
+          "source": "ID of the message recipient",
+          "message": "訊息收件者的 ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to a specific user",
+          "message": "傳送訊息給特定使用者"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.desc": {
+          "source": "Removes a member from a Circle community",
+          "message": "從 Circle 社群中移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
+          "source": "Remove a Member",
+          "message": "移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to remove",
+          "message": "要移除的社群成員唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to remove",
+          "message": "要移除的成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
+          "source": "Remove a member from the community",
+          "message": "從社群中移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.desc": {
+          "source": "Removes a member from a space in Circle",
+          "message": "從 Circle 中的空間移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
+          "source": "Remove a Member from a Space",
+          "message": "從空間移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space",
+          "message": "要從空間中移除的社群成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "要移除的成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to remove the member from",
+          "message": "要從中移除成員的空間 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to remove the member from",
+          "message": "要從中移除成員的空間"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
+          "source": "Remove a member from a space",
+          "message": "從空間移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.desc": {
+          "source": "Removes a member from a space group in Circle",
+          "message": "從 Circle 中的空間群組移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
+          "source": "Remove a Member from a Space Group",
+          "message": "從空間群組移除成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space group",
+          "message": "要從空間群組中移除的社群成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "要移除的成員"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to remove the member from",
+          "message": "要從中移除成員的空間群組 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "空間群組 ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to remove the member from",
+          "message": "要從中移除成員的空間群組"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
+          "source": "Remove a member from a space group",
+          "message": "從空間群組移除成員"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.desc": {
+          "source": "Tags a specific community member in Circle",
+          "message": "在 Circle 中為特定社群成員新增標籤"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
+          "source": "Tag a Member",
+          "message": "為成員新增標籤"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to tag",
+          "message": "要標記的社群成員唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to tag",
+          "message": "要標記的成員 ID"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.desc": {
+          "source": "The tag to apply to the member",
+          "message": "要套用至成員的標籤"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.short_desc": {
+          "source": "Tag name",
+          "message": "標籤名稱"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
+          "source": "Tag a specific member",
+          "message": "為特定成員新增標籤"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.desc": {
+          "source": "Removes a tag from a specific community member in Circle",
+          "message": "在 Circle 中移除特定社群成員的標籤"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
+          "source": "Untag a Member",
+          "message": "移除成員的標籤"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to untag",
+          "message": "要移除標籤的社群成員唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "成員 ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.short_desc": {
+          "source": "ID of the member to untag",
+          "message": "要移除標籤的成員 ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to remove from the member",
+          "message": "要從成員移除的標籤 ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.short_desc": {
+          "source": "ID of the tag to remove",
+          "message": "要移除的標籤 ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
+          "source": "Untag a specific member",
+          "message": "移除特定成員的標籤"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Updates an existing post in Circle",
+          "message": "更新 Circle 中的現有貼文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update a Post",
+          "message": "更新貼文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "貼文的內文內容（HTML 格式）。範例：`<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "貼文內容"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to update",
+          "message": "要更新的貼文唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "貼文 ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to update",
+          "message": "要更新的貼文 ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.desc": {
+          "source": "Whether to close comments on the post",
+          "message": "是否關閉貼文留言功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.display_name": {
+          "source": "Comments Closed",
+          "message": "留言已關閉"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.short_desc": {
+          "source": "Close comments on the post",
+          "message": "關閉貼文留言功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post",
+          "message": "是否啟用貼文留言功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "已啟用留言"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "在貼文中啟用留言功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post",
+          "message": "是否啟用貼文按讚功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "已啟用按讚"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "在貼文中啟用按讚功能"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "是否將貼文置頂於該空間頂端"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "已置頂"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "將貼文置頂於空間頂端"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "貼文的標題"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "貼文標題"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent about this update",
+          "message": "若為 `True`，則不會傳送有關此更新的通知"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "跳過通知"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "略過傳送通知"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "已發布"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "排程"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "貼文的發布狀態"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "貼文狀態"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`",
+          "message": "發布貼文的日期與時間，採用 ISO 8601 格式。範例：`2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "發布時間"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date",
+          "message": "發布日期"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Update an existing post",
+          "message": "更新現有貼文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Updates an existing space in Circle",
+          "message": "更新 Circle 中的現有空間"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update a Space",
+          "message": "更新空間"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "用作空間圖示的表情符號"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "表情符號"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "空間表情符號圖示"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.desc": {
+          "source": "Whether to hide this space from featured areas in the community",
+          "message": "是否在社群的精選區域中隱藏此空間"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.display_name": {
+          "source": "Hide from Featured Areas",
+          "message": "從精選區域隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.short_desc": {
+          "source": "Whether to hide from featured areas",
+          "message": "是否在精選區域中隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.desc": {
+          "source": "Whether to hide post settings in this space",
+          "message": "是否在此空間中隱藏貼文設定"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.display_name": {
+          "source": "Hide Post Settings",
+          "message": "隱藏貼文設定"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.short_desc": {
+          "source": "Whether post settings are hidden",
+          "message": "貼文設定是否隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to update",
+          "message": "要更新的空間唯一識別碼"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "聊天室 ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to update",
+          "message": "要更新的空間 ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "空間是否完全隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "是否隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "空間是否隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "空間是否對非其成員的使用者隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "對非成員隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "空間是否對非成員隱藏"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "此空間是否已停用成員發文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "已停用發文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "是否停用發文"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private",
+          "message": "空間是否應設為私密"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "是否為私人"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "空間是否為私密"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "空間名稱"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "空間名稱"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update an existing space",
+          "message": "更新現有空間"
+        },
+        "app.Q2lyY2xl.desc": {
+          "source": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging.",
+          "message": "Circle 是一個社群平台，用於管理貼文、留言、成員、空間、活動和傳訊。\n\n此整合支援建立與管理社群內容、成員管理、空間成員資格、標籤以及私訊。"
+        },
+        "app.Q2lyY2xl.display_name": {
+          "source": "Circle",
+          "message": "Circle"
+        },
+        "app.Q2lyY2xl.short_desc": {
+          "source": "Circle community platform",
+          "message": "Circle 社群平台"
+        }
+      }
+    }
+  }
+}

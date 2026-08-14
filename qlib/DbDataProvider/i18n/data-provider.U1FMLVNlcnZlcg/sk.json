@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U1FMLVNlcnZlcg.desc": {
+          "source": "Create and manage connections to a Microsoft SQL Server database",
+          "message": "Vytvárajte a spravujte pripojenia k databáze Microsoft SQL Server"
+        },
+        "app.U1FMLVNlcnZlcg.display_name": {
+          "source": "SQL-Server",
+          "message": "SQL-Server"
+        },
+        "app.U1FMLVNlcnZlcg.short_desc": {
+          "source": "Microsoft SQL Server database",
+          "message": "Databáza Microsoft SQL Server"
+        }
+      }
+    }
+  }
+}

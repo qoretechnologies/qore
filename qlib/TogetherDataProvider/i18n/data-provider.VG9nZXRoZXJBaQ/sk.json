@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Together AI hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.",
+          "message": "Odošle zoznam správ chatu hostovanému modelu Together AI pomocou koncového bodu `/v1/chat/completions` kompatibilného s OpenAI a vráti vygenerovanú odpoveď."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Dopĺňanie chatu"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens by frequency.  Range `-2.0` to `2.0`.",
+          "message": "Penalizuje tokeny podľa frekvencie. Rozsah `-2.0` až `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalizácia frekvencie"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "OpenAI-style frequency penalty",
+          "message": "Penalizácia frekvencie v štýle OpenAI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Together model identifier, e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V3`.\n\nConsult the [Together AI models list](https://docs.together.ai/docs/inference-models) for the currently-served set.",
+          "message": "Identifikátor modelu Together, napr. `meta-llama/Llama-3.3-70B-Instruct-Turbo`, `Qwen/Qwen2.5-72B-Instruct-Turbo`, `deepseek-ai/DeepSeek-V3`.\n\nAktuálne poskytovanú sadu nájdete v [zozname modelov Together AI](https://docs.together.ai/docs/inference-models)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted model to use",
+          "message": "Použitý model hostovaný službou Together"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Maximálny počet tokenov na vygenerovanie."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "Maximálny počet tokenov na vygenerovanie v dokončení"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "História konverzácie ako zoznam objektov správ."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Zoznam správ chatu tvoriacich konverzáciu"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Celočíselný seed pre deterministické vzorkovanie."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed pre deterministické vzorkovanie"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.",
+          "message": "Jedna alebo viac stop sekvencií."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "Reťazec alebo zoznam reťazcov; generovanie sa zastaví pri ich vygenerovaní"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "Keď je `True`, server streamuje čiastočné dokončenia ako SSE."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as Server-Sent Events",
+          "message": "Streamovať čiastočné dokončenia ako Server-Sent Events"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared.  Range `-2.0` to `2.0`.",
+          "message": "Penalizuje tokeny, ktoré sa už objavili. Rozsah `-2.0` až `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalizácia prítomnosti"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "OpenAI-style presence penalty",
+          "message": "Penalizácia prítomnosti v štýle OpenAI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.desc": {
+          "source": "Penalize repeated tokens.  Together-specific extension.  Values above `1.0` discourage repetition; values below `1.0` encourage it.",
+          "message": "Penalizácia opakovaných tokenov. Rozšírenie špecifické pre Together. Hodnoty nad `1.0` potláčajú opakovanie; hodnoty pod `1.0` ho podporujú."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.display_name": {
+          "source": "Repetition Penalty",
+          "message": "Penalizácia opakovania"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVwZXRpdGlvbl9wZW5hbHR5.short_desc": {
+          "source": "Together's repetition penalty (separate from frequency_penalty)",
+          "message": "Penalizácia opakovania Together (oddelená od frequency_penalty)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_schema\", schema: {...}}`.",
+          "message": "Hash, ktorý vynucuje štruktúrovaný tvar odpovede, napr. `{type: \"json_object\"}` alebo `{type: \"json_schema\", schema: {...}}`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Vynútiť štruktúrovaný výstup (napr. JSON)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Žiadne – nikdy nevolať nástroj"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto – rozhoduje model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Povinné – musí zavolať nástroj"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Režim vyvolania nástroja: `none`, `auto` alebo `required`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "Či a aký nástroj musí model zavolať"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.",
+          "message": "Zoznam definícií nástrojov, ktoré môže model vyvolať."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definície nástrojov v štýle OpenAI, ktoré model môže volať"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  Together-specific extension to the OpenAI chat API.",
+          "message": "Obmedzí vzorkovanie na K najpravdepodobnejších nasledujúcich tokenov. Špecifické rozšírenie Together pre OpenAI chat API."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Vzorkovať iba z K najpravdepodobnejších nasledujúcich tokenov"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff.  Range `0.0` to `1.0`.",
+          "message": "Prahová hodnota vzorkovania nucleus. Rozsah `0.0` až `1.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Hranica vzorkovania nucleus (0-1)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.",
+          "message": "Riadi náhodnosť výstupu. Rozsah `0.0` až `2.0`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Teplota vzorkovania (0-2)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Together AI hosted model",
+          "message": "Generovať dokončenie chatu z modelu hostovaného na Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using a Together-hosted embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible `/v1/embeddings` endpoint.",
+          "message": "Konvertuje textové vstupy na vkladacie vektory (embeddingy) pomocou modelu vkladania hostovaného na Together (napr. `BAAI/bge-base-en-v1.5`) cez koncový bod `/v1/embeddings` kompatibilný s OpenAI."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Vytvoriť embeddingy"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded float32 buffer",
+          "message": "Base64 – kódovaný float32 buffer"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - JSON list of floats",
+          "message": "Float – JSON zoznam float hodnôt"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) returns each vector as a JSON list of floats; `base64` returns base64-encoded little-endian float32 buffers (smaller wire size).",
+          "message": "`float` (predvolené) vracia každý vektor ako JSON zoznam hodnôt typu float; `base64` vracia buffery float32 s poradím bajtov little-endian kódované v base64 (menšia veľkosť pri prenose)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formát kódovania"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for the returned vectors",
+          "message": "Formát prenosu pre vrátené vektory"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
+          "message": "Textový vstup (alebo vstupy) na konverziu na embedding vektory. Môže ísť o jeden reťazec alebo zoznam reťazcov pre dávkové vkladanie."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Vstup"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed — single string or list of strings",
+          "message": "Text(y) na vloženie (embedding) — jeden reťazec alebo zoznam reťazcov"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`.",
+          "message": "Identifikátor modelu vkladania Together, napr. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted embedding model to use",
+          "message": "Model vkladania hostovaný na Together, ktorý sa má použiť"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Together AI hosted model",
+          "message": "Generovať vkladacie vektory z modelu hostovaného na Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates one or more images from a text prompt using a Together-hosted diffusion model (`black-forest-labs/FLUX.1-schnell-Free`, `stabilityai/stable-diffusion-xl-base-1.0`, etc.) via the `/v1/images/generations` endpoint.\n\nReturns image URLs by default; set `response_format` to `b64_json` to receive base64-encoded image bytes inline.",
+          "message": "Vygeneruje jeden alebo viac obrázkov z textového promptu pomocou difúzneho modelu hostovaného na Together (`black-forest-labs/FLUX.1-schnell-Free`, `stabilityai/stable-diffusion-xl-base-1.0` atď.) cez koncový bod `/v1/images/generations`.\n\nPredvolene vracia adresy URL obrázkov; nastavte `response_format` na `b64_json` na priame prijatie bajtov obrázka zakódovaných v base64."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generovať obrázok"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.desc": {
+          "source": "Classifier-free guidance scale.  Higher values force the output to follow the prompt more closely at the cost of diversity.",
+          "message": "Mierka vedenia bez klasifikátora (Classifier-free guidance scale). Vyššie hodnoty nútia výstup presnejšie nasledovať prompt na úkor rozmanitosti."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.display_name": {
+          "source": "Guidance Scale",
+          "message": "Mierka vedenia"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.Z3VpZGFuY2U.short_desc": {
+          "source": "Prompt adherence (CFG scale)",
+          "message": "Dodržiavanie promptu (škála CFG)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Image height in pixels.  See `width` for resolution constraints.",
+          "message": "Výška obrázka v pixeloch. Pozrite si obmedzenia rozlíšenia v `width`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Výška"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Image height in pixels",
+          "message": "Výška obrázka v pixeloch"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Together image model identifier.  Examples:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — fast FLUX.1 (free tier)\n- `black-forest-labs/FLUX.1-schnell` — fast FLUX.1\n- `black-forest-labs/FLUX.1-dev` — quality FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0",
+          "message": "Identifikátor obrázkového modelu Together. Príklady:\n\n- `black-forest-labs/FLUX.1-schnell-Free` — rýchly FLUX.1 (bezplatná úroveň)\n- `black-forest-labs/FLUX.1-schnell` — rýchly FLUX.1\n- `black-forest-labs/FLUX.1-dev` — kvalitný FLUX.1\n- `stabilityai/stable-diffusion-xl-base-1.0` — SDXL 1.0"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "The Together-hosted image-generation model",
+          "message": "Model na generovanie obrázkov hostovaný na Together"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.desc": {
+          "source": "Number of images to generate from the prompt.",
+          "message": "Počet obrázkov, ktoré sa majú vygenerovať z promptu."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.display_name": {
+          "source": "Number of Images",
+          "message": "Počet obrázkov"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bg.short_desc": {
+          "source": "How many images to generate",
+          "message": "Koľko obrázkov vygenerovať"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Optional negative prompt — features the model should suppress in the output (e.g. `\"blurry, low quality, watermark\"`).",
+          "message": "Voliteľný negatívny prompt — prvky, ktoré by mal model vo výstupe potlačiť (napr. `\"blurry, low quality, watermark\"`)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Negatívny prompt"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What the image should NOT contain",
+          "message": "Čo by obrázok NEMAL obsahovať"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Integer seed.  With a fixed seed, prompt, and model, generation is reproducible.",
+          "message": "Celočíselný seed. Pri fixnom seede, prompte a modeli je generovanie reprodukovateľné."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Deterministic generation seed",
+          "message": "Seed pre deterministické generovanie"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.desc": {
+          "source": "Number of denoising steps.  Higher values improve quality at the cost of latency.  FLUX schnell is tuned for 1-4 steps; SDXL typically uses 20-50.",
+          "message": "Počet krokov odšumovania. Vyššie hodnoty zvyšujú kvalitu za cenu vyššej latencie. FLUX schnell je vyladený na 1 – 4 kroky; SDXL zvyčajne používa 20 – 50."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.display_name": {
+          "source": "Steps",
+          "message": "Kroky"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.c3RlcHM.short_desc": {
+          "source": "Number of diffusion steps",
+          "message": "Počet difúznych krokov"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Free-form text describing the image to generate.  Diffusion models are sensitive to wording — be specific about subject, lighting, style, and composition for best results.",
+          "message": "Voľný text popisujúci obrázok, ktorý sa má vygenerovať. Difúzne modely sú citlivé na formuláciu — pre dosiahnutie najlepších výsledkov buďte konkrétni ohľadom objektu, osvetlenia, štýlu a kompozície."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text description of the image to generate",
+          "message": "Textový popis obrázka, ktorý sa má vygenerovať"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmI2NF9qc29u.display_name": {
+          "source": "Base64 - inline image bytes",
+          "message": "Base64 – priame bajty obrázka"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnVybA.display_name": {
+          "source": "URL - hosted image URL",
+          "message": "URL – hostovaná URL adresa obrázka"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "`url` (default) returns hosted image URLs.  `b64_json` returns the image bytes inline as base64-encoded JSON.",
+          "message": "`url` (predvolené) vracia hostované URL adresy obrázkov. `b64_json` vracia bajty obrázka priamo ako reťazec JSON kódovaný v base64."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Whether to return URLs or base64-encoded image bytes",
+          "message": "Či vrátiť adresy URL alebo bajty obrázka kódované v base64"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Image width in pixels.  Must match a resolution the chosen model supports — typically multiples of 64 in the 256-1792 range.",
+          "message": "Šírka obrázka v pixeloch. Musí zodpovedať rozlíšeniu, ktoré zvolený model podporuje — zvyčajne násobky 64 v rozsahu 256 – 1792."
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Šírka"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Image width in pixels",
+          "message": "Šírka obrázka v pixeloch"
+        },
+        "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt using FLUX or Stable Diffusion",
+          "message": "Vygenerovať obrázok z textového promptu pomocou FLUX alebo Stable Diffusion"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Together AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Together AI** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú vystavené ako priame akcie v tejto aplikácii."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Together AI",
+          "message": "Vykonať vlastné volanie API do Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.desc": {
+          "source": "Provides access to [Together AI](https://www.together.ai) — a managed inference platform for open-weight LLMs (Llama, Qwen, DeepSeek, Mixtral), embedding models (`BAAI/bge-*`, `togethercomputer/m2-bert-*`), and image generation (FLUX, Stable Diffusion XL).\n\nTogether exposes an OpenAI-compatible chat-completions API plus its own `/v1/images/generations` endpoint for text-to-image diffusion.\n\n**Common use cases**:\n- **OSS chat at production scale** without owning GPU infrastructure\n- **RAG embeddings** with open-weight embedders for cost control\n- **Text-to-image generation** via FLUX.1 (schnell + dev) and SDXL\n- **Tool-calling and structured output** via the OpenAI-compatible surface",
+          "message": "Poskytuje prístup k [Together AI](https://www.together.ai) — spravovanej inferenčnej platforme pre modely LLM s otvorenými váhami (Llama, Qwen, DeepSeek, Mixtral), modely vkladania (`BAAI/bge-*`, `togethercomputer/m2-bert-*`) a generovanie obrázkov (FLUX, Stable Diffusion XL).\n\nTogether sprístupňuje API pre dokončovanie chatu kompatibilné s OpenAI a navyše vlastný koncový bod `/v1/images/generations` pre difúziu textu na obrázok.\n\n**Bežné prípady použitia**:\n- **OSS chat v produkčnom rozsahu** bez nutnosti vlastniť infraštruktúru GPU\n- **Embeddingy pre RAG** s otvorenými modelmi pre kontrolu nákladov\n- **Generovanie obrázkov z textu** cez FLUX.1 (schnell + dev) a SDXL\n- **Volanie nástrojov a štruktúrovaný výstup** cez rozhranie kompatibilné s OpenAI"
+        },
+        "app.VG9nZXRoZXJBaQ.display_name": {
+          "source": "Together AI",
+          "message": "Together AI"
+        },
+        "app.VG9nZXRoZXJBaQ.short_desc": {
+          "source": "Together AI hosted open-weight LLMs, embeddings, and image generation",
+          "message": "Together AI hostované modely LLM s otvorenými váhami, embeddingy a generovanie obrázkov"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1893 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.desc": {
+          "source": "Asynchronously copy a document or folder to a new location, optionally with a new name. Returns a monitor URL to track copy progress",
+          "message": "非同步將文件或資料夾複製到新位置，可選擇使用新名稱。傳回用於追蹤複製進度的監視器 URL"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.display_name": {
+          "source": "Copy Document",
+          "message": "複製文件"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "要求失敗並傳回錯誤"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "失敗"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new copy",
+          "message": "自動重新命名新複本"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "重新命名"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "取代現有檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "取代"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists in the destination:\n- `rename`: automatically rename the new copy\n- `replace`: replace the existing file (only supported for files, not folders)\n- `fail`: fail the request with an error (default)",
+          "message": "目的地存在同名項目時的衝突解決行為：\n- `rename`：自動重新命名新複本\n- `replace`：取代現有檔案（僅支援檔案，不支援資料夾）\n- `fail`：要求失敗並傳回錯誤（預設）"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "衝突行為"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "如何處理命名衝突"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.desc": {
+          "source": "The unique identifier of the file or folder to copy",
+          "message": "要複製的檔案或資料夾的唯一識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.aWQ.short_desc": {
+          "source": "The item ID to copy",
+          "message": "要複製的項目識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.desc": {
+          "source": "The new name for the copied item. If not provided, the same name as the original is used",
+          "message": "複製項目的新名稱。如未提供，將使用與原始項目相同的名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "新名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.bmFtZQ.short_desc": {
+          "source": "New name for the copy",
+          "message": "複本的新名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.desc": {
+          "source": "The unique identifier of the destination drive. Required when copying to a different drive",
+          "message": "目的地磁碟機的唯一識別碼。複製到不同磁碟機時為必填"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.display_name": {
+          "source": "Destination Drive ID",
+          "message": "目的地磁碟機識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2RyaXZlX2lk.short_desc": {
+          "source": "Target drive ID for the copy",
+          "message": "用於複製的目標磁碟機識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder. If omitted, the item is copied to the drive root",
+          "message": "目的地資料夾的識別碼。如果省略，項目將複製到磁碟機根目錄"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.display_name": {
+          "source": "Destination Folder ID",
+          "message": "目的地資料夾識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.option.cGFyZW50X2lk.short_desc": {
+          "source": "Target folder ID for the copy",
+          "message": "用於複製的目標資料夾識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y29weS1pdGVt.short_desc": {
+          "source": "Copy a document or folder",
+          "message": "複製文件或資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in a document library, optionally within a parent folder",
+          "message": "在文件庫中建立新資料夾，可選在父資料夾中"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "建立資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "要求失敗並傳回錯誤"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "失敗"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new folder",
+          "message": "自動重新命名新資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "重新命名"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing item",
+          "message": "取代現有項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "取代"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if an item with the same name exists:\n- `rename`: automatically rename the new folder\n- `replace`: replace the existing item\n- `fail`: fail the request with an error",
+          "message": "存在同名項目時的衝突解決行為：\n- `rename`：自動重新命名新資料夾\n- `replace`：取代現有項目\n- `fail`：要求失敗並傳回錯誤"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "衝突行為"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "如何處理命名衝突"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional description of the folder",
+          "message": "資料夾的選填說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Folder description",
+          "message": "資料夾說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name of the new folder",
+          "message": "新資料夾的名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "資料夾名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "The name of the folder to create",
+          "message": "要建立的資料夾名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the folder is created in the drive root",
+          "message": "父資料夾的識別碼。如果省略，資料夾將建立在磁碟機根目錄中"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "上層資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "父資料夾識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "建立新資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.desc": {
+          "source": "Create a new list in a SharePoint site, optionally with its columns",
+          "message": "在 SharePoint 網站中建立新清單，可選擇包含其資料行"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.display_name": {
+          "source": "Create List",
+          "message": "建立清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.desc": {
+          "source": "The columns to create the list with, as a list of Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) objects, for example `{\"name\": \"Amount\", \"number\": {}}`. When omitted the list is created with only the default `Title` column",
+          "message": "建立清單所使用的資料行，格式為 Microsoft Graph [columnDefinition](https://learn.microsoft.com/en-us/graph/api/resources/columndefinition) 物件的清單，例如 `{\"name\": \"Amount\", \"number\": {}}`。省略時，建立的清單將僅包含預設的 `Title` 資料行"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "欄"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.Y29sdW1ucw.short_desc": {
+          "source": "The columns to create the list with",
+          "message": "建立清單所使用的資料行"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the list to create",
+          "message": "要建立之清單的說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the new list",
+          "message": "新清單的說明"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "The title of the list to create, as shown to users",
+          "message": "要建立之清單的標題，向使用者顯示"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "List Name",
+          "message": "清單名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "The name of the new list",
+          "message": "新清單的名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.desc": {
+          "source": "A library of files, reached with the file actions",
+          "message": "檔案庫，可透過檔案動作存取"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmRvY3VtZW50TGlicmFyeQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.desc": {
+          "source": "A calendar of events",
+          "message": "活動行事曆"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmV2ZW50cw.display_name": {
+          "source": "Calendar",
+          "message": "日曆"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.desc": {
+          "source": "An ordinary list of records",
+          "message": "一般記錄清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOmdlbmVyaWNMaXN0.display_name": {
+          "source": "Generic List",
+          "message": "一般清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.desc": {
+          "source": "A task list",
+          "message": "工作清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.allowed-value.c3RyaW5nOnRhc2tz.display_name": {
+          "source": "Tasks",
+          "message": "工作"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.desc": {
+          "source": "The SharePoint template the list is based on; `genericList` is an ordinary list of records and `documentLibrary` holds files",
+          "message": "清單所基於的 SharePoint 範本；`genericList` 是一般記錄清單，而 `documentLibrary` 存放檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "範本"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.option.dGVtcGxhdGU.short_desc": {
+          "source": "The kind of list to create",
+          "message": "要建立的清單種類"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3Q.short_desc": {
+          "source": "Create a new list",
+          "message": "建立新清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Create an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "在 SharePoint 清單中建立項目。選取網站和清單後，清單本身的資料行會以個別具類型的選項提供"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Create List Item",
+          "message": "建立清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "要為項目資料行設定的值，以內部資料行名稱作為索引鍵。選取網站和清單後，個別資料行會以其自屬類型提供；`columns` 動作會列出它們"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "資料行值"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "要為項目資料行設定的值"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Create an item in a list",
+          "message": "在清單中建立項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.desc": {
+          "source": "Create a sharing link (view, edit, or embed) for a document or folder",
+          "message": "建立文件或資料夾的共用連結 (檢視、編輯或內嵌)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.display_name": {
+          "source": "Create Sharing Link",
+          "message": "建立共用連結"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "The date and time when the sharing link expires",
+          "message": "共用連結過期的日期與時間"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date",
+          "message": "到期日"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "When the link expires",
+          "message": "連結過期時間"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.desc": {
+          "source": "The unique identifier of the item to create a sharing link for",
+          "message": "要建立共用連結的項目唯一識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.aWQ.short_desc": {
+          "source": "The item ID to share",
+          "message": "要共用的項目識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.desc": {
+          "source": "Only users in the same organization",
+          "message": "僅限同組織內的使用者"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOm9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.desc": {
+          "source": "Anyone with the link can access",
+          "message": "擁有此連結的任何人皆可存取"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.allowed-value.c3RyaW5nOmFub255bW91cw.display_name": {
+          "source": "Anonymous",
+          "message": "匿名"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.desc": {
+          "source": "The scope of the link:\n- `anonymous`: anyone with the link can access\n- `organization`: only users in the same organization can access",
+          "message": "連結的範圍：\n- `anonymous`：擁有連結的任何人皆可存取\n- `organization`：僅同組織內的使用者可存取"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.display_name": {
+          "source": "Link Scope",
+          "message": "連結範圍"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2NvcGU.short_desc": {
+          "source": "The scope of the sharing link",
+          "message": "共用連結的範圍"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for the sharing link (optional)",
+          "message": "共用連結的密碼（選填）"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.cGFzc3dvcmQ.short_desc": {
+          "source": "Password for the sharing link",
+          "message": "共用連結的密碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.desc": {
+          "source": "Read-write access",
+          "message": "讀寫存取權限"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVkaXQ.display_name": {
+          "source": "Edit",
+          "message": "編輯"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.desc": {
+          "source": "Embeddable link",
+          "message": "可嵌入連結"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYmVk.display_name": {
+          "source": "Embed",
+          "message": "嵌入"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.desc": {
+          "source": "Read-only access",
+          "message": "唯讀存取權限"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOnZpZXc.display_name": {
+          "source": "View",
+          "message": "檢視表"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.desc": {
+          "source": "The type of sharing link to create:\n- `view`: read-only link\n- `edit`: read-write link\n- `embed`: embeddable link",
+          "message": "要建立的共用連結類型：\n- `view`：唯讀連結\n- `edit`：讀寫連結\n- `embed`：可嵌入連結"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.display_name": {
+          "source": "Link Type",
+          "message": "連結類型"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.option.dHlwZQ.short_desc": {
+          "source": "The type of sharing link",
+          "message": "共用連結的類型"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXNoYXJpbmctbGluaw.short_desc": {
+          "source": "Create a sharing link for a document",
+          "message": "建立文件的共用連結"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.desc": {
+          "source": "Create a resumable upload session for uploading a large document (>4 MB) in chunks. Returns an upload URL that accepts PUT requests with byte ranges",
+          "message": "建立可續傳上傳工作階段，以便分塊上傳大型文件 (>4 MB)。傳回接受包含位元組範圍之 PUT 請求的上傳 URL"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.display_name": {
+          "source": "Create Upload Session",
+          "message": "建立上傳工作階段"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.desc": {
+          "source": "Fail the request with an error",
+          "message": "要求失敗並傳回錯誤"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOmZhaWw.display_name": {
+          "source": "Fail",
+          "message": "失敗"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.desc": {
+          "source": "Automatically rename the new file",
+          "message": "自動重新命名新檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlbmFtZQ.display_name": {
+          "source": "Rename",
+          "message": "重新命名"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.desc": {
+          "source": "Replace the existing file",
+          "message": "取代現有檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.allowed-value.c3RyaW5nOnJlcGxhY2U.display_name": {
+          "source": "Replace",
+          "message": "取代"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.desc": {
+          "source": "The conflict resolution behavior if a file with the same name exists:\n- `rename`: automatically rename the new file\n- `replace`: replace the existing file\n- `fail`: fail the request with an error",
+          "message": "存在同名檔案時的衝突解決行為：\n- `rename`：自動重新命名新檔案\n- `replace`：取代現有檔案\n- `fail`：要求失敗並傳回錯誤"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.display_name": {
+          "source": "Conflict Behavior",
+          "message": "衝突行為"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.Y29uZmxpY3RfYmVoYXZpb3I.short_desc": {
+          "source": "How to handle naming conflicts",
+          "message": "如何處理命名衝突"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.desc": {
+          "source": "The name of the file to upload (e.g., `large-file.zip`)",
+          "message": "要上傳的檔案名稱（例如 `large-file.zip`）"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.display_name": {
+          "source": "File Name",
+          "message": "檔案名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.ZmlsZW5hbWU.short_desc": {
+          "source": "The name of the file to upload",
+          "message": "要上傳的檔案名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "上層資料夾的 ID。如果省略，檔案將上傳至雲端硬碟根目錄"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "上層資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "父資料夾識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.Y3JlYXRlLXVwbG9hZC1zZXNzaW9u.short_desc": {
+          "source": "Create a resumable upload session",
+          "message": "建立可續傳的上傳工作階段"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.desc": {
+          "source": "Retrieve a document library's metadata, including its storage quota and owner",
+          "message": "擷取文件庫的元資料，包含其儲存配額與擁有者"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.display_name": {
+          "source": "Get Document Library Info",
+          "message": "取得文件庫資訊"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWRyaXZlLWluZm8.short_desc": {
+          "source": "Get document library metadata and quota",
+          "message": "取得文件庫元資料與配額"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve metadata for a document or folder by ID or by path within the library",
+          "message": "依 ID 或庫內路徑擷取文件或資料夾的元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Document",
+          "message": "取得文件"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to retrieve. Provide either `id` or `path`",
+          "message": "要擷取之項目的唯一識別碼。請提供 `id` 或 `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to retrieve",
+          "message": "要擷取的項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.desc": {
+          "source": "The path of the item relative to the drive root (e.g., `/Documents/file.txt`). Provide either `id` or `path`",
+          "message": "相對於雲端硬碟根目錄的項目路徑（例如 `/Documents/file.txt`）。請提供 `id` 或 `path`"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.display_name": {
+          "source": "Item Path",
+          "message": "項目路徑"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.option.cGF0aA.short_desc": {
+          "source": "The item path to retrieve",
+          "message": "要擷取的項目路徑"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get document or folder metadata",
+          "message": "取得文件或資料夾元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.desc": {
+          "source": "Retrieve metadata for a SharePoint list",
+          "message": "擷取 SharePoint 清單的元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.display_name": {
+          "source": "Get List",
+          "message": "取得清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3Q.short_desc": {
+          "source": "Get list metadata",
+          "message": "取得清單元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.desc": {
+          "source": "Retrieve a list item with the values of all of its columns",
+          "message": "擷取包含所有欄位值的清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.display_name": {
+          "source": "Get List Item",
+          "message": "取得清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "要處理的清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LWxpc3QtaXRlbQ.short_desc": {
+          "source": "Get a list item and its column values",
+          "message": "取得清單項目及其欄位值"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.desc": {
+          "source": "Retrieve metadata for a SharePoint site",
+          "message": "擷取 SharePoint 網站的元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.display_name": {
+          "source": "Get Site",
+          "message": "取得網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.Z2V0LXNpdGU.short_desc": {
+          "source": "Get site metadata",
+          "message": "取得網站元資料"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Get the download URL and metadata for a document. Returns a pre-authenticated download URL that can be used to download the content directly",
+          "message": "取得文件的下載 URL 與元資料。傳回可用於直接下載內容的預先驗證下載 URL"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download Document",
+          "message": "下載文件"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the file to download",
+          "message": "要下載之檔案的唯一識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.aWQ.short_desc": {
+          "source": "The item ID to download",
+          "message": "要下載的項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a document",
+          "message": "下載文件"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete a document or folder from a library. The item is moved to the recycle bin",
+          "message": "從庫中刪除文件或資料夾。該項目將移至資源回收筒"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Document",
+          "message": "刪除文件"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to delete",
+          "message": "要刪除之項目的唯一識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to delete",
+          "message": "要刪除的項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete a document or folder",
+          "message": "刪除文件或資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.desc": {
+          "source": "Delete a SharePoint list and every item in it",
+          "message": "刪除 SharePoint 清單及其中的所有項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "刪除清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3Q.short_desc": {
+          "source": "Delete a list",
+          "message": "刪除清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Delete an item from a SharePoint list",
+          "message": "從 SharePoint 清單中刪除項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Delete List Item",
+          "message": "刪除清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "要處理的清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.ZGVsZXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Delete an item from a list",
+          "message": "從清單中刪除項目"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a document already in a library is modified. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "當庫中已存在的文件被修改時觸發。使用差異查詢，可從中斷處精確繼續，而無需重新讀取整個庫"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "Document Modified",
+          "message": "文件已修改"
+        },
+        "app.U2hhcmVQb2ludA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "Trigger when a document is modified",
+          "message": "當文件被修改時觸發"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.desc": {
+          "source": "List the columns of a SharePoint list, with their types and whether they can be written",
+          "message": "列出 SharePoint 清單的欄位及其類型和是否可寫入"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.display_name": {
+          "source": "List Columns",
+          "message": "列出欄位"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.desc": {
+          "source": "Return only the columns that can be written; SharePoint maintains many read-only columns that a create or update call would reject",
+          "message": "僅傳回可寫入的欄位；SharePoint 維護許多唯讀欄位，建立或更新呼叫將會拒絕這些欄位"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.display_name": {
+          "source": "Writable Only",
+          "message": "僅限可寫入"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.option.d3JpdGFibGVfb25seQ.short_desc": {
+          "source": "Return only columns that can be written",
+          "message": "僅傳回可寫入的欄位"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1jb2x1bW5z.short_desc": {
+          "source": "List the columns of a list",
+          "message": "列出清單的欄位"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.desc": {
+          "source": "List the document libraries (drives) in a SharePoint site. The `drive_id` of a library identifies it to every file action",
+          "message": "列出 SharePoint 網站中的文件庫 (磁碟機)。庫的 `drive_id` 可向每個檔案動作識別該庫"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.display_name": {
+          "source": "List Document Libraries",
+          "message": "列出文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1kcml2ZXM.short_desc": {
+          "source": "List the document libraries in a site",
+          "message": "列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.desc": {
+          "source": "List the lists in a SharePoint site. SharePoint's own internal lists are excluded by default",
+          "message": "列出 SharePoint 網站中的清單。預設排除 SharePoint 自身的內部清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "列出清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.desc": {
+          "source": "Include lists whose template is `documentLibrary`",
+          "message": "包含範本為 `documentLibrary` 的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.display_name": {
+          "source": "Include Document Libraries",
+          "message": "包含文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9kb2N1bWVudF9saWJyYXJpZXM.short_desc": {
+          "source": "Include document libraries as well as record lists",
+          "message": "包含文件庫以及記錄清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.desc": {
+          "source": "Include the lists SharePoint maintains for its own bookkeeping",
+          "message": "包含 SharePoint 為自身內部記錄所維護的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.display_name": {
+          "source": "Include System Lists",
+          "message": "包含系統清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.aW5jbHVkZV9zeXN0ZW0.short_desc": {
+          "source": "Include SharePoint's own internal lists",
+          "message": "包含 SharePoint 自身的內部清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1saXN0cw.short_desc": {
+          "source": "List the lists in a site",
+          "message": "列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.desc": {
+          "source": "List the sites available. With no search term the tenant's root site and its subsites are returned, which always works; a search term is answered from the SharePoint search index",
+          "message": "列出可用的網站。若未指定搜尋字詞，將傳回租用戶的根網站及其子網站（此操作一律有效）；若有指定搜尋字詞，則從 SharePoint 搜尋索引傳回結果"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.display_name": {
+          "source": "List Sites",
+          "message": "列出網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.desc": {
+          "source": "A term to search site titles and URLs for. When omitted, the tenant's root site and its subsites are returned",
+          "message": "用於搜尋網站標題與 URL 的搜尋字詞。省略時，將傳回租用戶的根網站及其子網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "搜尋"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.option.c2VhcmNo.short_desc": {
+          "source": "Search term to match sites against",
+          "message": "用於比對網站的搜尋字詞"
+        },
+        "app.U2hhcmVQb2ludA.action.bGlzdC1zaXRlcw.short_desc": {
+          "source": "List or search SharePoint sites",
+          "message": "列出或搜尋 SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft SharePoint** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定之連線的驗證向 **Microsoft SharePoint** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基本 URL)、選填的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n對此應用程式上尚未公開為頂級動作的端點使用此動作。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.U2hhcmVQb2ludA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft SharePoint",
+          "message": "向 Microsoft SharePoint 發出自訂 API 呼叫"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a document is added to a document library. Uses delta queries, which resume exactly where they left off rather than re-reading the library",
+          "message": "當文件新增至文件庫時觸發。使用差異查詢，可從中斷處精確繼續，而無需重新讀取整個庫"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.display_name": {
+          "source": "Document Added",
+          "message": "文件已新增"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZpbGU.short_desc": {
+          "source": "Trigger when a document is added to a library",
+          "message": "當文件新增至庫時觸發"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is added to a document library",
+          "message": "當資料夾新增至文件庫時觸發"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "Folder Added",
+          "message": "資料夾已新增"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "Trigger when a folder is added to a library",
+          "message": "當資料夾新增至庫時觸發"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.desc": {
+          "source": "Fires when an item is added to a SharePoint list. Uses delta queries, which resume exactly where they left off rather than polling the head of the list",
+          "message": "當項目新增至 SharePoint 清單時觸發。使用差異查詢，可從中斷處精確繼續，而無需輪詢清單開頭"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.display_name": {
+          "source": "List Item Added",
+          "message": "清單項目已新增"
+        },
+        "app.U2hhcmVQb2ludA.action.bmV3LXJvdw.short_desc": {
+          "source": "Trigger when an item is added to a list",
+          "message": "當項目新增至清單時觸發"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "List the items in a folder of a document library, or search the whole library. Supports pagination and sorting",
+          "message": "列出文件庫資料夾中的項目，或搜尋整個庫。支援分頁與排序"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Documents",
+          "message": "搜尋文件"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.desc": {
+          "source": "The ID of the folder to list items from. If omitted, lists items from the root of the library",
+          "message": "要列出項目的資料夾 ID。若省略，則列出庫根目錄中的項目"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.display_name": {
+          "source": "Folder ID",
+          "message": "資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.Zm9sZGVyX2lk.short_desc": {
+          "source": "The folder to list items from",
+          "message": "要列出項目的資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results (e.g., `name asc`, `size desc`)",
+          "message": "結果的排序順序（例如 `name asc`、`size desc`）"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "排序欄位與方向"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "A search query string to filter items by name or content",
+          "message": "用於依名稱或內容篩選項目的搜尋查詢字串"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "搜尋查詢"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Search query string",
+          "message": "搜尋查詢字串"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.desc": {
+          "source": "Maximum number of items to return per page (default `200`, max `1000`)",
+          "message": "每頁傳回的項目數量上限（預設 `200`，最大值 `1000`）"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.display_name": {
+          "source": "Top",
+          "message": "靠上"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.option.dG9w.short_desc": {
+          "source": "Maximum items to return per page",
+          "message": "每頁傳回的項目數量上限"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "List or search documents and folders",
+          "message": "列出或搜尋文件與資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.desc": {
+          "source": "List the items in a SharePoint list, optionally filtered with an OData expression over the item's columns",
+          "message": "列出 SharePoint 清單中的項目，可選用針對項目欄位的 OData 運算式進行篩選"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.display_name": {
+          "source": "Search List Items",
+          "message": "搜尋清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.desc": {
+          "source": "An OData `$filter` expression over the item's columns, for example `fields/Title eq 'Widget'`. Column names are prefixed with `fields/`",
+          "message": "針對項目資料欄的 OData `$filter` 運算式，例如 `fields/Title eq 'Widget'`。資料欄名稱前置詞為 `fields/`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.ZmlsdGVy.short_desc": {
+          "source": "An OData filter expression",
+          "message": "OData 篩選運算式"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.desc": {
+          "source": "Sort order for results, for example `fields/Title asc`",
+          "message": "結果的排序順序，例如 `fields/Title asc`"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort field and direction",
+          "message": "排序欄位與方向"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.desc": {
+          "source": "Stop after this many items in total, across all pages",
+          "message": "跨所有頁面達到此項目總數後停止"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum items to return in total",
+          "message": "傳回的項目總數上限"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.c2VhcmNoLWxpc3QtaXRlbXM.short_desc": {
+          "source": "List or search the items in a list",
+          "message": "列出或搜尋清單中的項目"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update the metadata of a document or folder. Can be used to rename an item, move it to a different folder, or update its description",
+          "message": "更新文件或資料夾的元資料。可用於重新命名項目、將其移動至其他資料夾或更新其描述"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Document",
+          "message": "更新文件"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Provides a user-visible description of the item",
+          "message": "提供使用者可見的項目描述"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "A user-visible description of the item",
+          "message": "使用者可見的項目描述"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.desc": {
+          "source": "The unique identifier of the item to update",
+          "message": "要更新之項目的唯一識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID to update",
+          "message": "要更新的項目 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The new name for the file or folder (including extension for files)",
+          "message": "檔案或資料夾的新名稱（檔案需包含副檔名）"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "New Name",
+          "message": "新名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "The new name for the item",
+          "message": "項目的新名稱"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the destination folder to move the item to. Set this to move an item to a different folder",
+          "message": "要將項目移至的目的地資料夾 ID。設定此欄位可將項目移至其他資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.display_name": {
+          "source": "New Parent Folder ID",
+          "message": "新上層資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.option.cGFyZW50X2lk.short_desc": {
+          "source": "The destination folder ID for moving",
+          "message": "移動的目的地資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Rename, move, or update a document or folder",
+          "message": "重新命名、移動或更新文件或資料夾"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.desc": {
+          "source": "Update the column values of an item in a SharePoint list. Once a site and list have been chosen, the list's own columns are offered as individual typed options",
+          "message": "更新 SharePoint 清單中項目的資料欄值。選取網站和清單後，該清單自有的資料欄將作為個別的類型化選項提供"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.display_name": {
+          "source": "Update List Item",
+          "message": "更新清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.desc": {
+          "source": "The values to set for the item's columns, keyed by internal column name. Once a site and list have been selected the individual columns are offered with their own types; the `columns` action lists them",
+          "message": "要為項目資料行設定的值，以內部資料行名稱作為索引鍵。選取網站和清單後，個別資料行會以其自屬類型提供；`columns` 動作會列出它們"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.display_name": {
+          "source": "Column Values",
+          "message": "資料行值"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.ZmllbGRz.short_desc": {
+          "source": "The values to set for the item's columns",
+          "message": "要為項目資料行設定的值"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.desc": {
+          "source": "The list item to address",
+          "message": "要處理的清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The list item",
+          "message": "清單項目"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.desc": {
+          "source": "The list to address. Use the `list-lists` action to list the lists in a site",
+          "message": "要定位的清單。使用 `list-lists` 動作來列出網站中的清單"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.bGlzdF9pZA.short_desc": {
+          "source": "The SharePoint list",
+          "message": "SharePoint 清單"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBkYXRlLWxpc3QtaXRlbQ.short_desc": {
+          "source": "Update an item's column values",
+          "message": "更新項目的資料欄值"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a document to a library using a simple upload. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "使用簡易上傳將文件上傳至文件庫。若檔案大於 4 MB，請改用 `create-upload-session` 動作"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload Document",
+          "message": "上傳文件"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.desc": {
+          "source": "The document library to address. Use the `list-drives` action to list the libraries in a site",
+          "message": "要定位的文件庫。使用 `list-drives` 動作來列出網站中的文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.display_name": {
+          "source": "Document Library",
+          "message": "文件庫"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZHJpdmVfaWQ.short_desc": {
+          "source": "The document library (drive)",
+          "message": "文件庫 (磁碟機)"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to OneDrive, including file name, content, and MIME type. For files larger than 4 MB, use the `create-upload-session` action instead",
+          "message": "要上傳至 OneDrive 的檔案，包括檔案名稱、內容與 MIME 類型。對於大於 4 MB 的檔案，請改用 `create-upload-session` 動作"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "要上傳的檔案"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.desc": {
+          "source": "The SharePoint site to address. Use the `list-sites` action to discover the sites available; the tenant's root site is always offered",
+          "message": "要定位的 SharePoint 網站。使用 `list-sites` 動作來探索可用的網站；一律會提供租用戶的根網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.display_name": {
+          "source": "Site",
+          "message": "網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.c2l0ZV9pZA.short_desc": {
+          "source": "The SharePoint site",
+          "message": "SharePoint 網站"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.desc": {
+          "source": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
+          "message": "上層資料夾的 ID。如果省略，檔案將上傳至雲端硬碟根目錄"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Folder ID",
+          "message": "上層資料夾 ID"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.option.cGFyZW50X2lk.short_desc": {
+          "source": "The parent folder ID",
+          "message": "父資料夾識別碼"
+        },
+        "app.U2hhcmVQb2ludA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a document (up to 4 MB)",
+          "message": "上傳文件（最大 4 MB）"
+        },
+        "app.U2hhcmVQb2ludA.desc": {
+          "source": "Provides access to [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) document libraries and lists via the Microsoft Graph API.\n\n**Common use cases**:\n- **Document management**: upload, download, copy, move, and delete documents in a document library, including resumable uploads for large files\n- **Sharing**: create sharing links for documents and folders\n- **Lists**: create and delete lists, and create, update, search, and delete list items\n- **Records**: read and write list items as records, typed from each list's own columns\n- **Change tracking**: react to new and modified documents and to new list items, using delta queries that resume exactly where they left off\n\nMicrosoft and SharePoint are trademarks of the Microsoft group of companies",
+          "message": "透過 Microsoft Graph API 提供對 [Microsoft SharePoint](https://www.microsoft.com/microsoft-365/sharepoint/) 文件庫和清單的存取。\n\n**常見使用案例**：\n- **文件管理**：在文件庫中上傳、下載、複製、移動和刪除文件，包括大型檔案的可續傳上傳\n- **共用**：建立文件和資料夾的共用連結\n- **清單**：建立和刪除清單，以及建立、更新、搜尋和刪除清單項目\n- **記錄**：將清單項目讀寫為記錄，依據每個清單各自的資料欄定義型別\n- **變更追蹤**：透過能精確從中斷處繼續的增量 (Delta) 查詢，回應新增與修改的文件以及新增的清單項目\n\nMicrosoft 和 SharePoint 是 Microsoft 集團公司的商標"
+        },
+        "app.U2hhcmVQb2ludA.display_name": {
+          "source": "Microsoft SharePoint",
+          "message": "Microsoft SharePoint"
+        },
+        "app.U2hhcmVQb2ludA.short_desc": {
+          "source": "Microsoft SharePoint document libraries and lists",
+          "message": "Microsoft SharePoint 文件庫與清單"
+        }
+      }
+    }
+  }
+}

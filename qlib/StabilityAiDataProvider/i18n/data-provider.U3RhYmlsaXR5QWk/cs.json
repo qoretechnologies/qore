@@ -1,0 +1,573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via Stability AI's v2beta `/stable-image/generate/*` endpoints.  The `model` option selects the endpoint (`ultra` / `sd3` / `core`).\n\nReturns raw image bytes — `image` holds the bytes, `content_type` the MIME type, and `finish_reason` flags content-safety blocks (`CONTENT_FILTERED`).",
+          "message": "Vygeneruje obrázek z textového zadání pomocí koncových bodů v2beta `/stable-image/generate/*` služby Stability AI. Možnost `model` vybírá koncový bod (`ultra` / `sd3` / `core`).\n\nVrací surové bajty obrázku — `image` obsahuje bajty, `content_type` MIME typ a `finish_reason` označuje blokace z důvodu bezpečnosti obsahu (`CONTENT_FILTERED`)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generovat obrázek"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE2Ojk.display_name": {
+          "source": "16:9 (Landscape Video)",
+          "message": "16:9 (video na šířku)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE6MQ.display_name": {
+          "source": "1:1 (Square)",
+          "message": "1:1 (čtverec)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjI6Mw.display_name": {
+          "source": "2:3 (Tall Portrait)",
+          "message": "2:3 (vysoký portrét)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjIxOjk.display_name": {
+          "source": "21:9 (Cinemascope)",
+          "message": "21:9 (Cinemascope)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6Mg.display_name": {
+          "source": "3:2 (Wide Landscape)",
+          "message": "3:2 (širokoúhlá krajina)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6NA.display_name": {
+          "source": "3:4 (Portrait)",
+          "message": "3:4 (portrét)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6Mw.display_name": {
+          "source": "4:3 (Standard)",
+          "message": "4:3 (standardní)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6NQ.display_name": {
+          "source": "4:5",
+          "message": "4:5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjU6NA.display_name": {
+          "source": "5:4",
+          "message": "5:4"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MTY.display_name": {
+          "source": "9:16 (Portrait Video)",
+          "message": "9:16 (video na výšku)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MjE.display_name": {
+          "source": "9:21 (Tall Cinemascope)",
+          "message": "9:21 (vysoký Cinemascope)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.  Common values: `1:1` (square), `16:9` (landscape video), `9:16` (portrait video), `4:3`, `3:4`, `21:9` (cinemascope).",
+          "message": "Výstupní poměr stran. Běžné hodnoty: `1:1` (čtverec), `16:9` (video na šířku), `9:16` (video na výšku), `4:3`, `3:4`, `21:9` (cinemascope)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "Poměr stran"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "Poměr stran výstupu"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "Output image format.",
+          "message": "Výstupní formát obrázku."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Výstupní formát"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "Output image format",
+          "message": "Formát výstupního obrázku"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmNvcmU.display_name": {
+          "source": "Core (faster, cheaper)",
+          "message": "Core (rychlejší, levnější)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnNkMw.display_name": {
+          "source": "Stable Diffusion 3 / 3.5",
+          "message": "Stable Diffusion 3 / 3.5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnVsdHJh.display_name": {
+          "source": "Ultra (highest quality)",
+          "message": "Ultra (nejvyšší kvalita)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Stability AI model identifier — `ultra` for highest quality (SD3 Ultra), `sd3` for Stable Diffusion 3 / 3.5, or `core` for the faster / cheaper model.",
+          "message": "Identifikátor modelu Stability AI — `ultra` pro nejvyšší kvalitu (SD3 Ultra), `sd3` pro Stable Diffusion 3 / 3.5 nebo `core` pro rychlejší / levnější model."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "Stability AI model identifier",
+          "message": "Identifikátor modelu Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image — e.g. `blurry, low quality, text, watermark`.",
+          "message": "Text popisující, čemu se v obrázku vyhnout – např. `blurry, low quality, text, watermark`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Negativní prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What you don't want in the image",
+          "message": "Co nechcete mít v obrázku"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed used for generation — passing the same seed + prompt should produce the same image.  `0` (default) uses a random seed.",
+          "message": "Náhodný seed použitý pro generování — předání stejného seedu + promptu by mělo vytvořit stejný obrázek. `0` (výchozí) používá náhodný seed."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility (0–4294967294)",
+          "message": "Náhodný seed pro reprodukovatelnost (0–4294967294)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOjNkLW1vZGVs.display_name": {
+          "source": "3D Model",
+          "message": "3D Model"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm1vZGVsaW5nLWNvbXBvdW5k.display_name": {
+          "source": "Modeling Compound",
+          "message": "Modeling Compound"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm5lb24tcHVuaw.display_name": {
+          "source": "Neon Punk",
+          "message": "Neon Punk"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm9yaWdhbWk.display_name": {
+          "source": "Origami",
+          "message": "Origami"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuYWxvZy1maWxt.display_name": {
+          "source": "Analog Film",
+          "message": "Analog Film"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuaW1l.display_name": {
+          "source": "Anime",
+          "message": "Anime"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNpbmVtYXRpYw.display_name": {
+          "source": "Cinematic",
+          "message": "Cinematic"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNvbWljLWJvb2s.display_name": {
+          "source": "Comic Book",
+          "message": "Comic Book"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmRpZ2l0YWwtYXJ0.display_name": {
+          "source": "Digital Art",
+          "message": "Digital Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmZhbnRhc3ktYXJ0.display_name": {
+          "source": "Fantasy Art",
+          "message": "Fantasy Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmlzb21ldHJpYw.display_name": {
+          "source": "Isometric",
+          "message": "Isometric"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxpbmUtYXJ0.display_name": {
+          "source": "Line Art",
+          "message": "Line Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxvdy1wb2x5.display_name": {
+          "source": "Low Poly",
+          "message": "Low Poly"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBob3RvZ3JhcGhpYw.display_name": {
+          "source": "Photographic",
+          "message": "Photographic"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBpeGVsLWFydA.display_name": {
+          "source": "Pixel Art",
+          "message": "Pixel Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnRpbGUtdGV4dHVyZQ.display_name": {
+          "source": "Tile Texture",
+          "message": "Tile Texture"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.desc": {
+          "source": "Pre-baked style preset.  Only honoured by the `core` model; ignored by `sd3` and `ultra`.",
+          "message": "Přednastavená předvolba stylu. Je podporována pouze modelem `core`; modely `sd3` a `ultra` ji ignorují."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.display_name": {
+          "source": "Style Preset",
+          "message": "Předvolba stylu"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
+          "source": "Pre-baked style preset (`core` model only)",
+          "message": "Přednastavená předvolba stylu (pouze model `core`)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
+          "message": "Textové zadání popisující požadovaný obrázek. Pro nejlepší výsledky buďte konkrétní ohledně objektu, stylu, osvětlení a kompozice."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "Textový prompt popisující obrázek"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt",
+          "message": "Vygenerovat obrázek z textového zadání"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Stability AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provede vlastní volání HTTP / REST API do **Stability AI** pomocí ověření v nakonfigurovaném připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou k dispozici jako samostatné akce."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Stability AI",
+          "message": "Provést vlastní volání API do Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.desc": {
+          "source": "Provides access to [Stability AI](https://stability.ai) — the company behind Stable Diffusion.  Three model tiers:\n\n- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for marketing artwork, photo-real images, and brand visuals\n- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default balanced quality / speed model\n- **Core** (`core`): faster + cheaper model with preset-driven style transfer for prototyping and bulk work",
+          "message": "Poskytuje přístup k [Stability AI](https://stability.ai) — společnosti stojící za modelem Stable Diffusion. Tři úrovně modelů:\n\n- **Ultra** (`ultra`): nejkvalitnější SD3 Ultra, nejlepší pro marketingovou grafiku, fotorealistické obrázky a vizuály značky\n- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — výchozí model s vyváženým poměrem kvality a rychlosti\n- **Core** (`core`): rychlejší a levnější model s přenosem stylu na základě předvoleb pro prototypování a hromadnou práci"
+        },
+        "app.U3RhYmlsaXR5QWk.display_name": {
+          "source": "Stability AI",
+          "message": "Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.short_desc": {
+          "source": "Stability AI text-to-image generation (Stable Diffusion)",
+          "message": "Generování obrázků z textu pomocí Stability AI (Stable Diffusion)"
+        }
+      }
+    }
+  }
+}

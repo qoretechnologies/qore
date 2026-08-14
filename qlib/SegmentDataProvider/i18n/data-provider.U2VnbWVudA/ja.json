@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Create a new integration destination in Segment.",
+          "message": "Segment に新しい連携宛先を作成します。"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Create Destination",
+          "message": "宛先の作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the destination or `False` to create it in a disabled state",
+          "message": "宛先を有効にするには `True` に設定し、無効な状態で作成するには `False` に設定します"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the destination should be enabled",
+          "message": "宛先を有効にするかどうか"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the destination type from the Segment catalog (e.g., `catalog/destinations/google-analytics`)",
+          "message": "Segment カタログからの宛先タイプのメタデータ ID（例: `catalog/destinations/google-analytics`）"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "メタデータ ID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the destination type",
+          "message": "宛先タイプのカタログID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.desc": {
+          "source": "A human-readable display name for the destination",
+          "message": "宛先の人間が読みやすい表示名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.short_desc": {
+          "source": "Destination name",
+          "message": "宛先名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to connect this destination to",
+          "message": "この宛先を接続するSegmentソースの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ソースID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to connect to",
+          "message": "接続先のソースID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.desc": {
+          "source": "A key-value object holding configuration settings required by the destination type, including connection credentials and options (for example, a Google Analytics destination may accept `{\"trackingId\": \"UA-...\"}`, while a webhook destination may accept `{\"hooks\": [\"https://example.com/hook\"]}`); consult the destination catalog for the exact schema for the selected `metadataId`",
+          "message": "接続資格情報やオプションなど、宛先タイプに必要な構成設定を保持するキー/値オブジェクト（例えば、Google Analyticsの宛先は`{\"trackingId\": \"UA-...\"}`を受け入れる場合があり、Webhookの宛先は`{\"hooks\": [\"https://example.com/hook\"]}`を受け入れる場合があります）。選択した`metadataId`の正確なスキーマについては、宛先カタログを参照してください"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.short_desc": {
+          "source": "Destination configuration settings",
+          "message": "宛先構成設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Create a new destination",
+          "message": "新しい宛先を作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label in Segment for organizing resources.",
+          "message": "リソースを整理するための新しいラベルをSegmentに作成します。"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "ラベルを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional human-readable description explaining the purpose of this label",
+          "message": "このラベルの目的を説明する人間が読める任意の形式の説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Label description",
+          "message": "ラベルの説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.desc": {
+          "source": "The key for the new label; labels are key-value pairs used to organize Segment resources",
+          "message": "新しいラベルのキー。ラベルはSegmentリソースの整理に使用されるキー/値のペアです"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.display_name": {
+          "source": "Key",
+          "message": "キー"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.short_desc": {
+          "source": "Label key",
+          "message": "ラベルキー"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.desc": {
+          "source": "The value for the new label",
+          "message": "新しいラベルの値"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "値"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.short_desc": {
+          "source": "Label value",
+          "message": "ラベル値"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label",
+          "message": "新しいラベルを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.desc": {
+          "source": "Create a new data collection source in Segment.",
+          "message": "Segmentに新しいデータ収集ソースを作成します。"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "作成ソース"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.desc": {
+          "source": "Set to `True` to disconnect all currently-connected warehouses from this source on creation; defaults to `False`",
+          "message": "作成時に現在接続されているすべてのウェアハウスをこのソースから切断する場合は`True`に設定します。デフォルトは`False`です"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.display_name": {
+          "source": "Disconnect All Warehouses",
+          "message": "すべてのウェアハウスを切断"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.short_desc": {
+          "source": "Disconnect all warehouses on creation",
+          "message": "作成時にすべてのウェアハウスを切断"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the source or `False` to create it in a disabled state",
+          "message": "ソースを有効にする場合は`True`に設定し、無効な状態で作成する場合は`False`に設定します"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the source should be enabled",
+          "message": "ソースを有効にするかどうか"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the source type from the Segment catalog (e.g., `catalog/sources/javascript`)",
+          "message": "SegmentカタログのソースタイプのメタデータID（例: `catalog/sources/javascript`）"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "メタデータ ID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the source type",
+          "message": "ソースタイプのカタログID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.desc": {
+          "source": "A key-value object holding configuration settings specific to the source type; the available keys depend on the selected `metadataId` (for example, an HTTP API source may accept `{\"trackUtmTags\": True}` while a JavaScript source may accept `{\"writeKey\": \"...\"}`); consult the source catalog for the exact schema",
+          "message": "ソースタイプに固有の構成設定を保持するキー/値オブジェクト。利用可能なキーは選択した`metadataId`によって異なります（例えば、HTTP APIソースは`{\"trackUtmTags\": True}`を受け入れる場合があり、JavaScriptソースは`{\"writeKey\": \"...\"}`を受け入れる場合があります）。正確なスキーマについては、ソースカタログを参照してください"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Source configuration settings",
+          "message": "ソース構成設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.desc": {
+          "source": "A URL-friendly identifier for the source; must be unique within the workspace",
+          "message": "ソースのURLフレンドリーな識別子。ワークスペース内で一意である必要があります"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.short_desc": {
+          "source": "URL-friendly source name",
+          "message": "URLフレンドリーなソース名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
+          "source": "Create a new source",
+          "message": "新しいソースを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Create a new tracking plan in Segment for defining and enforcing event schemas.",
+          "message": "イベントスキーマを定義および適用するための新しいトラッキングプランをSegmentに作成します。"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Create Tracking Plan",
+          "message": "トラッキングプランを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the tracking plan",
+          "message": "トラッキングプランの説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.desc": {
+          "source": "The name of the new tracking plan",
+          "message": "新しいトラッキングプランの名前"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.short_desc": {
+          "source": "Tracking plan name",
+          "message": "トラッキングプラン名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.desc": {
+          "source": "Engage tracking plan",
+          "message": "Engageトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.display_name": {
+          "source": "Engage",
+          "message": "Engage"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.desc": {
+          "source": "Live tracking plan",
+          "message": "ライブトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.display_name": {
+          "source": "Live",
+          "message": "ライブ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.desc": {
+          "source": "Property library",
+          "message": "プロパティライブラリ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.display_name": {
+          "source": "Property Library",
+          "message": "プロパティライブラリ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.desc": {
+          "source": "Rule library",
+          "message": "ルールライブラリ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.display_name": {
+          "source": "Rule Library",
+          "message": "ルールライブラリ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.desc": {
+          "source": "Template tracking plan",
+          "message": "テンプレートトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.display_name": {
+          "source": "Template",
+          "message": "テンプレート"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.desc": {
+          "source": "The type of tracking plan to create",
+          "message": "作成するトラッキングプランのタイプ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.short_desc": {
+          "source": "Tracking plan type",
+          "message": "トラッキングプランのタイプ"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Create a new tracking plan",
+          "message": "新しいトラッキングプランを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Create a new data warehouse connection in Segment.",
+          "message": "Segmentに新しいデータウェアハウス接続を作成します。"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Create Warehouse",
+          "message": "ウェアハウスを作成"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.desc": {
+          "source": "Set to `True` to disconnect all currently-connected sources from this warehouse on creation; defaults to `False`",
+          "message": "作成時に現在接続されているすべてのソースをこのウェアハウスから切断する場合は`True`に設定します。デフォルトは`False`です"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.display_name": {
+          "source": "Disconnect All Sources",
+          "message": "すべてのソースを切断"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.short_desc": {
+          "source": "Disconnect all sources on creation",
+          "message": "作成時にすべてのソースを切断"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the warehouse or `False` to create it in a disabled state",
+          "message": "ウェアハウスを有効にする場合は`True`に設定し、無効な状態で作成する場合は`False`に設定します"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the warehouse should be enabled",
+          "message": "ウェアハウスを有効にするかどうか"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the warehouse type from the Segment catalog (e.g., `catalog/warehouses/bigquery`)",
+          "message": "SegmentカタログのウェアハウスタイプのメタデータID（例: `catalog/warehouses/bigquery`）"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "メタデータ ID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the warehouse type",
+          "message": "ウェアハウスタイプのカタログID"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.desc": {
+          "source": "A human-readable display name for the warehouse",
+          "message": "ウェアハウスの人間が読みやすい表示名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.short_desc": {
+          "source": "Warehouse name",
+          "message": "ウェアハウス名"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Configuration settings required by the warehouse type, including connection details such as `hostname`, `port`, `database`, and `schema`; the available keys depend on the selected `metadataId`",
+          "message": "`hostname`、`port`、`database`、`schema`などの接続詳細を含む、ウェアハウスタイプに必要な構成設定。利用可能なキーは選択した`metadataId`によって異なります"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Warehouse connection settings",
+          "message": "ウェアハウス接続設定"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Create a new warehouse",
+          "message": "新しいウェアハウスを作成"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.desc": {
+          "source": "Retrieve a single Segment destination by its unique ID.",
+          "message": "一意のIDで単一のSegment宛先を取得します。"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
+          "source": "Get Destination",
+          "message": "宛先を取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to retrieve",
+          "message": "取得するSegment宛先の一意の識別子"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "宛先ID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to retrieve",
+          "message": "取得するデスティネーションID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Get a destination by ID",
+          "message": "IDでデスティネーションを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.desc": {
+          "source": "Retrieve a single Segment source by its unique ID.",
+          "message": "一意のIDで単一のSegmentソースを取得します。"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
+          "source": "Get Source",
+          "message": "ソースを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to retrieve",
+          "message": "取得するSegmentソースの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ソースID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to retrieve",
+          "message": "取得するソースID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
+          "source": "Get a source by ID",
+          "message": "IDでソースを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Retrieve a single Segment tracking plan by its unique ID.",
+          "message": "一意のIDで単一のSegmentトラッキングプランを取得します。"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Get Tracking Plan",
+          "message": "トラッキングプランを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to retrieve",
+          "message": "取得する一意のSegmentトラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "トラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to retrieve",
+          "message": "取得するトラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Get a tracking plan by ID",
+          "message": "IDでトラッキングプランを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.desc": {
+          "source": "Retrieve a single Segment warehouse by its unique ID.",
+          "message": "一意のIDで単一のSegmentウェアハウスを取得します。"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
+          "source": "Get Warehouse",
+          "message": "ウェアハウスを取得"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to retrieve",
+          "message": "取得するSegmentウェアハウスの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "倉庫ID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to retrieve",
+          "message": "取得するウェアハウスID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
+          "source": "Get a warehouse by ID",
+          "message": "IDでウェアハウスを取得"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Delete a Segment destination by its ID.",
+          "message": "IDでSegmentデスティネーションを削除します。"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Delete Destination",
+          "message": "デスティネーションを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to delete",
+          "message": "削除するSegmentデスティネーションの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "宛先ID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to delete",
+          "message": "削除するデスティネーションID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Delete a destination",
+          "message": "デスティネーションを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.desc": {
+          "source": "Delete a Segment label by its key and value.",
+          "message": "キーと値でSegmentラベルを削除します。"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
+          "source": "Delete Label",
+          "message": "ラベルを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.desc": {
+          "source": "The key of the label to delete",
+          "message": "削除するラベルのキー"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.display_name": {
+          "source": "Key",
+          "message": "キー"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.short_desc": {
+          "source": "Label key",
+          "message": "ラベルキー"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.desc": {
+          "source": "The value of the label to delete",
+          "message": "削除するラベルの値"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "値"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.short_desc": {
+          "source": "Label value",
+          "message": "ラベル値"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {
+          "source": "Delete a label",
+          "message": "ラベルを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.desc": {
+          "source": "Delete a Segment source by its ID.",
+          "message": "IDでSegmentソースを削除します。"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
+          "source": "Delete Source",
+          "message": "ソースを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to delete",
+          "message": "削除するSegmentソースの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ソースID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to delete",
+          "message": "削除するソースID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
+          "source": "Delete a source",
+          "message": "ソースを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Delete a Segment tracking plan by its ID.",
+          "message": "IDでSegmentトラッキングプランを削除します。"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Delete Tracking Plan",
+          "message": "トラッキングプランを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to delete",
+          "message": "削除する一意のSegmentトラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "トラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to delete",
+          "message": "削除するトラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Delete a tracking plan",
+          "message": "トラッキングプランを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Delete a Segment warehouse by its ID.",
+          "message": "IDでSegmentウェアハウスを削除します。"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Delete Warehouse",
+          "message": "ウェアハウスを削除"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to delete",
+          "message": "削除するSegmentウェアハウスの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "倉庫ID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to delete",
+          "message": "削除するウェアハウスID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Delete a warehouse",
+          "message": "ウェアハウスを削除"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.desc": {
+          "source": "Retrieve a list of tracking plans from Segment with cursor-based pagination.",
+          "message": "カーソルベースのページネーションを使用してSegmentからトラッキングプランの一覧を取得します。"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
+          "source": "List Tracking Plans",
+          "message": "トラッキングプランの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "1ページあたりの結果数 (`1`〜`1000`、デフォルト: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "カウント"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.desc": {
+          "source": "Engage tracking plan",
+          "message": "Engageトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.display_name": {
+          "source": "Engage",
+          "message": "Engage"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.desc": {
+          "source": "Live tracking plan",
+          "message": "ライブトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.display_name": {
+          "source": "Live",
+          "message": "ライブ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.desc": {
+          "source": "Property library",
+          "message": "プロパティライブラリ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.display_name": {
+          "source": "Property Library",
+          "message": "プロパティライブラリ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.desc": {
+          "source": "Rule library",
+          "message": "ルールライブラリ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.display_name": {
+          "source": "Rule Library",
+          "message": "ルールライブラリ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.desc": {
+          "source": "Template tracking plan",
+          "message": "テンプレートトラッキングプラン"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.display_name": {
+          "source": "Template",
+          "message": "テンプレート"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.desc": {
+          "source": "Filter tracking plans by type: `ENGAGE`, `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
+          "message": "タイプでトラッキングプランをフィルタリング: `ENGAGE`、`LIVE`、`PROPERTY_LIBRARY`、`RULE_LIBRARY`、または `TEMPLATE`"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.short_desc": {
+          "source": "Filter by tracking plan type",
+          "message": "トラッキングプランタイプでフィルタリング"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
+          "source": "List tracking plans with cursor-based pagination",
+          "message": "カーソルベースのページネーションでトラッキングプランの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.desc": {
+          "source": "Retrieve a list of warehouses from Segment with cursor-based pagination.",
+          "message": "カーソルベースのページネーションを使用してSegmentからウェアハウスの一覧を取得します。"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
+          "source": "List Warehouses",
+          "message": "ウェアハウスの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "1ページあたりの結果数 (`1`〜`1000`、デフォルト: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "カウント"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
+          "source": "List warehouses with cursor-based pagination",
+          "message": "カーソルベースのページネーションでウェアハウスの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.desc": {
+          "source": "Retrieve a list of destinations from Segment with cursor-based pagination.",
+          "message": "カーソルベースのページネーションを使用してSegmentからデスティネーションの一覧を取得します。"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
+          "source": "List Destinations",
+          "message": "デスティネーションの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "1ページあたりの結果数 (`1`〜`1000`、デフォルト: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "カウント"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
+          "source": "List destinations with cursor-based pagination",
+          "message": "カーソルベースのページネーションでデスティネーションの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.desc": {
+          "source": "Retrieve a list of labels from Segment with cursor-based pagination.",
+          "message": "カーソルベースのページネーションを使用してSegmentからラベルの一覧を取得します。"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
+          "source": "List Labels",
+          "message": "ラベル一覧の取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "1ページあたりの結果数 (`1`〜`1000`、デフォルト: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "カウント"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
+          "source": "List labels with cursor-based pagination",
+          "message": "カーソルベースのページネーションでラベルの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.desc": {
+          "source": "Retrieve a list of sources from Segment with cursor-based pagination.",
+          "message": "カーソルベースのページネーションを使用してSegmentからソースの一覧を取得します。"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
+          "source": "List Sources",
+          "message": "ソースのリスト"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "1ページあたりの結果数 (`1`〜`1000`、デフォルト: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "カウント"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "1ページあたりの結果数"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
+          "source": "List sources with cursor-based pagination",
+          "message": "カーソルベースのページネーションでソースの一覧を取得"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Segment** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Segment** へのカスタム HTTP / REST API 呼び出しを実行します。\n\nHTTP メソッド、URI パス (接続の API ベース URL に対する相対パス)、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Segment",
+          "message": "SegmentへのカスタムAPI呼び出しを実行"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Update an existing Segment destination by its ID.",
+          "message": "IDで既存のSegmentデスティネーションを更新します。"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Update Destination",
+          "message": "デスティネーションを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to update",
+          "message": "更新するSegmentデスティネーションの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "宛先ID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to update",
+          "message": "更新するデスティネーションID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the destination or `False` to disable it",
+          "message": "デスティネーションを有効にするには `True`、無効にするには `False` を設定します"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the destination is enabled",
+          "message": "デスティネーションが有効かどうか"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the destination",
+          "message": "デスティネーションの新しい表示名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.short_desc": {
+          "source": "Updated destination name",
+          "message": "更新されたデスティネーション名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the destination; the available keys depend on the destination type",
+          "message": "デスティネーションの更新された構成設定。使用可能なキーはデスティネーションのタイプによって異なります"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated destination settings",
+          "message": "更新されたデスティネーション設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Update an existing destination",
+          "message": "既存のデスティネーションを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.desc": {
+          "source": "Update an existing Segment source by its ID.",
+          "message": "ID を指定して既存の Segment ソースを更新します。"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "更新元"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the source or `False` to disable it",
+          "message": "ソースを有効にするには `True`、無効にするには `False` を設定します"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the source is enabled",
+          "message": "ソースが有効かどうか"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the source",
+          "message": "ソースの新しい表示名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated source name",
+          "message": "更新されたソース名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to update",
+          "message": "更新する Segment ソースの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ソースID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to update",
+          "message": "更新するソースID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the source; the available keys depend on the source type",
+          "message": "ソースの更新された構成設定。使用可能なキーはソースのタイプによって異なります"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated source settings",
+          "message": "更新されたソース設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.desc": {
+          "source": "The new URL-friendly identifier for the source",
+          "message": "ソースの新しい URL フレンドリーな識別子"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "スラッグ"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.short_desc": {
+          "source": "Updated source slug",
+          "message": "更新されたソーススラッグ"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
+          "source": "Update an existing source",
+          "message": "既存のソースを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Update an existing Segment tracking plan by its ID.",
+          "message": "ID を指定して既存の Segment トラッキングプランを更新します。"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Update Tracking Plan",
+          "message": "トラッキングプランを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the tracking plan",
+          "message": "トラッキングプランの新しい説明"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated description",
+          "message": "更新された説明"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.desc": {
+          "source": "The new name for the tracking plan",
+          "message": "トラッキングプランの新しい名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.short_desc": {
+          "source": "Updated name",
+          "message": "更新された名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to update",
+          "message": "更新する一意の Segment トラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "トラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to update",
+          "message": "更新するトラッキングプランID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Update an existing tracking plan",
+          "message": "既存のトラッキングプランを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Update an existing Segment warehouse by its ID.",
+          "message": "ID を指定して既存の Segment ウェアハウスを更新します。"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Update Warehouse",
+          "message": "ウェアハウスを更新"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the warehouse or `False` to disable it",
+          "message": "ウェアハウスを有効にするには `True`、無効にするには `False` を設定します"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "有効"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the warehouse is enabled",
+          "message": "ウェアハウスが有効かどうか"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the warehouse",
+          "message": "ウェアハウスの新しい表示名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated warehouse name",
+          "message": "更新されたウェアハウス名"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the warehouse (e.g., `hostname`, `port`, `database`, `schema`); the available keys depend on the warehouse type",
+          "message": "ウェアハウスの更新された構成設定（例: `hostname`、`port`、`database`、`schema`）。使用可能なキーはウェアハウスのタイプによって異なります"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated warehouse settings",
+          "message": "更新されたウェアハウス設定"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to update",
+          "message": "更新する Segment ウェアハウスの一意の識別子"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "倉庫ID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to update",
+          "message": "更新するウェアハウスID"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Update an existing warehouse",
+          "message": "既存のウェアハウスを更新"
+        },
+        "app.U2VnbWVudA.desc": {
+          "source": "Twilio Segment is a Customer Data Platform (CDP) that helps you collect, clean, and control your customer data.\n\n**Key Features:**\n- Manage data collection sources\n- Configure integration destinations\n- Connect data warehouses\n- Define and enforce tracking plans\n- Organize resources with labels",
+          "message": "Twilio Segment は、顧客データの収集、クレンジング、および制御を支援するカスタマーデータプラットフォーム（CDP）です。\n\n**主な機能:**\n- データ収集ソースの管理\n- 統合デスティネーションの設定\n- データウェアハウスの接続\n- トラッキングプランの定義と適用\n- ラベルによるリソースの整理"
+        },
+        "app.U2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "セグメント"
+        },
+        "app.U2VnbWVudA.short_desc": {
+          "source": "Twilio Segment CDP services",
+          "message": "Twilio Segment CDP サービス"
+        }
+      }
+    }
+  }
+}

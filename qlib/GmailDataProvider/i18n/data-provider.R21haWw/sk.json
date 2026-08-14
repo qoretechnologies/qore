@@ -1,0 +1,1049 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.R21haWw.action.Z2V0.desc": {
+          "source": "Retrieve a message",
+          "message": "Získať správu"
+        },
+        "app.R21haWw.action.Z2V0.display_name": {
+          "source": "Retrieve a Message",
+          "message": "Získať správu"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "ID správy, ktorú chcete získať"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R21haWw.action.Z2V0.option.aWQ.short_desc": {
+          "source": "The ID of the message to retrieve",
+          "message": "ID správy, ktorú chcete získať"
+        },
+        "app.R21haWw.action.Z2V0.short_desc": {
+          "source": "Retrieve a message",
+          "message": "Získať správu"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.desc": {
+          "source": "Retrieve an attachment",
+          "message": "Získať prílohu"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.display_name": {
+          "source": "Retrieve an Attachment",
+          "message": "Získať prílohu"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "ID prílohy na načítanie"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.display_name": {
+          "source": "Attachment ID",
+          "message": "ID prílohy"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.aWQ.short_desc": {
+          "source": "The ID of the attachment to retrieve",
+          "message": "ID prílohy na načítanie"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "ID správy s prílohou na načítanie"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.option.bWVzc2FnZUlk.short_desc": {
+          "source": "The ID of the message with the attachment to retrieve",
+          "message": "ID správy s prílohou na načítanie"
+        },
+        "app.R21haWw.action.Z2V0LWF0dGFjaG1lbnQ.short_desc": {
+          "source": "Retrieve an attachment",
+          "message": "Získať prílohu"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
+          "message": "Natrvalo vymaže správu. **Túto akciu nie je možné vrátiť späť**: správa sa nepresunie do koša a nezostane žiadna kópia, preto použite `trash-message`, pokiaľ správa nemusí byť zničená okamžite.\n\nTúto akciu použite zo spracovateľa udalosti `watch` alebo `watch-attachment` s hodnotou `message_id`, ktorú udalosť nesie, keď spracovanie úspešne prebehne. Vymazanie priamo zo sledovania pomocou `delete_messages` zničí správu hneď po vyvolaní udalosti bez ohľadu na to, či bolo spracovanie úspešné.\n\nRozhranie Gmail API pre toto volanie nevracia žiadny obsah"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "Odstrániť správu"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.desc": {
+          "source": "The ID of the message to delete permanently; watch events carry this value as `message_id`",
+          "message": "ID správy, ktorá sa má natrvalo vymazať; udalosti sledovania nesú túto hodnotu ako `message_id`"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.option.aWQ.short_desc": {
+          "source": "The ID of the message to delete permanently",
+          "message": "ID správy, ktorá sa má natrvalo vymazať"
+        },
+        "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Permanently delete a message; this cannot be undone",
+          "message": "Natrvalo vymazať správu; túto akciu nie je možné vrátiť späť"
+        },
+        "app.R21haWw.action.bGlzdA.desc": {
+          "source": "Search for messages in the account",
+          "message": "Vyhľadať správy v účte"
+        },
+        "app.R21haWw.action.bGlzdA.display_name": {
+          "source": "Search for Messages",
+          "message": "Vyhľadať správy"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnúť do vyhľadávania priečinky spam a kôš?"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Zahrnúť spam a kôš?"
+        },
+        "app.R21haWw.action.bGlzdA.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnúť do vyhľadávania priečinky spam a kôš?"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "Vrátiť iba správy so štítkami, ktoré zodpovedajú všetkým zadaným ID štítkov. Správy vo vlákne môžu mať štítky, ktoré iné správy v tom istom vlákne nemajú"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Štítky"
+        },
+        "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "Vrátiť iba správy so štítkami, ktoré zodpovedajú všetkým zadaným ID štítkov"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "Maximálny počet výsledkov, ktoré sa majú vrátiť"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Maximálny počet výsledkov, ktoré sa majú vrátiť"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky na načítanie konkrétnej stránky výsledkov v zozname"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R21haWw.action.bGlzdA.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky na načítanie konkrétnej stránky výsledkov v zozname"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Vyhľadávacie kritériá Gmailu na načítanie správ; napr.: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Kritériá vyhľadávania"
+        },
+        "app.R21haWw.action.bGlzdA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "Vyhľadávacie kritériá Gmailu na načítanie správ"
+        },
+        "app.R21haWw.action.bGlzdA.short_desc": {
+          "source": "Search for messages",
+          "message": "Vyhľadať správy"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do služby **Gmail** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API daného pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré v tejto aplikácii zatiaľ nie sú sprístupnené ako štandardné akcie."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gmail",
+          "message": "Vykonať vlastné volanie API do služby Gmail"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message",
+          "message": "Odoslať správu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "Odoslať správu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Jedna alebo viacero adries `Cc:` pre e-mail"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "Kópia"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Adresy kópie (Cc)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Akékoľvek prílohy správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Prílohy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Prílohy správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Telo správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Telo správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Telo správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Bez kódovania obsahu (neodporúča sa)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Bez kódovania obsahu (neodporúča sa)"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideálne pre binárne dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideálne pre binárne dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` pre reťazcové dáta, `base64` pre binárne dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "'quoted-printable' pre reťazcové dáta, 'base64' pre binárne dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "Ideálne pre reťazcové dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "Ideálne pre reťazcové dáta"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "Kódovanie použité pre prílohu:\n- `default`: `quoted-printable` pre reťazcové dáta, `base64` pre binárne dáta\n- `none`: žiadne kódovanie obsahu (neodporúča sa)\n- `quoted-printable`: kódovanie quoted printable \n- `base64`: kódovanie base64"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Kódovanie tela"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "Kódovanie použité pre prílohu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Obyčajný text"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "Typ MIME tela správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "Typ MIME tela"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "Typ MIME tela správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Jedna alebo viacero adries `Bcc:` pre e-mail"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "Skrytá kópia"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Adresy skrytej kópie"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odosielateľa e-mailu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odosielateľ"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odosielateľa e-mailu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Jedna alebo viacero adries `To:` pre e-mail"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Adresy príjemcov správy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message",
+          "message": "Odoslať správu"
+        },
+        "app.R21haWw.action.d2F0Y2g.desc": {
+          "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
+          "message": "Reagovať na nové e-maily; po doručení nového e-mailu sa všetky informácie o správe vrátane tela správy vrátia ako výstupné dáta"
+        },
+        "app.R21haWw.action.d2F0Y2g.display_name": {
+          "source": "New Email",
+          "message": "Nový e-mail"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its event?\n\n**The message is deleted as soon as its event has been raised, whatever the event consumer then does with it.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the message, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` the event carries",
+          "message": "Natrvalo vymazať každú vyhovujúcu správu po vyvolaní jej udalosti?\n\n**Správa sa vymaže hneď po vyvolaní jej udalosti bez ohľadu na to, čo s ňou spotrebiteľ udalosti následne urobí.** Spotrebiteľ, ktorý zlyhá, vyprší mu časový limit alebo sa reštartuje uprostred spracovania, už stratil jedinú kópiu správy a vymazanie v Gmaile nemožno vrátiť späť.\n\nPri akejkoľvek záťaži, ktorá nesmie stratiť zdrojovú správu, nechajte túto možnosť nenastavenú a po úspešnom spracovaní použite akciu `delete-message` alebo `trash-message` zo spotrebiteľa s `message_id`, ktorý udalosť nesie"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Vymazať správy?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its event?",
+          "message": "Natrvalo vymazať každú vyhovujúcu správu po vyvolaní jej udalosti?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "Maximálny počet správ doručených v jednom cykle dopytovania; nenastavená hodnota alebo `0` znamená bez obmedzenia.\n\nLimit sa uplatňuje od **najstarších** položiek v nevybavenom zozname, takže kurzor sledovania stále postupuje súvisle a zostávajúce správy sa doručia v nasledujúcich cykloch namiesto toho, aby sa preskočili. Použite ho na obmedzenie objemu práce, ktorú môže vykonať jeden cyklus, keď sa môže nahromadiť veľké množstvo nevybavených položiek"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "Maximálny počet správ za cyklus"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "Maximálny počet správ doručených v jednom cykle dopytovania"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "Ponechať iba najnovšiu vyhovujúcu správu"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "Najnovšie celkovo"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "Ponechať najnovšiu správu v každom vlákne Gmailu"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "Najnovšie podľa vlákna"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "Spôsob zoskupovania vyhovujúcich správ pred výberom najnovšej v každej skupine; ignoruje sa, pokiaľ nie je nastavená možnosť `snapshot_mode`.\n\n- `all`: jedna globálna skupina, takže každý cyklus vyvolá jednu udalosť nesúcu najnovšiu vyhovujúcu správu\n- `thread`: zoskupenie podľa vlákna Gmailu, takže každý cyklus vyvolá jednu udalosť za vlákno nesúcu najnovšiu správu daného vlákna"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "Zoskupovanie snímok"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "Spôsob zoskupovania správ pred výberom najnovšej"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania.\n\nNiektoré kanály predstavujú snímky a nie denník: každá správa znovu uvádza aktuálny stav, takže po výpadku má zmysel spracovať iba tú poslednú. Ak je táto možnosť nastavená, každý cyklus dopytovania vyvolá jednu udalosť za skupinu (pozri `snapshot_key`) nesúcu najnovšiu vyhovujúcu správu a správy, ktoré zbalil, nahlási v poliach udalosti `superseded_count` a `superseded_ids`. Zbalené správy sa nikdy nenačítajú celé, takže veľký objem nevybavených položiek vyžaduje iba jedno načítanie správy, nie jedno pre každú správu.\n\nNechajte túto možnosť nenastavenú pre kanál, v ktorom sa musí spracovať každá správa"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "Iba najnovšia správa?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Nastavuje počiatočný dátum a čas pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Nastavuje počiatočný dátum a čas pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "Natrvalo vymazať nahradené správy"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "Natrvalo vymazať"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "Ponechať nahradené správy v poštovej schránke"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "Ponechať"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "Presunúť nahradené správy do koša Gmailu"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "Presunúť do koša"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "Čo urobiť so správami, ktoré voľba `snapshot_mode` zbalila; ignoruje sa, pokiaľ nie je nastavená možnosť `snapshot_mode`.\n\n- `ignore`: ponechať ich v poštovej schránke, aby zostali k dispozícii pre audit; znova sa nevyvolajú ako udalosti, pretože kurzor sledovania sa už posunul za ne\n- `trash`: presunúť ich do koša Gmailu, odkiaľ ich možno stále obnoviť\n- `delete`: natrvalo ich vymazať; **túto akciu nemožno vrátiť späť**\n\nOdstránenie, ktoré zlyhá, sa zaznamená do denníka a správa sa ponechá na mieste; pokus sa neopakuje, pretože jej udalosť už bola vyvolaná a kurzor sledovania sa už posunul za ňu"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "Akcia pre nahradenú správu"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "Čo urobiť so správami, ktoré boli zbalené"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "Ako často kontrolovať vyhovujúce e-maily v sekundách; dolná hranica je 30; nižšie čísla nastavia minimálny interval dopytovania"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "Ako často kontrolovať vyhovujúce e-maily v sekundách"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Kritériá vyhľadávania v Gmaile pre vyhovujúce správy; napr.: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Kritériá vyhľadávania"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "Kritériá vyhľadávania v Gmaile pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "Získať dáta príloh automaticky?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.display_name": {
+          "source": "Retrieve Attachments?",
+          "message": "Získať prílohy?"
+        },
+        "app.R21haWw.action.d2F0Y2g.option.cmV0cmlldmVfYXR0YWNobWVudHM.short_desc": {
+          "source": "Retrieve attachment data automatically?",
+          "message": "Získať dáta príloh automaticky?"
+        },
+        "app.R21haWw.action.d2F0Y2g.short_desc": {
+          "source": "React to new emails",
+          "message": "Reagovať na nové e-maily"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.desc": {
+          "source": "React to new email attachments",
+          "message": "Reagovať na nové prílohy e-mailov"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.display_name": {
+          "source": "New Email Attachments",
+          "message": "Nové prílohy e-mailov"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.desc": {
+          "source": "An optional filename pattern (glob) for matching attachments; if not set, then all attachments are reported; if set, then only attachments matching the pattern are reported; by default, the glob pattern is case-insensitive; to make it case-sensitive, set the `ignore_case` option to `false`",
+          "message": "Voliteľný vzor názvu súboru (glob) na porovnávanie príloh; ak nie je nastavený, nahlásia sa všetky prílohy; ak je nastavený, nahlásia sa iba prílohy zodpovedajúce vzoru; predvolene vzor glob nerozlišuje veľké a malé písmená; ak chcete, aby ich rozlišoval, nastavte možnosť `ignore_case` na `false`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.display_name": {
+          "source": "Attachment File Pattern",
+          "message": "Vzor súboru prílohy"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
+          "source": "An optional filename pattern (glob) for matching attachments",
+          "message": "Voliteľný vzor názvu súboru (glob) na porovnávanie príloh"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
+          "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
+          "message": "Natrvalo vymazať každú vyhovujúcu správu po vyvolaní jej udalostí? Vymaže sa každá vyhovujúca správa, dokonca aj tá, ktorej všetky prílohy nesplnili kritériá pre prílohy, a preto nevyvolali vôbec žiadnu udalosť.\n\n**Správa sa vymaže hneď po vyvolaní jej udalostí bez ohľadu na to, čo s nimi spotrebiteľ udalosti následne urobí.** Spotrebiteľ, ktorý zlyhá, vyprší mu časový limit alebo sa reštartuje uprostred spracovania, už stratil jedinú kópiu prílohy a vymazanie v Gmaile nemožno vrátiť späť.\n\nPri akejkoľvek záťaži, ktorá nesmie stratiť zdrojovú správu, nechajte túto možnosť nenastavenú a po úspešnom spracovaní použite akciu `delete-message` alebo `trash-message` zo spotrebiteľa s `message_id`, ktorý každá udalosť prílohy nesie"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.display_name": {
+          "source": "Delete Messages?",
+          "message": "Vymazať správy?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
+          "source": "Permanently delete each matched message after raising its events?",
+          "message": "Natrvalo vymazať každú vyhovujúcu správu po vyvolaní jej udalostí?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
+          "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
+          "message": "Ignorovať veľkosť písmen vo vzoroch glob; ignoruje sa, ak možnosť `attachment_glob` nie je nastavená"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.display_name": {
+          "source": "Ignore Glob Case?",
+          "message": "Ignorovať veľkosť písmen v maskách (glob)?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
+          "source": "Ignore case in globs",
+          "message": "Ignorovať veľkosť písmen v maskách (glob)"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
+          "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
+          "message": "Maximálny počet správ doručených v jednom cykle dopytovania; nenastavená hodnota alebo `0` znamená bez obmedzenia.\n\nLimit sa uplatňuje od **najstarších** položiek v nevybavenom zozname, takže kurzor sledovania stále postupuje súvisle a zostávajúce správy sa doručia v nasledujúcich cykloch namiesto toho, aby sa preskočili. Použite ho na obmedzenie objemu práce, ktorú môže vykonať jeden cyklus, keď sa môže nahromadiť veľké množstvo nevybavených položiek"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.display_name": {
+          "source": "Maximum Messages Per Cycle",
+          "message": "Maximálny počet správ za cyklus"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.short_desc": {
+          "source": "The maximum number of messages delivered in one polling cycle",
+          "message": "Maximálny počet správ doručených v jednom cykle dopytovania"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Retain the single newest matching message",
+          "message": "Ponechať iba najnovšiu vyhovujúcu správu"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "Latest Overall",
+          "message": "Najnovšie celkovo"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.desc": {
+          "source": "Retain the newest message in each Gmail thread",
+          "message": "Ponechať najnovšiu správu v každom vlákne Gmailu"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.allowed-value.c3RyaW5nOnRocmVhZA.display_name": {
+          "source": "Latest Per Thread",
+          "message": "Najnovšie podľa vlákna"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.desc": {
+          "source": "How matching messages are grouped before the latest one in each group is selected; ignored unless `snapshot_mode` is set.\n\n- `all`: one global group, so each cycle raises a single event carrying the newest matching message\n- `thread`: group by Gmail thread, so each cycle raises one event per thread carrying that thread's newest message",
+          "message": "Spôsob zoskupovania vyhovujúcich správ pred výberom najnovšej v každej skupine; ignoruje sa, pokiaľ nie je nastavená možnosť `snapshot_mode`.\n\n- `all`: jedna globálna skupina, takže každý cyklus vyvolá jednu udalosť nesúcu najnovšiu vyhovujúcu správu\n- `thread`: zoskupenie podľa vlákna Gmailu, takže každý cyklus vyvolá jednu udalosť za vlákno nesúcu najnovšiu správu daného vlákna"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.display_name": {
+          "source": "Snapshot Grouping",
+          "message": "Zoskupovanie snímok"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3Rfa2V5.short_desc": {
+          "source": "How messages are grouped before the latest one is selected",
+          "message": "Spôsob zoskupovania správ pred výberom najnovšej"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it.\n\nSome feeds are snapshots rather than a log: each message restates the current state, so after an outage only the last one is worth processing. With this option set, each polling cycle raises one event per group (see `snapshot_key`) carrying the newest matching message, and reports the messages it collapsed away in the event's `superseded_count` and `superseded_ids` fields. The collapsed messages are never retrieved in full, so a large backlog costs one message retrieval, not one per message.\n\nLeave this unset for a feed where every message must be processed",
+          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania.\n\nNiektoré kanály predstavujú snímky a nie denník: každá správa znovu uvádza aktuálny stav, takže po výpadku má zmysel spracovať iba tú poslednú. Ak je táto možnosť nastavená, každý cyklus dopytovania vyvolá jednu udalosť za skupinu (pozri `snapshot_key`) nesúcu najnovšiu vyhovujúcu správu a správy, ktoré zbalil, nahlási v poliach udalosti `superseded_count` a `superseded_ids`. Zbalené správy sa nikdy nenačítajú celé, takže veľký objem nevybavených položiek vyžaduje iba jedno načítanie správy, nie jedno pre každú správu.\n\nNechajte túto možnosť nenastavenú pre kanál, v ktorom sa musí spracovať každá správa"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.display_name": {
+          "source": "Latest Message Only?",
+          "message": "Iba najnovšia správa?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
+          "source": "Collapse a backlog to its latest message instead of replaying it?",
+          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania?"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Nastavuje počiatočný dátum a čas pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Sets the start date and time for matching messages",
+          "message": "Nastavuje počiatočný dátum a čas pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.desc": {
+          "source": "Delete superseded messages permanently",
+          "message": "Natrvalo vymazať nahradené správy"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmRlbGV0ZQ.display_name": {
+          "source": "Delete Permanently",
+          "message": "Natrvalo vymazať"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.desc": {
+          "source": "Leave superseded messages in the mailbox",
+          "message": "Ponechať nahradené správy v poštovej schránke"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOmlnbm9yZQ.display_name": {
+          "source": "Keep",
+          "message": "Ponechať"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.desc": {
+          "source": "Move superseded messages to the Gmail trash",
+          "message": "Presunúť nahradené správy do koša Gmailu"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.allowed-value.c3RyaW5nOnRyYXNo.display_name": {
+          "source": "Move to Trash",
+          "message": "Presunúť do koša"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.desc": {
+          "source": "What to do with the messages that `snapshot_mode` collapsed away; ignored unless `snapshot_mode` is set.\n\n- `ignore`: leave them in the mailbox, so they remain available for audit; they are not raised as events again because the watch cursor has moved past them\n- `trash`: move them to the Gmail trash, where they can still be recovered\n- `delete`: delete them permanently; **this cannot be undone**\n\nA removal that fails is logged and the message is left in place; it is not retried, because its event has already been raised and the watch cursor has already moved past it",
+          "message": "Čo urobiť so správami, ktoré voľba `snapshot_mode` zbalila; ignoruje sa, pokiaľ nie je nastavená možnosť `snapshot_mode`.\n\n- `ignore`: ponechať ich v poštovej schránke, aby zostali k dispozícii pre audit; znova sa nevyvolajú ako udalosti, pretože kurzor sledovania sa už posunul za ne\n- `trash`: presunúť ich do koša Gmailu, odkiaľ ich možno stále obnoviť\n- `delete`: natrvalo ich vymazať; **túto akciu nemožno vrátiť späť**\n\nOdstránenie, ktoré zlyhá, sa zaznamená do denníka a správa sa ponechá na mieste; pokus sa neopakuje, pretože jej udalosť už bola vyvolaná a kurzor sledovania sa už posunul za ňu"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.display_name": {
+          "source": "Superseded Message Action",
+          "message": "Akcia pre nahradenú správu"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3VwZXJzZWRlZF9hY3Rpb24.short_desc": {
+          "source": "What to do with messages that were collapsed away",
+          "message": "Čo urobiť so správami, ktoré boli zbalené"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for matching emails in seconds; lower bound 30; lower numbers will set the minimum polling period",
+          "message": "Ako často kontrolovať vyhovujúce e-maily v sekundách; dolná hranica je 30; nižšie čísla nastavia minimálny interval dopytovania"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for matching emails in seconds",
+          "message": "Ako často kontrolovať vyhovujúce e-maily v sekundách"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
+          "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Kritériá vyhľadávania v Gmaile pre vyhovujúce správy; napr.: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Kritériá vyhľadávania"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.short_desc": {
+          "source": "The gmail search criteria for matching messages",
+          "message": "Kritériá vyhľadávania v Gmaile pre vyhovujúce správy"
+        },
+        "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.short_desc": {
+          "source": "React to new email attachments",
+          "message": "Reagovať na nové prílohy e-mailov"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Presunie správu do koša. Správa opustí poštovú schránku, ale je obnoviteľná, kým Gmail kôš nevyprázdni, vďaka čomu je to bezpečný spôsob vyčistenia správy po dokončení pracovného postupu.\n\nTúto akciu použite z prijímača udalosti `watch` alebo `watch-attachment` s hodnotou `message_id`, ktorú udalosť nesie, po úspešnom spracovaní. Odstránenie priamo zo sledovania pomocou `delete_messages` správu zničí hneď po vyvolaní udalosti bez ohľadu na to, či prijímač úspešne dokončil spracovanie"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "Presunúť správu do koša"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.desc": {
+          "source": "The ID of the message to move to the trash; watch events carry this value as `message_id`",
+          "message": "ID správy, ktorá sa má presunúť do koša; udalosti sledovania nesú túto hodnotu ako `message_id`"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.option.aWQ.short_desc": {
+          "source": "The ID of the message to move to the trash",
+          "message": "ID správy, ktorá sa má presunúť do koša"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Move a message to the trash, where it can still be recovered",
+          "message": "Presunúť správu do koša, odkiaľ ju možno ešte obnoviť"
+        },
+        "app.R21haWw.desc": {
+          "source": "Gmail services",
+          "message": "Služby Gmail"
+        },
+        "app.R21haWw.display_name": {
+          "source": "Gmail",
+          "message": "Gmail"
+        },
+        "app.R21haWw.short_desc": {
+          "source": "Gmail services",
+          "message": "Služby Gmail"
+        }
+      }
+    }
+  }
+}

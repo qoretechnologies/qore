@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.UmVkaXM.action.Z2V0LWhhc2g.desc": {
+          "source": "Get the values of hash fields from Redis",
+          "message": "Získať hodnoty hash polí z Redis"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
+          "source": "Get Hash Fields",
+          "message": "Získať hash polia"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
+          "source": "Get hash field values",
+          "message": "Získať hodnoty hash polí"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.desc": {
+          "source": "Get the string value of a key from Redis",
+          "message": "Získať reťazcovú hodnotu kľúča z Redis"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
+          "source": "Get String",
+          "message": "Získať reťazec"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
+          "source": "Get the string value of a key",
+          "message": "Získať reťazcovú hodnotu kľúča"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.desc": {
+          "source": "Set the value of a hash field in Redis",
+          "message": "Nastaviť hodnotu poľa hash v Redis"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
+          "source": "Set Hash Field",
+          "message": "Nastaviť pole hash"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
+          "source": "Set a hash field value",
+          "message": "Nastaviť hodnotu poľa hash"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.desc": {
+          "source": "Set the string value of a key in Redis",
+          "message": "Nastaviť reťazcovú hodnotu kľúča v Redis"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
+          "source": "Set String",
+          "message": "Nastaviť reťazec"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
+          "source": "Set the string value of a key",
+          "message": "Nastaviť reťazcovú hodnotu kľúča"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.desc": {
+          "source": "Pop elements from a list in Redis",
+          "message": "Vybrať prvky zo zoznamu v Redis"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
+          "source": "Pop from List",
+          "message": "Vybrať zo zoznamu"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
+          "source": "Pop elements from a list",
+          "message": "Vybrať prvky zo zoznamu"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.desc": {
+          "source": "Publish a message to a Redis pub/sub channel",
+          "message": "Publikovať správu do kanála Redis pub/sub"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
+          "source": "Publish Message",
+          "message": "Publikovať správu"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {
+          "source": "Publish a message to a channel",
+          "message": "Publikovať správu do kanála"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.desc": {
+          "source": "Push elements to a list in Redis",
+          "message": "Vložiť prvky do zoznamu v Redis"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
+          "source": "Push to List",
+          "message": "Vložiť do zoznamu"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
+          "source": "Push elements to a list",
+          "message": "Vložiť prvky do zoznamu"
+        },
+        "app.UmVkaXM.desc": {
+          "source": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",
+          "message": "In-memory úložisko dátových štruktúr Redis, používané ako databáza, medzipamäť, broker správ a front"
+        },
+        "app.UmVkaXM.display_name": {
+          "source": "Redis Server",
+          "message": "Server Redis"
+        },
+        "app.UmVkaXM.short_desc": {
+          "source": "Redis in-memory data store",
+          "message": "In-memory dátové úložisko Redis"
+        }
+      }
+    }
+  }
+}

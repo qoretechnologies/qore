@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Q29oZXJl.action.Y2hhdA.desc": {
+          "source": "Sends a list of chat messages to a Cohere Command model via `/v2/chat` and returns the generated response.",
+          "message": "Надсилає список повідомлень чату моделі Cohere Command через `/v2/chat` і повертає згенеровану відповідь."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.",
+          "message": "Обмежити вибірку K найбільш імовірними наступними токенами."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Вибирати лише з K найбільш імовірних наступних токенів"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.desc": {
+          "source": "Cohere chat model identifier, e.g. `command-r-plus`, `command-r`, `command-r7b`.",
+          "message": "Ідентифікатор чат-моделі Cohere, наприклад `command-r-plus`, `command-r`, `command-r7b`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Cohere chat model",
+          "message": "Чат-модель Cohere"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Максимальна кількість токенів для генерації."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Максимальна кількість токенів для видачі"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "Історія розмови у вигляді списку об'єктів повідомлень."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Список повідомлень чату, що формують розмову"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Цілочисловий seed для детермінованої вибірки."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed детермінованої вибірки"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "List of stop sequences; generation halts when any is emitted.",
+          "message": "Список стоп-послідовностей; генерація зупиняється, коли згенеровано будь-яку з них."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "Послідовності зупинки"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "List of stop sequences",
+          "message": "Список стоп-послідовностей"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "Поріг ядерної вибірки (nucleus sampling)."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Поріг ядерної вибірки (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_object\", schema: {...}}`.",
+          "message": "Хеш, який примусово задає структуровану форму відповіді, наприклад `{type: \"json_object\"}` або `{type: \"json_object\", schema: {...}}`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON schema)",
+          "message": "Примусово задати структурований вивід (наприклад, JSON schema)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None — ніколи не викликати інструмент"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto — модель вирішує самостійно"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Required — обов'язково викликати інструмент"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Режим виклику інструментів: `none`, `auto` або `required`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Вибір інструмента"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Режим виклику інструментів"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.  Each entry has `type: function` and a `function` hash with `name`, `description`, and JSON-schema `parameters`.",
+          "message": "Список визначень інструментів. Кожен запис містить `type: function` та хеш `function` з `name`, `description` та JSON-схемою `parameters`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Інструменти"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.short_desc": {
+          "source": "Tool definitions the model may call",
+          "message": "Визначення інструментів, які може викликати модель"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Cohere recommends `0.3` as default.",
+          "message": "Керує випадковістю виводу. Cohere рекомендує `0.3` за замовчуванням."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Температура"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1)",
+          "message": "Температура вибірки (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.short_desc": {
+          "source": "Generate a chat completion from a Cohere Command model",
+          "message": "Згенерувати відповідь у чаті за допомогою моделі Cohere Command"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.desc": {
+          "source": "Classifies text inputs into one of a set of labels using few-shot examples or fine-tuned classification models via Cohere's `/v1/classify` endpoint.\n\nNote: classify currently uses the v1 endpoint; the rest of this provider uses v2.  The request body path is absolute (`/v1/classify`) to address the v1 surface.",
+          "message": "Класифікує вхідні тексти за однією з міток, використовуючи few-shot приклади або тонко налаштовані моделі класифікації через кінцеву точку Cohere `/v1/classify`.\n\nПримітка: classify наразі використовує кінцеву точку v1; решта цього провайдера використовує v2. Шлях до тіла запиту є абсолютним (`/v1/classify`) для звернення до інтерфейсу v1."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
+          "source": "Classify Text",
+          "message": "Класифікувати текст"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.desc": {
+          "source": "List of `{text, label}` hashes providing few-shot examples.  Required when no fine-tuned model is supplied; minimum 2 examples per label and at least 2 labels.",
+          "message": "Список хешів `{text, label}`, що надають few-shot приклади. Обов'язково, якщо не надано тонко налаштовану модель; мінімум 2 приклади на мітку та щонайменше 2 мітки."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.display_name": {
+          "source": "Examples",
+          "message": "Приклади"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.short_desc": {
+          "source": "Few-shot labeled examples (required without fine-tuned model)",
+          "message": "Few-shot розмічені приклади (обов'язково без тонко налаштованої моделі)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.desc": {
+          "source": "List of input texts to classify into one of the labels supplied via `examples` (few-shot) or the fine-tuned model's vocabulary.",
+          "message": "Список вхідних текстів для класифікації за однією з міток, наданих через `examples` (few-shot) або словник тонко налаштованої моделі."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.display_name": {
+          "source": "Inputs",
+          "message": "Вхідні дані"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.short_desc": {
+          "source": "List of input texts to classify",
+          "message": "Список вхідних текстів для класифікації"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.desc": {
+          "source": "Fine-tuned classification model identifier.  Optional when `examples` is supplied for few-shot classification.",
+          "message": "Ідентифікатор тонко налаштованої моделі класифікації. Необов'язково, якщо надано `examples` для few-shot класифікації."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.short_desc": {
+          "source": "Fine-tuned classification model (optional with examples)",
+          "message": "Тонко налаштована модель класифікації (необов'язково за наявності прикладів)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.desc": {
+          "source": "Cohere classification preset name (alternative to inline `examples`).",
+          "message": "Назва пресету класифікації Cohere (альтернатива вбудованим `examples`)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "Пресет"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.short_desc": {
+          "source": "Preset name (alternative to inline examples)",
+          "message": "Назва пресету (альтернатива вбудованим прикладам)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.desc": {
+          "source": "Truncation strategy: `NONE`, `START`, or `END` (default).",
+          "message": "Стратегія усікання: `NONE`, `START` або `END` (за замовчуванням)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Усікати"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Як усікати вхідні дані, що перевищують контекст"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
+          "source": "Classify text inputs into labeled categories using Cohere Classify",
+          "message": "Класифікувати вхідний текст за категоріями з мітками за допомогою Cohere Classify"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.desc": {
+          "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
+          "message": "Перетворює вхідний текст на вектори ембедінгів через кінцеву точку Cohere `/v2/embed` із вибором `input_type` залежно від завдання."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
+          "source": "Create Embeddings",
+          "message": "Створити ембединги"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "Класифікація"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "Кластеризація"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document - text to be indexed",
+          "message": "Search Document — текст для індексації"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query - user query",
+          "message": "Search Query — запит користувача"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Task hint required by Cohere v3 embedding models.  Choosing the right input type improves retrieval relevance — query and document embeddings are optimized differently.",
+          "message": "Підказка щодо завдання, обов'язкова для моделей ембедінгів Cohere v3. Вибір правильного типу введення підвищує релевантність пошуку — ембедінги запитів і документів оптимізуються по-різному."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "Тип введення"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Task hint (required for v3 models)",
+          "message": "Підказка щодо завдання (обов'язково для моделей v3)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Cohere embedding model identifier.  Examples:\n\n- `embed-multilingual-v3.0` — 100+ languages (recommended default)\n- `embed-english-v3.0` — English-only, slightly faster\n- `embed-multilingual-light-v3.0` — smaller, lower-cost variant",
+          "message": "Ідентифікатор моделі ембедінгів Cohere. Приклади:\n\n- `embed-multilingual-v3.0` — 100+ мов (рекомендовано за замовчуванням)\n- `embed-english-v3.0` — лише англійська, трохи швидше\n- `embed-multilingual-light-v3.0` — менший і дешевший варіант"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Cohere embedding model",
+          "message": "Модель ембедінгів Cohere"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "List of input texts to convert to embedding vectors.",
+          "message": "Список вхідних текстів для перетворення на вектори ембедінгів."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "Тексти"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "List of texts to embed",
+          "message": "Список текстів для ембедінгу"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None - error on overflow",
+          "message": "Немає — помилка в разі перевищення"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOkVORA.display_name": {
+          "source": "End - truncate end (default)",
+          "message": "Кінець — усікати кінець (за замовчуванням)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOlNUQVJU.display_name": {
+          "source": "Start - truncate beginning",
+          "message": "Початок — усікати початок"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.desc": {
+          "source": "How to handle inputs that exceed the embedding model's context window.  Default `END`.",
+          "message": "Як обробляти вхідні дані, що перевищують контекстне вікно моделі ембедінгів. За замовчуванням: `END`."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Усікати"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Як усікати вхідні дані, що перевищують контекст"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
+          "source": "Generate embedding vectors from a Cohere embedding model",
+          "message": "Генерувати вектори ембедінгів із моделі ембедінгів Cohere"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cohere** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Зробити довільний виклик HTTP / REST API до **Cohere**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базового URL API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cohere",
+          "message": "Зробити користувацький виклик API до Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a query using Cohere's rerank-v3.5 cross-encoder via `/v2/rerank`.  Returns top-N documents sorted by relevance score.",
+          "message": "Переранжовує список документів-кандидатів відносно запиту за допомогою крос-енкодера rerank-v3.5 від Cohere через `/v2/rerank`. Повертає топ-N документів, відсортованих за оцінкою релевантності."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Переранжувати документи"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents to rerank against the query.",
+          "message": "Список документів-кандидатів для переранжування відносно запиту."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Документи"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "Документи-кандидати для переранжування"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Cohere reranker model.  Examples:\n\n- `rerank-v3.5` — latest cross-encoder (recommended default)\n- `rerank-english-v3.0` — English-only v3\n- `rerank-multilingual-v3.0` — multilingual v3",
+          "message": "Модель переранжування Cohere. Приклади:\n\n- `rerank-v3.5` — найновіший крос-енкодер (рекомендовано за замовчуванням)\n- `rerank-english-v3.0` — лише англійська v3\n- `rerank-multilingual-v3.0` — багатомовна v3"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Cohere reranker model",
+          "message": "Модель переранжування Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.desc": {
+          "source": "When documents exceed the rerank context window, Cohere chunks them internally.  This caps the number of chunks per document.",
+          "message": "Коли документи перевищують контекстне вікно переранжування, Cohere розбиває їх на фрагменти всередині. Це обмежує кількість фрагментів на документ."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.display_name": {
+          "source": "Max Chunks Per Doc",
+          "message": "Макс. фрагментів на документ"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
+          "source": "Maximum chunks per document for long-document rerank",
+          "message": "Максимальна кількість фрагментів на документ для переранжування довгих документів"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.",
+          "message": "Запит користувача у вільній формі."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "Запит користувача, за яким слід переранжувати документи"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document.",
+          "message": "Якщо `True` (за замовчуванням), кожен результат містить документ."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "Повертати документи"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "Чи повертати текст документа у відповіді"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.",
+          "message": "Кількість найвищих за рейтингом документів для повернення."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "Топ N"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "Скільки результатів із найвищим балом повертати"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query using Cohere Rerank",
+          "message": "Переранжувати документи-кандидати відносно запиту за допомогою Cohere Rerank"
+        },
+        "app.Q29oZXJl.desc": {
+          "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",
+          "message": "Надає доступ до [Cohere](https://cohere.com) — чат корпоративного рівня з Command R / R+, багатомовні ембедінги та найкраще у своєму класі переранжування.\n\n**Поширені варіанти використання**:\n- **Чат-агенти з викликом інструментів** за допомогою Command R+\n- **Багатомовні RAG-ембедінги** за допомогою embed-multilingual-v3.0\n- **Продуктивне переранжування** за допомогою rerank-v3.5 — природно поєднується з будь-яким ембедером\n- **Класифікація тексту** через виділену кінцеву точку /classify"
+        },
+        "app.Q29oZXJl.display_name": {
+          "source": "Cohere",
+          "message": "Cohere"
+        },
+        "app.Q29oZXJl.short_desc": {
+          "source": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
+          "message": "Чат Cohere (Command R/R+), ембедінги, переранжування та класифікація"
+        }
+      }
+    }
+  }
+}

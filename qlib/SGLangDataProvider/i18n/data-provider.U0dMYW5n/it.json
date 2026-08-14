@@ -1,0 +1,809 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a local SGLang model server using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Local chat assistants with data residency guarantees\n- Bulk text generation on internal infrastructure without per-token billing\n- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n\nThe `model` is taken from the connection by default; override per-request with the `model` field.",
+          "message": "Invia un elenco di messaggi di chat a un server del modello SGLang locale utilizzando l'endpoint compatibile con OpenAI `/v1/chat/completions` e restituisce la risposta generata.\n\n**Casi d'uso di esempio**:\n- Assistenti di chat locali con garanzie sulla residenza dei dati\n- Generazione di testo in blocco su infrastruttura interna senza fatturazione per token\n- Agenti che richiamano strumenti (passare `tools` e `tool_choice` nella richiesta)\n\nPer impostazione predefinita, `model` viene ricavato dalla connessione; eseguire l'override per richiesta con il campo `model`."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Completamento chat"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens based on how often they have already appeared in the output. Range `-2.0` to `2.0`.  Positive values reduce verbatim repetition.",
+          "message": "Penalizza i token in base alla frequenza con cui sono già apparsi nell'output. Intervallo da `-2.0` a `2.0`. I valori positivi riducono la ripetizione letterale."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalità di frequenza"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize repeated tokens proportional to their frequency",
+          "message": "Penalizza i token ripetuti proporzionalmente alla loro frequenza"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Name of the model to use for this request.  Optional; defaults to the model configured on the SGLang connection via `getModel()`.\n\n**Note**: SGLang serves exactly one model per server, so overriding `model` only makes sense when routing to a multi-model gateway.",
+          "message": "Nome del modello da utilizzare per questa richiesta. Facoltativo; il valore predefinito è il modello configurato nella connessione SGLang tramite `getModel()`.\n\n**Nota**: SGLang gestisce esattamente un modello per server, quindi eseguire l'override di `model` ha senso solo quando si esegue il routing verso un gateway multimodello."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Override the model served by the SGLang connection",
+          "message": "Esegui l'override del modello gestito dalla connessione SGLang"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate in the completion.  The total token count (prompt + completion) must fit within the model's context window; if it doesn't, the server returns an error.",
+          "message": "Numero massimo di token da generare nel completamento. Il conteggio totale dei token (prompt + completamento) deve rientrare nella finestra di contesto del modello; in caso contrario, il server restituisce un errore."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Token massimi"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "Numero massimo di token da emettere nel completamento"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.  Each message has a `role` (`system`, `user`, `assistant`, or `tool`) and `content` (text).\n\n**Typical patterns**:\n- Single user turn: `[{role: \"user\", content: \"...\"}]`\n- With system prompt: `[{role: \"system\", content: \"...\"}, {role: \"user\", content: \"...\"}]`\n- Multi-turn: include prior `assistant` messages to preserve context\n- Tool calling: `assistant` messages carry `tool_calls`; `tool` messages return results keyed by `tool_call_id`",
+          "message": "La cronologia della conversazione come elenco di oggetti messaggio. Ogni messaggio ha un `role` (`system`, `user`, `assistant` o `tool`) e `content` (testo).\n\n**Pattern tipici**:\n- Singolo turno utente: `[{role: \"user\", content: \"...\"}]`\n- Con prompt di sistema: `[{role: \"system\", content: \"...\"}, {role: \"user\", content: \"...\"}]`\n- Più turni: includere i messaggi `assistant` precedenti per preservare il contesto\n- Chiamata di strumenti: i messaggi `assistant` contengono `tool_calls`; i messaggi `tool` restituiscono risultati indicizzati da `tool_call_id`"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Elenco di messaggi di chat che compongono la conversazione"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.  With a fixed `seed`, `temperature`, and prompt, the same request returns the same output (useful for tests and reproducibility).",
+          "message": "Valore seed intero per il campionamento deterministico. Con un `seed`, `temperature` e prompt fissi, la stessa richiesta restituisce lo stesso output (utile per test e riproducibilità)."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed di campionamento deterministico"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.  Generation halts as soon as the model emits any of them.  Can be a single string or a list of strings.\n\n**Examples**: `\"\\n\\n\"`, `[\"END\", \"STOP\"]`",
+          "message": "Una o più sequenze di arresto. La generazione si interrompe non appena il modello ne emette una qualsiasi. Può essere una singola stringa o un elenco di stringhe.\n\n**Esempi**: `\"\\n\\n\"`, `[\"END\", \"STOP\"]`"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sequenze di arresto"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "Stringa o elenco di stringhe; la generazione si interrompe quando viene emessa"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as Server-Sent Events (SSE) instead of returning a single response.  Most data provider flows expect non-streaming (`False` / omitted); enable only when wiring into a streaming consumer.",
+          "message": "Quando è `True`, il server trasmette i completamenti parziali in streaming come Server-Sent Events (SSE) invece di restituire una singola risposta. La maggior parte dei flussi dei data provider prevede una risposta non in streaming (`False` / omesso); abilitare solo quando collegato a un consumer in streaming."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as server-sent events",
+          "message": "Esegui lo streaming dei completamenti parziali come eventi inviati dal server (server-sent events)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared in the output, regardless of frequency.  Range `-2.0` to `2.0`.  Positive values encourage topic diversity.",
+          "message": "Penalizza i token che sono già apparsi nell'output, indipendentemente dalla frequenza. Intervallo da `-2.0` a `2.0`. I valori positivi incoraggiano la diversità degli argomenti."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalità di presenza"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize any token that has already appeared",
+          "message": "Penalizza qualsiasi token che sia già apparso"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape.  The most common use is JSON mode: `{type: \"json_object\"}`.\n\nFor stricter schema enforcement, consider the `/generate` action with `json_schema` — SGLang's constrained decoding guarantees schema conformance at the token-sampling level.",
+          "message": "Hash che forza una forma di risposta strutturata. L'uso più comune è la modalità JSON: `{type: \"json_object\"}`.\n\nPer un'applicazione più rigorosa dello schema, prendere in considerazione l'azione `/generate` con `json_schema`: la decodifica vincolata di SGLang garantisce la conformità dello schema a livello di campionamento dei token."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato di risposta"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured (e.g. JSON) output",
+          "message": "Forza l'output strutturato (es. JSON)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Nessuno - non chiamare mai uno strumento"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - decide il modello"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Obbligatorio - deve chiamare uno strumento"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls tool invocation.\n\n- `none` — never call a tool (text-only reply)\n- `auto` — model decides (default when `tools` is set)\n- `required` — model must call at least one tool",
+          "message": "Controlla l'invocazione dello strumento.\n\n- `none` — non chiamare mai uno strumento (risposta solo testo)\n- `auto` — decide il modello (impostazione predefinita quando è impostato `tools`)\n- `required` — il modello deve chiamare almeno uno strumento"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Scelta dello strumento"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "Se e quale strumento deve invocare il modello"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.  Each entry is a hash with a `type` field (`function`) and a `function` hash containing `name`, `description`, and a JSON-schema `parameters` object.\n\n**Example**:\n```\n[{type: \"function\", function: {\n  name: \"get_weather\",\n  description: \"Get the weather for a location\",\n  parameters: {type: \"object\", properties: {...}, required: [\"location\"]}\n}}]\n```",
+          "message": "Elenco di definizioni di strumenti che il modello può invocare. Ogni voce è un hash con un campo `type` (`function`) e un hash `function` contenente `name`, `description` e un oggetto JSON-schema `parameters`.\n\n**Esempio**:\n```\n[{type: \"function\", function: {\n  name: \"get_weather\",\n  description: \"Get the weather for a location\",\n  parameters: {type: \"object\", properties: {...}, required: [\"location\"]}\n}}]\n```"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Strumenti"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definizioni di strumenti in stile OpenAI che il modello può chiamare"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  SGLang-specific extension to the OpenAI chat API; useful for reducing low-probability token noise.  Set to `-1` or omit to disable.",
+          "message": "Limita il campionamento ai K token successivi più probabili. Estensione specifica di SGLang per l'API di chat di OpenAI; utile per ridurre il rumore dei token a bassa probabilità. Impostare su `-1` o omettere per disabilitare."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens (SGLang extension)",
+          "message": "Campiona solo dai K token successivi più probabili (estensione SGLang)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling — restrict sampling to tokens whose cumulative probability exceeds this threshold.  Range `0.0` to `1.0`.  Usually left at `1.0` and varied only in combination with `top_k` or lower `temperature`.",
+          "message": "Campionamento nucleare (nucleus sampling) — limita il campionamento ai token la cui probabilità cumulativa supera questa soglia. Intervallo da `0.0` a `1.0`. Di solito viene lasciato a `1.0` e modificato solo in combinazione con `top_k` o un `temperature` inferiore."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Soglia di campionamento nucleus (0-1)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.\n\n- `0.0` — deterministic (greedy decoding)\n- `0.7` — balanced creativity (typical default for chat)\n- `1.5`+ — highly varied / creative\n\nDefaults to `1.0` on most SGLang deployments.",
+          "message": "Controlla la casualità dell'output. Intervallo da `0.0` a `2.0`.\n\n- `0.0` — deterministico (greedy decoding)\n- `0.7` — creatività bilanciata (impostazione predefinita tipica per la chat)\n- `1.5`+ — altamente variabile / creativo\n\nIl valore predefinito è `1.0` nella maggior parte delle distribuzioni SGLang."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2); higher values give more varied output",
+          "message": "Temperatura di campionamento (0-2); valori più alti producono output più vari"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
+          "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation.",
+          "message": "Identificatore opaco che rappresenta l'utente finale. Registrato lato server per il monitoraggio degli abusi e l'attribuzione dell'utilizzo; non influisce sulla generazione."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.short_desc": {
+          "source": "Opaque end-user identifier for abuse tracking",
+          "message": "Identificatore opaco dell'utente finale per il monitoraggio degli abusi"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a local SGLang model server",
+          "message": "Genera un completamento di chat da un server del modello SGLang locale"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using the local SGLang model via the OpenAI-compatible `/v1/embeddings` endpoint.\n\nThe SGLang server must be configured with an embedding model (e.g. `bge-m3`).\n\n**Example use cases**:\n- RAG vector index population using local inference\n- On-prem semantic search without cloud dependency",
+          "message": "Converte input di testo in vettori di embedding utilizzando il modello SGLang locale tramite l'endpoint compatibile con OpenAI `/v1/embeddings`.\n\nIl server SGLang deve essere configurato con un modello di embedding (es. `bge-m3`).\n\n**Casi d'uso di esempio**:\n- Popolamento dell'indice vettoriale RAG tramite inferenza locale\n- Ricerca semantica on-premise senza dipendenza dal cloud"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Crea embedding"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded binary (smaller transfer)",
+          "message": "Base64 - binario codificato (trasferimento più piccolo)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - plain number array (default)",
+          "message": "Float - semplice array numerico (predefinito)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are returned.\n\n- `float` — plain JSON number array (default, easiest to consume)\n- `base64` — base64-encoded binary blob (smaller on the wire; decode before use)",
+          "message": "Controlla il modo in cui vengono restituiti i vettori di embedding.\n\n- `float` — semplice array numerico JSON (predefinito, più semplice da consumare)\n- `base64` — blob binario codificato in base64 (più piccolo per il trasferimento in rete; decodificare prima dell'uso)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formato di codifica"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "Modo in cui i valori di embedding sono codificati nella risposta"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to embed.  Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\"]`\n\nThe SGLang server must be running an embedding model (e.g. `bge-m3`, `nomic-embed-text-v1.5`).",
+          "message": "Il contenuto di testo di cui creare l'embedding. Può essere una singola stringa o un elenco di stringhe per l'elaborazione batch.\n\n**Esempi**:\n- Singolo testo: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\"]`\n\nIl server SGLang deve eseguire un modello di embedding (es. `bge-m3`, `nomic-embed-text-v1.5`)."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "Testo di input"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "Il testo o l'elenco di testi da convertire in embedding"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Name of the embedding model to use.  Optional; defaults to the model configured on the SGLang connection via `getModel()`.\n\n**Note**: SGLang serves exactly one model per server, so overriding `model` only makes sense when routing to a multi-model gateway.",
+          "message": "Nome del modello di embedding da utilizzare. Facoltativo; il valore predefinito è il modello configurato sulla connessione SGLang tramite `getModel()`.\n\n**Nota**: SGLang serve esattamente un modello per server, pertanto l'override di `model` ha senso solo quando si esegue il routing verso un gateway multi-modello."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Override the model served by the SGLang connection",
+          "message": "Esegui l'override del modello gestito dalla connessione SGLang"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.desc": {
+          "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect output.",
+          "message": "Identificatore opaco che rappresenta l'utente finale. Registrato lato server per il tracciamento degli abusi e l'attribuzione dell'utilizzo; non influisce sull'output."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.short_desc": {
+          "source": "Opaque end-user identifier for abuse tracking",
+          "message": "Identificatore opaco dell'utente finale per il monitoraggio degli abusi"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a local SGLang model server",
+          "message": "Genera vettori di embedding da un server di modelli SGLang locale"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.desc": {
+          "source": "Uses SGLang's native `/generate` endpoint with constrained decoding — the model is guaranteed to emit output matching a JSON schema, regex pattern, or EBNF grammar.\n\nThis eliminates the retry loops common to OpenAI-style schema enforcement because constraints are applied at the token-sampling step, not post-hoc.\n\n**Example use cases**:\n- Typed field extraction (invoices, receipts, contracts) with guaranteed schema conformance\n- Classification tasks where the output must be exactly one of N labels\n- Tool-call argument generation where the arguments must match a precise shape\n\nSupply exactly one of `json_schema`, `regex`, or `ebnf` to constrain the output.",
+          "message": "Utilizza l'endpoint nativo `/generate` di SGLang con decodifica vincolata: è garantito che il modello emetta un output corrispondente a uno schema JSON, a un pattern regex o a una grammatica EBNF.\n\nCiò elimina i cicli di tentativi tipici dell'applicazione dello schema in stile OpenAI perché i vincoli vengono applicati nella fase di campionamento dei token, non a posteriori.\n\n**Casi d'uso di esempio**:\n- Estrazione di campi tipizzati (fatture, ricevute, contratti) con conformità garantita dello schema\n- Attività di classificazione in cui l'output deve essere esattamente una tra N etichette\n- Generazione di argomenti per chiamate di strumenti in cui gli argomenti devono corrispondere a una struttura precisa\n\nFornire esattamente uno tra `json_schema`, `regex` o `ebnf` per vincolare l'output."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
+          "source": "Constrained Generation",
+          "message": "Generazione vincolata"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.desc": {
+          "source": "Convenience field merged into `sampling_params.ebnf`.\n\nAn EBNF grammar that the generated output must conform to.  Useful for structured outputs that don't fit naturally into JSON schema (SQL queries, domain-specific languages, arithmetic expressions).\n\nMutually exclusive with `json_schema`, `regex`, and `structural_tag`.",
+          "message": "Campo di utilità unito in `sampling_params.ebnf`.\n\nUna grammatica EBNF a cui l'output generato deve conformarsi. Utile per output strutturati che non si adattano naturalmente a uno schema JSON (query SQL, linguaggi specifici di dominio, espressioni aritmetiche).\n\nReciprocamente esclusivo con `json_schema`, `regex` e `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.display_name": {
+          "source": "EBNF Grammar Constraint",
+          "message": "Vincolo grammatica EBNF"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.short_desc": {
+          "source": "EBNF grammar the output must conform to",
+          "message": "Grammatica EBNF a cui l'output deve conformarsi"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.desc": {
+          "source": "Alternative to `text` — pass a pre-tokenized list of integer token IDs directly.  Useful when you've already run the tokenizer yourself and want to skip re-tokenization.  Provide exactly one of `text` or `input_ids`.",
+          "message": "Alternativa a `text`: passa direttamente un elenco pre-tokenizzato di ID token interi. Utile se il tokenizer è già stato eseguito in autonomia e si desidera saltare la nuova tokenizzazione. Fornire esattamente uno tra `text` o `input_ids`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.display_name": {
+          "source": "Input Token IDs",
+          "message": "ID token di input"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.short_desc": {
+          "source": "Pre-tokenized input as a list of integer token IDs",
+          "message": "Input pre-tokenizzato come elenco di ID token interi"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.desc": {
+          "source": "Convenience field merged into `sampling_params.json_schema`.\n\nA JSON schema, serialized as a string, that the output is guaranteed to match. SGLang enforces the schema at the token-sampling level, so the output is **always** valid JSON conforming to the schema — no parse errors, no retries.\n\n**Example** (extract an invoice total):\n```\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"amount\": {\"type\": \"number\"},\n    \"currency\": {\"type\": \"string\"}\n  },\n  \"required\": [\"amount\", \"currency\"]\n}\n```\n\nMutually exclusive with `regex`, `ebnf`, and `structural_tag`.",
+          "message": "Campo di utilità unito in `sampling_params.json_schema`.\n\nUno schema JSON, serializzato come stringa, a cui è garantito che l'output corrisponda. SGLang impone lo schema a livello di campionamento dei token, quindi l'output è **sempre** un JSON valido e conforme allo schema, senza errori di analisi né tentativi ripetuti.\n\n**Esempio** (estrarre il totale di una fattura):\n```\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"amount\": {\"type\": \"number\"},\n    \"currency\": {\"type\": \"string\"}\n  },\n  \"required\": [\"amount\", \"currency\"]\n}\n```\n\nReciprocamente esclusivo con `regex`, `ebnf` e `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.display_name": {
+          "source": "JSON Schema Constraint",
+          "message": "Vincolo schema JSON"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.short_desc": {
+          "source": "JSON schema (as a string) the output must conform to",
+          "message": "Schema JSON (come stringa) a cui l'output deve conformarsi"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.desc": {
+          "source": "Token offset at which log-probability reporting begins.  Use `-1` to report from the first generated token onward (typical).  Has no effect unless `return_logprob` is `True`.",
+          "message": "Offset dei token a partire dal quale inizia la segnalazione delle probabilità logaritmiche. Utilizzare `-1` per creare report a partire dal primo token generato in poi (tipico). Non ha alcun effetto a meno che `return_logprob` non sia `True`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.display_name": {
+          "source": "Log Probability Start Length",
+          "message": "Lunghezza iniziale probabilità logaritmica"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.short_desc": {
+          "source": "Token offset at which log-probability reporting begins",
+          "message": "Offset dei token a partire dal quale inizia la segnalazione delle probabilità logaritmiche"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.desc": {
+          "source": "Convenience field merged into `sampling_params.max_new_tokens`.  Maximum number of tokens to generate.  Increase for long-form output; decrease to cap cost.",
+          "message": "Campo di utilità unito in `sampling_params.max_new_tokens`. Numero massimo di token da generare. Aumentare per output di formato lungo; diminuire per limitare i costi."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.display_name": {
+          "source": "Max New Tokens",
+          "message": "Token nuovi massimi"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.short_desc": {
+          "source": "Maximum tokens to emit (merged into sampling_params)",
+          "message": "Numero massimo di token da emettere (unito in sampling_params)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.desc": {
+          "source": "Hash of sampling parameters controlling how the model generates tokens.\n\n**Decoding controls**:\n- `temperature` — sampling temperature (`0.0` = deterministic, `1.0` = default)\n- `top_p` — nucleus sampling cutoff (`0.0`-`1.0`)\n- `top_k` — sample only from the K most likely tokens\n- `max_new_tokens` — hard cap on generated tokens\n- `stop` — string or list of stop sequences\n- `n` — number of completions to return\n\n**Constraint modes** (mutually exclusive — pick at most one):\n- `json_schema` — force output to match a JSON schema (passed as a JSON string)\n- `regex` — force output to match a regular expression\n- `ebnf` — force output to match an EBNF grammar\n- `structural_tag` — constrain output with XML-like structural tags\n\nConstraints are enforced at the token-sampling step — the model cannot emit tokens that would violate the constraint, so no retry loop is needed.\n\nThe convenience fields `temperature`, `max_new_tokens`, `json_schema`, `regex`, and `ebnf` at the top level of the request are automatically merged into `sampling_params` by the provider, so you usually don't need to build this hash manually.",
+          "message": "Hash dei parametri di campionamento che controllano il modo in cui il modello genera i token.\n\n**Controlli di decodifica**:\n- `temperature` — temperatura di campionamento (`0.0` = deterministica, `1.0` = predefinita)\n- `top_p` — soglia di campionamento nucleus (`0.0`-`1.0`)\n- `top_k` — campiona solo dai K token più probabili\n- `max_new_tokens` — limite massimo di token generati\n- `stop` — stringa o elenco di sequenze di stop\n- `n` — numero di completamenti da restituire\n\n**Modalità di vincolo** (reciprocamente esclusive — sceglierne al massimo una):\n- `json_schema` — forza la corrispondenza dell'output con uno schema JSON (passato come stringa JSON)\n- `regex` — forza la corrispondenza dell'output con un'espressione regolare\n- `ebnf` — forza la corrispondenza dell'output con una grammatica EBNF\n- `structural_tag` — vincola l'output con tag strutturali simili a XML\n\nI vincoli vengono applicati nella fase di campionamento dei token: il modello non può emettere token che violerebbero il vincolo, quindi non è necessario alcun ciclo di tentativi.\n\nI campi di utilità `temperature`, `max_new_tokens`, `json_schema`, `regex` e `ebnf` al livello superiore della richiesta vengono automaticamente uniti in `sampling_params` dal provider, pertanto di solito non è necessario creare questo hash manualmente."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.display_name": {
+          "source": "Sampling Parameters",
+          "message": "Parametri di campionamento"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.short_desc": {
+          "source": "Sampling configuration (temperature, max_new_tokens, constraints)",
+          "message": "Configurazione di campionamento (temperatura, max_new_tokens, vincoli)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial output as Server-Sent Events instead of returning a single response.  Most action flows expect non-streaming; enable only when wiring into a streaming consumer.",
+          "message": "Quando è `True`, il server trasmette l'output parziale in streaming come Server-Sent Events anziché restituire una singola risposta. La maggior parte dei flussi di azioni prevede output non in streaming; abilitare solo durante l'integrazione con un consumer di streaming."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial output as server-sent events",
+          "message": "Trasmetti in streaming l'output parziale come Server-Sent Events"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.desc": {
+          "source": "When `True`, the response's `meta_info` includes per-token log probabilities.  Useful for calibration and confidence estimation; adds response size.",
+          "message": "Quando è `True`, `meta_info` della risposta include le probabilità logaritmiche per token. Utile per la calibrazione e la stima della confidenza; aumenta la dimensione della risposta."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.display_name": {
+          "source": "Return Log Probabilities",
+          "message": "Restituisci probabilità logaritmiche"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.short_desc": {
+          "source": "Include per-token log probabilities in the response",
+          "message": "Includi le probabilità logaritmiche per token nella risposta"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.desc": {
+          "source": "When `True`, each log-probability entry includes the decoded token text in addition to the token ID.  Easier to inspect but larger payload.",
+          "message": "Quando è `True`, ciascuna voce di probabilità logaritmica include il testo del token decodificato oltre all'ID del token. Più facile da ispezionare ma payload più grande."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.display_name": {
+          "source": "Return Text in Log Probabilities",
+          "message": "Restituisci testo nelle probabilità logaritmiche"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.short_desc": {
+          "source": "Include decoded token text alongside each logprob",
+          "message": "Includi il testo del token decodificato accanto a ciascun logprob"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.desc": {
+          "source": "Convenience field merged into `sampling_params.regex`.\n\nA regular expression that the generated output is guaranteed to match.  Useful for tight single-value extraction (dates, identifiers, classifications).\n\n**Example** (classify as exactly one of three labels):\n`\"^(positive|negative|neutral)$\"`\n\nMutually exclusive with `json_schema`, `ebnf`, and `structural_tag`.",
+          "message": "Campo di utilità unito in `sampling_params.regex`.\n\nUn'espressione regolare a cui è garantito che l'output generato corrisponda. Utile per l'estrazione precisa di valori singoli (date, identificatori, classificazioni).\n\n**Esempio** (classificare esattamente come una di tre etichette):\n`\"^(positive|negative|neutral)$\"`\n\nReciprocamente esclusivo con `json_schema`, `ebnf` e `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.display_name": {
+          "source": "Regex Constraint",
+          "message": "Vincolo regex"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.short_desc": {
+          "source": "Regular expression the output must match",
+          "message": "Espressione regolare a cui l'output deve corrispondere"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.desc": {
+          "source": "For each generated token, include the top N alternative tokens and their log probabilities.  Has no effect unless `return_logprob` is `True`.",
+          "message": "Per ciascun token generato, include i primi N token alternativi e le relative probabilità logaritmiche. Non ha alcun effetto a meno che `return_logprob` non sia `True`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.display_name": {
+          "source": "Top Log Probabilities Count",
+          "message": "Conteggio delle probabilità logaritmiche principali"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.short_desc": {
+          "source": "Number of alternative tokens to include in each logprob entry",
+          "message": "Numero di token alternativi da includere in ciascuna voce di logprob"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.desc": {
+          "source": "The raw prompt(s) to send to the model.  Can be a single string or a list of strings for batch completion.\n\nUnlike the chat endpoint, `/generate` does not apply a chat template — the text is tokenized and fed directly to the model.  Include any role markers or formatting the model expects yourself.\n\n**Example**: `\"Extract the invoice number from: Invoice #INV-2026-0041 ...\"`",
+          "message": "I prompt non elaborati da inviare al modello. Può essere una singola stringa o un elenco di stringhe per il completamento batch.\n\nA differenza dell'endpoint di chat, `/generate` non applica un modello di chat: il testo viene tokenizzato e inviato direttamente al modello. Includere autonomamente eventuali marcatori di ruolo o formattazioni previsti dal modello.\n\n**Esempio**: `\"Extract the invoice number from: Invoice #INV-2026-0041 ...\"`"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.display_name": {
+          "source": "Prompt Text",
+          "message": "Testo del prompt"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.short_desc": {
+          "source": "Raw prompt text (or list of prompts) to complete",
+          "message": "Testo del prompt non elaborato (o elenco di prompt) da completare"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Convenience field merged into `sampling_params.temperature`.\n\n- `0.0` — deterministic (greedy decoding; recommended for extraction tasks)\n- `0.7` — balanced\n- `1.0`+ — more varied output",
+          "message": "Campo di utilità unito in `sampling_params.temperature`.\n\n- `0.0` — deterministico (decodifica greedy; consigliata per attività di estrazione)\n- `0.7` — bilanciato\n- `1.0`+ — output più vario"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (merged into sampling_params)",
+          "message": "Temperatura di campionamento (unita in sampling_params)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
+          "source": "Generate text with schema/regex/grammar-enforced output structure",
+          "message": "Genera testo con struttura di output imposta da schema/regex/grammatica"
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.desc": {
+          "source": "Instructs the SGLang server to flush its KV cache.  Useful after switching workloads or for freeing memory.  Safe to call at any time; does not interrupt in-flight requests.",
+          "message": "Indica al server SGLang di svuotare la propria cache KV. Utile dopo aver cambiato carichi di lavoro o per liberare memoria. È sicuro da chiamare in qualsiasi momento; non interrompe le richieste in corso."
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
+          "source": "Flush KV Cache",
+          "message": "Svuota cache KV"
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {
+          "source": "Flush the SGLang server's KV cache",
+          "message": "Svuota la cache KV del server SGLang"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **SGLang** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **SGLang** utilizzando l'autenticazione della connessione configurata.\n\nSpecificare il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query facoltativi, intestazioni e corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizzare questa azione per gli endpoint non ancora esposti come azioni native in questa app."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to SGLang",
+          "message": "Esegui una chiamata API personalizzata a SGLang"
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.desc": {
+          "source": "Returns the SGLang server's configuration (model name, tokenizer path, max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, number of GPUs).  Useful for health checks and configuration validation.",
+          "message": "Restituisce la configurazione del server SGLang (nome modello, percorso tokenizer, max_total_tokens, chat_template, ecc.) e lo stato di runtime (versione, dispositivo CUDA, numero di GPU). Utile per i controlli di integrità e la convalida della configurazione."
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
+          "source": "Get Server Info",
+          "message": "Ottieni informazioni sul server"
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
+          "source": "Retrieve SGLang server configuration and runtime metadata",
+          "message": "Recupera la configurazione del server SGLang e i metadati di runtime"
+        },
+        "app.U0dMYW5n.desc": {
+          "source": "Provides access to [SGLang](https://github.com/sgl-project/sglang) — a fast serving framework for large language models and vision language models.\n\nSGLang exposes both OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/embeddings`) and SGLang-native endpoints including `/generate` with constrained decoding (JSON schema, regex, EBNF grammars) for reliable structured extraction without retry loops.\n\n**Common use cases**:\n- **Local LLM chat and completions** with no per-token cost and data residency control\n- **Structured extraction** using constrained decoding — the model is guaranteed to emit output matching a JSON schema, regex, or grammar, eliminating output-parsing retries\n- **Embeddings generation** for RAG pipelines using the same backend that serves chat\n- **Edge / on-prem inference** where data must not leave the organization",
+          "message": "Fornisce l'accesso a [SGLang](https://github.com/sgl-project/sglang), un framework di serving rapido per modelli linguistici di grandi dimensioni (LLM) e modelli linguistici visivi (VLM).\n\nSGLang espone sia endpoint compatibili con OpenAI (`/v1/chat/completions`, `/v1/embeddings`) sia endpoint nativi di SGLang tra cui `/generate` con decodifica vincolata (schema JSON, regex, grammatiche EBNF) per un'estrazione strutturata affidabile senza cicli di tentativi.\n\n**Casi d'uso comuni**:\n- **Chat e completamenti con LLM locali** senza costi per token e con controllo della residenza dei dati\n- **Estrazione strutturata** mediante decodifica vincolata: il modello garantisce l'emissione di output corrispondente a uno schema JSON, a una regex o a una grammatica, eliminando i tentativi ripetuti di analisi dell'output\n- **Generazione di embedding** per pipeline RAG utilizzando lo stesso backend che gestisce la chat\n- **Inferenza edge / on-premise** in cui i dati non devono lasciare l'organizzazione"
+        },
+        "app.U0dMYW5n.display_name": {
+          "source": "SGLang",
+          "message": "SGLang"
+        },
+        "app.U0dMYW5n.short_desc": {
+          "source": "SGLang model server for local LLM inference with constrained decoding",
+          "message": "Model server SGLang per inferenza LLM locale con decodifica vincolata"
+        }
+      }
+    }
+  }
+}

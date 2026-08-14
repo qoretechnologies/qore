@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts one or more text inputs into numerical vectors (embeddings) that capture the meaning of the text. Texts with similar meanings will have similar vectors, enabling semantic search and comparison.\n\n**Example use cases**:\n- Convert product descriptions into embeddings to power a \"find similar products\" feature\n- Embed support tickets to automatically route them to the right team\n- Build a knowledge base index for AI-powered question answering (RAG)\n\nSupports batch processing (up to 1,000 texts per request) and configurable output dimensions for balancing accuracy vs. storage cost",
+          "message": "將一個或多個文字輸入轉換為捕捉文字語意的數值向量（嵌入）。具有相似語意的文字將具有相似的向量，從而實現語意搜尋與比對。\n\n**範例使用案例**：\n- 將產品說明轉換為嵌入，以支援「尋找類似產品」功能\n- 嵌入支援工單以自動將其分派給合適的團隊\n- 為 AI 支援的問答 (RAG) 建立知識庫索引\n\n支援批次處理（每個請求最多 1,000 個文字）以及可自訂的輸出維度，以在準確度與儲存成本之間取得平衡"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "建立嵌入"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - Encoded Binary (efficient for compact types)",
+          "message": "Base64 - 編碼二進位（適用於精簡類型）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are formatted in the API response.\n\nBy default, embeddings are returned as plain number arrays. Set to `base64` to receive base64-encoded binary data, which can be more efficient for network transfer when using compact output types like `int8` or `binary`",
+          "message": "控制 API 回應中嵌入向量的格式。\n\n預設情況下，嵌入會以純數字陣列形式傳回。設定為 `base64` 可接收經 base64 編碼的二進位資料，在使用像 `int8` 或 `binary` 這樣的精簡輸出類型時，網路傳輸效率會更高"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "編碼格式"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "回應中嵌入值的編碼方式"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to convert into embeddings. Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nMaximum **1,000** items per request. Total token limits vary by model",
+          "message": "要轉換為嵌入的文字內容。可以是單一字串或用於批次處理的字串清單。\n\n**範例**：\n- 單一文字：`\"How do I reset my password?\"`\n- 批次：`[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\n每個請求最多 **1,000** 個項目。總權杖上限依模型而異"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "輸入文字"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "要轉換為嵌入向量的文字或文字列表"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50.display_name": {
+          "source": "Document - Content to be searched (e.g., articles, products)",
+          "message": "文件 - 要被搜尋的內容（例如文章、產品）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnF1ZXJ5.display_name": {
+          "source": "Query - Search question (e.g., user's search input)",
+          "message": "查詢 - 搜尋問題（例如使用者的搜尋輸入）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Tells the model whether the input text is a search query or a document to be searched. This optimizes the embeddings for better search accuracy.\n\n- Use **Query** when embedding a user's search question (e.g., `\"How do I reset my password?\"`)\n- Use **Document** when embedding content that will be searched through (e.g., knowledge base articles, product descriptions)\n\nLeave empty if you're not using the embeddings for search/retrieval",
+          "message": "告知模型輸入文字是搜尋查詢還是要被搜尋的文件。這能最佳化嵌入以獲得更高的搜尋準確度。\n\n- 嵌入使用者的搜尋問題時請使用 **查詢**（例如 `\"How do I reset my password?\"`）\n- 嵌入將被搜尋的內容時請使用 **文件**（例如知識庫文章、產品說明）\n\n若未將嵌入用於搜尋/擷取，請保留空白"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "輸入類型"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Whether the text is a search query or a document to be searched",
+          "message": "文字為搜尋查詢或要被搜尋的文件"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Binary - Minimal Storage (32x less, for large-scale search)",
+          "message": "二進位 - 最小儲存空間（減少 32 倍，適用於大規模搜尋）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - Full Precision (default, best accuracy)",
+          "message": "浮點數 - 全精度（預設，最佳準確度）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmludDg.display_name": {
+          "source": "Int8 - Compact (4x less storage, minimal accuracy loss)",
+          "message": "Int8 - 精簡（減少 4 倍儲存空間，準確度損失極小）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnViaW5hcnk.display_name": {
+          "source": "Unsigned Binary - Minimal Storage (32x less)",
+          "message": "無正負號二進位 - 最小儲存空間（減少 32 倍）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnVpbnQ4.display_name": {
+          "source": "Uint8 - Compact Unsigned (4x less storage)",
+          "message": "Uint8 - 精簡無正負號（減少 4 倍儲存空間）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.desc": {
+          "source": "Controls the numeric precision of embedding values. Lower precision uses less storage with a small accuracy trade-off.\n\n- **Float** — full precision (default), best accuracy\n- **Int8/Uint8** — 4x less storage, minimal accuracy loss\n- **Binary/Unsigned Binary** — 32x less storage, suitable for large-scale approximate search\n\nUse the default (`float`) unless you need to optimize storage for millions of embeddings",
+          "message": "控制嵌入數值的數值精度。較低的精度使用較少的儲存空間，但會有些許準確度折損。\n\n- **Float** — 全精度（預設），最佳準確度\n- **Int8/Uint8** — 減少 4 倍儲存空間，準確度損失極小\n- **Binary/Unsigned Binary** — 減少 32 倍儲存空間，適用於大規模近似搜尋\n\n除非您需要為數百萬個嵌入最佳化儲存空間，否則請使用預設值 (`float`)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.display_name": {
+          "source": "Output Precision",
+          "message": "輸出精度"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.short_desc": {
+          "source": "Numeric precision of embedding values (affects storage size)",
+          "message": "嵌入數值的數值精度（影響儲存大小）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjEwMjQ.display_name": {
+          "source": "1024 - Default (recommended)",
+          "message": "1024 - 預設（建議）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjI1Ng.display_name": {
+          "source": "256 - Smallest (least storage)",
+          "message": "256 - 最小（佔用最少儲存空間）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjIwNDg.display_name": {
+          "source": "2048 - Largest (highest accuracy)",
+          "message": "2048 - 最大（最高準確度）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjUxMg.display_name": {
+          "source": "512 - Compact (good balance)",
+          "message": "512 - 緊湊（良好平衡）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.desc": {
+          "source": "Controls the size of the output embedding vectors. Higher dimensions give more accurate results but use more storage and memory.\n\n- **256** — smallest, ~4x less storage, good for large-scale approximate search\n- **512** — compact, good balance for most applications\n- **1024** — default, recommended for high-accuracy search\n- **2048** — highest accuracy, best when storage is not a concern\n\nNot all models support all dimensions. Default is `1024`",
+          "message": "控制輸出嵌入向量的大小。較高的維度可提供更準確的結果，但會使用更多儲存空間與記憶體。\n\n- **256** — 最小，節省約 4 倍儲存空間，適合大規模近似搜尋\n- **512** — 緊湊，適用於大多數應用程式的良好平衡\n- **1024** — 預設，建議用於高準確度搜尋\n- **2048** — 最高準確度，最適合不擔心儲存空間的情況\n\n並非所有模型都支援所有維度。預設為 `1024`"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
+          "source": "Output Dimensions",
+          "message": "輸出維度"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
+          "source": "Size of the embedding vector (affects accuracy vs. storage)",
+          "message": "嵌入向量的大小（影響準確度與儲存空間）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00.display_name": {
+          "source": "Voyage 4 - Balanced (good quality and speed)",
+          "message": "Voyage 4 - 平衡（品質與速度兼具）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxhcmdl.display_name": {
+          "source": "Voyage 4 Large - Best Quality (general-purpose, multilingual)",
+          "message": "Voyage 4 Large - 最佳品質（通用型、多語言）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxpdGU.display_name": {
+          "source": "Voyage 4 Lite - Fastest (high-volume workloads)",
+          "message": "Voyage 4 Lite - 最快（高負載工作量）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0z.display_name": {
+          "source": "Voyage 3 - Previous Gen (balanced)",
+          "message": "Voyage 3 - 前一代（平衡）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0zLWxhcmdl.display_name": {
+          "source": "Voyage 3 Large - Previous Gen (general-purpose)",
+          "message": "Voyage 3 Large - 前一代（通用型）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1jb2RlLTM.display_name": {
+          "source": "Voyage Code 3 - Code Search (source code retrieval)",
+          "message": "Voyage Code 3 - 程式碼搜尋（原始碼檢索）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1maW5hbmNlLTI.display_name": {
+          "source": "Voyage Finance 2 - Finance (SEC filings, earnings)",
+          "message": "Voyage Finance 2 - 金融（SEC 申報文件、財報）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1sYXctMg.display_name": {
+          "source": "Voyage Law 2 - Legal (contracts, case law)",
+          "message": "Voyage Law 2 - 法律（合約、判例法）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1tdWx0aWxpbmd1YWwtMg.display_name": {
+          "source": "Voyage Multilingual 2 - Previous Gen (multilingual)",
+          "message": "Voyage Multilingual 2 - 前一代（多語言）"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for converting your text into embeddings.\n\n**Recommended models**:\n- `voyage-4-large` — highest quality, best for multilingual content and complex documents\n- `voyage-4` — good balance of quality and speed for most use cases\n- `voyage-4-lite` — fastest and cheapest, good for high-volume or latency-sensitive workloads\n- `voyage-code-3` — specialized for source code search and retrieval\n\n**Domain-specific models** (trained on specialized data):\n- `voyage-finance-2` — financial documents, SEC filings, earnings reports\n- `voyage-law-2` — legal contracts, case law, regulations",
+          "message": "選擇用於將文字轉換為嵌入向量的 Voyage AI 模型。\n\n**建議模型**：\n- `voyage-4-large` — 最高品質，最適合多語言內容和複雜文件\n- `voyage-4` — 品質與速度平衡良好，適用於大多數使用案例\n- `voyage-4-lite` — 最快且成本最低，適用於高負載或對延遲敏感的工作量\n- `voyage-code-3` — 專為原始碼搜尋與檢索打造\n\n**特定領域模型**（在專屬資料上訓練）：\n- `voyage-finance-2` — 金融文件、SEC 申報文件、財報\n- `voyage-law-2` — 法律合約、判例法、法規"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for generating embeddings",
+          "message": "用於生成嵌入向量的 AI 模型"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "啟用時（預設），超出模型長度上限的文字將會自動截斷以符合要求。停用時則會傳回錯誤，如果您需要確保處理完整文字，這項設定會很有用"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "自動截斷過長文字"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "自動截斷超出模型上限的文字"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Convert text into numerical vectors for search and comparison",
+          "message": "將文字轉換為數值向量以進行搜尋與比較"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Voyage AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Voyage AI** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選填的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n針對此應用程式上尚未公開為主要動作的端點，請使用此動作。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Voyage AI",
+          "message": "向 Voyage AI 進行自訂 API 呼叫"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.desc": {
+          "source": "Takes a search query and a list of documents, then re-sorts the documents by how relevant they are to the query. This improves search quality by using AI to understand meaning rather than just keyword matching.\n\n**Example use cases**:\n- Improve search results from a basic keyword search by reranking with semantic understanding\n- Filter a large set of candidate documents down to the most relevant ones for AI processing\n- Re-sort customer support articles by relevance to a user's question\n\nReturns results sorted by relevance score (highest first). Use `top_k` to limit the number of results returned, and `return_documents` to include the document text in each result",
+          "message": "接收搜尋查詢和文件清單，然後根據與查詢的關聯性重新排序文件。這能透過使用 AI 理解語意而非僅僅進行關鍵字比對來提升搜尋品質。\n\n**範例使用案例**：\n- 透過語意理解重排順序，以改善基本關鍵字搜尋的結果\n- 將龐大的候選文件集篩選為最相關的文件以供 AI 處理\n- 根據與使用者問題的關聯性重新排序客戶支援文章\n\n傳回依關聯性分數排序（由高至低）的結果。使用 `top_k` 限制傳回的結果數量，並使用 `return_documents` 在每個結果中包含文件文字"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "重新排序文件"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "A list of text documents to rank by relevance to the search query. These can be full documents, paragraphs, or short text snippets.\n\n**Example**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nMaximum **1,000** documents per request",
+          "message": "要依與搜尋查詢的關聯性進行排序的文字文件清單。這些可以是完整文件、段落或簡短文字片段。\n\n**範例**：`[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\n每次請求最多 **1,000** 份文件"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "文件"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "The list of documents or text snippets to rank",
+          "message": "要進行排序的文件或文字片段清單"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0y.display_name": {
+          "source": "Rerank 2 - Previous Generation",
+          "message": "Rerank 2 - 前一代"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjU.display_name": {
+          "source": "Rerank 2.5 - Best Quality (most accurate relevance scoring)",
+          "message": "Rerank 2.5 - 最佳品質（最精準的關聯性評分）"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjUtbGl0ZQ.display_name": {
+          "source": "Rerank 2.5 Lite - Fastest (high-volume workloads)",
+          "message": "Rerank 2.5 Lite - 最快（高負載工作量）"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for reranking your documents.\n\n- `rerank-2.5` — best quality, most accurate relevance scoring\n- `rerank-2.5-lite` — faster and cheaper, good for high-volume workloads\n- `rerank-2` — previous generation model",
+          "message": "選擇用於重新排序文件的 Voyage AI 模型。\n\n- `rerank-2.5` — 最佳品質，最精準的關聯性評分\n- `rerank-2.5-lite` — 更快且成本更低，適用於高負載工作量\n- `rerank-2` — 前一代模型"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for reranking documents",
+          "message": "用於重新排序文件的 AI 模型"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "The search query or question that documents will be ranked against. Documents most relevant to this query will be ranked highest.\n\n**Example**: `\"How do I cancel my subscription?\"`",
+          "message": "文件排序所依據的搜尋查詢或問題。與此查詢最相關的文件將排在最前面。\n\n**範例**：`\"How do I cancel my subscription?\"`"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "搜尋查詢"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The search question to rank documents against",
+          "message": "文件排序所依據的搜尋問題"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When enabled, each result includes the full text of the document alongside its relevance score. This is convenient when you want to display results directly without looking up documents by their index.\n\nDisabled by default to reduce response size",
+          "message": "啟用時，每個結果都會包含文件的全文以及其關聯性分數。當您想要直接顯示結果而無需透過索引查詢文件時，這會非常方便。\n\n預設為停用以縮減回應大小"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Include Document Text",
+          "message": "包含文件文字"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Include the original document text in each result",
+          "message": "在每個結果中包含原始文件文字"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.desc": {
+          "source": "Limits the results to only the top most-relevant documents.\n\nFor example, set to `5` to get only the 5 most relevant documents. If not specified, all documents are returned sorted by relevance score",
+          "message": "將結果限制為僅顯示最相關的前幾份文件。\n\n例如，設定為 `5` 即可僅取得 5 份最相關的文件。若未指定，將傳回依關聯性分數排序的所有文件"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.display_name": {
+          "source": "Number of Results",
+          "message": "結果數量"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.short_desc": {
+          "source": "How many top results to return",
+          "message": "要傳回前幾名結果的數量"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "啟用時（預設），超出模型長度上限的文字將會自動截斷以符合要求。停用時則會傳回錯誤，如果您需要確保處理完整文字，這項設定會很有用"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "自動截斷過長文字"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "自動截斷超出模型上限的文字"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.short_desc": {
+          "source": "Re-sort search results by relevance to a query",
+          "message": "依與查詢的關聯性重新排序搜尋結果"
+        },
+        "app.Vm95YWdlQUk.desc": {
+          "source": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into numerical representations (embeddings) and reranking search results by relevance.\n\n**Common use cases**:\n- **Semantic search**: convert product descriptions, support tickets, or documents into embeddings, then find the most similar items by comparing vectors\n- **RAG (Retrieval-Augmented Generation)**: embed your knowledge base so an AI assistant can find relevant context before answering questions\n- **Search result reranking**: take initial search results and re-sort them by true relevance to the user's query for higher-quality results",
+          "message": "提供對 [Voyage AI](https://voyageai.com/) 的存取權，用於將文字轉換為數值表示（嵌入向量），並依關聯性重新排序搜尋結果。\n\n**常見使用案例**：\n- **語意搜尋**：將產品描述、支援工單或文件轉換為嵌入向量，接著透過比較向量找出最相似的項目\n- **RAG（檢索增強生成）**：嵌入您的知識庫，讓 AI 助理在回答問題之前能找到相關上下文\n- **搜尋結果重新排序**：取得初始搜尋結果並依據與使用者查詢的實際關聯性重新排序，以獲得更高品質的結果"
+        },
+        "app.Vm95YWdlQUk.display_name": {
+          "source": "Voyage AI",
+          "message": "Voyage AI"
+        },
+        "app.Vm95YWdlQUk.short_desc": {
+          "source": "Voyage AI text embedding and search reranking services",
+          "message": "Voyage AI 文字嵌入與搜尋重排服務"
+        }
+      }
+    }
+  }
+}

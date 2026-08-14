@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
+          "source": "React to files created in a server directory",
+          "message": "서버 디렉터리에 생성된 파일에 반응합니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
+          "source": "New File Created",
+          "message": "새 파일 생성됨"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.desc": {
+          "source": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask",
+          "message": "사용할 폴링 마스크입니다. `regex`이(가) `true`인 경우 정규식으로 처리되며, 그렇지 않으면 glob 마스크로 처리됩니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
+          "source": "Polling Mask",
+          "message": "폴링 마스크"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
+          "source": "The polling mask to use to match files to poll",
+          "message": "폴링할 파일과 일치시키는 데 사용할 폴링 마스크입니다"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "파일이 폴링되기 전의 최소 파일 연령(초)을 지정하는 정수입니다. 이는 비원자적 파일 전송 작업을 우회하기 위한 것입니다.\n\n이 옵션이 필요한 경우, 파일을 전송하는 데 걸리는 가장 긴 시간보다 큰 값으로 설정하세요."
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "최소 폴링 연령"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "폴링할 파일의 최소 연령(초)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "정렬에 사용할 데이터의 `name` 또는 `date`"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "정렬 유형"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "파일을 정렬할 필드"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "내림차순 정렬입니다. 지정되지 않고 `sort_type`이 제공된 경우 오름차순 정렬로 간주됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "내림차순 정렬"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "파일을 내림차순으로 정렬"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "파일 폴링 간격(초)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "`true`인 경우 `mask`은 glob 패턴 대신 정규식으로 처리됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "정규식 일치"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "true인 경우 'mask' 인수가 정규식으로 처리됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "정규식 옵션의 비트필드(`1` = 대소문자 무시, `2` = EOL을 일반 문자로 처리). `regex`가 `true`이 아니면 무시됩니다."
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "정규식 옵션"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "정규식 옵션의 비트필드"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
+          "source": "A file is created in a server directory",
+          "message": "서버 디렉터리에 파일이 생성됩니다"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "서버 파일 시스템에 대한 액세스"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "서버 파일 시스템"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "서버 파일 시스템에 대한 액세스"
+        }
+      }
+    }
+  }
+}

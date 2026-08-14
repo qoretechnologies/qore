@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
+          "message": "FTP サーバーにアップロードされたファイルに反応します。アクション設定によって、イベントにファイルデータ自体が含まれるか、ローカルファイルシステム上のファイル場所へのリンクが含まれるかが決定されます。いずれの場合も、イベントはファイルデータがすでにダウンロードされ、ローカルで利用可能であることを示します"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
+          "source": "FTP File Received",
+          "message": "FTPファイルを受信"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.desc": {
+          "source": "Use an atomic transfer mechanism with `local_dir` where remote files are first moved to a temporary location (specified by `tempfile_template`) and then moved to the final location when they have been fully transferred.\n\nThis ensures that files will never be read until they are fully transferred",
+          "message": "`local_dir` を使用したアトミック転送メカニズムを使用します。リモートファイルはまず一時的な場所（`tempfile_template` で指定）に移動され、完全に転送された後に最終的な場所に移動されます。\n\nこれにより、完全に転送されるまでファイルが読み取られないことが保証されます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.display_name": {
+          "source": "Atomic File Transfer",
+          "message": "アトミックファイル転送"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.short_desc": {
+          "source": "Use an atomic file transfer mechanism",
+          "message": "アトミックファイル転送メカニズムを使用する"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
+          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "FTP エラー発生後に再ポーリングするまでの待機秒数。エラーは error レベルでログに記録され、この遅延の後にポーリングが継続されます。\n\nネットワークの中断やサーバーの再起動などの一時的な問題は FTP でよく発生します。値を小さくするとこのような問題から迅速に回復し、値を大きくすると継続的に障害が発生しているサーバーへの負荷が軽減されます。\n\n**注意**: この遅延が有効な間はファイルはポーリングされません"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.display_name": {
+          "source": "Error Retry Delay",
+          "message": "エラー再試行遅延"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.short_desc": {
+          "source": "The delay in seconds before retrying after an FTP error",
+          "message": "FTP エラー発生後に再試行するまでの遅延（秒）"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "ファイルの取得に使用するローカルディレクトリ"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.display_name": {
+          "source": "Local Directory",
+          "message": "ローカルディレクトリ"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.short_desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "ファイルの取得に使用するローカルディレクトリ"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.desc": {
+          "source": "The glob mask to use to match files to poll; will be treated as a regex if `regex` is `true`",
+          "message": "ポーリング対象のファイルにマッチさせるために使用するGlobマスク。`regex` が `true` の場合は正規表現として扱われます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
+          "source": "Glob Mask",
+          "message": "Globマスク"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.short_desc": {
+          "source": "The glob mask to use to match files to poll",
+          "message": "ポーリング対象のファイルにマッチさせるために使用するGlobマスク"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "ファイルがポーリングされるまでの最小のファイル経過時間（秒単位）を示す整数。これはアトミックでないファイル転送操作に対処するためのものです。\n\nこのオプションが必要な場合は、ファイルの転送にかかる最長時間よりも大きい値に設定してください"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "最小ポーリング経過時間"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "ポーリング対象ファイルの最小経過時間（秒）"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "ソートに使用するデータを示す `name` または `date` のいずれか"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "ソートタイプ"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "ファイルをソートするフィールド"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "降順でソートします。指定されていない場合、`sort_type` が指定されていれば昇順ソートとみなされます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "降順ソート"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "ファイルを降順でソート"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "ファイルをポーリングする間隔（秒）"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "`true` の場合、`mask` はGlobパターンではなく正規表現として扱われます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "正規表現マッチ"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "trueの場合、'mask' 引数は正規表現として扱われます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.desc": {
+          "source": "Move the remote file after processing; in this case `remote_file_move_target` must be set",
+          "message": "処理後にリモートファイルを移動します。この場合、`remote_file_move_target` を設定する必要があります"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.display_name": {
+          "source": "MOVE",
+          "message": "MOVE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.short_desc": {
+          "source": "Move the remote file after processing",
+          "message": "処理後にリモートファイルを移動"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "Leave the file untouched after processing; the file must be moved or deleted manually during post-processing, or the file will appear in subsequent polls as well",
+          "message": "処理後もファイルをそのまま残します。後処理中に手動で移動または削除しない限り、以降のポーリングにもファイルが表示されます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "NONE",
+          "message": "NONE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Leave the file untouched after processing",
+          "message": "処理後にファイルをそのまま残す"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Delete the remote file after processing",
+          "message": "処理後にリモートファイルを削除"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Delete the remote file after processing",
+          "message": "処理後にリモートファイルを削除"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.desc": {
+          "source": "Delete or move remote file after processing? If `MOVE`, `remote_file_move_target` must also be set",
+          "message": "処理後にリモートファイルを削除または移動しますか？`MOVE` の場合は、`remote_file_move_target` も設定する必要があります"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.display_name": {
+          "source": "Remote File Disposition",
+          "message": "リモートファイルの処理方法"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.short_desc": {
+          "source": "Delete or move remote file after processing?",
+          "message": "処理後にリモートファイルを削除または移動しますか？"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.desc": {
+          "source": "The target template for the remote file after processing; use `%s` for the original file name. This option is only used when `remote_file_disposition` is `MOVE`, otherwise it is ignored",
+          "message": "処理後のリモートファイルのターゲットテンプレート。元のファイル名には `%s` を使用します。このオプションは `remote_file_disposition` が `MOVE` の場合にのみ使用され、それ以外の場合は無視されます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.display_name": {
+          "source": "Remote File Move Target",
+          "message": "リモートファイル移動先ターゲット"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.short_desc": {
+          "source": "The target template for the remote file after processing",
+          "message": "処理後のリモートファイルのターゲットテンプレート"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "正規表現オプションのビットフィールド（`1` = 大文字/小文字を無視、`2` = 改行コードを通常の文字として扱う）。`regex` が `true` でない場合は無視されます"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "正規表現オプション"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "正規表現オプションのビットフィールド"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.desc": {
+          "source": "The template for temporary filenames; use `%s` for the original filename",
+          "message": "一時ファイル名のテンプレート。元のファイル名には `%s` を使用します"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.display_name": {
+          "source": "Temporary Filename Template",
+          "message": "一時ファイル名テンプレート"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.short_desc": {
+          "source": "The template for temporary filenames",
+          "message": "一時ファイル名のテンプレート"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {
+          "source": "A file is uploaded to an FTP server",
+          "message": "ファイルが FTP サーバーにアップロードされます"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "FTP および FTPS でファイルを交換するための汎用 FTP サーバー"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP サーバー"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "FTP および FTPS でファイルを交換するための汎用 FTP サーバー"
+        }
+      }
+    }
+  }
+}

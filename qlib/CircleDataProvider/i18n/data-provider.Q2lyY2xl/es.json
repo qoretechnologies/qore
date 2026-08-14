@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Creates a new comment on a post in Circle",
+          "message": "Crea un nuevo comentario en una publicación de Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create a Comment",
+          "message": "Crear un comentario"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`",
+          "message": "El contenido del cuerpo del comentario en formato HTML. Ejemplo: `<p>Great post!</p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "Comment content",
+          "message": "Contenido del comentario"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.desc": {
+          "source": "The ID of the post to add the comment to",
+          "message": "El ID de la publicación a la que agregar el comentario"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.short_desc": {
+          "source": "Post to comment on",
+          "message": "Publicación en la que comentar"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Create a new comment",
+          "message": "Crear un nuevo comentario"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.desc": {
+          "source": "Creates a new post in a Circle space",
+          "message": "Crea una nueva publicación en un espacio de Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
+          "source": "Create a Post",
+          "message": "Crear una publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "El contenido del cuerpo de la publicación en formato HTML. Ejemplo: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Contenido de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post. Default: `True`",
+          "message": "Indica si se deben habilitar los comentarios en la publicación. Predeterminado: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Comentarios habilitados"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Habilitar comentarios en la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post. Default: `True`",
+          "message": "Indica si se debe habilitar la opción de «me gusta» en la publicación. Predeterminado: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "«Me gusta» habilitados"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Habilitar «me gusta» en la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Indica si se debe fijar la publicación en la parte superior de su espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Está fijado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Fijar publicación en la parte superior del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "El título de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Título de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent to members about this post",
+          "message": "Si es `True`, no se enviarán notificaciones a los miembros sobre esta publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Omitir notificaciones"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Omitir el envío de notificaciones"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to create the post in",
+          "message": "El ID del espacio donde crear la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to create the post in",
+          "message": "Espacio donde crear la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Borrador"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publicado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Programado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "El estado de publicación de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Estado de la publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`",
+          "message": "La fecha y hora para publicar la publicación en formato ISO 8601. Úselo con `status` establecido en `scheduled` para programar una publicación futura. Ejemplo: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Fecha de publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date for scheduling",
+          "message": "Fecha de publicación para programar"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
+          "source": "Create a new post",
+          "message": "Crear una nueva publicación"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Creates a new space in a Circle community",
+          "message": "Crea un nuevo espacio en una comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create a Space",
+          "message": "Crear un espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "Un emoji para usar como icono del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Icono de emoji del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Indica si el espacio está completamente oculto"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Está oculto"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Indica si el espacio está oculto"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Indica si el espacio está oculto para los usuarios que no son miembros del mismo"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Oculto para no miembros"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Indica si el espacio está oculto para no miembros"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Indica si las publicaciones de miembros están deshabilitadas en este espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Publicaciones deshabilitadas"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Indica si las publicaciones están deshabilitadas"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private. Default: `False`",
+          "message": "Indica si el espacio debe ser privado. Por defecto: `False`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Es privado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Indica si el espacio es privado"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "El nombre del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Nombre del espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOm1lbWJlcnM.display_name": {
+          "source": "Members",
+          "message": "Miembros"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Básico"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvdXJzZQ.display_name": {
+          "source": "Course",
+          "message": "Curso"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmV2ZW50.display_name": {
+          "source": "Event",
+          "message": "Evento"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmltYWdl.display_name": {
+          "source": "Image",
+          "message": "Imagen"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "The type of space to create",
+          "message": "El tipo de espacio a crear"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "Tipo de espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Type of space",
+          "message": "Tipo de espacio"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new space",
+          "message": "Crear un nuevo espacio"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.desc": {
+          "source": "Adds a member to a certain space in Circle",
+          "message": "Añade un miembro a un espacio determinado en Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
+          "source": "Add a Member to a Space",
+          "message": "Añadir un miembro a un espacio"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space",
+          "message": "La dirección de correo electrónico del miembro que se añadirá al espacio"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "Dirección de correo electrónico del miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to add the member to",
+          "message": "El ID del espacio al que añadir el miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to add the member to",
+          "message": "Espacio al que añadir el miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
+          "source": "Add a member to a certain space",
+          "message": "Añadir un miembro a un espacio determinado"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.desc": {
+          "source": "Adds a member to a specific space group in Circle",
+          "message": "Añade un miembro a un grupo de espacios específico en Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
+          "source": "Add a Member to a Space Group",
+          "message": "Añadir un miembro a un grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space group",
+          "message": "La dirección de correo electrónico del miembro que se añadirá al grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "Dirección de correo electrónico del miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to add the member to",
+          "message": "El ID del grupo de espacios al que añadir el miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "ID del grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to add the member to",
+          "message": "Grupo de espacios al que añadir el miembro"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
+          "source": "Add a member to a specific space group",
+          "message": "Añadir un miembro a un grupo de espacios específico"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.desc": {
+          "source": "Retrieve a single community by its ID",
+          "message": "Recuperar una sola comunidad por su ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
+          "source": "Get a Community",
+          "message": "Obtener una comunidad"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID de la comunidad"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.short_desc": {
+          "source": "The community ID",
+          "message": "El ID de la comunidad"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
+          "source": "Retrieve a specific community",
+          "message": "Recuperar una comunidad específica"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.desc": {
+          "source": "Retrieve a single comment by its ID",
+          "message": "Recuperar un solo comentario por su ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
+          "source": "Get a Comment",
+          "message": "Obtener un comentario"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID de comentario"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "The comment ID",
+          "message": "El ID del comentario"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
+          "source": "Retrieve a specific comment",
+          "message": "Recuperar un comentario específico"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieve a single post by its ID",
+          "message": "Recuperar una sola publicación por su ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get a Post",
+          "message": "Obtener una publicación"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.short_desc": {
+          "source": "The post ID",
+          "message": "El ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a specific post",
+          "message": "Recuperar una publicación específica"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve a single space by its ID",
+          "message": "Recuperar un solo espacio por su ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get a Space",
+          "message": "Obtener un espacio"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.short_desc": {
+          "source": "The space ID",
+          "message": "El ID del espacio"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Retrieve a specific space",
+          "message": "Obtener un espacio específico"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.desc": {
+          "source": "Permanently deletes a comment from Circle",
+          "message": "Elimina permanentemente un comentario de Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
+          "source": "Delete a Comment",
+          "message": "Eliminar un comentario"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the comment to delete",
+          "message": "El identificador único del comentario a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID de comentario"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "ID of the comment to delete",
+          "message": "ID del comentario a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Delete a specific comment",
+          "message": "Eliminar un comentario específico"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Permanently deletes a post from Circle",
+          "message": "Elimina permanentemente una publicación de Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete a Post",
+          "message": "Eliminar una publicación"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to delete",
+          "message": "El identificador único de la publicación a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to delete",
+          "message": "ID de la publicación a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a specific post",
+          "message": "Eliminar una publicación específica"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Permanently deletes a space from Circle",
+          "message": "Elimina permanentemente un espacio de Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete a Space",
+          "message": "Eliminar un espacio"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to delete",
+          "message": "El identificador único del espacio a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to delete",
+          "message": "ID del espacio a eliminar"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a specific space",
+          "message": "Eliminar un espacio específico"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.desc": {
+          "source": "Invites a member to a Circle community by email",
+          "message": "Invita a un miembro a una comunidad de Circle por correo electrónico"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
+          "source": "Invite a Member",
+          "message": "Invitar a un miembro"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the person to invite to the community",
+          "message": "La dirección de correo electrónico de la persona a invitar a la comunidad"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.short_desc": {
+          "source": "Email address to invite",
+          "message": "Dirección de correo electrónico a invitar"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.desc": {
+          "source": "The headline or tagline for the member's profile",
+          "message": "El titular o lema para el perfil del miembro"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.display_name": {
+          "source": "Headline",
+          "message": "Titular"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.short_desc": {
+          "source": "Member headline",
+          "message": "Titular del miembro"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.desc": {
+          "source": "The name of the person being invited",
+          "message": "El nombre de la persona que se está invitando"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.short_desc": {
+          "source": "Member name",
+          "message": "Nombre del miembro"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.desc": {
+          "source": "If `True`, the member will be added without sending an invitation email",
+          "message": "Si es `True`, el miembro se añadirá sin enviar un correo electrónico de invitación"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.display_name": {
+          "source": "Skip Invitation",
+          "message": "Omitir invitación"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.short_desc": {
+          "source": "Skip sending the invitation email",
+          "message": "Omitir el envío del correo electrónico de invitación"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.desc": {
+          "source": "List of space IDs to add the member to upon invitation",
+          "message": "Lista de IDs de espacio a los que añadir al miembro tras la invitación"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.display_name": {
+          "source": "Space IDs",
+          "message": "IDs de espacio"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.short_desc": {
+          "source": "Spaces to add the member to",
+          "message": "Espacios a los que añadir al miembro"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
+          "source": "Invite a member to the community",
+          "message": "Invitar a un miembro a la comunidad"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "List comments with optional filtering by post",
+          "message": "Listar comentarios con filtrado opcional por publicación"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "Listar comentarios"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID de comentario"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific comment",
+          "message": "Obtener un comentario específico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.short_desc": {
+          "source": "Filter by post",
+          "message": "Filtrar por publicación"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List comments in the community",
+          "message": "Listar comentarios en la comunidad"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities accessible to the current API token",
+          "message": "Listar comunidades accesibles para el token de API actual"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "Listar comunidades"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID de la comunidad"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "Obtener una comunidad específica"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities in the account",
+          "message": "Listar comunidades en la cuenta"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.desc": {
+          "source": "List community members with optional filtering by email",
+          "message": "Listar miembros de la comunidad con filtrado opcional por correo electrónico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
+          "source": "List Members",
+          "message": "Listar miembros"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrar por correo electrónico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.short_desc": {
+          "source": "Get a specific member",
+          "message": "Obtener un miembro específico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Todos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.display_name": {
+          "source": "Inactive",
+          "message": "Inactivo"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by member status",
+          "message": "Filtrar por estado del miembro"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
+          "source": "List community members",
+          "message": "Listar miembros de la comunidad"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.desc": {
+          "source": "List posts in the community with optional filtering by space and status",
+          "message": "Listar publicaciones en la comunidad con filtrado opcional por espacio y estado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "Listar publicaciones"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.short_desc": {
+          "source": "Get a specific post",
+          "message": "Obtener una publicación específica"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Filter by space",
+          "message": "Filtrar por espacio"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Borrador"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publicado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Programado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrar por estado"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List posts in the community",
+          "message": "Listar publicaciones en la comunidad"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List spaces in the community with optional sorting",
+          "message": "Listar espacios en la comunidad con ordenación opcional"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "Listar espacios"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.short_desc": {
+          "source": "Get a specific space",
+          "message": "Obtener un espacio específico"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOm9sZGVzdA.display_name": {
+          "source": "Oldest",
+          "message": "Más antiguo"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Activo"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFscGhhYmV0aWNhbA.display_name": {
+          "source": "Alphabetical",
+          "message": "Alfabético"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhdGVzdF91cGRhdGVk.display_name": {
+          "source": "Latest Updated",
+          "message": "Actualizado más recientemente"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort Order",
+          "message": "Orden de clasificación"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Sort order for spaces",
+          "message": "Criterio de ordenación para los espacios"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List spaces in the community",
+          "message": "Listar espacios en la comunidad"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Circle** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUsa esta acción para endpoints que aún no estén disponibles como acciones de primer nivel en esta aplicación."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Circle",
+          "message": "Realizar una llamada personalizada a la API de Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.desc": {
+          "source": "Fires when a member accepts an invitation to the Circle community",
+          "message": "Se activa cuando un miembro acepta una invitación a la comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
+          "source": "Member Accepted an Invitation",
+          "message": "Miembro aceptó una invitación"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
+          "source": "Trigger when a member accepts an invitation",
+          "message": "Se activa cuando un miembro acepta una invitación"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.desc": {
+          "source": "Fires when a member is tagged in the Circle community",
+          "message": "Se activa cuando un miembro es etiquetado en la comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
+          "source": "Member Tagged",
+          "message": "Miembro etiquetado"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
+          "source": "Trigger when a member is tagged",
+          "message": "Se activa cuando un miembro es etiquetado"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.desc": {
+          "source": "Fires when new communities are created in Circle",
+          "message": "Se activa cuando se crean nuevas comunidades en Circle"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
+          "source": "New Community",
+          "message": "Nueva comunidad"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
+          "source": "Trigger when new communities are created",
+          "message": "Se activa cuando se crean nuevas comunidades"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.desc": {
+          "source": "Fires when new comments are posted in the Circle community",
+          "message": "Se activa cuando se publican nuevos comentarios en la comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
+          "source": "New Comment",
+          "message": "Nuevo comentario"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
+          "source": "Trigger when new comments are posted",
+          "message": "Se activa cuando se publican nuevos comentarios"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when new posts are created in the Circle community",
+          "message": "Se activa cuando se crean nuevas publicaciones en la comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "Nueva publicación"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Trigger when new posts are created",
+          "message": "Se activa cuando se crean nuevas publicaciones"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.desc": {
+          "source": "Fires when new spaces are created in the Circle community",
+          "message": "Se activa cuando se crean nuevos espacios en la comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
+          "source": "New Space",
+          "message": "Nuevo espacio"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
+          "source": "Trigger when new spaces are created",
+          "message": "Se activa cuando se crean nuevos espacios"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Sends a message to a specific user on behalf of the current user in Circle",
+          "message": "Envía un mensaje a un usuario específico en nombre del usuario actual en Circle"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "Enviar un mensaje"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The body content of the message",
+          "message": "El contenido del cuerpo del mensaje"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "Message content",
+          "message": "Contenido del mensaje"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.desc": {
+          "source": "The ID of the community member to send the message to",
+          "message": "El ID del miembro de la comunidad al que se enviará el mensaje"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.display_name": {
+          "source": "Recipient ID",
+          "message": "ID del destinatario"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.short_desc": {
+          "source": "ID of the message recipient",
+          "message": "ID del destinatario del mensaje"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to a specific user",
+          "message": "Enviar un mensaje a un usuario específico"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.desc": {
+          "source": "Removes a member from a Circle community",
+          "message": "Elimina a un miembro de una comunidad de Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
+          "source": "Remove a Member",
+          "message": "Eliminar a un miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to remove",
+          "message": "El identificador único del miembro de la comunidad que se va a eliminar"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to remove",
+          "message": "ID del miembro a eliminar"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
+          "source": "Remove a member from the community",
+          "message": "Eliminar a un miembro de la comunidad"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.desc": {
+          "source": "Removes a member from a space in Circle",
+          "message": "Elimina a un miembro de un espacio en Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
+          "source": "Remove a Member from a Space",
+          "message": "Eliminar a un miembro de un espacio"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space",
+          "message": "El ID del miembro de la comunidad que se va a eliminar del espacio"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Miembro a eliminar"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to remove the member from",
+          "message": "El ID del espacio del que se eliminará al miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to remove the member from",
+          "message": "Espacio del que se eliminará al miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
+          "source": "Remove a member from a space",
+          "message": "Eliminar a un miembro de un espacio"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.desc": {
+          "source": "Removes a member from a space group in Circle",
+          "message": "Elimina a un miembro de un grupo de espacios en Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
+          "source": "Remove a Member from a Space Group",
+          "message": "Eliminar a un miembro de un grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space group",
+          "message": "El ID del miembro de la comunidad que se va a eliminar del grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Miembro a eliminar"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to remove the member from",
+          "message": "El ID del grupo de espacios del que se eliminará al miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "ID del grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to remove the member from",
+          "message": "Grupo de espacios del que se eliminará al miembro"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
+          "source": "Remove a member from a space group",
+          "message": "Eliminar a un miembro de un grupo de espacios"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.desc": {
+          "source": "Tags a specific community member in Circle",
+          "message": "Etiqueta a un miembro específico de la comunidad en Circle"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
+          "source": "Tag a Member",
+          "message": "Etiquetar a un miembro"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to tag",
+          "message": "El identificador único del miembro de la comunidad que se va a etiquetar"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to tag",
+          "message": "ID del miembro a etiquetar"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.desc": {
+          "source": "The tag to apply to the member",
+          "message": "La etiqueta que se aplicará al miembro"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Etiqueta"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.short_desc": {
+          "source": "Tag name",
+          "message": "Nombre de la etiqueta"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
+          "source": "Tag a specific member",
+          "message": "Etiquetar a un miembro específico"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.desc": {
+          "source": "Removes a tag from a specific community member in Circle",
+          "message": "Elimina una etiqueta de un miembro específico de la comunidad en Circle"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
+          "source": "Untag a Member",
+          "message": "Desetiquetar a un miembro"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to untag",
+          "message": "El identificador único del miembro de la comunidad que se va a desetiquetar"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID del miembro"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.short_desc": {
+          "source": "ID of the member to untag",
+          "message": "ID del miembro a desetiquetar"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to remove from the member",
+          "message": "El ID de la etiqueta que se va a eliminar del miembro"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de etiqueta"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.short_desc": {
+          "source": "ID of the tag to remove",
+          "message": "ID de la etiqueta a eliminar"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
+          "source": "Untag a specific member",
+          "message": "Desetiquetar a un miembro específico"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Updates an existing post in Circle",
+          "message": "Actualiza una publicación existente en Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update a Post",
+          "message": "Actualizar una publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "El contenido del cuerpo de la publicación en formato HTML. Ejemplo: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Contenido de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to update",
+          "message": "El identificador único de la publicación a actualizar"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to update",
+          "message": "ID de la publicación a actualizar"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.desc": {
+          "source": "Whether to close comments on the post",
+          "message": "Indica si se deben cerrar los comentarios en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.display_name": {
+          "source": "Comments Closed",
+          "message": "Comentarios cerrados"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.short_desc": {
+          "source": "Close comments on the post",
+          "message": "Cerrar comentarios en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post",
+          "message": "Indica si se deben habilitar los comentarios en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Comentarios habilitados"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Habilitar comentarios en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post",
+          "message": "Indica si se deben habilitar las reacciones de Me gusta en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "«Me gusta» habilitados"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Habilitar «me gusta» en la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Indica si se debe fijar la publicación en la parte superior de su espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Está fijado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Fijar publicación en la parte superior del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "El título de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Título de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent about this update",
+          "message": "Si es `True`, no se enviarán notificaciones sobre esta actualización"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Omitir notificaciones"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Omitir el envío de notificaciones"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Borrador"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publicado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Programado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "El estado de publicación de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Estado de la publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`",
+          "message": "La fecha y hora para publicar la publicación en formato ISO 8601. Ejemplo: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Fecha de publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date",
+          "message": "Fecha de publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Update an existing post",
+          "message": "Actualizar una publicación existente"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Updates an existing space in Circle",
+          "message": "Actualiza un espacio existente en Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update a Space",
+          "message": "Actualizar un espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "Un emoji para usar como icono del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Icono de emoji del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.desc": {
+          "source": "Whether to hide this space from featured areas in the community",
+          "message": "Indica si se debe ocultar este espacio de las áreas destacadas de la comunidad"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.display_name": {
+          "source": "Hide from Featured Areas",
+          "message": "Ocultar de áreas destacadas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.short_desc": {
+          "source": "Whether to hide from featured areas",
+          "message": "Indica si se debe ocultar de las áreas destacadas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.desc": {
+          "source": "Whether to hide post settings in this space",
+          "message": "Indica si se deben ocultar los ajustes de publicación en este espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.display_name": {
+          "source": "Hide Post Settings",
+          "message": "Ocultar ajustes de publicación"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.short_desc": {
+          "source": "Whether post settings are hidden",
+          "message": "Indica si los ajustes de publicación están ocultos"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to update",
+          "message": "El identificador único del espacio que se va a actualizar"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to update",
+          "message": "ID del espacio a actualizar"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Indica si el espacio está completamente oculto"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Está oculto"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Indica si el espacio está oculto"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Indica si el espacio está oculto para los usuarios que no son miembros del mismo"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Oculto para no miembros"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Indica si el espacio está oculto para no miembros"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Indica si las publicaciones de miembros están deshabilitadas en este espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Publicaciones deshabilitadas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Indica si las publicaciones están deshabilitadas"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private",
+          "message": "Indica si el espacio debe ser privado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Es privado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Indica si el espacio es privado"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "El nombre del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Nombre del espacio"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update an existing space",
+          "message": "Actualizar un espacio existente"
+        },
+        "app.Q2lyY2xl.desc": {
+          "source": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging.",
+          "message": "Circle es una plataforma comunitaria para gestionar publicaciones, comentarios, miembros, espacios, eventos y mensajería.\n\nEsta integración permite crear y gestionar contenido comunitario, gestión de miembros, pertenencia a espacios, etiquetado y mensajería directa."
+        },
+        "app.Q2lyY2xl.display_name": {
+          "source": "Circle",
+          "message": "Circle"
+        },
+        "app.Q2lyY2xl.short_desc": {
+          "source": "Circle community platform",
+          "message": "Plataforma comunitaria Circle"
+        }
+      }
+    }
+  }
+}

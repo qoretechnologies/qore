@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q29ja3JvYWNoREI.desc": {
+          "source": "Create and manage connections to a CockroachDB distributed SQL database",
+          "message": "CockroachDB 分散 SQL データベースへの接続を作成および管理"
+        },
+        "app.Q29ja3JvYWNoREI.display_name": {
+          "source": "CockroachDB",
+          "message": "CockroachDB"
+        },
+        "app.Q29ja3JvYWNoREI.short_desc": {
+          "source": "CockroachDB distributed SQL database",
+          "message": "CockroachDB 分散 SQL データベース"
+        }
+      }
+    }
+  }
+}

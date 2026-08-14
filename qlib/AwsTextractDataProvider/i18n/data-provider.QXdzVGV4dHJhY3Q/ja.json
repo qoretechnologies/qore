@@ -1,0 +1,533 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
+          "message": "Textract の `AnalyzeDocument` API を呼び出して、テキストと構造的特徴を抽出します。`feature_types` で抽出する特徴を選択します — `TABLES`、`FORMS`、`SIGNATURES`、`LAYOUT`、`QUERIES` のうち少なくとも 1 つを渡してください。\n\n`QUERIES` が含まれている場合は、`queries` リストも渡してください — 各クエリには問い合わせる質問を含む `Text` フィールドがあります。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "ドキュメントの分析"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  See `AwsTextractDetectDocumentTextRequestDataType.document_bytes` for source-selection rules.",
+          "message": "ドキュメントの生バイトデータ。ソース選択ルールについては `AwsTextractDetectDocumentTextRequestDataType.document_bytes` を参照してください。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "ドキュメントバイト"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "ドキュメントの生バイトデータ (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.",
+          "message": "ローカルファイルパス。ファイルが読み取られ、`Bytes` としてアップロードされます。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "ドキュメントパス"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "バイトとして読み取ってアップロードするローカルファイルパス"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms (key/value pairs)",
+          "message": "フォーム (キー/値のペア)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout (titles, headers, paragraphs)",
+          "message": "レイアウト (タイトル、ヘッダー、段落)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries (ask questions of the document)",
+          "message": "クエリ (ドキュメントに対する質問)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "署名"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "テーブル"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.desc": {
+          "source": "Which structural features to extract.  Pass at least one.",
+          "message": "抽出する構造的特徴。少なくとも 1 つ渡してください。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.display_name": {
+          "source": "Feature Types",
+          "message": "機能タイプ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.short_desc": {
+          "source": "Which structural features to extract (list)",
+          "message": "抽出する構造的特徴 (リスト)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "`QUERIES` が `feature_types` に含まれる場合のクエリオブジェクトのリスト。各クエリには `Text` フィールド (問い合わせる質問) に加えて、オプションの `Alias` および `Pages` フィルターがあります。\n\n**例**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "クエリ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with `QUERIES` feature)",
+          "message": "ドキュメントに問い合わせるカスタムクエリ (`QUERIES` 機能を使用)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.",
+          "message": "ドキュメントを含む S3 バケットの名前。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "S3 バケット"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "ドキュメントを含む S3 バケット"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "S3 オブジェクトキー (バケット内のパス)。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "S3 オブジェクト名"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key",
+          "message": "S3 オブジェクトキー"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "バージョニングされたバケットのオプションの S3 オブジェクトバージョン ID。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "S3 オブジェクトバージョン"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "オプションの S3 オブジェクトバージョン ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Extract text + tables/forms/signatures/queries from a document",
+          "message": "ドキュメントからテキスト + 表/フォーム/署名/クエリを抽出します"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
+          "message": "Textract の `DetectDocumentText` API を呼び出して、単一ページまたは複数ページのドキュメントのテキストコンテンツを抽出します。テキスト、信頼度、バウンディングボックスのジオメトリを含む `Block` オブジェクト (`PAGE`、`LINE`、`WORD`) のリストを返します。\n\n次のいずれかの方法でドキュメントを渡します:\n- `document_bytes` — 生バイトデータ (PNG / JPEG / PDF / TIFF、最大 10 MB)\n- `document_path` — ローカルファイルパス (バイトとして読み取られてアップロード)\n- `s3_bucket` + `s3_name` — S3 オブジェクト参照 (サイズ制限なし)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
+          "source": "Detect Document Text",
+          "message": "ドキュメントテキストの検出"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  Supported formats: PNG, JPEG, PDF, TIFF.  Maximum 10 MB for sync calls.  Mutually exclusive with `document_path` and the `s3_*` fields.",
+          "message": "ドキュメントの生バイト。サポートされている形式: PNG、JPEG、PDF、TIFF。同期呼び出しの場合は最大 10 MB。`document_path` および `s3_*` フィールドとは相互排他です。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "ドキュメントバイト"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "ドキュメントの生バイトデータ (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.  Mutually exclusive with `document_bytes` and the `s3_*` fields.",
+          "message": "ローカルファイルパス。ファイルが読み込まれ、`Bytes` としてアップロードされます。`document_bytes` および `s3_*` フィールドとは相互排他です。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "ドキュメントパス"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "バイトとして読み取ってアップロードするローカルファイルパス"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.  Use together with `s3_name`.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "ドキュメントを含む S3 バケットの名前。`s3_name` と一緒に使用します。`document_bytes` および `document_path` とは相互排他です。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "S3 バケット"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "ドキュメントを含む S3 バケット"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "S3 オブジェクトキー (バケット内のパス)。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "S3 オブジェクト名"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key (path within the bucket)",
+          "message": "S3 オブジェクトキー (バケット内のパス)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "バージョニングされたバケットのオプションの S3 オブジェクトバージョン ID。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "S3 オブジェクトバージョン"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "オプションの S3 オブジェクトバージョン ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
+          "source": "Extract raw text from a document (no structure)",
+          "message": "ドキュメントから未加工のテキストを抽出 (構造なし)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Textract** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**AWS Textract** へのカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス (接続の API ベース URL に対する相対パス)、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Textract",
+          "message": "AWS Textract へのカスタム API 呼び出しを実行"
+        },
+        "app.QXdzVGV4dHJhY3Q.desc": {
+          "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
+          "message": "[AWS Textract](https://aws.amazon.com/textract/) へのアクセスを提供します — スキャンされたドキュメントや PDF からテキスト、構造、回答を抽出するためのマネージドドキュメント AI サービスです。\n\n**一般的なユースケース**:\n- **請求書および領収書の解析**: `FORMS` 機能を使用してフォームからキー/値のペアを抽出\n- **テーブル抽出**: `TABLES` 機能を使用してスキャンされたテーブルから構造化された行と列を抽出\n- **ドキュメント Q&A**: `QUERIES` 機能を使用してドキュメントに対して特定の質問を実行 (例:「合計はいくらですか？」)\n- **署名検出**: `SIGNATURES` 機能を使用して契約書内の手書き署名を検出\n- **レイアウトを保持した OCR**: `LAYOUT` 機能を使用して段落、タイトル、ヘッダー、フッターごとにグループ化されたテキストを抽出"
+        },
+        "app.QXdzVGV4dHJhY3Q.display_name": {
+          "source": "AWS Textract",
+          "message": "AWS Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.short_desc": {
+          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
+          "message": "AWS Textract ドキュメント AI (OCR + レイアウト + テーブル + フォーム + クエリ)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.WGVybw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Vytvorí nové záznamy v danej tabuľke"
+        },
+        "app.WGVybw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Vytvoriť záznamy"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` alebo `project-tasks`"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.WGVybw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Vytvoriť nové záznamy v danej tabuľke"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.desc": {
+          "source": "Applies a credit note to one or more invoices.\n\n`Allocations` is an **array** even for one allocation, and each names the `Invoice` it applies to and the `Amount` applied. The credit note has to have enough remaining credit, and the invoice has to be `AUTHORISED`.",
+          "message": "Aplikuje dobropis na jednu alebo viac faktúr.\n\n`Allocations` je **pole** aj pre jednu alokáciu a každá uvádza `Invoice`, na ktorú sa vzťahuje, a aplikovanú `Amount`. Dobropis musí mať dostatočný zostávajúci kredit a faktúra musí byť `AUTHORISED`."
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
+          "source": "Allocate Credit Note",
+          "message": "Alokovať dobropis"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "Jedinečný identifikátor dobropisu"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.display_name": {
+          "source": "Credit Note",
+          "message": "Dobropis"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.short_desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "Jedinečný identifikátor dobropisu"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.display_name": {
+          "source": "Allocations",
+          "message": "Alokácie"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.short_desc": {
+          "source": "The invoices to apply the credit to, and how much to each",
+          "message": "Faktúry, na ktoré sa má kredit uplatniť, a suma pre každú z nich"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
+          "source": "Apply a credit note to an invoice",
+          "message": "Uplatniť dobropis na faktúru"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Adds a note to an invoice's history.\n\n`HistoryRecords` is an **array** even for one note, and the note itself is its `Details` property.",
+          "message": "Pridá poznámku do histórie faktúry.\n\n`HistoryRecords` je **pole** aj pre jednu poznámku a samotná poznámka je jej vlastnosť `Details`."
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Add Note to Invoice",
+          "message": "Pridať poznámku k faktúre"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.short_desc": {
+          "source": "The notes to record; each one's text is its \"Details\"",
+          "message": "Poznámky na zaznamenanie; textom každej z nich je hodnota „Details“"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Jedinečný identifikátor faktúry"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Faktúra"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "Faktúra, na ktorú sa toto vzťahuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Record a note against an invoice",
+          "message": "Zaznamenať poznámku k faktúre"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.desc": {
+          "source": "Records a payment.\n\nUnlike most of the accounting API this takes **one** payment rather than an envelope of them. It needs the `Invoice` it pays, the `Account` it is paid from or into, an `Amount` and a `Date`.\n\nThe account has to be one that allows payments - a bank account, in practice - and the invoice has to be `AUTHORISED`.",
+          "message": "Zaznamená platbu.\n\nNa rozdiel od väčšiny účtovného API toto prijíma **jednu** platbu namiesto ich obálky. Vyžaduje `Invoice`, ktorú platí, `Account`, z ktorého alebo na ktorý sa platí, `Amount` a `Date`.\n\nÚčet musí byť taký, ktorý umožňuje platby – v praxi bankový účet – a faktúra musí byť `AUTHORISED`."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.display_name": {
+          "source": "Create Payment",
+          "message": "Vytvoriť platbu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.desc": {
+          "source": "Code of account you are using to make the payment e.g. 001 (note- not all accounts have a code value)",
+          "message": "Kód účtu, ktorý používate na uskutočnenie platby, napr. 001 (poznámka – nie všetky účty majú hodnotu kódu)"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.display_name": {
+          "source": "Code",
+          "message": "Kód"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
+          "source": "Code of account you are using to make the payment e",
+          "message": "Kód účtu, ktorý používate na uskutočnenie platby, napr"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
+          "source": "Credit Note",
+          "message": "Dobropis"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.short_desc": {
+          "source": "The credit note being paid, instead of an invoice",
+          "message": "Zaplatený dobropis namiesto faktúry"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr. INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
+          "source": "Credit Note Number",
+          "message": "Číslo dobropisu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
+          "message": "Výmenný kurz pri prijatí platby. Používa sa len pre faktúry a dobropisy v inej ako základnej mene, napr. 0.7500"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "Kurz meny"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate when payment is received",
+          "message": "Výmenný kurz pri prijatí platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The amount of the payment. Must be less than or equal to the outstanding amount owing on the invoice e.g. 200.00",
+          "message": "Suma platby. Musí byť menšia alebo rovná neuhradenej sume na faktúre, napr. 200.00"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "The amount of the payment",
+          "message": "Suma platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Účet"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "The account the payment is made from or into",
+          "message": "Účet, z ktorého alebo na ktorý sa platba uskutočňuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50.display_name": {
+          "source": "Batch Payment",
+          "message": "Hromadná platba"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.desc": {
+          "source": "Present if the payment was created as part of a batch.",
+          "message": "Prítomné, ak bola platba vytvorená ako súčasť dávky."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.display_name": {
+          "source": "Batch Payment ID",
+          "message": "ID hromadnej platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.short_desc": {
+          "source": "Present if the payment was created as part of a batch",
+          "message": "Prítomné, ak bola platba vytvorená ako súčasť dávky"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Číslo bankového účtu dodávateľa, na ktorý sa platba uskutočňuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.display_name": {
+          "source": "Bank Account Number",
+          "message": "Číslo bankového účtu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Číslo bankového účtu dodávateľa, na ktorý sa platba uskutočňuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.desc": {
+          "source": "The amount of the payment in the currency of the bank account.",
+          "message": "Suma platby v mene bankového účtu."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.display_name": {
+          "source": "Bank Amount",
+          "message": "Suma na bankovom účte"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.short_desc": {
+          "source": "The amount of the payment in the currency of the bank account",
+          "message": "Suma platby v mene bankového účtu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "Dátum uskutočnenia platby (YYYY-MM-DD), napr. 2009-09-06"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Dátum"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e",
+          "message": "Dátum vykonania platby (YYYY-MM-DD) e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "Informácie, ktoré sa majú zobraziť na bankovom účte dodávateľa"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "Podrobnosti"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.short_desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "Informácie, ktoré sa majú zobraziť na bankovom účte dodávateľa"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.display_name": {
+          "source": "Invoice",
+          "message": "Faktúra"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.short_desc": {
+          "source": "The invoice being paid",
+          "message": "Faktúra, ktorá sa uhrádza"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr. INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
+          "source": "Invoice Number",
+          "message": "Číslo faktúry"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
+          "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
+          "message": "Voliteľný parameter pre platbu. Boolovská hodnota určujúca, či chcete, aby bola platba pri použití PUT vytvorená ako zosúladená, alebo či bola platba zosúladená pri použití GET"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.display_name": {
+          "source": "Is Reconciled",
+          "message": "Je zosúladené"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.short_desc": {
+          "source": "An optional parameter for the payment",
+          "message": "Voliteľný parameter pre platbu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.T3ZlcnBheW1lbnQ.display_name": {
+          "source": "Overpayment",
+          "message": "Preplatok"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.desc": {
+          "source": "The status of the payment.",
+          "message": "Stav platby."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.short_desc": {
+          "source": "The status of the payment",
+          "message": "Stav platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "Identifikátor Xero pre platbu, napr. 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The Xero identifier for an Payment e",
+          "message": "Identifikátor Xero pre platbu e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
+          "source": "ACCPAYPAYMENT",
+          "message": "ACCPAYPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1JFQ1BBWU1FTlQ.display_name": {
+          "source": "ACCRECPAYMENT",
+          "message": "ACCRECPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "APCREDITPAYMENT",
+          "message": "APCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQT1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "APOVERPAYMENTPAYMENT",
+          "message": "APOVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "APPREPAYMENTPAYMENT",
+          "message": "APPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "ARCREDITPAYMENT",
+          "message": "ARCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFST1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "AROVERPAYMENTPAYMENT",
+          "message": "AROVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "ARPREPAYMENTPAYMENT",
+          "message": "ARPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.desc": {
+          "source": "See Payment Types.",
+          "message": "Pozrite si typy platieb."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "Typ platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.short_desc": {
+          "source": "See Payment Types",
+          "message": "Pozrite si typy platieb"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Číslo bankového účtu dodávateľa, na ktorý sa platba uskutočňuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.display_name": {
+          "source": "Particulars",
+          "message": "Podrobnosti"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Číslo bankového účtu dodávateľa, na ktorý sa platba uskutočňuje"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UHJlcGF5bWVudA.display_name": {
+          "source": "Prepayment",
+          "message": "Platba vopred"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "Voliteľný popis platby, napr. Direct Debit"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Referencia"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "An optional description for the payment e",
+          "message": "Voliteľný popis platby e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
+          "source": "Record a payment against an invoice",
+          "message": "Zaznamenať platbu k faktúre"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.desc": {
+          "source": "Creates a project.\n\n`contactId` and `name` are required; `estimateAmount` and `deadlineUtc` are the budget and the due date.",
+          "message": "Vytvorí projekt.\n\n`contactId` a `name` sú povinné; `estimateAmount` a `deadlineUtc` predstavujú rozpočet a termín dokončenia."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.display_name": {
+          "source": "Create Project",
+          "message": "Vytvoriť projekt"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.desc": {
+          "source": "Identifier of the contact this project was created for.",
+          "message": "Identifikátor kontaktu, pre ktorý bol tento projekt vytvorený."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact the project is for",
+          "message": "Kontakt, pre ktorý je projekt určený"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.desc": {
+          "source": "Deadline for the project. UTC Date Time in ISO-8601 format.",
+          "message": "Termín dokončenia projektu. Dátum a čas UTC vo formáte ISO-8601."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
+          "source": "Deadline Utc",
+          "message": "Deadline Utc"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
+          "source": "Deadline for the project",
+          "message": "Termín dokončenia projektu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZXN0aW1hdGVBbW91bnQ.display_name": {
+          "source": "Estimate Amount",
+          "message": "Odhadovaná suma"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.desc": {
+          "source": "Name of the project.",
+          "message": "Názov projektu."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.short_desc": {
+          "source": "Name of the project",
+          "message": "Názov projektu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.short_desc": {
+          "source": "Create a project for a contact",
+          "message": "Vytvoriť projekt pre kontakt"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.desc": {
+          "source": "Creates a task in a project.\n\n`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a `TIME` task needs a `rate`.",
+          "message": "Vytvorí úlohu v projekte.\n\n`chargeType` určuje spôsob účtovania – `TIME`, `FIXED` alebo `NON_CHARGEABLE` – a úloha typu `TIME` vyžaduje `rate`."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
+          "source": "Create Task",
+          "message": "Vytvoriť úlohu"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "Môže byť `TIME`, `FIXED` alebo `NON_CHARGEABLE`, definuje spôsob účtovania úlohy. Použite `TIME`, ak chcete účtovať hodinovú sadzbu, a `FIXED`, ak chcete účtovať pevnú sumu. Ak úloha nebude účtovaná, použite `NON_CHARGEABLE`."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "Typ účtovania"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', definuje, ako sa bude úloha účtovať"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.desc": {
+          "source": "An estimated time to perform the task",
+          "message": "Odhadovaný čas na vykonanie úlohy"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.display_name": {
+          "source": "Estimate Minutes",
+          "message": "Odhadované minúty"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.short_desc": {
+          "source": "An estimated time to perform the task",
+          "message": "Odhadovaný čas na vykonanie úlohy"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.desc": {
+          "source": "Name of the task. Max length 100 characters.",
+          "message": "Názov úlohy. Maximálna dĺžka 100 znakov."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.short_desc": {
+          "source": "Name of the task",
+          "message": "Názov úlohy"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Jednotlivý projekt môžete špecifikovať pripojením projectId k endpointu"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Jednotlivý projekt môžete špecifikovať pripojením projectId k endpointu"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Sadzba"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
+          "source": "Add a task to a project",
+          "message": "Pridať úlohu do projektu"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.desc": {
+          "source": "Lists contacts - customers, suppliers and everyone else in the address book.\n\n`where` filters with Xero's expression language: `IsCustomer==true`, `Name.StartsWith(\"Acme\")`. `IDs` takes a **comma-separated** list of contact IDs rather than a list.\n\nThe response is `{Contacts: [...]}`.",
+          "message": "Zobrazí zoznam kontaktov – zákazníkov, dodávateľov a všetkých ostatných v adresári.\n\n`where` filtruje pomocou výrazového jazyka Xero: `IsCustomer==true`, `Name.StartsWith(\"Acme\")`. `IDs` prijíma zoznam ID kontaktov **oddelených čiarkou** namiesto zoznamu.\n\nOdpoveďou je `{Contacts: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.display_name": {
+          "source": "Find Contacts",
+          "message": "Nájsť kontakty"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "Filtrovanie podľa zoznamu ContactID oddelených čiarkou. Umožňuje získať konkrétnu skupinu kontaktov v jednom volaní."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.display_name": {
+          "source": "Contact IDs",
+          "message": "ID kontaktov"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "Zoznam ID kontaktov oddelených čiarkou"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "napr. includeArchived=true – kontakty so stavom ARCHIVED budú zahrnuté v odpovedi"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "Zahrnúť archivované"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "Vyhľadávací parameter, ktorý vykonáva textové vyhľadávanie bez rozlišovania veľkých a malých písmen v poliach Name, FirstName, LastName, ContactNumber a EmailAddress."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "Hľadaný výraz"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "Vyhľadávací parameter, ktorý vykonáva textové vyhľadávanie bez rozlišovania veľkých a malých písmen v poliach Name, FirstName, LastName, ContactNumber a EmailAddress"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede. Vrátia sa iba ľahké polia bez polí náročných na výpočet, vďaka čomu sú volania API rýchle a efektívne."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "Iba súhrn"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.short_desc": {
+          "source": "List the contacts in the organisation",
+          "message": "Zoznam kontaktov v organizácii"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.desc": {
+          "source": "Lists credit notes.\n\nThis is exported so that the credit note dropdown and the **New Credit Note** event have something to read; the application this module replaces offered both without exporting the endpoint behind them.\n\nThe response is `{CreditNotes: [...]}`.",
+          "message": "Zobrazí dobropisy.\n\nToto sa exportuje, aby rozbaľovací zoznam dobropisov a udalosť **New Credit Note** mali z čoho čítať; aplikácia, ktorú tento modul nahrádza, ponúkala oboje bez exportovania koncového bodu za nimi.\n\nOdpoveď je `{CreditNotes: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.display_name": {
+          "source": "Find Credit Notes",
+          "message": "Nájsť dobropisy"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
+          "source": "List the credit notes in the organisation",
+          "message": "Zoznam dobropisov v organizácii"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.desc": {
+          "source": "Lists the chart of accounts with each account's code, name, type and tax type.\n\nThis is what backs the account, account-code and bank-account dropdowns; the application this module replaces offered all three without exporting the endpoint that fills them. `Type==\"BANK\"` narrows it to bank accounts.\n\nThe response is `{Accounts: [...]}`.",
+          "message": "Zobrazí účtový rozvrh s kódom, názvom, typom a daňovým typom každého účtu.\n\nToto slúži ako podklad pre rozbaľovacie zoznamy účtov, kódov účtov a bankových účtov; aplikácia, ktorú tento modul nahrádza, ponúkala všetky tri bez exportovania koncového bodu, ktorý ich napĺňa. `Type==\"BANK\"` zužuje výber na bankové účty.\n\nOdpoveď je `{Accounts: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.display_name": {
+          "source": "Find Accounts",
+          "message": "Nájsť účty"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.short_desc": {
+          "source": "List the chart of accounts",
+          "message": "Zoznam účtového rozvrhu"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.desc": {
+          "source": "Lists bank transactions - spend and receive money entries against a bank account.\n\nThis is exported so that the bank transaction dropdown and the **New Bank Transaction** event have something to read.\n\nThe response is `{BankTransactions: [...]}`.",
+          "message": "Zobrazí bankové transakcie – položky výdavkov a príjmov peňazí na bankovom účte.\n\nToto sa exportuje, aby rozbaľovací zoznam bankových transakcií a udalosť **New Bank Transaction** mali z čoho čítať.\n\nOdpoveď je `{BankTransactions: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Find Bank Transactions",
+          "message": "Nájsť bankové transakcie"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu hodnôt References"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "References"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.short_desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu hodnôt References"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "List the bank transactions in the organisation",
+          "message": "Zoznam bankových transakcií v organizácii"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.desc": {
+          "source": "Lists the employees in the organisation's payroll.\n\n**Which payroll API is used comes from the connection's `payroll_region`**, because Xero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe regions wrap the result differently - `{Employees: [...]}` in Australia and `{employees: [...], pagination}` in the other two - and this action returns the employees as a plain list either way.\n\nThe application this module replaces read employees through the accounting API, where they do not exist, so this never returned anything at all.",
+          "message": "Zobrazí zamestnancov vo mzdovej agende organizácie.\n\n**To, ktoré mzdové API sa použije, vychádza z `payroll_region` pripojenia**, pretože Xero nemá jednotné mzdové API: pre Austráliu slúži `payroll.xro/1.0` a pre Nový Zéland a Spojené kráľovstvo `payroll.xro/2.0`. Pripojenie bez nastaveného regiónu to nahlási namiesto toho, aby región odhadovalo.\n\nRegióny zabaľujú výsledok odlišne – `{Employees: [...]}` v Austrálii a `{employees: [...], pagination}` v ostatných dvoch – a táto akcia vráti zamestnancov v oboch prípadoch ako jednoduchý zoznam.\n\nAplikácia, ktorú tento modul nahrádza, načítavala zamestnancov cez účtovné API, kde neexistujú, takže toto nikdy nič nevrátilo."
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
+          "source": "Find Employees",
+          "message": "Nájsť zamestnancov"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
+          "source": "List the employees in the payroll organisation",
+          "message": "Zoznam zamestnancov v mzdovej organizácii"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Reads the history of an invoice: who changed it, when, and any notes recorded against it.",
+          "message": "Načíta históriu faktúry: kto ju zmenil, kedy a všetky poznámky, ktoré k nej boli zaznamenané."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Find Invoice History",
+          "message": "Nájsť históriu faktúry"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Jedinečný identifikátor faktúry"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Faktúra"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "Faktúra, na ktorú sa toto vzťahuje"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Read an invoice's history and notes",
+          "message": "Načítať históriu a poznámky faktúry"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.desc": {
+          "source": "Lists invoices.\n\n**Bills are invoices here**: `Type==\"ACCPAY\"` selects what Xero's UI calls a bill and `Type==\"ACCREC\"` a sales invoice, and without a filter both are returned.\n\n`IDs`, `InvoiceNumbers`, `ContactIDs` and `Statuses` each take a **comma-separated** list. The response is `{Invoices: [...]}`.",
+          "message": "Zobrazí faktúry.\n\n**Prijaté faktúry sú tu faktúrami**: `Type==\"ACCPAY\"` vyberá to, čo používateľské rozhranie Xero nazýva prijatou faktúrou, a `Type==\"ACCREC\"` vydanou faktúrou, a bez filtra sa vrátia obe.\n\n`IDs`, `InvoiceNumbers`, `ContactIDs` a `Statuses` prijímajú zoznam **oddelený čiarkami**. Odpoveď je `{Invoices: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.display_name": {
+          "source": "Find Invoices",
+          "message": "Nájsť faktúry"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.desc": {
+          "source": "Filter by a comma-separated list of ContactIDs.",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu ContactIDs."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.display_name": {
+          "source": "Contact IDs",
+          "message": "ID kontaktov"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "Zoznam ID kontaktov oddelených čiarkou"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "Filtrovanie podľa zoznamu ContactID oddelených čiarkou. Umožňuje získať konkrétnu skupinu kontaktov v jednom volaní."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.display_name": {
+          "source": "Invoice IDs",
+          "message": "ID faktúr"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.short_desc": {
+          "source": "A comma-separated list of invoice IDs",
+          "message": "Čiarkami oddelený zoznam ID faktúr"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers.",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu InvoiceNumbers."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.display_name": {
+          "source": "Invoice Numbers",
+          "message": "Čísla faktúr"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.short_desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu InvoiceNumbers"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.desc": {
+          "source": "Filter by a comma-separated list Statuses. For faster response times we recommend using these explicit parameters instead of passing OR conditions into the Where filter.",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu Statuses. Pre rýchlejšiu odozvu odporúčame použiť tieto explicitné parametre namiesto odovzdávania podmienok OR do filtra Where."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.display_name": {
+          "source": "Statuses",
+          "message": "Stavy"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.short_desc": {
+          "source": "Filter by a comma-separated list Statuses",
+          "message": "Filtrovať podľa čiarkami oddeleného zoznamu Statuses"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "Ak je nastavené na true, získate iba faktúry vytvorené vašou aplikáciou"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
+          "source": "Created By My App",
+          "message": "Created By My App"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "Ak je nastavené na true, získate iba faktúry vytvorené vašou aplikáciou"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "napr. includeArchived=true – kontakty so stavom ARCHIVED budú zahrnuté v odpovedi"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "Zahrnúť archivované"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "Vyhľadávací parameter, ktorý vykonáva textové vyhľadávanie bez rozlišovania veľkých a malých písmen v poliach Name, FirstName, LastName, ContactNumber a EmailAddress."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "Hľadaný výraz"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "Vyhľadávací parameter, ktorý vykonáva textové vyhľadávanie bez rozlišovania veľkých a malých písmen v poliach Name, FirstName, LastName, ContactNumber a EmailAddress"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede. Vrátia sa iba ľahké polia bez polí náročných na výpočet, vďaka čomu sú volania API rýchle a efektívne."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "Iba súhrn"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
+          "source": "List invoices and bills",
+          "message": "Zoznam faktúr a prijatých faktúr"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.desc": {
+          "source": "Lists inventory and service items with their codes, prices and accounts.\n\nThe response is `{Items: [...]}`.",
+          "message": "Zobrazí skladové položky a položky služieb s ich kódmi, cenami a účtami.\n\nOdpoveď je `{Items: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.display_name": {
+          "source": "Find Items",
+          "message": "Nájsť položky"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
+          "source": "List the items in the organisation",
+          "message": "Zoznam položiek v organizácii"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.desc": {
+          "source": "Lists payments made against invoices and credit notes.\n\nThis is exported so that the **New Payment** event has something to read: the application this module replaces polled payments without exporting any way to list one.\n\nThe response is `{Payments: [...]}`.",
+          "message": "Zobrazí platby vykonané k faktúram a dobropisom.\n\nToto sa exportuje, aby udalosť **New Payment** mala z čoho čítať: aplikácia, ktorú tento modul nahrádza, dopytovala platby bez exportovania možnosti ich vypísania.\n\nOdpoveď je `{Payments: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.display_name": {
+          "source": "Find Payments",
+          "message": "Nájsť platby"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.short_desc": {
+          "source": "List the payments in the organisation",
+          "message": "Zoznam platieb v organizácii"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.desc": {
+          "source": "Lists the users of the projects API - the people time can be recorded against.",
+          "message": "Zobrazí používateľov rozhrania Projects API – osoby, ku ktorým je možné evidovať čas."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.display_name": {
+          "source": "Find Project Users",
+          "message": "Nájsť používateľov projektov"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "predvolene nastavené na 1. Požadované číslo stránky v stránkovanej odpovedi – musí byť číslo väčšie ako 0."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.short_desc": {
+          "source": "List the users who can be assigned to project tasks",
+          "message": "Zoznam používateľov, ktorých možno priradiť k úlohám projektu"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.desc": {
+          "source": "Lists projects.\n\n`contactID` narrows the listing to one contact's projects and `states` to `INPROGRESS` or `CLOSED`.\n\nThe projects API answers `{items, pagination}` in `camelCase`, where the accounting API answers a `PascalCase` envelope named after the type.",
+          "message": "Zobrazí projekty.\n\n`contactID` zužuje zoznam na projekty jedného kontaktu a `states` na `INPROGRESS` alebo `CLOSED`.\n\nRozhranie Projects API vracia `{items, pagination}` v `camelCase`, zatiaľ čo Accounting API vracia obálku `PascalCase` pomenovanú podľa daného typu."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.display_name": {
+          "source": "Find Projects",
+          "message": "Nájsť projekty"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.desc": {
+          "source": "Filter for projects for a specific contact",
+          "message": "Filtrovať projekty pre konkrétny kontakt"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.short_desc": {
+          "source": "Return only this contact's projects",
+          "message": "Vrátiť iba projekty tohto kontaktu"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "Filtrovať projekty v konkrétnom stave (INPROGRESS alebo CLOSED)"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.display_name": {
+          "source": "States",
+          "message": "States"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.short_desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "Filtrovať projekty v konkrétnom stave (INPROGRESS alebo CLOSED)"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "predvolene nastavené na 1. Požadované číslo stránky v stránkovanej odpovedi – musí byť číslo väčšie ako 0."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.desc": {
+          "source": "Search for all projects that match a comma separated list of projectIds",
+          "message": "Vyhľadať všetky projekty, ktoré zodpovedajú čiarkami oddelenému zoznamu projectIds"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.display_name": {
+          "source": "Projects",
+          "message": "Projects"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.short_desc": {
+          "source": "Return only these projects",
+          "message": "Vrátiť iba tieto projekty"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.short_desc": {
+          "source": "List the projects in the organisation",
+          "message": "Zoznam projektov v organizácii"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.desc": {
+          "source": "Lists purchase orders.\n\n`Status` selects one state, and `DateFrom` and `DateTo` bound the listing by order date. Xero writes those two as calendar dates, so they take a date here and are sent as `YYYY-MM-DD`.\n\nThe response is `{PurchaseOrders: [...]}`.",
+          "message": "Zobrazí objednávky.\n\n`Status` vyberá jeden stav a `DateFrom` a `DateTo` ohraničujú výpis podľa dátumu objednávky. Xero tieto dva zapisuje ako kalendárne dátumy, takže tu prijímajú dátum a odosielajú sa ako `YYYY-MM-DD`.\n\nOdpoveď je `{PurchaseOrders: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.display_name": {
+          "source": "Find Purchase Orders",
+          "message": "Nájsť objednávky"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "Filtrovať podľa dátumu objednávky (napr. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nTáto hodnota sa odosiela ako kalendárny dátum zapísaný v tvare \"YYYY-MM-DD\"."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.display_name": {
+          "source": "Date From",
+          "message": "Dátum od"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.short_desc": {
+          "source": "Return only orders dated on or after this day",
+          "message": "Vrátiť iba objednávky s dátumom v tento deň alebo neskôr"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "Filtrovať podľa dátumu objednávky (napr. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nTáto hodnota sa odosiela ako kalendárny dátum zapísaný v tvare \"YYYY-MM-DD\"."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.display_name": {
+          "source": "Date To",
+          "message": "Dátum do"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.short_desc": {
+          "source": "Return only orders dated on or before this day",
+          "message": "Vrátiť iba objednávky s dátumom v tento deň alebo skôr"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Vráti iba záznamy vytvorené alebo zmenené od tohto času.\n\nToto umožňuje prírastkové načítavanie: bez toho každé volanie načíta celú kolekciu."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Upravené od"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Vrátiť iba záznamy vytvorené alebo zmenené od tohto času"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkJJTExFRA.display_name": {
+          "source": "BILLED",
+          "message": "BILLED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "DRAFT",
+          "message": "DRAFT"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOlNVQk1JVFRFRA.display_name": {
+          "source": "SUBMITTED",
+          "message": "ODOSLANÉ"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.desc": {
+          "source": "Filter by purchase order status",
+          "message": "Filtrovať podľa stavu objednávky"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "Filtrovať podľa stavu objednávky"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "napr. page=1 – V jednom volaní API sa vráti až 100 kontaktov."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.short_desc": {
+          "source": "List the purchase orders in the organisation",
+          "message": "Zoznam objednávok v organizácii"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.desc": {
+          "source": "Lists tax rates with the `TaxType` code a line item uses to name one.\n\nThis is what backs the tax type dropdown; the application this module replaces offered it without exporting the endpoint that fills it.\n\nThe response is `{TaxRates: [...]}`.",
+          "message": "Zobrazí zoznam daňových sadzieb s kódom `TaxType`, ktorý položka riadka používa na jej označenie.\n\nToto je podkladom pre rozbaľovací zoznam typov daní; aplikácia, ktorú tento modul nahrádza, to ponúkala bez exportovania koncového bodu, ktorý ho napĺňa.\n\nOdpoveď je `{TaxRates: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.display_name": {
+          "source": "Find Tax Rates",
+          "message": "Nájsť daňové sadzby"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Zoradiť podľa ľubovoľného prvku"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Pole, podľa ktorého sa má triediť, napr.: \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Filter vo vlastnom jazyku výrazov Xero, napr.: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nToto nie je SQL ani dopytový reťazec: reťazcové hodnoty sú v dvojitých úvodzovkách, GUID je zabalený v `guid(...)` a podmienky sú spojené pomocou `AND`."
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Výraz filtra Xero"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.short_desc": {
+          "source": "List the tax rates in the organisation",
+          "message": "Zoznam daňových sadzieb v organizácii"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.desc": {
+          "source": "Lists a project's tasks with their rates, charge types and estimates.",
+          "message": "Zobrazí zoznam úloh projektu s ich sadzbami, typmi poplatkov a odhadmi."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.display_name": {
+          "source": "Find Tasks",
+          "message": "Nájsť úlohy"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "Môže byť `TIME`, `FIXED` alebo `NON_CHARGEABLE`, definuje spôsob účtovania úlohy. Použite `TIME`, ak chcete účtovať hodinovú sadzbu, a `FIXED`, ak chcete účtovať pevnú sumu. Ak úloha nebude účtovaná, použite `NON_CHARGEABLE`."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "Typ účtovania"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', definuje, ako sa bude úloha účtovať"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.desc": {
+          "source": "Set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "Predvolene nastavené na 1. Požadované číslo stránky v stránkovanej odpovedi – musí byť číslo väčšie ako 0."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Ktorú stránku vrátiť, počítané od 1"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Predvolená hodnota v Xero je 100 a maximum je 1000."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Jednotlivý projekt môžete špecifikovať pripojením projectId k endpointu"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projekt"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Jednotlivý projekt môžete špecifikovať pripojením projectId k endpointu"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET https://.../tasks?taskIds={taskID},{taskID}",
+          "message": "Vyhľadať všetky úlohy zodpovedajúce čiarkami oddelenému zoznamu taskIds, t. j. GET https://.../tasks?taskIds={taskID},{taskID}"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.display_name": {
+          "source": "Task Ids",
+          "message": "ID úloh"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i",
+          "message": "Vyhľadať všetky úlohy zodpovedajúce čiarkami oddelenému zoznamu taskIds, t"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
+          "source": "List the tasks in a project",
+          "message": "Zoznam úloh v projekte"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.desc": {
+          "source": "Sends an invoice to the email address on its contact.\n\nXero decides the recipient and the template; there is nothing to fill in but the invoice. The invoice has to be `AUTHORISED` - a draft cannot be sent.",
+          "message": "Odošle faktúru na e-mailovú adresu jej kontaktu.\n\nXero určí príjemcu a šablónu; okrem faktúry nie je potrebné nič vypĺňať. Faktúra musí byť `AUTHORISED` – koncept nemožno odoslať."
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
+          "source": "Email Invoice",
+          "message": "Odoslať faktúru e-mailom"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Jedinečný identifikátor faktúry"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Faktúra"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "Faktúra, na ktorú sa toto vzťahuje"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "Na vytvorenie prázdneho JSON payloadu je potrebné aspoň jedno pole"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.short_desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "Na vytvorenie prázdneho JSON payloadu je potrebné aspoň jedno pole"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
+          "source": "Send an invoice to its contact by email",
+          "message": "Odoslať faktúru jej kontaktu e-mailom"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Xero** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **Xero** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL adrese API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Xero",
+          "message": "Vykonať vlastné volanie API do Xero"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.desc": {
+          "source": "Fires for each bank transaction created or changed - money spent or received against a bank account.\n\nThe event carries the bank transaction record Xero returns.",
+          "message": "Spustí sa pre každú vytvorenú alebo zmenenú bankovú transakciu – peniaze vydané alebo prijaté na bankovom účte.\n\nUdalosť nesie záznam o bankovej transakcii, ktorý Xero vráti."
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
+          "source": "New Bank Transaction",
+          "message": "Nová banková transakcia"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
+          "source": "Fires when a bank transaction is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene bankovej transakcie"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.desc": {
+          "source": "Fires for each bill created or changed.\n\nA bill is an invoice of type `ACCPAY`, which is the filter this event applies; a sales invoice (`ACCREC`) does not fire it. The event carries the invoice record Xero returns.",
+          "message": "Spustí sa pre každý prijatý účet vytvorený alebo zmenený.\n\nPrijatý účet je faktúra typu `ACCPAY`, čo je filter, ktorý táto udalosť aplikuje; odoslaná faktúra (`ACCREC`) ju nespustí. Udalosť nesie záznam o faktúre, ktorý Xero vráti."
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.display_name": {
+          "source": "New Bill",
+          "message": "Nový prijatý účet"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
+          "source": "Fires when a bill is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene prijatého účtu"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.desc": {
+          "source": "Fires for each contact created or changed in the organisation.\n\nXero positions a contact by `UpdatedDateUTC` and offers no \"created since\" filter, so a contact edited later fires this again. The event carries the contact record Xero returns.",
+          "message": "Spustí sa pre každý kontakt vytvorený alebo zmenený v organizácii.\n\nXero určuje pozíciu kontaktu podľa `UpdatedDateUTC` a neponúka filter „created since“, takže kontakt upravený neskôr toto spustí znova. Udalosť nesie záznam o kontakte, ktorý Xero vráti."
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nový kontakt"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene kontaktu"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.desc": {
+          "source": "Fires for each credit note created or changed.\n\nThe event carries the credit note record Xero returns. The application this module replaces polled credit notes without exporting any way to list or read one; **Find Credit Notes** exists so that this event has a counterpart.",
+          "message": "Spustí sa pre každý vytvorený alebo zmenený dobropis.\n\nUdalosť nesie záznam o dobropise, ktorý Xero vráti. Aplikácia, ktorú tento modul nahrádza, dopytovala dobropisy bez exportovania akéhokoľvek spôsobu na ich výpis alebo čítanie; akcia **Find Credit Notes** existuje preto, aby mala táto udalosť svoj náprotivok."
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
+          "source": "New Credit Note",
+          "message": "Nový dobropis"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
+          "source": "Fires when a credit note is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene dobropisu"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.desc": {
+          "source": "Fires for each employee added to the organisation's payroll or changed.\n\n**Which payroll API is polled comes from the connection's `payroll_region`**: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe application this module replaces polled employees through the **accounting** API, where they do not exist, so this event never fired at all.",
+          "message": "Spustí sa pre každého zamestnanca pridaného do mzdového systému organizácie alebo zmeneného.\n\n**Ktoré mzdové rozhranie API sa dopytuje, závisí od parametra `payroll_region` pripojenia**: Austrália je obsluhovaná na `payroll.xro/1.0` a Nový Zéland a Spojené kráľovstvo na `payroll.xro/2.0`. Pripojenie bez nastaveného regiónu to nahlási namiesto toho, aby ho odhadovalo.\n\nAplikácia, ktorú tento modul nahrádza, dopytovala zamestnancov prostredníctvom rozhrania API **accounting**, kde neexistujú, takže táto udalosť sa vôbec nespúšťala."
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
+          "source": "New Employee",
+          "message": "Nový zamestnanec"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {
+          "source": "Fires when an employee is added to payroll or changed",
+          "message": "Spustí sa pri pridaní zamestnanca do miezd alebo pri jeho zmene"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.desc": {
+          "source": "Fires for each purchase order created or changed.\n\nThe event carries the purchase order record Xero returns.",
+          "message": "Spustí sa pre každú vytvorenú alebo zmenenú objednávku.\n\nUdalosť nesie záznam o objednávke, ktorý Xero vráti."
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "Nová objednávka"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
+          "source": "Fires when a purchase order is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene objednávky"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.desc": {
+          "source": "Fires for each payment created or changed against an invoice or a credit note.\n\nThe event carries the payment record Xero returns.",
+          "message": "Spustí sa pre každú vytvorenú alebo zmenenú platbu priradenú k faktúre alebo dobropisu.\n\nUdalosť nesie záznam o platbe, ktorý Xero vráti."
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nová platba"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
+          "source": "Fires when a payment is created or changed",
+          "message": "Spustí sa pri vytvorení alebo zmene platby"
+        },
+        "app.WGVybw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Vráti všetky záznamy v danej tabuľke, ktoré zodpovedajú kritériám vyhľadávania"
+        },
+        "app.WGVybw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Vyhľadať záznamy"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` alebo `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.WGVybw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Vyhľadať zodpovedajúce záznamy v danej tabuľke"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Vráti jeden záznam v danej tabuľke, ktorý zodpovedá kritériám vyhľadávania; ak ich zodpovedá viac, ide o chybu"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Nájsť jeden záznam"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` alebo `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Vyhľadať jeden zodpovedajúci záznam v danej tabuľke"
+        },
+        "app.WGVybw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Aktualizuje každý záznam v danej tabuľke zodpovedajúci vyhľadávacím kritériám"
+        },
+        "app.WGVybw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Aktualizovať záznamy"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` alebo `project-tasks`"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.WGVybw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Aktualizovať záznamy zodpovedajúce vyhľadávacím kritériám"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.desc": {
+          "source": "Creates or updates bank transactions.\n\n`BankTransactions` is an **array** even for one. Each needs a `Type` - `SPEND` or `RECEIVE` - a `Contact`, a `BankAccount` and `LineItems`.\n\nThe bank account must be an account of type `BANK`, which is what its dropdown offers; a line item needs `AccountCode` or `AccountID` to say which account it posts to.",
+          "message": "Vytvorí alebo aktualizuje bankové transakcie.\n\n`BankTransactions` je **pole** aj pre jednu transakciu. Každá vyžaduje `Type` – `SPEND` alebo `RECEIVE` – `Contact`, `BankAccount` a `LineItems`.\n\nBankový účet musí byť účet typu `BANK`, čo ponúka jeho rozbaľovací zoznam; položka riadka vyžaduje `AccountCode` alebo `AccountID` na určenie, na ktorý účet sa zaúčtuje."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.display_name": {
+          "source": "Create Bank Transaction",
+          "message": "Vytvoriť bankovú transakciu"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Bank Transactions",
+          "message": "Bankové transakcie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "The transactions to create or update; an array even for one",
+          "message": "Transakcie na vytvorenie alebo aktualizáciu; pole aj pre jednu"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
+          "source": "Record money spent or received against a bank account",
+          "message": "Zaznamenať peniaze vydané alebo prijaté na bankovom účte"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.desc": {
+          "source": "Creates or updates contacts.\n\n`Contacts` is an **array** even for one contact - that is Xero's envelope. A member carrying `ContactID` updates that contact; one without creates a new one.\n\n`summarizeErrors` set to `false` makes Xero accept the members it can and report the rest, instead of rejecting the whole batch.",
+          "message": "Vytvorí alebo aktualizuje kontakty.\n\n`Contacts` je **pole** aj pre jeden kontakt – to je obálka Xero. Položka obsahujúca `ContactID` aktualizuje daný kontakt; položka bez neho vytvorí nový.\n\n`summarizeErrors` nastavené na `false` spôsobí, že Xero prijme položky, ktoré môže, a ostatné nahlási, namiesto odmietnutia celej dávky."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.display_name": {
+          "source": "Create or Update Contacts",
+          "message": "Vytvoriť alebo aktualizovať kontakty"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.short_desc": {
+          "source": "The contacts to create or update; an array even for one",
+          "message": "Kontakty na vytvorenie alebo aktualizáciu; pole aj pre jeden"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
+          "source": "Create contacts, or update them by ID",
+          "message": "Vytvoriť kontakty alebo ich aktualizovať podľa ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.desc": {
+          "source": "Creates employees in the organisation's payroll.\n\n`Employees` is a list even for one employee. Australia's payroll API takes a list directly; New Zealand's and the United Kingdom's take one employee per call, so a list of several is sent one at a time and the results collected.\n\n**Which payroll API is used comes from the connection's `payroll_region`.** The fields an employee needs differ by region - a United Kingdom employee has a National Insurance number where a New Zealand one has an IRD number - so this passes the employee through as given rather than declaring one region's shape for all of them.",
+          "message": "Vytvorí zamestnancov v mzdovom systéme organizácie.\n\n`Employees` je zoznam aj pre jedného zamestnanca. Mzdové API pre Austráliu prijíma zoznam priamo; API pre Nový Zéland a Spojené kráľovstvo prijímajú jedného zamestnanca na jedno volanie, takže zoznam viacerých zamestnancov sa odosiela po jednom a výsledky sa zhromažďujú.\n\n**To, ktoré mzdové rozhranie API sa použije, závisí od parametra `payroll_region` pripojenia.** Polia, ktoré zamestnanec potrebuje, sa líšia podľa regiónu – zamestnanec v Spojenom kráľovstve má číslo národného poistenia, zatiaľ čo zamestnanec na Novom Zélande má číslo IRD – preto táto akcia odovzdáva zamestnanca v zadanej podobe namiesto deklarovania jednotného formátu pre všetky regióny."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
+          "source": "Create Employees",
+          "message": "Vytvoriť zamestnancov"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
+          "source": "Create employees in the payroll organisation",
+          "message": "Vytvoriť zamestnancov v mzdovej organizácii"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.desc": {
+          "source": "Creates or updates invoices.\n\n`Invoices` is an **array** even for one invoice. Each member needs `Type` - `ACCREC` for a sales invoice, `ACCPAY` for a bill - a `Contact`, and `LineItems`.\n\nA line item needs an amount and an account: give `AccountCode`, or an `ItemCode` whose item already carries one. `Status` decides whether it is a draft: leave it unset for `DRAFT`, or set `AUTHORISED` to approve it as it is created.",
+          "message": "Vytvorí alebo aktualizuje faktúry.\n\n`Invoices` je **pole** aj pre jednu faktúru. Každá položka vyžaduje `Type` – `ACCREC` pre odoslanú faktúru, `ACCPAY` pre prijatý účet – `Contact` a `LineItems`.\n\nPoložka riadka vyžaduje čiastku a účet: zadajte `AccountCode` alebo `ItemCode`, ktorého položka už jeden obsahuje. `Status` určuje, či ide o koncept: nechajte nenastavené pre `DRAFT` alebo nastavte `AUTHORISED` na schválenie pri jej vytvorení."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Invoices",
+          "message": "Vytvoriť alebo aktualizovať faktúry"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Faktúry"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.short_desc": {
+          "source": "The invoices to create or update; an array even for one",
+          "message": "Faktúry na vytvorenie alebo aktualizáciu; pole aj pre jednu"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "Umožňuje vytvoriť faktúru aj vtedy, keď jedna alebo viacero položiek riadka obsahuje sledované zásoby, pri ktorých by množstvo na faktúre spôsobilo záporné dostupné množstvo"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.display_name": {
+          "source": "Allow Backorders",
+          "message": "Povoliť spätné objednávky"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "Umožňuje vytvoriť faktúru aj vtedy, keď jedna alebo viacero položiek riadka obsahuje sledované zásoby, pri ktorých by množstvo na faktúre spôsobilo záporné dostupné množstvo"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
+          "source": "Create invoices or bills, or update them by ID",
+          "message": "Vytvoriť faktúry alebo prijaté účty, prípadne ich aktualizovať podľa ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.desc": {
+          "source": "Creates or updates items.\n\n`Items` is an **array** even for one item, and `Code` is what identifies an item to a line item elsewhere.",
+          "message": "Vytvorí alebo aktualizuje položky.\n\n`Items` je **pole** aj pre jednu položku a `Code` je to, čo identifikuje položku pre položku riadka inde."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.display_name": {
+          "source": "Create or Update Items",
+          "message": "Vytvoriť alebo aktualizovať položky"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Položky"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.short_desc": {
+          "source": "The items to create or update; an array even for one",
+          "message": "Položky na vytvorenie alebo aktualizáciu; pole aj pre jednu"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
+          "source": "Create items, or update them by ID",
+          "message": "Vytvoriť položky alebo ich aktualizovať podľa ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.desc": {
+          "source": "Creates or updates quotes.\n\n`Quotes` is an **array** even for one quote, and each needs a `Contact`, a `Date` and `LineItems`.",
+          "message": "Vytvorí alebo aktualizuje cenové ponuky.\n\n`Quotes` je **pole** aj pre jednu cenovú ponuku a každá vyžaduje `Contact`, `Date` a `LineItems`."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.display_name": {
+          "source": "Create or Update Quotes",
+          "message": "Vytvoriť alebo aktualizovať cenové ponuky"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.display_name": {
+          "source": "Quotes",
+          "message": "Cenové ponuky"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.short_desc": {
+          "source": "The quotes to create or update; an array even for one",
+          "message": "Cenové ponuky na vytvorenie alebo aktualizáciu; pole aj pre jednu"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
+          "source": "Create quotes, or update them by ID",
+          "message": "Vytvárajte cenové ponuky alebo ich aktualizujte podľa ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.desc": {
+          "source": "Creates or updates repeating invoice templates.\n\n`Schedule` is what makes it repeat - its period, unit and next scheduled date - and `Status` decides whether Xero sends each occurrence (`AUTHORISED`) or leaves it as a draft (`DRAFT`).",
+          "message": "Vytvára alebo aktualizuje šablóny opakujúcich sa faktúr.\n\n`Schedule` určuje opakovanie – jeho periódu, jednotku a nasledujúci plánovaný dátum – a `Status` rozhoduje, či Xero odošle každý výskyt (`AUTHORISED`) alebo ho ponechá ako koncept (`DRAFT`)."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Repeating Invoices",
+          "message": "Vytvoriť alebo aktualizovať opakujúce sa faktúry"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.display_name": {
+          "source": "Repeating Invoices",
+          "message": "Opakujúce sa faktúry"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.short_desc": {
+          "source": "The templates to create or update; an array even for one",
+          "message": "Šablóny na vytvorenie alebo aktualizáciu; pole aj pre jednu položku"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
+          "source": "Set up an invoice that repeats on a schedule",
+          "message": "Nastaviť faktúru, ktorá sa opakuje podľa plánu"
+        },
+        "app.WGVybw.desc": {
+          "source": "Provides access to [Xero](https://www.xero.com), the online accounting platform.\n\n**Common use cases**:\n- **Contacts**: find, create and update customers and suppliers\n- **Invoices**: find, create and update sales invoices and bills, add notes and email them\n- **Payments**: record payments, allocate credit notes and read bank transactions\n- **Items and accounts**: read the chart of accounts and tax rates, and manage items\n- **Projects**: find and create projects and their tasks\n- **Payroll**: find and create employees in the organisation's regional payroll\n\n**The organisation is the connection**: a Xero credential can reach several organisations and every call has to name one, so `tenant_id` belongs to the connection rather than to each action.\n\nXero is a trademark of Xero Limited.",
+          "message": "Poskytuje prístup k platforme [Xero](https://www.xero.com), online účtovníctvu.\n\n**Bežné prípady použitia**:\n- **Kontakty**: vyhľadávanie, vytváranie a aktualizácia zákazníkov a dodávateľov\n- **Faktúry**: vyhľadávanie, vytváranie a aktualizácia odberateľských a dodávateľských faktúr, pridávanie poznámok a ich odosielanie e-mailom\n- **Platby**: zaznamenávanie platieb, priraďovanie dobropisov a čítanie bankových transakcií\n- **Položky a účty**: čítanie účtovného rozvrhu a daňových sadzieb a správa položiek\n- **Projekty**: vyhľadávanie a vytváranie projektov a ich úloh\n- **Mzdy**: vyhľadávanie a vytváranie zamestnancov v regionálnych mzdách organizácie\n\n**Organizácia je spojenie**: poverenie Xero má prístup k viacerým organizáciám a každé volanie musí jednu určiť, takže `tenant_id` patrí k spojeniu a nie k jednotlivým akciám.\n\nXero je ochranná známka spoločnosti Xero Limited."
+        },
+        "app.WGVybw.display_name": {
+          "source": "Xero",
+          "message": "Xero"
+        },
+        "app.WGVybw.short_desc": {
+          "source": "Work with Xero contacts, invoices, payments, projects and payroll",
+          "message": "Práca s kontaktmi, faktúrami, platbami, projektmi a mzdami v Xero"
+        }
+      }
+    }
+  }
+}

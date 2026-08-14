@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.TUNQ.action.Y29tcGxldGU.desc": {
+          "source": "Get autocompletion suggestions for prompts or resources",
+          "message": "프롬프트 또는 리소스에 대한 자동 완성 제안 가져오기"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.display_name": {
+          "source": "Get Completion",
+          "message": "완성 제안 가져오기"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.short_desc": {
+          "source": "Get autocompletion suggestions",
+          "message": "자동 완성 제안 가져오기"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.desc": {
+          "source": "Execute an MCP tool with the provided arguments and return the result",
+          "message": "제공된 인수로 MCP 도구를 실행하고 결과를 반환합니다"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.display_name": {
+          "source": "Call Tool",
+          "message": "도구 호출"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
+          "source": "Execute an MCP tool",
+          "message": "MCP 도구 실행"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.desc": {
+          "source": "Get a prompt template from the MCP server with arguments",
+          "message": "인수와 함께 MCP 서버에서 프롬프트 템플릿 가져오기"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
+          "source": "Get Prompt",
+          "message": "프롬프트 가져오기"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
+          "source": "Get an MCP prompt",
+          "message": "MCP 프롬프트 가져오기"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.desc": {
+          "source": "List all tools available on the MCP server",
+          "message": "MCP 서버에서 사용 가능한 모든 도구 나열"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.display_name": {
+          "source": "List Tools",
+          "message": "도구 목록 조회"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
+          "source": "List available MCP tools",
+          "message": "사용 가능한 MCP 도구 목록 조회"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.desc": {
+          "source": "List all prompts available on the MCP server",
+          "message": "MCP 서버에서 사용 가능한 모든 프롬프트 나열"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
+          "source": "List Prompts",
+          "message": "프롬프트 목록 조회"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
+          "source": "List available MCP prompts",
+          "message": "사용 가능한 MCP 프롬프트 목록 조회"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.desc": {
+          "source": "List all resources available on the MCP server",
+          "message": "MCP 서버에서 사용 가능한 모든 리소스 나열"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
+          "source": "List Resources",
+          "message": "리소스 목록 조회"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
+          "source": "List available MCP resources",
+          "message": "사용 가능한 MCP 리소스 목록 조회"
+        },
+        "app.TUNQ.action.cGluZw.desc": {
+          "source": "Ping the MCP server to verify connectivity",
+          "message": "연결 상태를 확인하기 위해 MCP 서버에 핑을 보냅니다"
+        },
+        "app.TUNQ.action.cGluZw.display_name": {
+          "source": "Ping Server",
+          "message": "서버 핑"
+        },
+        "app.TUNQ.action.cGluZw.short_desc": {
+          "source": "Check server connectivity",
+          "message": "서버 연결 상태 확인"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read content from an MCP resource by URI",
+          "message": "URI로 MCP 리소스에서 콘텐츠 읽기"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "리소스 읽기"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read an MCP resource",
+          "message": "MCP 리소스 읽기"
+        },
+        "app.TUNQ.desc": {
+          "source": "Connect to MCP servers for AI tool, resource, and prompt integration",
+          "message": "AI 도구, 리소스 및 프롬프트 통합을 위해 MCP 서버에 연결"
+        },
+        "app.TUNQ.display_name": {
+          "source": "MCP Server",
+          "message": "MCP 서버"
+        },
+        "app.TUNQ.short_desc": {
+          "source": "Model Context Protocol server",
+          "message": "Model Context Protocol 서버"
+        }
+      }
+    }
+  }
+}

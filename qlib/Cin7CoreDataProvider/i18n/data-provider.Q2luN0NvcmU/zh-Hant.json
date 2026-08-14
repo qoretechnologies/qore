@@ -1,0 +1,2649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
+          "message": "在 Cin7Core 中建立包含聯絡資訊、地址和付款條件的新客戶。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "建立客戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "關於客戶的其他備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this customer",
+          "message": "要為此客戶建立的聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "聯絡人"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "客戶的信用額度"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "信用額度"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "信用額度"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "三個字母的 ISO 貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "預設貨幣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "應收帳款科目代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "應收帳款"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "應收帳款科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this customer",
+          "message": "要為此客戶建立的地址清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "地址清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "預設折扣百分比"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "預設折扣 %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name (required)",
+          "message": "客戶名稱或公司名稱（必填）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "客戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "有效客戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "已棄用/停用的客戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "啟用或停用狀態。預設為 Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "客戶狀態"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "此客戶的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "收入科目代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "收入科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "收入科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "客戶的稅號"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "要套用的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "客戶的逗號分隔標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "客戶標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "建立新客戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Create a new stock adjustment to modify inventory levels.",
+          "message": "建立新的庫存調整以修改庫存水準。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Create Stock Adjustment",
+          "message": "建立庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The account for the adjustment",
+          "message": "調整科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Adjustment account",
+          "message": "調整科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the adjustment (defaults to today)",
+          "message": "調整日期（預設為今天）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "調整日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "調整日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment (required)",
+          "message": "調整的倉庫位置（必填）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of stock adjustment line items (required)",
+          "message": "庫存調整明細行清單（必填）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "調整明細行"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.desc": {
+          "source": "The reason for the stock adjustment",
+          "message": "庫存調整的原因"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "原因"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.short_desc": {
+          "source": "Adjustment reason",
+          "message": "調整原因"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Create a new stock adjustment",
+          "message": "建立新的庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.desc": {
+          "source": "Create a new supplier in Cin7Core with contact information and payment terms.",
+          "message": "在 Cin7Core 中建立包含聯絡資訊和付款條件的新供應商。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Create Supplier",
+          "message": "建立供應商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the supplier",
+          "message": "關於供應商的其他備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this supplier",
+          "message": "要為此供應商建立的聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "聯絡人"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "三個字母的 ISO 貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "預設貨幣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The account payable account code",
+          "message": "應付帳款科目代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "應付帳款"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "AP account",
+          "message": "應付帳款科目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this supplier",
+          "message": "要為此供應商建立的地址清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "地址清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "預設折扣百分比"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "預設折扣 %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's name or company name (required)",
+          "message": "供應商名稱或公司名稱（必填）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "供應商名稱"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active supplier",
+          "message": "啟用的供應商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive supplier",
+          "message": "已棄用/停用的供應商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "啟用或停用狀態。預設為 Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "供應商狀態"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "此供應商的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "供應商的稅務識別碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "要套用的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the supplier",
+          "message": "以逗號分隔的供應商標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Supplier tags",
+          "message": "供應商標籤"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Create a new supplier",
+          "message": "建立新供應商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.desc": {
+          "source": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
+          "message": "在 Cin7Core 中建立包含客戶、明細項目及運送詳細資訊的新銷售訂單。"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
+          "source": "Create Sale",
+          "message": "建立銷售"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.desc": {
+          "source": "The contact name at the customer",
+          "message": "客戶聯絡人姓名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.short_desc": {
+          "source": "Contact name",
+          "message": "聯絡人姓名"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier",
+          "message": "物流承運商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "承運商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "物流承運商"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "三個字母的 ISO 貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name (required). Must match an existing customer",
+          "message": "客戶名稱（必填）。必須與現有客戶相符"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "客戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for the sale",
+          "message": "銷售的帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the sale",
+          "message": "銷售的倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "List of line items to add to the order",
+          "message": "要新增至訂單的明細項目清單"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Order lines",
+          "message": "訂單明細"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "Date when the sale order was created (defaults to today)",
+          "message": "銷售訂單建立日期（預設為今天）"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "訂單日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Sale order date",
+          "message": "銷售訂單日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "Date by which the order must be shipped",
+          "message": "訂單必須出貨的截止日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "最晚出貨日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "出貨截止日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for the sale",
+          "message": "銷售的運送地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "收件地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "運送地址"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.desc": {
+          "source": "Customer phone number",
+          "message": "客戶電話號碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "Date by which the order must be delivered",
+          "message": "訂單必須送達的截止日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "要求送達日"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required delivery date",
+          "message": "要求送達日期"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.desc": {
+          "source": "Whether prices include tax",
+          "message": "價格是否含稅"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.display_name": {
+          "source": "Tax Inclusive",
+          "message": "含稅"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.short_desc": {
+          "source": "Prices include tax",
+          "message": "價格含稅"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "Tax rule to apply",
+          "message": "要套用的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for the sale",
+          "message": "銷售的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
+          "source": "Create a new sale order",
+          "message": "建立新銷售訂單"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is created or modified via polling.",
+          "message": "透過輪詢在建立或修改客戶時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "客戶已更新"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "在建立或更新客戶時觸發"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Upload a file attachment to a sale order.",
+          "message": "將檔案附件上傳至銷售訂單。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Add Sale Attachment",
+          "message": "新增銷售附件"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.desc": {
+          "source": "The file content encoded as Base64 string",
+          "message": "以 Base64 字串編碼的檔案內容"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.display_name": {
+          "source": "Content (Base64)",
+          "message": "內容 (Base64)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.short_desc": {
+          "source": "File content in Base64",
+          "message": "Base64 格式的檔案內容"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.desc": {
+          "source": "The name of the file being attached",
+          "message": "要附加的檔案名稱"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "檔案名稱"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.short_desc": {
+          "source": "Attachment file name",
+          "message": "附件檔案名稱"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale to attach to",
+          "message": "要附加附件之銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Add an attachment to a sale",
+          "message": "新增附件至銷售"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.desc": {
+          "source": "Add shipment details and tracking information to a sale order.",
+          "message": "將出貨詳細資訊和追蹤資訊新增至銷售訂單。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
+          "source": "Add Sale Shipment",
+          "message": "新增銷售出貨"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier name",
+          "message": "物流承運商名稱"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "承運商"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "物流承運商"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of lines to ship with quantities",
+          "message": "要出貨的明細項目及數量清單"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Shipment lines",
+          "message": "出貨明細"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.desc": {
+          "source": "The date the items were shipped",
+          "message": "品項出貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.display_name": {
+          "source": "Ship Date",
+          "message": "出貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.short_desc": {
+          "source": "Shipment date",
+          "message": "出貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes about the shipment",
+          "message": "出貨備註"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "出貨備註"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "貨運備註"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.desc": {
+          "source": "Date by which shipment is required",
+          "message": "要求出貨的日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.display_name": {
+          "source": "Required By",
+          "message": "要求送達日"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.short_desc": {
+          "source": "Required by date",
+          "message": "要求日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The fulfilment task ID to add shipment to",
+          "message": "要新增出貨資訊的履約任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "Fulfilment task ID",
+          "message": "履約任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.desc": {
+          "source": "The shipment tracking number",
+          "message": "貨件追蹤號碼"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.display_name": {
+          "source": "Tracking Number",
+          "message": "追蹤號碼"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.short_desc": {
+          "source": "Tracking number",
+          "message": "追蹤號碼"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.desc": {
+          "source": "URL to track the shipment",
+          "message": "追蹤貨件的 URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.display_name": {
+          "source": "Tracking URL",
+          "message": "追蹤 URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.short_desc": {
+          "source": "Tracking URL",
+          "message": "追蹤 URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
+          "source": "Add shipment/tracking to a sale",
+          "message": "為銷售新增出貨/追蹤資訊"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Record a payment against a sale order.",
+          "message": "針對銷售訂單記錄付款。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Add Sale Payment",
+          "message": "新增銷售付款"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount (required)",
+          "message": "付款金額（必填）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "付款金額"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment to",
+          "message": "記錄付款的帳戶"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Payment account",
+          "message": "付款帳戶"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made (defaults to today)",
+          "message": "付款日期（預設為今天）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "付款日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "付款日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The GUID of the sale to add the payment to (required)",
+          "message": "要新增付款的銷售 GUID（必填）"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "Sale identifier",
+          "message": "銷售識別碼"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment",
+          "message": "付款方式"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "付款方式"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "付款方式"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Payment reference or transaction ID",
+          "message": "付款參考或交易 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "參考"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "付款參考"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Add a payment to a sale",
+          "message": "為銷售新增付款"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.desc": {
+          "source": "Create a pack or pick task for fulfilling a sale order.",
+          "message": "建立用於履行銷售訂單的裝箱或揀貨任務。"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
+          "source": "Add Sale Pack",
+          "message": "新增銷售裝箱"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the pack",
+          "message": "裝箱的倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.short_desc": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.desc": {
+          "source": "List of lines to pack with quantities",
+          "message": "要裝箱的項目清單及數量"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.short_desc": {
+          "source": "Pack lines",
+          "message": "裝箱明細行"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.desc": {
+          "source": "Notes or memo for the pack operation",
+          "message": "裝箱作業的備註或備忘"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "備忘"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.short_desc": {
+          "source": "Pack memo",
+          "message": "裝箱備忘"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.desc": {
+          "source": "The date the items were picked",
+          "message": "品項揀貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.display_name": {
+          "source": "Pick Date",
+          "message": "揀貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.short_desc": {
+          "source": "Pick date",
+          "message": "揀貨日期"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
+          "source": "Add a pack/pick record to a sale",
+          "message": "為銷售新增裝箱/揀貨記錄"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier.",
+          "message": "透過特定客戶的唯一識別碼擷取其詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "取得客戶"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "要擷取的客戶唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by ID",
+          "message": "透過 ID 取得客戶"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "擷取特定產品的詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "取得產品"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "要擷取的產品唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.short_desc": {
+          "source": "The product ID",
+          "message": "產品 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by ID",
+          "message": "透過 ID 取得產品"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Retrieve detailed information about a specific stock adjustment.",
+          "message": "擷取特定庫存調整的詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Get Stock Adjustment",
+          "message": "取得庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to retrieve",
+          "message": "要擷取的庫存調整唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "庫存調整任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Get a stock adjustment by ID",
+          "message": "透過 ID 取得庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.desc": {
+          "source": "Retrieve detailed information about a specific supplier.",
+          "message": "擷取特定供應商的詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
+          "source": "Get Supplier",
+          "message": "取得供應商"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to retrieve",
+          "message": "要擷取的供應商唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "供應商 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID",
+          "message": "供應商 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
+          "source": "Get a supplier by ID",
+          "message": "透過 ID 取得供應商"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.desc": {
+          "source": "Retrieve detailed information about a specific sale order.",
+          "message": "擷取特定銷售訂單的詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
+          "source": "Get Sale",
+          "message": "取得銷售"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to retrieve",
+          "message": "要擷取的銷售唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
+          "source": "Get a sale order by ID",
+          "message": "透過 ID 取得銷售訂單"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.desc": {
+          "source": "Retrieve pack/pick details for a sale order.",
+          "message": "擷取銷售訂單的裝箱/揀貨詳細資訊。"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
+          "source": "Get Sale Pack",
+          "message": "取得銷售裝箱"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.desc": {
+          "source": "Optional task ID to get a specific pack record",
+          "message": "用於取得特定裝箱記錄的選填任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.short_desc": {
+          "source": "The fulfilment task ID",
+          "message": "履約任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
+          "source": "Get pack details for a sale",
+          "message": "取得銷售包裝詳細資料"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Delete or void a stock adjustment in Cin7Core.",
+          "message": "刪除或作廢 Cin7Core 中的庫存調整。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Delete Stock Adjustment",
+          "message": "刪除庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to delete/void",
+          "message": "要刪除/作廢的庫存調整唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "庫存調整任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Delete a stock adjustment",
+          "message": "刪除庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.desc": {
+          "source": "Delete or void a sale order in Cin7Core.",
+          "message": "刪除或作廢 Cin7Core 中的銷售訂單。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
+          "source": "Delete Sale",
+          "message": "刪除銷售"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to delete/void",
+          "message": "要刪除/作廢的銷售唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to delete",
+          "message": "要刪除的銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
+          "source": "Delete (void) a sale order",
+          "message": "刪除（作廢）銷售訂單"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Remove a file attachment from a sale order.",
+          "message": "從銷售訂單中移除檔案附件。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Delete Sale Attachment",
+          "message": "刪除銷售附件"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the attachment to delete",
+          "message": "要刪除的附件唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.display_name": {
+          "source": "Attachment ID",
+          "message": "附件 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.short_desc": {
+          "source": "The attachment ID",
+          "message": "附件 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Delete an attachment from a sale",
+          "message": "刪除銷售中的附件"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Remove a payment from a sale order.",
+          "message": "從銷售訂單中移除付款。"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Delete Sale Payment",
+          "message": "刪除銷售付款"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the payment to delete",
+          "message": "要刪除的付款唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The payment ID",
+          "message": "付款 ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Delete a payment from a sale",
+          "message": "刪除銷售中的付款"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.desc": {
+          "source": "Search for assembly and finished goods tasks.",
+          "message": "搜尋組裝與成品任務。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
+          "source": "Find Assemblies",
+          "message": "尋找組裝"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
+          "source": "Find assembly/finished goods tasks",
+          "message": "尋找組裝/成品任務"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.desc": {
+          "source": "Check product availability and stock levels across warehouse locations.",
+          "message": "檢查各倉庫位置的產品可用性與庫存水準。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
+          "source": "Find Product Availability",
+          "message": "尋找產品可用性"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
+          "source": "Check product stock levels",
+          "message": "檢查產品庫存水準"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Search for credit notes associated with sale orders.",
+          "message": "搜尋與銷售訂單相關聯的退款折讓單。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Find Sale Credit Notes",
+          "message": "尋找銷售退款折讓單"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Find credit notes for sales",
+          "message": "尋找銷售的退款折讓單"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.desc": {
+          "source": "Search for fulfilment, pick, and pack tasks for sales.",
+          "message": "搜尋銷售的履約、揀貨與包裝任務。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
+          "source": "Find Sale Fulfilment",
+          "message": "尋找銷售履約"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
+          "source": "Find fulfilment tasks for sales",
+          "message": "尋找銷售的履約任務"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.desc": {
+          "source": "Search for invoices associated with sale orders.",
+          "message": "搜尋與銷售訂單相關聯的發票。"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
+          "source": "Find Sale Invoices",
+          "message": "尋找銷售發票"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
+          "source": "Find invoices for sales",
+          "message": "尋找銷售的發票"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cin7Core** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Cin7Core** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊返回。\n\n對於尚未在此應用程式中公開為第一類操作的端點，請使用此操作。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cin7Core",
+          "message": "對 Cin7Core 進行自訂 API 呼叫"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is detected on a sale via polling.",
+          "message": "透過輪詢在銷售上偵測到新付款時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "新付款"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "在收到新付款時觸發"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.desc": {
+          "source": "Fires when a new sale credit note is authorized via polling.",
+          "message": "透過輪詢在新的銷售退款折讓單獲授權時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
+          "source": "New Sale Credit Note Authorized",
+          "message": "已授權新銷售退款折讓單"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
+          "source": "Trigger when a credit note is authorized",
+          "message": "在退款折讓單獲授權時觸發"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.desc": {
+          "source": "Fires when a new sale invoice is authorized via polling.",
+          "message": "透過輪詢在新的銷售發票獲授權時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
+          "source": "New Sale Invoice Authorized",
+          "message": "已授權新銷售發票"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
+          "source": "Trigger when an invoice is authorized",
+          "message": "在發票獲授權時觸發"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.desc": {
+          "source": "Fires when sale tracking or shipment information changes via polling.",
+          "message": "透過輪詢在銷售追蹤或出貨資訊變更時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
+          "source": "Sale Tracking Changed",
+          "message": "銷售追蹤已變更"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when tracking information changes",
+          "message": "在追蹤資訊變更時觸發"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.desc": {
+          "source": "Fires when a sale order is voided via polling.",
+          "message": "透過輪詢在銷售訂單作廢時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
+          "source": "Sale Voided",
+          "message": "銷售已作廢"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
+          "source": "Trigger when a sale is voided",
+          "message": "在銷售作廢時觸發"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, or modification date.",
+          "message": "從 Cin7Core 擷取客戶清單，可選依名稱、ID 或修改日期進行篩選。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "搜尋客戶"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "列出並搜尋客戶"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, category, or brand.",
+          "message": "從 Cin7Core 擷取產品清單，可選依 SKU、名稱、類別或品牌進行篩選。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "搜尋產品"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "列出並搜尋產品"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of stock adjustments from Cin7Core.",
+          "message": "從 Cin7Core 擷取庫存調整清單。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
+          "source": "Search Stock Adjustments",
+          "message": "搜尋庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List and search stock adjustments",
+          "message": "列出並搜尋庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.desc": {
+          "source": "Retrieve a list of suppliers from Cin7Core with optional filtering.",
+          "message": "從 Cin7Core 擷取供應商清單，並可選進行篩選。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
+          "source": "Search Suppliers",
+          "message": "搜尋供應商"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
+          "source": "List and search suppliers",
+          "message": "列出並搜尋供應商"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.desc": {
+          "source": "Retrieve a list of payments for sales.",
+          "message": "擷取銷售的付款清單。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
+          "source": "Search Sale Payments",
+          "message": "搜尋銷售付款"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
+          "source": "List and search sale payments",
+          "message": "列出並搜尋銷售付款"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.desc": {
+          "source": "Retrieve a list of sales orders from Cin7Core with optional filtering.",
+          "message": "從 Cin7Core 擷取銷售訂單清單，並可選擇篩選條件。"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
+          "source": "Search Sales",
+          "message": "搜尋銷售"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
+          "source": "List and search sales orders",
+          "message": "列出並搜尋銷售訂單"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.desc": {
+          "source": "Fires when product stock/inventory levels change via polling.",
+          "message": "透過輪詢在產品庫存水準變更時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
+          "source": "Stock Level Update",
+          "message": "庫存水準更新"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
+          "source": "Trigger when stock levels change",
+          "message": "在庫存水準變更時觸發"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a supplier is created or modified via polling.",
+          "message": "透過輪詢在建立或修改供應商時觸發。"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
+          "source": "Supplier Updated",
+          "message": "供應商已更新"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a supplier is created or updated",
+          "message": "在建立或更新供應商時觸發"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Cin7Core.",
+          "message": "更新 Cin7Core 中現有客戶的資訊。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "更新客戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "關於客戶的其他備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this customer",
+          "message": "此客戶的聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "聯絡人"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "客戶的信用額度"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "信用額度"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "信用額度"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "三個字母的 ISO 貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "預設貨幣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "應收帳款科目代碼"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "應收帳款"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "應收帳款科目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "此客戶的地址清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "地址清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "預設折扣百分比"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "預設折扣 %"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to update (required)",
+          "message": "要更新的客戶唯一識別碼 (GUID)（必填）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name",
+          "message": "客戶姓名或公司名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "客戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "有效客戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "已棄用/停用的客戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status",
+          "message": "啟用或停用狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "客戶狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "此客戶的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "收入科目代碼"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "收入科目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "收入科目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "客戶的稅號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "要套用的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "客戶的逗號分隔標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "客戶標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "更新現有客戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Update an existing stock adjustment in Cin7Core.",
+          "message": "更新 Cin7Core 中現有的庫存調整。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Update Stock Adjustment",
+          "message": "更新庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The expense account for the adjustment",
+          "message": "調整的費用帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Expense account",
+          "message": "費用帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the stock adjustment",
+          "message": "庫存調整日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "調整日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "調整日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment",
+          "message": "調整的倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of products and quantities to adjust",
+          "message": "要調整的產品與數量清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "調整明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.desc": {
+          "source": "Notes about the adjustment",
+          "message": "關於調整的備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "備忘"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.short_desc": {
+          "source": "Memo/notes",
+          "message": "備忘錄/備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.desc": {
+          "source": "The status of the adjustment (Draft, Authorized, Void)",
+          "message": "調整狀態 (Draft、Authorized、Void)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.short_desc": {
+          "source": "Adjustment status",
+          "message": "調整狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to update",
+          "message": "要更新的庫存調整唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "庫存調整任務 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Update an existing stock adjustment",
+          "message": "更新現有的庫存調整"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.desc": {
+          "source": "Update an existing supplier's information in Cin7Core.",
+          "message": "更新 Cin7Core 中現有供應商的資訊。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Update Supplier",
+          "message": "更新供應商"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional comments or notes about the supplier",
+          "message": "關於供應商的其他註解或備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this supplier",
+          "message": "此供應商的聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "聯絡人"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "聯絡人清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The default currency code for this supplier (e.g., USD, EUR)",
+          "message": "此供應商的預設貨幣代碼（例如 USD、EUR）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "預設貨幣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The accounts payable account for this supplier",
+          "message": "此供應商的應付帳款帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "應付帳款"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "Accounts payable account",
+          "message": "應付帳款帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this supplier",
+          "message": "此供應商的地址清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "地址清單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "The default discount percentage for this supplier",
+          "message": "此供應商的預設折扣百分比"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount",
+          "message": "預設折扣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to update",
+          "message": "要更新的供應商唯一識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "供應商 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID to update",
+          "message": "要更新的供應商 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's company or individual name",
+          "message": "供應商的公司或個人名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "供應商名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "The supplier's status (Active, Deprecated, etc.)",
+          "message": "供應商狀態 (Active、Deprecated 等)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "供應商狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "此供應商的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "供應商的稅務識別碼"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax identification number",
+          "message": "稅號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply to this supplier",
+          "message": "套用於此供應商的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Tags associated with this supplier",
+          "message": "與此供應商建立關聯的標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Update an existing supplier",
+          "message": "更新現有供應商"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.desc": {
+          "source": "Update an existing sale order in Cin7Core.",
+          "message": "更新 Cin7Core 中現有的銷售訂單。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
+          "source": "Update Sale",
+          "message": "更新銷售"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.desc": {
+          "source": "External comments for this sale",
+          "message": "此銷售的外部註解"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier for this sale",
+          "message": "此銷售的貨運承運商"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "承運商"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "物流承運商"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code for this sale (e.g., USD, EUR)",
+          "message": "此銷售的貨幣代碼（例如 USD、EUR）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "貨幣代碼"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "The currency exchange rate",
+          "message": "貨幣匯率"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "貨幣匯率"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate",
+          "message": "匯率"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name for this sale",
+          "message": "此銷售的客戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "客戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.desc": {
+          "source": "Customer's reference number or PO number",
+          "message": "客戶的參考編號或採購單 (PO) 編號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.display_name": {
+          "source": "Customer Reference",
+          "message": "客戶參考編號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.short_desc": {
+          "source": "Customer reference",
+          "message": "客戶參考編號"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.desc": {
+          "source": "Additional charges for this sale",
+          "message": "此銷售的附加費用"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.display_name": {
+          "source": "Additional Charges",
+          "message": "附加費用"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.short_desc": {
+          "source": "Additional charges",
+          "message": "附加費用"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for this sale",
+          "message": "此銷售的帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "帳單地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to update",
+          "message": "要更新的銷售專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to update",
+          "message": "要更新的銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.desc": {
+          "source": "Internal notes not visible to customer",
+          "message": "客戶不可見的內部備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.display_name": {
+          "source": "Internal Comments",
+          "message": "內部備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.short_desc": {
+          "source": "Internal comments",
+          "message": "內部備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for this sale",
+          "message": "此筆銷售的倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "倉庫位置"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "The line items for this sale",
+          "message": "此筆銷售的明細項目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "明細行"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Line items",
+          "message": "明細項目"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "The date when the sale order was created",
+          "message": "銷售訂單的建立日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Sale Order Date",
+          "message": "銷售訂單日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Date of the order",
+          "message": "訂單日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.desc": {
+          "source": "The sales representative for this sale",
+          "message": "此筆銷售的銷售代表"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.display_name": {
+          "source": "Sales Representative",
+          "message": "銷售代表"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.short_desc": {
+          "source": "Sales rep",
+          "message": "業務代表"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "The date by which the order should be shipped",
+          "message": "訂單預計出貨日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "最晚出貨日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "出貨截止日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for this sale",
+          "message": "此筆銷售的運送地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "收件地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "運送地址"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes for shipping",
+          "message": "運送備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "出貨備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "貨運備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.desc": {
+          "source": "The current status of the sale",
+          "message": "銷售的目前狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.short_desc": {
+          "source": "Sale status",
+          "message": "銷售狀態"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.desc": {
+          "source": "The price tier for this sale",
+          "message": "此筆銷售的價格層級"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.display_name": {
+          "source": "Price Tier",
+          "message": "價格層級"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.short_desc": {
+          "source": "Price tier",
+          "message": "價格層級"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "The date by which the customer requires the order",
+          "message": "客戶要求送達的日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "要求送達日"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required by date",
+          "message": "要求日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.desc": {
+          "source": "How taxes should be calculated (Inclusive, Exclusive)",
+          "message": "稅金計算方式（含稅、未稅）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.display_name": {
+          "source": "Tax Calculation",
+          "message": "稅金計算"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.short_desc": {
+          "source": "Tax calculation method",
+          "message": "稅金計算方式"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "要套用的稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "稅務規則"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for this sale",
+          "message": "此筆銷售的付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "付款條件"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
+          "source": "Update an existing sale order",
+          "message": "更新現有銷售訂單"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Update an existing payment on a sale order.",
+          "message": "更新銷售訂單上的現有付款。"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Update Sale Payment",
+          "message": "更新銷售付款"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount",
+          "message": "付款金額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "付款金額"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment",
+          "message": "用於記錄付款的帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Account name",
+          "message": "帳戶名稱"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made",
+          "message": "付款日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "付款日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "付款日期"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the payment to update",
+          "message": "要更新的付款專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.short_desc": {
+          "source": "The payment ID",
+          "message": "付款 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "銷售的專屬識別碼 (GUID)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "銷售 ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment (e.g., Cash, Credit Card, Bank Transfer)",
+          "message": "付款方式（例如：現金、信用卡、銀行轉帳）"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "付款方式"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "付款方式"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Reference number or note for the payment",
+          "message": "付款的參考編號或備註"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "參考"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "付款參考"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Update an existing payment",
+          "message": "更新現有付款"
+        },
+        "app.Q2luN0NvcmU.desc": {
+          "source": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required and can be obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, then find the credentials on the Setup tab.",
+          "message": "Cin7Core（前身為 DEAR Inventory）是一個全方位的庫存管理與 ERP 平台，可讓您管理產品、銷售、採購、客戶、供應商及庫存水準。\n\n**功能特色：**\n- 管理客戶與供應商\n- 建立並追蹤銷售訂單\n- 處理付款與發票\n- 監控庫存與存貨水準\n- 處理庫存調整\n- 追蹤貨件與出貨履約\n\n**身分驗證：**\nCin7Core 使用帳戶 ID (Account ID) 與 API 金鑰 (API Key) 進行驗證。兩項憑證皆為必填，可於 https://inventory.dearsystems.com/ExternalApi 取得 — 建立或選取應用程式，然後在「Setup」分頁中尋找憑證。"
+        },
+        "app.Q2luN0NvcmU.display_name": {
+          "source": "Cin7Core",
+          "message": "Cin7Core"
+        },
+        "app.Q2luN0NvcmU.short_desc": {
+          "source": "Cin7Core inventory management platform",
+          "message": "Cin7Core 庫存管理平台"
+        }
+      }
+    }
+  }
+}

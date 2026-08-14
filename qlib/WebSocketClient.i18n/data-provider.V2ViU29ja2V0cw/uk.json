@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a WebSocket message from a WebSocket server; react to a WebSocket message",
+          "message": "Отримати повідомлення WebSocket від сервера WebSocket; реагувати на повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "WebSocket Message Received",
+          "message": "Отримано повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A WebSocket message is received",
+          "message": "Отримано повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.desc": {
+          "source": "Send a WebSocket data message to a WebSocket server; the message is serialized for sending",
+          "message": "Надіслати повідомлення з даними WebSocket на сервер WebSocket; повідомлення серіалізується для надсилання"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.display_name": {
+          "source": "Send WebSocket Message",
+          "message": "Надіслати повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "Дані для надсилання; будуть серіалізовані відповідно до параметра серіалізації"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Дані"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "Дані для надсилання; будуть серіалізовані відповідно до параметра серіалізації"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
+          "source": "Send a WebSocket data message",
+          "message": "Надіслати повідомлення з даними WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.desc": {
+          "source": "Send a raw WebSocket message to a WebSocket server",
+          "message": "Надіслати необроблене повідомлення WebSocket на сервер WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.display_name": {
+          "source": "Send Raw WebSocket Message",
+          "message": "Надіслати необроблене повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.desc": {
+          "source": "The data to send; the data will be sent as-is, no data serialization will be performed",
+          "message": "Дані для надсилання; дані буде надіслано як є, без виконання серіалізації даних"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Дані"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.short_desc": {
+          "source": "The data to send",
+          "message": "Дані для надсилання"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.short_desc": {
+          "source": "Send a raw WebSocket message",
+          "message": "Надіслати необроблене повідомлення WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "Надсилання та отримання повідомлень WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.display_name": {
+          "source": "WebSocket Messaging",
+          "message": "Обмін повідомленнями WebSocket"
+        },
+        "app.V2ViU29ja2V0cw.short_desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "Надсилання та отримання повідомлень WebSocket"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Shippo with shipping and billing addresses, and line items. Orders can be used to manage fulfillment workflows.",
+          "message": "Cree un nuevo pedido en Shippo con direcciones de envío y facturación, y artículos de línea. Los pedidos se pueden usar para gestionar los flujos de trabajo de cumplimiento."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "Crear pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code for prices",
+          "message": "Código de moneda ISO de tres letras para los precios"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Moneda"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Price currency",
+          "message": "Moneda del precio"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "The origin address for the order (optional)",
+          "message": "La dirección de origen para el pedido (opcional)"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Dirección de origen"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Sender address",
+          "message": "Dirección del remitente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Your internal order number or reference",
+          "message": "Su número o referencia de pedido interno"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Número de pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Your order number",
+          "message": "Su número de pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Order was cancelled",
+          "message": "El pedido fue cancelado"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Order has been delivered",
+          "message": "El pedido ha sido entregado"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Order has been paid",
+          "message": "El pedido ha sido pagado"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Order was returned",
+          "message": "El pedido fue devuelto"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Order has been shipped",
+          "message": "El pedido ha sido enviado"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "Estado desconocido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "The current status of the order",
+          "message": "El estado actual del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "Estado del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Order status",
+          "message": "Estado del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "Array of line items in the order",
+          "message": "Array de elementos de línea en el pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Líneas de artículos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order items",
+          "message": "Elementos del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.desc": {
+          "source": "Any notes or special instructions for the order",
+          "message": "Cualquier nota o instrucción especial para el pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Order notes",
+          "message": "Notas del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.desc": {
+          "source": "The shipping cost charged to the customer",
+          "message": "El importe de envío cobrado al cliente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.display_name": {
+          "source": "Shipping Cost",
+          "message": "Coste de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.short_desc": {
+          "source": "Customer shipping cost",
+          "message": "Coste de envío del cliente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.desc": {
+          "source": "Three-letter ISO currency code for shipping cost",
+          "message": "Código de divisa ISO de tres letras para el coste de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.display_name": {
+          "source": "Shipping Cost Currency",
+          "message": "Moneda del coste de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.short_desc": {
+          "source": "Currency code",
+          "message": "Código de divisa"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "The shipping method selected by the customer",
+          "message": "El método de envío seleccionado por el cliente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Método de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Selected shipping method",
+          "message": "Método de envío seleccionado"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.desc": {
+          "source": "The subtotal price of the order (before shipping and tax)",
+          "message": "El precio subtotal del pedido (antes de envíos e impuestos)"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.display_name": {
+          "source": "Subtotal",
+          "message": "Subtotal"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.short_desc": {
+          "source": "Order subtotal",
+          "message": "Subtotal del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.desc": {
+          "source": "The date/time when the order was placed",
+          "message": "La fecha/hora en la que se realizó el pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.display_name": {
+          "source": "Placed At",
+          "message": "Fecha de realización"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.short_desc": {
+          "source": "Order placement date",
+          "message": "Fecha de realización del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.desc": {
+          "source": "The total weight of the order",
+          "message": "El peso total del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Peso"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.short_desc": {
+          "source": "Total weight",
+          "message": "Peso total"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.desc": {
+          "source": "Ounces",
+          "message": "Onzas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.desc": {
+          "source": "Grams",
+          "message": "Gramos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.desc": {
+          "source": "Kilograms",
+          "message": "Kilogramos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.desc": {
+          "source": "Pounds",
+          "message": "Libras"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.desc": {
+          "source": "The unit of measurement for weight (g, oz, lb, kg)",
+          "message": "La unidad de medida del peso (g, oz, lb, kg)"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.display_name": {
+          "source": "Weight Unit",
+          "message": "Unidad de peso"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.short_desc": {
+          "source": "Weight unit",
+          "message": "Unidad de peso"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.desc": {
+          "source": "The total price of the order",
+          "message": "El precio total del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.display_name": {
+          "source": "Total Price",
+          "message": "Precio total"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.short_desc": {
+          "source": "Order total",
+          "message": "Total del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.desc": {
+          "source": "The total tax amount for the order",
+          "message": "El importe total de impuestos para el pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.display_name": {
+          "source": "Total Tax",
+          "message": "Impuesto total"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.short_desc": {
+          "source": "Tax amount",
+          "message": "Importe de impuestos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "The destination address for the order",
+          "message": "La dirección de destino del pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Dirección de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Customer shipping address",
+          "message": "Dirección de envío del cliente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Crear un nuevo pedido"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.desc": {
+          "source": "Create a shipping label (transaction) using a rate object ID obtained from a shipment. This generates a printable label and tracking number.",
+          "message": "Cree una etiqueta de envío (transacción) utilizando el ID de objeto de tarifa obtenido de un envío. Esto genera una etiqueta imprimible y un número de seguimiento."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
+          "source": "Create Label by Rate",
+          "message": "Crear etiqueta por tarifa"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.desc": {
+          "source": "If `True`, the label will be generated asynchronously. Default is `False`.",
+          "message": "Si es `True`, la etiqueta se generará de forma asíncrona. El valor predeterminado es `False`."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "Asíncrono"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "Procesamiento asíncrono"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF document",
+          "message": "Documento PDF"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDY.desc": {
+          "source": "PDF 4x6 inches",
+          "message": "PDF 4x6 pulgadas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDg.desc": {
+          "source": "PDF 4x8 inches",
+          "message": "PDF 4x8 pulgadas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl8yLjN4Ny41.desc": {
+          "source": "PDF 2.3x7.5 inches",
+          "message": "PDF 2.3x7.5 pulgadas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNA.desc": {
+          "source": "PDF A4",
+          "message": "PDF A4"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNQ.desc": {
+          "source": "PDF A5",
+          "message": "PDF A5"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNg.desc": {
+          "source": "PDF A6",
+          "message": "PDF A6"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBOR18yLjN4Ny41.desc": {
+          "source": "PNG 2.3x7.5 inches",
+          "message": "PNG 2.3x7.5 pulgadas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "Imagen PNG"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlpQTElJ.desc": {
+          "source": "ZPL thermal printer format",
+          "message": "Formato de impresora térmica ZPL"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.desc": {
+          "source": "The file format for the shipping label",
+          "message": "El formato de archivo para la etiqueta de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.display_name": {
+          "source": "Label File Type",
+          "message": "Tipo de archivo de etiqueta"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.short_desc": {
+          "source": "Label format",
+          "message": "Formato de etiqueta"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "Una cadena de hasta 100 caracteres para almacenar información adicional"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadatos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "Metadatos personalizados"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.desc": {
+          "source": "The object ID of the rate to use for creating the label. Get this from a shipment's rates array.",
+          "message": "El ID de objeto de la tarifa que se utilizará para crear la etiqueta. Obténgalo del array de tarifas de un envío."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.display_name": {
+          "source": "Rate ID",
+          "message": "ID de tarifa"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.short_desc": {
+          "source": "The rate object ID",
+          "message": "El ID de objeto de la tarifa"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
+          "source": "Create a shipping label from a rate",
+          "message": "Crear una etiqueta de envío a partir de una tarifa"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment in Shippo with origin, destination, and parcel details to receive shipping rates from multiple carriers.",
+          "message": "Cree un nuevo envío en Shippo con detalles de origen, destino y paquete para recibir tarifas de envío de múltiples transportistas."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "Crear envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.desc": {
+          "source": "Object ID of the customs declaration for international shipments",
+          "message": "ID de objeto de la declaración de aduanas para envíos internacionales"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.display_name": {
+          "source": "Customs Declaration",
+          "message": "Declaración de aduanas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.short_desc": {
+          "source": "Customs declaration ID",
+          "message": "ID de declaración de aduanas"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.desc": {
+          "source": "The destination/recipient address for the shipment",
+          "message": "La dirección de destino/destinatario del envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.display_name": {
+          "source": "To Address",
+          "message": "Dirección de destino"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.short_desc": {
+          "source": "Recipient address",
+          "message": "Dirección del destinatario"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.desc": {
+          "source": "The origin/sender address for the shipment",
+          "message": "La dirección de origen/remitente del envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.display_name": {
+          "source": "From Address",
+          "message": "Dirección de origen"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.short_desc": {
+          "source": "Sender address",
+          "message": "Dirección del remitente"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.desc": {
+          "source": "The return address (defaults to `address_from` if not specified)",
+          "message": "La dirección de devolución (por defecto `address_from` si no se especifica)"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.display_name": {
+          "source": "Return Address",
+          "message": "Dirección de devolución"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.short_desc": {
+          "source": "Return address",
+          "message": "Dirección de devolución"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.desc": {
+          "source": "If `True`, rates will be generated asynchronously. Default is `False`.",
+          "message": "Si es `True`, las tarifas se generarán de forma asíncrona. El valor predeterminado es `False`."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "Asíncrono"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "Procesamiento asíncrono"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.desc": {
+          "source": "Extra shipment options including insurance, signature confirmation, billing, COD, and more",
+          "message": "Opciones de envío adicionales que incluyen seguro, confirmación de firma, facturación, contra reembolso y más"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.display_name": {
+          "source": "Extra Options",
+          "message": "Opciones adicionales"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.short_desc": {
+          "source": "Additional options",
+          "message": "Opciones adicionales"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "Una cadena de hasta 100 caracteres para almacenar información adicional"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadatos"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "Metadatos personalizados"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "The date the shipment will be sent. Defaults to current date.",
+          "message": "La fecha en que se enviará el envío. El valor predeterminado es la fecha actual."
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Fecha de envío"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Fecha de envío prevista"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.desc": {
+          "source": "Array of parcel objects describing the packages to ship",
+          "message": "Matriz de objetos de paquete que describen los paquetes que se enviarán"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.display_name": {
+          "source": "Parcels",
+          "message": "Paquetes"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.short_desc": {
+          "source": "Package details",
+          "message": "Detalles del paquete"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment to get rates",
+          "message": "Crear un nuevo envío para obtener tarifas"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific order including addresses, line items, and fulfillment status.",
+          "message": "Recuperar información detallada sobre un pedido específico, incluidas direcciones, artículos de línea y estado de cumplimiento."
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Obtener pedido"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to retrieve",
+          "message": "El identificador único del pedido a recuperar"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order object ID",
+          "message": "El ID de objeto del pedido"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get an order by ID",
+          "message": "Obtener un pedido por ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve detailed information about a specific shipment including addresses, parcels, and available rates.",
+          "message": "Recuperar información detallada sobre un envío específico, incluidas direcciones, paquetes y tarifas disponibles."
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "Obtener envío"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the shipment to retrieve",
+          "message": "El identificador único del envío a recuperar"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID del envío"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment object ID",
+          "message": "El ID de objeto del envío"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Get a shipment by ID",
+          "message": "Obtener un envío por ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.desc": {
+          "source": "Retrieve detailed information about a specific shipping label (transaction) including tracking number, label URL, and status.",
+          "message": "Recuperar información detallada sobre una etiqueta de envío (transacción) específica, incluidos el número de seguimiento, la URL de la etiqueta y el estado."
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
+          "source": "Get Shipping Label",
+          "message": "Obtener etiqueta de envío"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The unique identifier of the transaction (shipping label) to retrieve",
+          "message": "El identificador único de la transacción (etiqueta de envío) a recuperar"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID de transacción"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction object ID",
+          "message": "El ID de objeto de la transacción"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
+          "source": "Get a shipping label by ID",
+          "message": "Obtener una etiqueta de envío por ID"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of orders from Shippo with optional filtering by creation date, shop app, or order status.",
+          "message": "Recuperar una lista de pedidos de Shippo con filtrado opcional por fecha de creación, aplicación de tienda o estado del pedido."
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Listar pedidos"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkFXQUlUUEFZ.desc": {
+          "source": "Awaiting payment",
+          "message": "Esperando pago"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Cancelled",
+          "message": "Cancelado"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid",
+          "message": "Pagado"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUxMWV9GVUxGSUxMRUQ.desc": {
+          "source": "Partially fulfilled",
+          "message": "Cumplido parcialmente"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Refunded",
+          "message": "Reembolsado"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Shipped",
+          "message": "Enviado"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "Estado desconocido"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "Filter orders by their status",
+          "message": "Filtrar pedidos por su estado"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "Estado del pedido"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Filter by order status",
+          "message": "Filtrar por estado del pedido"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List and search orders",
+          "message": "Listar y buscar pedidos"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Shippo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Shippo** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta de URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de respuesta.\n\nUtiliza esta acción para extremos que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Shippo",
+          "message": "Realizar una llamada de API personalizada a Shippo"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.desc": {
+          "source": "Fires when a new order is detected in Shippo via polling. Provides order details including shipping address, line items, and order status.",
+          "message": "Se activa cuando se detecta un nuevo pedido en Shippo mediante sondeo. Proporciona detalles del pedido, incluidos la dirección de envío, los artículos de línea y el estado del pedido."
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
+          "source": "New Order",
+          "message": "Nuevo pedido"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "Activar cuando se cree un nuevo pedido"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.desc": {
+          "source": "Fires when a new shipping label (transaction) is detected in Shippo via polling. Provides label details including tracking number and label URL.",
+          "message": "Se activa cuando se detecta una nueva etiqueta de envío (transacción) en Shippo mediante sondeo. Proporciona detalles de la etiqueta, incluidos el número de seguimiento y la URL de la etiqueta."
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
+          "source": "New Shipping Label",
+          "message": "Nueva etiqueta de envío"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
+          "source": "Trigger when a new shipping label is created",
+          "message": "Activar cuando se crea una nueva etiqueta de envío"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.desc": {
+          "source": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details including dimensions and weight.",
+          "message": "Se activa cuando se detecta un nuevo paquete en Shippo mediante sondeo. Proporciona detalles del paquete, incluidas dimensiones y peso."
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
+          "source": "New Parcel",
+          "message": "Nuevo paquete"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
+          "source": "Trigger when a new parcel is created",
+          "message": "Activar cuando se crea un nuevo paquete"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.desc": {
+          "source": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details including addresses, parcels, and available rates.",
+          "message": "Se activa cuando se detecta un nuevo envío en Shippo mediante sondeo. Proporciona detalles del envío, incluidas direcciones, paquetes y tarifas disponibles."
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
+          "source": "New Shipment",
+          "message": "Nuevo envío"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
+          "source": "Trigger when a new shipment is created",
+          "message": "Activar cuando se crea un nuevo envío"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.desc": {
+          "source": "Retrieve a list of shipments from Shippo with optional filtering by creation date.",
+          "message": "Recuperar una lista de envíos de Shippo con filtrado opcional por fecha de creación."
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
+          "source": "Search Shipments",
+          "message": "Buscar envíos"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
+          "source": "List and search shipments",
+          "message": "Listar y buscar envíos"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.desc": {
+          "source": "Retrieve a list of shipping labels (transactions) from Shippo with optional filtering by creation date, status, or tracking status.",
+          "message": "Recuperar una lista de etiquetas de envío (transacciones) de Shippo con filtrado opcional por fecha de creación, estado o estado de seguimiento."
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
+          "source": "Search Shipping Labels",
+          "message": "Buscar etiquetas de envío"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOkVSUk9S.desc": {
+          "source": "Label creation failed",
+          "message": "Error al crear la etiqueta"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlFVRVVFRA.desc": {
+          "source": "Label creation pending",
+          "message": "Creación de etiqueta pendiente"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Label has been refunded",
+          "message": "La etiqueta ha sido reembolsada"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlNVQ0NFU1M.desc": {
+          "source": "Label created successfully",
+          "message": "Etiqueta creada con éxito"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.desc": {
+          "source": "Filter transactions by their creation status",
+          "message": "Filtrar transacciones por su estado de creación"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.display_name": {
+          "source": "Label Status",
+          "message": "Estado de la etiqueta"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.short_desc": {
+          "source": "Filter by label status",
+          "message": "Filtrar por estado de la etiqueta"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Delivered",
+          "message": "Entregado"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkZBSUxVUkU.desc": {
+          "source": "Delivery failed",
+          "message": "Error de entrega"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlBSRV9UUkFOU0lU.desc": {
+          "source": "Pre-transit",
+          "message": "Pre-tránsito"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Returned",
+          "message": "Devuelto"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlRSQU5TSVQ.desc": {
+          "source": "In transit",
+          "message": "En tránsito"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown tracking status",
+          "message": "Estado de seguimiento desconocido"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.desc": {
+          "source": "Filter transactions by their tracking status",
+          "message": "Filtrar transacciones por su estado de seguimiento"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.display_name": {
+          "source": "Tracking Status",
+          "message": "Estado de seguimiento"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.short_desc": {
+          "source": "Filter by tracking status",
+          "message": "Filtrar por estado de seguimiento"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
+          "source": "List and search shipping labels",
+          "message": "Enumerar y buscar etiquetas de envío"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.desc": {
+          "source": "Validates a shipping address using Shippo's address validation service. Returns the validated address with any corrections and validation status.",
+          "message": "Valida una dirección de envío mediante el servicio de validación de direcciones de Shippo. Devuelve la dirección validada con las correcciones y el estado de validación."
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
+          "source": "Validate Address",
+          "message": "Validar dirección"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO 3166-1 alpha-2 country code (e.g., US, CA, GB)",
+          "message": "Código de país de dos letras ISO 3166-1 alpha-2 (por ej., US, CA, GB)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "País"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code",
+          "message": "Código de país ISO"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name (optional)",
+          "message": "Nombre de la empresa (opcional)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Empresa"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company or organization name",
+          "message": "Nombre de la empresa u organización"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "Name of the city",
+          "message": "Nombre de la ciudad"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ciudad"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Nombre de la ciudad"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address for shipment notifications",
+          "message": "Dirección de correo electrónico para notificaciones de envío"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Dirección de correo electrónico"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.desc": {
+          "source": "Indicates whether the address is a residential location",
+          "message": "Indica si la dirección es una ubicación residencial"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "Residencial"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.short_desc": {
+          "source": "Is residential address",
+          "message": "Es dirección residencial"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "First and last name of the person at this address",
+          "message": "Nombre y apellidos de la persona en esta dirección"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Full name of the person",
+          "message": "Nombre completo de la persona"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State, province, or region code (e.g., CA for California)",
+          "message": "Código de estado, provincia o región (por ej., CA para California)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State/Province",
+          "message": "Estado/Provincia"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "Código de estado o provincia"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "Primera línea de la dirección postal"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street Address 1",
+          "message": "Dirección 1"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "Primary street address",
+          "message": "Dirección principal"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "Segunda línea de la dirección (apartamento, suite, etc.)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street Address 2",
+          "message": "Dirección 2"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Secondary street address",
+          "message": "Dirección secundaria"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.desc": {
+          "source": "Third line of the street address (optional)",
+          "message": "Tercera línea de la dirección (opcional)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.display_name": {
+          "source": "Street Address 3",
+          "message": "Dirección 3"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.short_desc": {
+          "source": "Additional street address",
+          "message": "Dirección adicional"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number including country code",
+          "message": "Número de teléfono con código de país incluido"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Teléfono"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Número de teléfono"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP or postal code",
+          "message": "Código postal"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP/Postal Code",
+          "message": "Código postal"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "Postal code",
+          "message": "Código postal"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
+          "source": "Validate a shipping address",
+          "message": "Validar una dirección de envío"
+        },
+        "app.U2hpcHBv.desc": {
+          "source": "Shippo is a multi-carrier shipping API and web application that simplifies the shipping process for e-commerce businesses. This integration enables creating shipments, generating shipping labels, managing orders, and tracking packages.\n\n**Features:**\n- Create shipments and get shipping rates from multiple carriers\n- Generate shipping labels for USPS, UPS, FedEx, DHL, and more\n- Track packages with real-time tracking updates\n- Manage orders and their fulfillment\n- Polling triggers for new parcels, shipments, and labels",
+          "message": "Shippo es una API y aplicación web de envíos con múltiples transportistas que simplifica el proceso de envío para empresas de comercio electrónico. Esta integración permite crear envíos, generar etiquetas de envío, gestionar pedidos y rastrear paquetes.\n\n**Características:**\n- Crear envíos y obtener tarifas de envío de múltiples transportistas\n- Generar etiquetas de envío para USPS, UPS, FedEx, DHL y más\n- Rastrear paquetes con actualizaciones de seguimiento en tiempo real\n- Gestionar pedidos y su cumplimiento\n- Disparadores de sondeo para nuevos paquetes, envíos y etiquetas"
+        },
+        "app.U2hpcHBv.display_name": {
+          "source": "Shippo",
+          "message": "Shippo"
+        },
+        "app.U2hpcHBv.short_desc": {
+          "source": "Shippo shipping platform",
+          "message": "Plataforma de envíos Shippo"
+        }
+      }
+    }
+  }
+}

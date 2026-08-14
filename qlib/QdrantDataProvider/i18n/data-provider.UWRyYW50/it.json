@@ -1,0 +1,597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.desc": {
+          "source": "Count the number of points in a Qdrant collection, optionally with a filter",
+          "message": "Conta il numero di punti in una collection Qdrant, facoltativamente con un filtro"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
+          "source": "Count Points",
+          "message": "Conta punti"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
+          "source": "Count points in a collection",
+          "message": "Conta i punti in una collection"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.desc": {
+          "source": "Check whether a specific collection exists in the Qdrant instance",
+          "message": "Verifica se una collection specifica esiste nell'istanza Qdrant"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
+          "source": "Collection Exists",
+          "message": "Collection esistente"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
+          "source": "Check if a collection exists",
+          "message": "Verifica se esiste una collection"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Create a new vector collection with configurable vector parameters and distance metrics",
+          "message": "Crea una nuova collezione vettoriale con parametri vettoriali e metriche di distanza configurabili"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Create Collection",
+          "message": "Crea collezione"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Create a new Qdrant collection",
+          "message": "Crea una nuova collezione Qdrant"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.desc": {
+          "source": "Create or upsert a point with a vector and optional payload in a Qdrant collection",
+          "message": "Crea o esegui l'upsert di un punto con un vettore e un payload facoltativo in una collezione Qdrant"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
+          "source": "Create/Upsert Point",
+          "message": "Crea/Upsert punto"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {
+          "source": "Create or upsert a point in a collection",
+          "message": "Crea o esegui l'upsert di un punto in una collezione"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.desc": {
+          "source": "Execute a batch of heterogeneous point operations (upsert, delete, set/overwrite/delete/clear payload, update/delete vectors) in a single request for high-performance bulk updates",
+          "message": "Esegui un batch di operazioni eterogenee sui punti (upsert, eliminazione, impostazione/sovrascrittura/eliminazione/azzeramento payload, aggiornamento/eliminazione vettori) in una singola richiesta per aggiornamenti in blocco ad alte prestazioni"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
+          "source": "Batch Update Points",
+          "message": "Aggiorna punti in batch"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
+          "source": "Apply multiple point operations in a single batch",
+          "message": "Applica più operazioni sui punti in un singolo batch"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.desc": {
+          "source": "Retrieve detailed information about a specific Qdrant collection, including its configuration and status",
+          "message": "Recupera informazioni dettagliate su una collezione Qdrant specifica, inclusi configurazione e stato"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
+          "source": "Get Collection",
+          "message": "Recupera raccolta"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
+          "source": "Get collection info",
+          "message": "Ottieni info collezione"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.desc": {
+          "source": "Retrieve specific points from a Qdrant collection by their IDs, including vectors and payloads",
+          "message": "Recupera punti specifici da una collezione Qdrant tramite i relativi ID, inclusi vettori e payload"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
+          "source": "Get Points",
+          "message": "Ottieni punti"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
+          "source": "Get specific points by ID",
+          "message": "Ottieni punti specifici per ID"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Delete a collection and all its data from the Qdrant instance",
+          "message": "Elimina una collezione e tutti i relativi dati dall'istanza Qdrant"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Delete Collection",
+          "message": "Elimina raccolta"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Delete a Qdrant collection",
+          "message": "Elimina una collezione Qdrant"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.desc": {
+          "source": "Delete points from a Qdrant collection by point IDs or by filter conditions",
+          "message": "Elimina punti da una collezione Qdrant tramite ID punto o condizioni di filtro"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
+          "source": "Delete Points",
+          "message": "Elimina punti"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
+          "source": "Delete points from a collection",
+          "message": "Elimina punti da una collezione"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.desc": {
+          "source": "Check the health status of the Qdrant server",
+          "message": "Verifica lo stato di integrità del server Qdrant"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
+          "source": "Health Check",
+          "message": "Controllo integrità"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
+          "source": "Check Qdrant server health",
+          "message": "Verifica l'integrità del server Qdrant"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.desc": {
+          "source": "Check if the Qdrant server is alive and responsive",
+          "message": "Verifica se il server Qdrant è attivo e reattivo"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
+          "source": "Liveness Check",
+          "message": "Controllo liveness"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
+          "source": "Check Qdrant server liveness",
+          "message": "Verifica l'attività del server Qdrant"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.desc": {
+          "source": "Retrieve a list of all aliases and their associated collections in the Qdrant instance",
+          "message": "Recupera un elenco di tutti gli alias e delle relative collezioni associate nell'istanza Qdrant"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
+          "source": "List All Aliases",
+          "message": "Elenca tutti gli alias"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
+          "source": "List all collection aliases",
+          "message": "Elenca tutti gli alias di collezione"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.desc": {
+          "source": "Retrieve a list of all collections in the Qdrant instance",
+          "message": "Recupera un elenco di tutte le collezioni nell'istanza Qdrant"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
+          "source": "List Collections",
+          "message": "Elenca raccolte"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
+          "source": "List all Qdrant collections",
+          "message": "Elenca tutte le collezioni Qdrant"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Qdrant Vector Database** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Qdrant Vector Database** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query facoltativi, intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint non ancora esposti come azioni native in questa applicazione."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Qdrant Vector Database",
+          "message": "Esegui una chiamata API personalizzata a Qdrant Vector Database"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.desc": {
+          "source": "Iterate through all points in a Qdrant collection using scroll-based pagination with optional filtering",
+          "message": "Esegui l'iterazione su tutti i punti in una collezione Qdrant utilizzando la paginazione con scroll e filtri facoltativi"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
+          "source": "Scroll Points",
+          "message": "Scorri punti"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
+          "source": "Scroll through points in a collection",
+          "message": "Scorri i punti in una collezione"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.desc": {
+          "source": "Set or update payload key-value pairs on points in a Qdrant collection by point IDs or filter conditions",
+          "message": "Imposta o aggiorna le coppie chiave-valore del payload sui punti in una collezione Qdrant tramite ID punto o condizioni di filtro"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
+          "source": "Set Payload",
+          "message": "Imposta payload"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
+          "source": "Set payload on points",
+          "message": "Imposta payload sui punti"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.desc": {
+          "source": "Vector similarity search on a Qdrant collection returning results as a record stream for efficient pipeline processing",
+          "message": "Ricerca per similarità vettoriale su una collezione Qdrant con risultati restituiti come flusso di record per un'elaborazione efficiente nella pipeline"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
+          "source": "Search Points",
+          "message": "Cerca punti"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
+          "source": "Search points with record streaming",
+          "message": "Cerca punti con streaming dei record"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.desc": {
+          "source": "Execute multiple vector similarity search queries in a single batch request against a Qdrant collection",
+          "message": "Esegui più query di ricerca per similarità vettoriale in una singola richiesta batch su una collezione Qdrant"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
+          "source": "Query Batch Points",
+          "message": "Interroga punti in batch"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
+          "source": "Perform batch vector similarity searches",
+          "message": "Esegui ricerche di similarità vettoriale in batch"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.desc": {
+          "source": "Execute a vector similarity search on a Qdrant collection with results grouped by a specified payload field",
+          "message": "Esegui una ricerca per similarità vettoriale su una collezione Qdrant con risultati raggruppati in base a un campo payload specificato"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
+          "source": "Query Grouped Points",
+          "message": "Interroga punti raggruppati"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
+          "source": "Perform grouped vector similarity search",
+          "message": "Esegui ricerca per similarità vettoriale raggruppata"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.desc": {
+          "source": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection",
+          "message": "Esegui ricerca per similarità vettoriale, filtri e ricerca ibrida su una collezione Qdrant"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
+          "source": "Query Points",
+          "message": "Interroga punti"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
+          "source": "Query points using vector similarity search",
+          "message": "Interroga punti tramite ricerca per similarità vettoriale"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.desc": {
+          "source": "Create, rename, or delete collection aliases in the Qdrant instance",
+          "message": "Crea, rinomina o elimina alias di collezione nell'istanza Qdrant"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
+          "source": "Update Aliases",
+          "message": "Aggiorna alias"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
+          "source": "Update collection aliases",
+          "message": "Aggiorna alias di collezione"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.desc": {
+          "source": "Insert or update points with vectors and optional payloads in a Qdrant collection",
+          "message": "Inserisci o aggiorna punti con vettori e payload facoltativi in una collezione Qdrant"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
+          "source": "Upsert Points",
+          "message": "Upsert punti"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
+          "source": "Insert or update points in a collection",
+          "message": "Inserisci o aggiorna punti in una collezione"
+        },
+        "app.UWRyYW50.desc": {
+          "source": "Qdrant vector database providing similarity search, hybrid search, and vector CRUD operations for AI/ML and RAG pipelines",
+          "message": "Database vettoriale Qdrant che fornisce ricerca per similarità, ricerca ibrida e operazioni CRUD sui vettori per pipeline di AI/ML e RAG"
+        },
+        "app.UWRyYW50.display_name": {
+          "source": "Qdrant Vector Database",
+          "message": "Qdrant Vector Database"
+        },
+        "app.UWRyYW50.short_desc": {
+          "source": "Qdrant vector database for similarity search and RAG",
+          "message": "Database vettoriale Qdrant per ricerca per similarità e RAG"
+        }
+      }
+    }
+  }
+}

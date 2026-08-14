@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a Server Sent Event (SSE) message",
+          "message": "Отримати повідомлення Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Server Sent Event (SSE) Message",
+          "message": "Повідомлення Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout to use in milliseconds",
+          "message": "Час очікування з'єднання в мілісекундах"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Тайм-аут з'єднання"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connect timeout in milliseconds",
+          "message": "Час очікування підключення в мілісекундах"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "URL-адреса або шлях до файлу схеми AsyncAPI, що використовується для валідації отриманих даних подій SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Схема AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL-адреса або шлях до файлу схеми AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "Назва каналу AsyncAPI для використання, коли налаштовано `asyncapi`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Канал AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Канал AsyncAPI для перевірки"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; if serialization is set to 'json' and the body is not a string, it will be serialized to JSON automatically. Only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "Тіло запиту для надсилання із запитом на з'єднання SSE; якщо для серіалізації встановлено значення 'json' і тіло не є рядком, воно буде автоматично серіалізовано в JSON. Дійсно лише для методів, відмінних від GET. Тіло надсилається повторно під час кожної спроби повторного підключення"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "Тіло запиту"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "Тіло запиту для SSE-запитів, відмінних від GET"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Use no data serialization",
+          "message": "Не використовувати серіалізацію даних"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Use JSON serialization",
+          "message": "Використовувати серіалізацію JSON"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.desc": {
+          "source": "data serialization to use:\n - `json`: JSON serialization (default)\n - `none`: no serialization; raw messages\n",
+          "message": "серіалізація даних для використання:\n - `json`: серіалізація JSON (за замовчуванням)\n - `none`: без серіалізації; необроблені повідомлення\n"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Серіалізація даних"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization for string messages",
+          "message": "Серіалізація даних для рядкових повідомлень"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.desc": {
+          "source": "HTTP headers to add in the initial connection request",
+          "message": "Заголовки HTTP для додавання до початкового запиту на підключення"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.display_name": {
+          "source": "Request Headers",
+          "message": "Заголовки запиту"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.short_desc": {
+          "source": "HTTP headers to send in the request",
+          "message": "Заголовки HTTP для надсилання в запиті"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Лише HTTP/1.0"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Лише HTTP/1.1"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Вимагати HTTP/2, повертати помилку, якщо сервер його не підтримує (потрібен TLS)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Вимагати HTTP/3 (QUIC), повертати помилку, якщо недоступно (потрібен TLS)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Використовувати алгоритм Happy Eyeballs із пріоритетом HTTP/3 для HTTPS; повертатися до HTTP/2 за потреби (за замовчуванням)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC",
+          "message": "Версія HTTP для використання: `auto` (спочатку HTTP/3 за протоколом Happy Eyeballs для HTTPS, за замовчуванням), `1.0`, `1.1`, `2.0` або `3.0`. Для HTTP/2 потрібен TLS і узгодження через ALPN. Для HTTP/3 потрібен TLS і використовується QUIC"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Версія HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "HTTP version to use",
+          "message": "Версія HTTP для використання"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.desc": {
+          "source": "Any logger to use for information about data provider operations",
+          "message": "Будь-який реєстратор для використання для отримання інформації про операції постачальника даних"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.display_name": {
+          "source": "Logger",
+          "message": "Логер"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.short_desc": {
+          "source": "The logger to use",
+          "message": "Реєстратор для використання"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "Запит до сервера на повторне надсилання подій починаючи з цього ідентифікатора. Це буде надіслано в заголовку `Last-Event-ID` у запиті на підключення до сервера SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "Ідентифікатор останньої події"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "Запит до сервера на відновлення надсилання подій починаючи з цього ідентифікатора"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Максимальна кількість підтримуваних перенаправлень HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max HTTP Redirects",
+          "message": "Макс. кількість перенаправлень HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Максимальна кількість підтримуваних перенаправлень HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "Метод HTTP для використання в запиті на підключення SSE; за замовчуванням: GET. Використовуйте POST для API, які вимагають тіла запиту (наприклад, потокові API OpenAI, Anthropic)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "Метод HTTP для запиту на підключення SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.desc": {
+          "source": "A `ServerSentEventClient` for the connection; either this or the `url` option must be provided; if this option is provided, then all other options are ignored",
+          "message": "`ServerSentEventClient` для підключення; необхідно вказати або цей параметр, або параметр `url`; якщо вказано цей параметр, усі інші параметри ігноруються"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.display_name": {
+          "source": "ServerSentEvent Client",
+          "message": "Клієнт ServerSentEvent"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.short_desc": {
+          "source": "The ServerSentEventClient object",
+          "message": "Об'єкт ServerSentEventClient"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Пароль для базової автентифікації HTTP; використовується лише тоді, коли в URL-адресі не вказано ім'я користувача або пароль і також використовується параметр `username`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Пароль"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "Пароль для базової автентифікації HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.desc": {
+          "source": "The proxy URL to use",
+          "message": "URL-адреса проксі для використання"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP-проксі"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "HTTP-проксі для використання"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Автоматично відновлювати з'єднання, якщо воно закрите або втрачене"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Повторно підключити?"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.short_desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Автоматично відновлювати з'єднання, якщо воно закрите або втрачене"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.desc": {
+          "source": "Any bearer token to use for the connection; will be passed as `Authorization: Bearer ...`  (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then OAuth2 options are ignored for login",
+          "message": "Будь-який токен на пред'явника (bearer token) для використання підключення; передаватиметься як `Authorization: Bearer ...`  (за умови, що `token_type` має значення `Bearer`) у заголовках запиту; цей параметр не можна використовувати разом із параметрами імені користувача та пароля або інформацією про автентифікацію в URL; якщо цей параметр встановлено, параметри OAuth2 для входу ігноруються"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Токен авторизації"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Установити токен авторизації для включення в запити"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Тип `token` для використання в заголовку `Authorization`; ігнорується, якщо параметр `token` не встановлено"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Тип токена авторизації"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Тип токена авторизації"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Максимальний час виконання однієї операції введення-виведення в мілісекундах"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Таймаут вводу/виводу"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.short_desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Максимальний час виконання однієї операції введення-виведення в мілісекундах"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.desc": {
+          "source": "A URL for a ServerSentEvent connection; either this or the `sseclient` option must be provided",
+          "message": "URL-адреса для з'єднання ServerSentEvent; необхідно вказати або її, або параметр `sseclient`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL-адреса"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.short_desc": {
+          "source": "The URL to connect to",
+          "message": "URL-адреса для підключення"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.desc": {
+          "source": "The username for HTTP basic authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Ім'я користувача для базової автентифікації HTTP; використовується лише тоді, коли в URL-адресі не вказано ім'я користувача або пароль і також використовується параметр `password`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Ім'я користувача"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Встановлює ім'я користувача для базової автентифікації HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Server Sent Event (SSE) is received",
+          "message": "Отримано подію Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Отримувати Server Sent Events"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.display_name": {
+          "source": "Server Sent Events (SSE)",
+          "message": "Server Sent Events (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.short_desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Отримувати Server Sent Events"
+        }
+      }
+    }
+  }
+}

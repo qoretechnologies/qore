@@ -1,0 +1,3181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.desc": {
+          "source": "Create a new bill from a vendor in Zoho Books",
+          "message": "Створити новий рахунок від постачальника в Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.display_name": {
+          "source": "Create Bill",
+          "message": "Створити рахунок постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.desc": {
+          "source": "A unique sequential identifier for the bill",
+          "message": "Унікальний послідовний ідентифікатор рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Номер рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Унікальний ідентифікатор рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Дата виставлення рахунка у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Дата рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Дата виставлення рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Термін оплати у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Список позицій із полями: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Позиції рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Додаткові примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Vendor's reference number for this bill",
+          "message": "Номер посилання постачальника для цього рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Зовнішнє посилання постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Умови оплати та доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Постачальник для рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.short_desc": {
+          "source": "Create a new bill",
+          "message": "Створити новий рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new customer or vendor contact in Zoho Books",
+          "message": "Створити новий контакт клієнта або постачальника в Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Створити контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Legal name of the company (max 200 characters)",
+          "message": "Юридична назва компанії (макс. 200 символів)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Юридична назва компанії"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Контакт клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Контакт постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Список контактних осіб із полями: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Контактні особи"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Список контактних осіб"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "Currency ID for transactions with this contact",
+          "message": "ID валюти для транзакцій із цим контактом"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Валюта для транзакцій"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Платіжна адреса з полями: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Адреса для виставлення рахунку"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Дані платіжної адреси"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Додаткові примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Адреса доставки з полями: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Адреса доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Дані адреси доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "Number of days within which payment must be made",
+          "message": "Кількість днів, протягом яких має бути здійснено оплату"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Створити новий контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Record a new expense in Zoho Books",
+          "message": "Зареєструвати нову витрату в Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "Створити витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Customer to bill if the expense is billable",
+          "message": "Клієнт для виставлення рахунка, якщо витрата підлягає оплаті"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Клієнт для виставлення рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Сума витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Обліковий запис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Рахунок витрат"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Дата витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Опис витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Оплачувана"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Чи підлягає ця витрата відшкодуванню"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Постачальник для витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "Створити нову витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new quote/estimate for a customer",
+          "message": "Створити нову комерційну пропозицію/оцінку для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "Створити кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Клієнт для кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Дата кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Дата закінчення терміну дії"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Дата закінчення терміну дії оцінки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Список позицій із полями: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Позиції кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Примітки для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "Створити новий кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in Zoho Books",
+          "message": "Створити нову позицію товару або послуги в Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Створити позицію"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Опис товару"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Оподатковуваний"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.short_desc": {
+          "source": "Whether the item is taxable",
+          "message": "Чи обкладається позиція податком"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Item Name",
+          "message": "Назва позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Name of the item",
+          "message": "Назва позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit code",
+          "message": "Артикул (SKU)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOmdvb2Rz.desc": {
+          "source": "Physical goods",
+          "message": "Матеріальні товари"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOnNlcnZpY2U.desc": {
+          "source": "Services",
+          "message": "Послуги"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.display_name": {
+          "source": "Product Type",
+          "message": "Тип товару"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.short_desc": {
+          "source": "Type of product",
+          "message": "Тип продукту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Тариф"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Price/rate of the item",
+          "message": "Ціна/тариф позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.display_name": {
+          "source": "Tax",
+          "message": "Податок"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.short_desc": {
+          "source": "Tax to apply",
+          "message": "Податок для застосування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.desc": {
+          "source": "Unit of measurement (e.g., `pcs`, `kg`, `hrs`)",
+          "message": "Одиниця вимірювання (наприклад, `pcs`, `kg`, `hrs`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Одиниця"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Одиниця вимірювання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Створити новий товар"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Books for a customer",
+          "message": "Створити новий рахунок-фактуру в Zoho Books для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Створити рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Значення настроюваних полів для рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Настроювані поля"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Значення настроюваних полів"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Ідентифікатор клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Будь-яке коригування загальної суми рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Сума коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "Дата рахунка-фактури (формат `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Сума або відсоток знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Знижка, що застосовується на рівні рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Знижка, що застосовується для кожного рядка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Чи застосовується знижка на рівні сутності чи на рівні позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Тип знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Тип знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "Кінцевий термін оплати (формат `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number (auto-generated if not provided)",
+          "message": "Користувацький номер рахунка-фактури (генерується автоматично, якщо не вказано)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Номер рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Користувацький номер рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Чи застосовувати знижку до розрахунку податку"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Знижка до оподаткування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Застосовувати знижку до розрахунку податку"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice",
+          "message": "Позиції в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Позиції рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Примітки для відображення в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Примітки до рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Ім'я продавця"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Менеджер з продажу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Ім'я продавця"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Вартість доставки в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Умови оплати в днях (наприклад, 30 для Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Необов'язковий довідковий номер (наприклад, номер замовлення)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Умови та положення для відображення в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Створити новий рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a payment received from a customer",
+          "message": "Зареєструвати платіж, отриманий від клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "Створити платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Клієнт, який здійснює платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Сума платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "ID of the account where the payment will be deposited",
+          "message": "ID рахунку, на який буде зараховано платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Deposit Account",
+          "message": "Рахунок зарахування"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Account to deposit payment",
+          "message": "Рахунок для зарахування платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Дата платежу у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Дата платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Дата платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Опис платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Список рахунків-фактур із полями: `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Рахунки-фактури для застосування платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmF1dG90cmFuc2FjdGlvbg.desc": {
+          "source": "Auto transaction",
+          "message": "Автоматична транзакція"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmt0cmFuc2Zlcg.desc": {
+          "source": "Bank transfer",
+          "message": "Банківський переказ"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmtyZW1pdHRhbmNl.desc": {
+          "source": "Bank remittance",
+          "message": "Банківський грошовий переказ"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "Платіж готівкою"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "Платіж чеком"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNyZWRpdGNhcmQ.desc": {
+          "source": "Credit card payment",
+          "message": "Платіж кредитною карткою"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.desc": {
+          "source": "The mode of payment used",
+          "message": "Використаний спосіб оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Спосіб оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Спосіб оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Reference number for the payment transaction",
+          "message": "Довідковий номер платіжної транзакції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Довідковий номер транзакції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Створити новий платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Create a new sales order for a customer",
+          "message": "Створити нове замовлення на продаж для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Create Sales Order",
+          "message": "Створити замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Клієнт для замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Дата замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Список позицій із полями: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Позиції замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Примітки для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Очікувана дата відправлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Створити нове замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.desc": {
+          "source": "Retrieve details of a specific bill",
+          "message": "Отримати відомості про конкретний рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.display_name": {
+          "source": "Get Bill",
+          "message": "Отримати рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to retrieve",
+          "message": "Рахунок для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.short_desc": {
+          "source": "Get bill details",
+          "message": "Отримати відомості про рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact",
+          "message": "Отримати відомості про конкретний контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Отримати контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Контакт, який потрібно отримати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by ID",
+          "message": "Отримати контакт за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve details of a specific expense",
+          "message": "Отримати відомості про конкретну витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "Отримати витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "Ідентифікатор витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to retrieve",
+          "message": "Витрата для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get an expense by ID",
+          "message": "Отримати витрату за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve details of a specific estimate",
+          "message": "Отримати відомості про конкретний кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "Отримати кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to retrieve",
+          "message": "Кошторис для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get an estimate by ID",
+          "message": "Отримати кошторис за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item",
+          "message": "Отримати відомості про конкретний товар"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Отримати елемент"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item ID",
+          "message": "Ідентифікатор елемента"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "Елемент для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get an item by ID",
+          "message": "Отримати товар за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice",
+          "message": "Отримати відомості про конкретний рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Отримати рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Рахунок-фактура для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Отримати відомості про рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Retrieve details of a specific purchase order",
+          "message": "Отримати відомості про конкретне замовлення на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Отримати замовлення на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order ID",
+          "message": "Ідентифікатор замовлення на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Замовлення на купівлю для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Get a purchase order by ID",
+          "message": "Отримати замовлення на купівлю за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve details of a specific payment",
+          "message": "Отримати відомості про конкретний платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "Отримати платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Ідентифікатор платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to retrieve",
+          "message": "Платіж для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get payment details",
+          "message": "Отримати відомості про платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.desc": {
+          "source": "Retrieve details of a specific sales order",
+          "message": "Отримати відомості про конкретне замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.display_name": {
+          "source": "Get Sales Order",
+          "message": "Отримати замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Замовлення на продаж для отримання"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Get a sales order by ID",
+          "message": "Отримати замовлення на продаж за ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.desc": {
+          "source": "Delete a bill from Zoho Books",
+          "message": "Видалити рахунок постачальника із Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.display_name": {
+          "source": "Delete Bill",
+          "message": "Видалити рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to delete",
+          "message": "Рахунок постачальника для видалення"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.short_desc": {
+          "source": "Delete a bill",
+          "message": "Видалити рахунок постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Books",
+          "message": "Видалити рахунок-фактуру із Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Видалити рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Рахунок-фактура для видалення"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Видалити рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Delete a payment record from Zoho Books",
+          "message": "Видалити запис платежу із Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "Видалити платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Ідентифікатор платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to delete",
+          "message": "Платіж для видалення"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "Видалити платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Delete a sales order from Zoho Books",
+          "message": "Видалити замовлення на продаж із Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Видалити замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Замовлення на продаж для видалення"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Видалити замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.desc": {
+          "source": "Send an invoice to the customer via email",
+          "message": "Надіслати рахунок-фактуру клієнту електронною поштою"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.display_name": {
+          "source": "Email Invoice",
+          "message": "Надіслати рахунок-фактуру електронною поштою"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.short_desc": {
+          "source": "Email body",
+          "message": "Тіло електронного листа"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to email",
+          "message": "Рахунок-фактура для надсилання електронною поштою"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Тема електронного листа"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.desc": {
+          "source": "Email addresses to send the invoice to",
+          "message": "Адреси електронної пошти для надсилання рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.display_name": {
+          "source": "To",
+          "message": "Кому"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.short_desc": {
+          "source": "Recipient email addresses",
+          "message": "Адреси електронної пошти одержувачів"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.short_desc": {
+          "source": "Send an invoice by email",
+          "message": "Надіслати рахунок-фактуру електронною поштою"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.desc": {
+          "source": "Retrieve a list of bills with optional filtering",
+          "message": "Отримати список рахунків постачальників із можливістю фільтрації"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.display_name": {
+          "source": "List Bills",
+          "message": "Список рахунків на оплату"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue bills",
+          "message": "Прострочені рахунки постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open bills",
+          "message": "Відкриті рахунки постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid bills",
+          "message": "Оплачені рахунки постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid bills",
+          "message": "Частково оплачені рахунки постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided bills",
+          "message": "Анульовані рахунки постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by bill status",
+          "message": "Фільтрувати за статусом рахунка постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Фільтрувати за постачальником"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.short_desc": {
+          "source": "List all bills",
+          "message": "Отримати список усіх рахунків постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of contacts (customers and vendors)",
+          "message": "Отримати список контактів (клієнтів і постачальників)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Список контактів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contacts only",
+          "message": "Лише контакти клієнтів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contacts only",
+          "message": "Лише контакти постачальників"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Фільтр за типом контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Отримати список усіх контактів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.desc": {
+          "source": "Retrieve a list of estimates/quotes",
+          "message": "Отримати список кошторисів/комерційних пропозицій"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
+          "source": "List Estimates",
+          "message": "Список кошторисів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
+          "source": "List all estimates",
+          "message": "Отримати список усіх кошторисів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.desc": {
+          "source": "Retrieve a list of expenses",
+          "message": "Отримати список витрат"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.display_name": {
+          "source": "List Expenses",
+          "message": "Список витрат"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.short_desc": {
+          "source": "List all expenses",
+          "message": "Отримати список усіх витрат"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices with optional filtering",
+          "message": "Отримати список рахунків-фактур із можливістю фільтрації"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Список рахунків-фактур"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Фільтрувати за клієнтом"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Прострочені рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Чернетки рахунків-фактур"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Оплачені рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Частково сплачені рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Надіслані рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Несплачені рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided invoices",
+          "message": "Анульовані рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Фільтрувати за статусом рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List all invoices",
+          "message": "Отримати список усіх рахунків-фактур"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items (products and services)",
+          "message": "Отримати список позицій (товарів і послуг)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Список елементів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List all items",
+          "message": "Отримати список усіх позицій"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "Retrieve a list of customer payments",
+          "message": "Отримати список платежів клієнтів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Список платежів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List all payments",
+          "message": "Отримати список усіх платежів"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.desc": {
+          "source": "Retrieve a list of purchase orders",
+          "message": "Отримати список замовлень на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Список замовлень на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.short_desc": {
+          "source": "List all purchase orders",
+          "message": "Отримати список усіх замовлень на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.desc": {
+          "source": "Retrieve a list of sales orders",
+          "message": "Отримати список замовлень на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.display_name": {
+          "source": "List Sales Orders",
+          "message": "Список замовлень на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.short_desc": {
+          "source": "List all sales orders",
+          "message": "Отримати список усіх замовлень на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Books** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Zoho Books**, використовуючи автентифікацію налаштованого підключення.\n\nУкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов’язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як стандартні дії в цій програмі."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Books",
+          "message": "Виконати довільний виклик API до Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.desc": {
+          "source": "Fires when a new bill is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує при створенні нового рахунка постачальника в Zoho Books. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.display_name": {
+          "source": "New Bill",
+          "message": "Новий рахунок постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new bills (seconds)",
+          "message": "Як часто перевіряти наявність нових рахунків постачальників (секунди)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.short_desc": {
+          "source": "Trigger when a new bill is created",
+          "message": "Запускати при створенні нового рахунка постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.desc": {
+          "source": "Fires when a new customer contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється новий контакт клієнта. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.display_name": {
+          "source": "New Customer",
+          "message": "Новий клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new customers (seconds)",
+          "message": "Як часто перевіряти наявність нових клієнтів (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Запускати, коли створюється новий клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.desc": {
+          "source": "Fires when a new expense is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books реєструється нова витрата. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.display_name": {
+          "source": "New Expense",
+          "message": "Нова витрата"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new expenses (seconds)",
+          "message": "Як часто перевіряти наявність нових витрат (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "Запускати, коли створюється нова витрата"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.desc": {
+          "source": "Fires when a new estimate/quote is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється новий кошторис / комерційна пропозиція. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.display_name": {
+          "source": "New Estimate",
+          "message": "Новий кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new estimates (seconds)",
+          "message": "Як часто перевіряти наявність нових кошторисів (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "Запускати, коли створюється новий кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new product/service item is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється новий товар/послуга. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Новий елемент"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Як часто перевіряти наявність нових товарів/послуг (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Запускати, коли створюється новий товар/послуга"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється новий рахунок-фактура. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Новий рахунок-фактура"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Як часто перевіряти наявність нових рахунків-фактур (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Запускати, коли створюється новий рахунок-фактура"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється нове замовлення на купівлю. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "New Purchase Order",
+          "message": "Нове замовлення на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Як часто перевіряти наявність нових замовлень на купівлю (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Запускати, коли створюється нове замовлення на купівлю"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books реєструється новий платіж. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Новий платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new payments (seconds)",
+          "message": "Як часто перевіряти наявність нових платежів (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Спрацьовує при отриманні нового платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.desc": {
+          "source": "Fires when a new sales order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється нове замовлення на продаж. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.display_name": {
+          "source": "New Sales Order",
+          "message": "Нове замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Як часто перевіряти наявність нових замовлень на продаж (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Запускати, коли створюється нове замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.desc": {
+          "source": "Fires when a new vendor contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Zoho Books створюється новий контакт постачальника. Використовує опитування для виявлення нових записів."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.display_name": {
+          "source": "New Vendor",
+          "message": "Новий постачальник"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new vendors (seconds)",
+          "message": "Як часто перевіряти наявність нових постачальників (у секундах)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.short_desc": {
+          "source": "Trigger when a new vendor is created",
+          "message": "Запускати, коли створюється новий постачальник"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.desc": {
+          "source": "Update an existing bill in Zoho Books",
+          "message": "Оновити наявний рахунок у Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.display_name": {
+          "source": "Update Bill",
+          "message": "Оновити рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to update",
+          "message": "Рахунок для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Номер рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Унікальний ідентифікатор рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Дата виставлення рахунка у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Дата рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Дата виставлення рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Термін оплати у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Список позицій із полями: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Позиції рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Додаткові примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Зовнішнє посилання постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Умови оплати та доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Постачальник для рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.short_desc": {
+          "source": "Update an existing bill",
+          "message": "Оновити наявний рахунок"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact's information",
+          "message": "Оновити інформацію наявного контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Оновити контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Юридична назва компанії"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Контакт клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Контакт постачальника"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Тип контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Контакт для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Список контактних осіб із полями: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Контактні особи"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Список контактних осіб"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Валюта для транзакцій"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Платіжна адреса з полями: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Адреса для виставлення рахунку"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Дані платіжної адреси"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Додаткові примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Адреса доставки з полями: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Адреса доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Дані адреси доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Оновити існуючий контакт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense record",
+          "message": "Оновити наявний запис витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "Оновити витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Клієнт для виставлення рахунка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Сума витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Обліковий запис"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Рахунок витрат"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Дата витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Опис витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "Ідентифікатор витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to update",
+          "message": "Витрата для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Оплачувана"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Чи підлягає ця витрата відшкодуванню"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Продавець"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Постачальник для витрати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "Оновити наявну витрату"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing quote/estimate",
+          "message": "Оновити наявний кошторис / комерційну пропозицію"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "Оновити кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Клієнт для кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Дата кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "Кошторис для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Дата закінчення терміну дії"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Дата закінчення терміну дії оцінки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Список позицій"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Позиції кошторису"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Примітки для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "Оновити наявний кошторис"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Books",
+          "message": "Оновити наявний рахунок-фактуру в Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Оновити рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Значення настроюваних полів для рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Настроювані поля"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Значення настроюваних полів"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer for this invoice",
+          "message": "Ідентифікатор клієнта для цього рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Ідентифікатор клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Будь-яке коригування загальної суми рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Сума коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Опис коригування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "Дата рахунка-фактури (формат `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Сума або відсоток знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Знижка, що застосовується на рівні рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Знижка, що застосовується для кожного рядка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Чи застосовується знижка на рівні сутності чи на рівні позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Тип знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Тип знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "Кінцевий термін оплати (формат `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Термін оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The ID of the invoice to update",
+          "message": "Ідентифікатор рахунка-фактури для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Invoice to update",
+          "message": "Рахунок-фактура для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number",
+          "message": "Користувацький номер рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Номер рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Користувацький номер рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Чи застосовувати знижку до розрахунку податку"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Знижка до оподаткування"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Застосовувати знижку до розрахунку податку"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice (replaces existing line items if provided)",
+          "message": "Позиції в рахунку-фактурі (замінює наявні позиції, якщо вказано)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Позиції рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Примітки для відображення в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Примітки до рахунка-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Ім'я продавця"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Менеджер з продажу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Ім'я продавця"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Вартість доставки в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Вартість доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Умови оплати в днях (наприклад, 30 для Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Умови оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Умови оплати в днях"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Необов'язковий довідковий номер (наприклад, номер замовлення)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Умови та положення для відображення в рахунку-фактурі"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Оновити наявний рахунок-фактуру"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment record",
+          "message": "Оновити наявний запис платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "Оновити платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Клієнт, який здійснює платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Сума платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Дата платежу у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Дата платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Дата платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Опис платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Список рахунків-фактур із полями: `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Рахунки-фактури"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Рахунки-фактури для застосування платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Ідентифікатор платежу"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to update",
+          "message": "Платіж для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Спосіб оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Спосіб оплати"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Довідковий номер транзакції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Оновити наявний платіж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Update an existing sales order",
+          "message": "Оновити наявне замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Update Sales Order",
+          "message": "Оновити замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Клієнт для замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Дата замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Знижка"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Сума знижки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Організація Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Список позицій"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Позиції"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Позиції замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Примітки для клієнта"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Замовлення на продаж для оновлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Дата у форматі `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Дата відправлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Очікувана дата відправлення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Номер посилання"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Умови"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Умови та положення"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Оновити наявне замовлення на продаж"
+        },
+        "app.Wm9ob0Jvb2tz.desc": {
+          "source": "Zoho Books is online accounting software that manages your finances, automates business workflows, and helps you work collectively across departments.\n\nThis integration supports invoices, bills, payments, contacts, expenses, estimates, sales orders, purchase orders, and items.",
+          "message": "Zoho Books — це онлайн-програма для бухгалтерського обліку, яка керує вашими фінансами, автоматизує робочі процеси бізнесу та допомагає злагоджено працювати між відділами.\n\nЦя інтеграція підтримує рахунки-фактури, рахунки до сплати, платежі, контакти, витрати, кошториси, замовлення на продаж, замовлення на купівлю та товари/послуги."
+        },
+        "app.Wm9ob0Jvb2tz.display_name": {
+          "source": "Zoho Books",
+          "message": "Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.short_desc": {
+          "source": "Zoho Books online accounting software",
+          "message": "Онлайн-програма для бухгалтерського обліку Zoho Books"
+        }
+      }
+    }
+  }
+}

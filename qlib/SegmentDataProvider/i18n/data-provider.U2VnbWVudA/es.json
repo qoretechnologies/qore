@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Create a new integration destination in Segment.",
+          "message": "Cree un nuevo destino de integración en Segment."
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Create Destination",
+          "message": "Crear destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the destination or `False` to create it in a disabled state",
+          "message": "Establézcalo en `True` para habilitar el destino o en `False` para crearlo en estado deshabilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the destination should be enabled",
+          "message": "Indica si el destino debe estar habilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the destination type from the Segment catalog (e.g., `catalog/destinations/google-analytics`)",
+          "message": "El ID de metadatos del tipo de destino del catálogo de Segment (p. ej., `catalog/destinations/google-analytics`)"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "ID de metadatos"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the destination type",
+          "message": "ID de catálogo del tipo de destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.desc": {
+          "source": "A human-readable display name for the destination",
+          "message": "Un nombre visible e inteligible para el destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.short_desc": {
+          "source": "Destination name",
+          "message": "Nombre del destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to connect this destination to",
+          "message": "El identificador único de la fuente de Segment a la que se conectará este destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ID de la fuente"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to connect to",
+          "message": "El ID de la fuente a la que conectarse"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.desc": {
+          "source": "A key-value object holding configuration settings required by the destination type, including connection credentials and options (for example, a Google Analytics destination may accept `{\"trackingId\": \"UA-...\"}`, while a webhook destination may accept `{\"hooks\": [\"https://example.com/hook\"]}`); consult the destination catalog for the exact schema for the selected `metadataId`",
+          "message": "Un objeto clave-valor que contiene los ajustes de configuración requeridos por el tipo de destino, incluidas las credenciales de conexión y las opciones (por ejemplo, un destino de Google Analytics puede aceptar `{\"trackingId\": \"UA-...\"}`, mientras que un destino de webhook puede aceptar `{\"hooks\": [\"https://example.com/hook\"]}`); consulte el catálogo de destinos para ver el esquema exacto para el `metadataId` seleccionado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.short_desc": {
+          "source": "Destination configuration settings",
+          "message": "Ajustes de configuración del destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Create a new destination",
+          "message": "Crear un nuevo destino"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label in Segment for organizing resources.",
+          "message": "Cree una nueva etiqueta en Segment para organizar recursos."
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "Crear etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An optional human-readable description explaining the purpose of this label",
+          "message": "Una descripción opcional e inteligible que explica el propósito de esta etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Label description",
+          "message": "Descripción de la etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.desc": {
+          "source": "The key for the new label; labels are key-value pairs used to organize Segment resources",
+          "message": "La clave para la nueva etiqueta; las etiquetas son pares clave-valor utilizados para organizar los recursos de Segment"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.display_name": {
+          "source": "Key",
+          "message": "Clave"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.a2V5.short_desc": {
+          "source": "Label key",
+          "message": "Clave de la etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.desc": {
+          "source": "The value for the new label",
+          "message": "El valor para la nueva etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Valor"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.option.dmFsdWU.short_desc": {
+          "source": "Label value",
+          "message": "Valor de la etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label",
+          "message": "Crear una nueva etiqueta"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.desc": {
+          "source": "Create a new data collection source in Segment.",
+          "message": "Cree una nueva fuente de recopilación de datos en Segment."
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "Origen de creación"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.desc": {
+          "source": "Set to `True` to disconnect all currently-connected warehouses from this source on creation; defaults to `False`",
+          "message": "Establézcalo en `True` para desconectar todos los almacenes de datos actualmente conectados de esta fuente al crearla; el valor predeterminado es `False`"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.display_name": {
+          "source": "Disconnect All Warehouses",
+          "message": "Desconectar todos los almacenes de datos"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZGlzY29ubmVjdEFsbFdhcmVob3VzZXM.short_desc": {
+          "source": "Disconnect all warehouses on creation",
+          "message": "Desconectar todos los almacenes de datos al crear"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the source or `False` to create it in a disabled state",
+          "message": "Establézcalo en `True` para habilitar la fuente o en `False` para crearla en estado deshabilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the source should be enabled",
+          "message": "Indica si la fuente debe estar habilitada"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the source type from the Segment catalog (e.g., `catalog/sources/javascript`)",
+          "message": "El ID de metadatos del tipo de fuente del catálogo de Segment (p. ej., `catalog/sources/javascript`)"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "ID de metadatos"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the source type",
+          "message": "ID de catálogo del tipo de fuente"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.desc": {
+          "source": "A key-value object holding configuration settings specific to the source type; the available keys depend on the selected `metadataId` (for example, an HTTP API source may accept `{\"trackUtmTags\": True}` while a JavaScript source may accept `{\"writeKey\": \"...\"}`); consult the source catalog for the exact schema",
+          "message": "Un objeto clave-valor que contiene los ajustes de configuración específicos del tipo de fuente; las claves disponibles dependen del `metadataId` seleccionado (por ejemplo, una fuente de API HTTP puede aceptar `{\"trackUtmTags\": True}`, mientras que una fuente de JavaScript puede aceptar `{\"writeKey\": \"...\"}`); consulte el catálogo de fuentes para ver el esquema exacto"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Source configuration settings",
+          "message": "Ajustes de configuración de la fuente"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.desc": {
+          "source": "A URL-friendly identifier for the source; must be unique within the workspace",
+          "message": "Un identificador compatible con URL para la fuente; debe ser único dentro del espacio de trabajo"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.option.c2x1Zw.short_desc": {
+          "source": "URL-friendly source name",
+          "message": "Nombre de la fuente compatible con URL"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXNvdXJjZQ.short_desc": {
+          "source": "Create a new source",
+          "message": "Crear una nueva fuente"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Create a new tracking plan in Segment for defining and enforcing event schemas.",
+          "message": "Cree un nuevo plan de seguimiento en Segment para definir y aplicar esquemas de eventos."
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Create Tracking Plan",
+          "message": "Crear plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the tracking plan",
+          "message": "Una descripción del plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.desc": {
+          "source": "The name of the new tracking plan",
+          "message": "El nombre del nuevo plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.short_desc": {
+          "source": "Tracking plan name",
+          "message": "Nombre del plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.desc": {
+          "source": "Engage tracking plan",
+          "message": "Plan de seguimiento de Engage"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.display_name": {
+          "source": "Engage",
+          "message": "Engage"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.desc": {
+          "source": "Live tracking plan",
+          "message": "Plan de seguimiento Live"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.display_name": {
+          "source": "Live",
+          "message": "Live"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.desc": {
+          "source": "Property library",
+          "message": "Biblioteca de propiedades"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.display_name": {
+          "source": "Property Library",
+          "message": "Biblioteca de propiedades"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.desc": {
+          "source": "Rule library",
+          "message": "Biblioteca de reglas"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.display_name": {
+          "source": "Rule Library",
+          "message": "Biblioteca de reglas"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.desc": {
+          "source": "Template tracking plan",
+          "message": "Plantilla de plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.display_name": {
+          "source": "Template",
+          "message": "Plantilla"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.desc": {
+          "source": "The type of tracking plan to create",
+          "message": "El tipo de plan de seguimiento a crear"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.option.dHlwZQ.short_desc": {
+          "source": "Tracking plan type",
+          "message": "Tipo de plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Create a new tracking plan",
+          "message": "Crear un nuevo plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Create a new data warehouse connection in Segment.",
+          "message": "Cree una nueva conexión de almacén de datos en Segment."
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Create Warehouse",
+          "message": "Crear almacén de datos"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.desc": {
+          "source": "Set to `True` to disconnect all currently-connected sources from this warehouse on creation; defaults to `False`",
+          "message": "Establézcalo en `True` para desconectar todas las fuentes actualmente conectadas de este almacén de datos al crearlo; el valor predeterminado es `False`"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.display_name": {
+          "source": "Disconnect All Sources",
+          "message": "Desconectar todas las fuentes"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZGlzY29ubmVjdEFsbFNvdXJjZXM.short_desc": {
+          "source": "Disconnect all sources on creation",
+          "message": "Desconectar todas las fuentes al crear"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the warehouse or `False` to create it in a disabled state",
+          "message": "Establezca en `True` para habilitar el almacén o `False` para crearlo en un estado deshabilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the warehouse should be enabled",
+          "message": "Indica si el almacén debe estar habilitado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.desc": {
+          "source": "The metadata ID of the warehouse type from the Segment catalog (e.g., `catalog/warehouses/bigquery`)",
+          "message": "El ID de metadatos del tipo de almacén del catálogo de Segment (p. ej., `catalog/warehouses/bigquery`)"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.display_name": {
+          "source": "Metadata ID",
+          "message": "ID de metadatos"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bWV0YWRhdGFJZA.short_desc": {
+          "source": "Catalog ID of the warehouse type",
+          "message": "ID de catálogo del tipo de almacén"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.desc": {
+          "source": "A human-readable display name for the warehouse",
+          "message": "Un nombre para mostrar legible para las personas para el almacén"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.bmFtZQ.short_desc": {
+          "source": "Warehouse name",
+          "message": "Nombre del almacén"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Configuration settings required by the warehouse type, including connection details such as `hostname`, `port`, `database`, and `schema`; the available keys depend on the selected `metadataId`",
+          "message": "Ajustes de configuración requeridos por el tipo de almacén, incluidos detalles de conexión como `hostname`, `port`, `database` y `schema`; las claves disponibles dependen del `metadataId` seleccionado"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Warehouse connection settings",
+          "message": "Ajustes de conexión del almacén"
+        },
+        "app.U2VnbWVudA.action.Y3JlYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Create a new warehouse",
+          "message": "Crear un nuevo almacén"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.desc": {
+          "source": "Retrieve a single Segment destination by its unique ID.",
+          "message": "Recuperar un único destino de Segment por su ID único."
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.display_name": {
+          "source": "Get Destination",
+          "message": "Obtener destino"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to retrieve",
+          "message": "El identificador único del destino de Segment que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "ID de destino"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to retrieve",
+          "message": "El ID de destino que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Get a destination by ID",
+          "message": "Obtener un destino por ID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.desc": {
+          "source": "Retrieve a single Segment source by its unique ID.",
+          "message": "Recuperar una única fuente de Segment por su ID único."
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.display_name": {
+          "source": "Get Source",
+          "message": "Obtener fuente"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to retrieve",
+          "message": "El identificador único de la fuente de Segment que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ID de la fuente"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to retrieve",
+          "message": "El ID de fuente que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXNvdXJjZQ.short_desc": {
+          "source": "Get a source by ID",
+          "message": "Obtener una fuente por ID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Retrieve a single Segment tracking plan by its unique ID.",
+          "message": "Recuperar un único plan de seguimiento de Segment por su ID único."
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Get Tracking Plan",
+          "message": "Obtener plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to retrieve",
+          "message": "El ID único del plan de seguimiento de Segment que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "ID del plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to retrieve",
+          "message": "El ID del plan de seguimiento que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Get a tracking plan by ID",
+          "message": "Obtener un plan de seguimiento por ID"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.desc": {
+          "source": "Retrieve a single Segment warehouse by its unique ID.",
+          "message": "Recuperar un único almacén de Segment por su ID único."
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.display_name": {
+          "source": "Get Warehouse",
+          "message": "Obtener almacén"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to retrieve",
+          "message": "El identificador único del almacén de Segment que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "ID de almacén"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to retrieve",
+          "message": "El ID de almacén que se recuperará"
+        },
+        "app.U2VnbWVudA.action.Z2V0LXdhcmVob3VzZQ.short_desc": {
+          "source": "Get a warehouse by ID",
+          "message": "Obtener un almacén por ID"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Delete a Segment destination by its ID.",
+          "message": "Eliminar un destino de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Delete Destination",
+          "message": "Eliminar destino"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to delete",
+          "message": "El identificador único del destino de Segment que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "ID de destino"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to delete",
+          "message": "El ID de destino que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Delete a destination",
+          "message": "Eliminar un destino"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.desc": {
+          "source": "Delete a Segment label by its key and value.",
+          "message": "Eliminar una etiqueta de Segment por su clave y valor."
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.display_name": {
+          "source": "Delete Label",
+          "message": "Eliminar etiqueta"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.desc": {
+          "source": "The key of the label to delete",
+          "message": "La clave de la etiqueta que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.display_name": {
+          "source": "Key",
+          "message": "Clave"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.a2V5.short_desc": {
+          "source": "Label key",
+          "message": "Clave de la etiqueta"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.desc": {
+          "source": "The value of the label to delete",
+          "message": "El valor de la etiqueta que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Valor"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.option.dmFsdWU.short_desc": {
+          "source": "Label value",
+          "message": "Valor de la etiqueta"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLWxhYmVs.short_desc": {
+          "source": "Delete a label",
+          "message": "Eliminar una etiqueta"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.desc": {
+          "source": "Delete a Segment source by its ID.",
+          "message": "Eliminar una fuente de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.display_name": {
+          "source": "Delete Source",
+          "message": "Eliminar fuente"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to delete",
+          "message": "El identificador único de la fuente de Segment que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ID de la fuente"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to delete",
+          "message": "El ID de fuente que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXNvdXJjZQ.short_desc": {
+          "source": "Delete a source",
+          "message": "Eliminar una fuente"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Delete a Segment tracking plan by its ID.",
+          "message": "Eliminar un plan de seguimiento de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Delete Tracking Plan",
+          "message": "Eliminar plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to delete",
+          "message": "El ID único del plan de seguimiento de Segment que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "ID del plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to delete",
+          "message": "El ID del plan de seguimiento que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Delete a tracking plan",
+          "message": "Eliminar un plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Delete a Segment warehouse by its ID.",
+          "message": "Eliminar un almacén de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Delete Warehouse",
+          "message": "Eliminar almacén"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to delete",
+          "message": "El identificador único del almacén de Segment que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "ID de almacén"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to delete",
+          "message": "El ID de almacén que se eliminará"
+        },
+        "app.U2VnbWVudA.action.ZGVsZXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Delete a warehouse",
+          "message": "Eliminar un almacén"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.desc": {
+          "source": "Retrieve a list of tracking plans from Segment with cursor-based pagination.",
+          "message": "Recuperar una lista de planes de seguimiento de Segment con paginación basada en cursor."
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.display_name": {
+          "source": "List Tracking Plans",
+          "message": "Listar planes de seguimiento"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "Número de resultados por página (`1`-`1000`, predeterminado: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Cantidad"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.desc": {
+          "source": "Engage tracking plan",
+          "message": "Plan de seguimiento de Engage"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkVOR0FHRQ.display_name": {
+          "source": "Engage",
+          "message": "Engage"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.desc": {
+          "source": "Live tracking plan",
+          "message": "Plan de seguimiento Live"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOkxJVkU.display_name": {
+          "source": "Live",
+          "message": "Live"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.desc": {
+          "source": "Property library",
+          "message": "Biblioteca de propiedades"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlBST1BFUlRZX0xJQlJBUlk.display_name": {
+          "source": "Property Library",
+          "message": "Biblioteca de propiedades"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.desc": {
+          "source": "Rule library",
+          "message": "Biblioteca de reglas"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlJVTEVfTElCUkFSWQ.display_name": {
+          "source": "Rule Library",
+          "message": "Biblioteca de reglas"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.desc": {
+          "source": "Template tracking plan",
+          "message": "Plantilla de plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.allowed-value.c3RyaW5nOlRFTVBMQVRF.display_name": {
+          "source": "Template",
+          "message": "Plantilla"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.desc": {
+          "source": "Filter tracking plans by type: `ENGAGE`, `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
+          "message": "Filtrar planes de seguimiento por tipo: `ENGAGE`, `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY` o `TEMPLATE`"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.option.dHlwZQ.short_desc": {
+          "source": "Filter by tracking plan type",
+          "message": "Filtrar por tipo de plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.bGlzdC10cmFja2luZy1wbGFucw.short_desc": {
+          "source": "List tracking plans with cursor-based pagination",
+          "message": "Listar planes de seguimiento con paginación basada en cursor"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.desc": {
+          "source": "Retrieve a list of warehouses from Segment with cursor-based pagination.",
+          "message": "Recupera una lista de almacenes de Segment con paginación basada en cursor."
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.display_name": {
+          "source": "List Warehouses",
+          "message": "Listar almacenes"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "Número de resultados por página (`1`-`1000`, predeterminado: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Cantidad"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.U2VnbWVudA.action.bGlzdC13YXJlaG91c2Vz.short_desc": {
+          "source": "List warehouses with cursor-based pagination",
+          "message": "Listar almacenes con paginación basada en cursor"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.desc": {
+          "source": "Retrieve a list of destinations from Segment with cursor-based pagination.",
+          "message": "Recupera una lista de destinos de Segment con paginación basada en cursor."
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.display_name": {
+          "source": "List Destinations",
+          "message": "Listar destinos"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "Número de resultados por página (`1`-`1000`, predeterminado: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Cantidad"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1kZXN0aW5hdGlvbnM.short_desc": {
+          "source": "List destinations with cursor-based pagination",
+          "message": "Listar destinos con paginación basada en cursor"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.desc": {
+          "source": "Retrieve a list of labels from Segment with cursor-based pagination.",
+          "message": "Recupera una lista de etiquetas de Segment con paginación basada en cursor."
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.display_name": {
+          "source": "List Labels",
+          "message": "Listar etiquetas"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "Número de resultados por página (`1`-`1000`, predeterminado: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Cantidad"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1sYWJlbHM.short_desc": {
+          "source": "List labels with cursor-based pagination",
+          "message": "Listar etiquetas con paginación basada en cursor"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.desc": {
+          "source": "Retrieve a list of sources from Segment with cursor-based pagination.",
+          "message": "Recupera una lista de fuentes de Segment con paginación basada en cursor."
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.display_name": {
+          "source": "List Sources",
+          "message": "Listar fuentes"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.desc": {
+          "source": "Number of results per page (`1`-`1000`, default: `100`)",
+          "message": "Número de resultados por página (`1`-`1000`, predeterminado: `100`)"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Cantidad"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.option.Y291bnQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.U2VnbWVudA.action.bGlzdC1zb3VyY2Vz.short_desc": {
+          "source": "List sources with cursor-based pagination",
+          "message": "Listar fuentes con paginación basada en cursor"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Segment** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada personalizada a la API HTTP / REST a **Segment** utilizando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtilice esta acción para endpoints que aún no estén expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.U2VnbWVudA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Segment",
+          "message": "Hacer una llamada personalizada a la API de Segment"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.desc": {
+          "source": "Update an existing Segment destination by its ID.",
+          "message": "Actualiza un destino existente de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.display_name": {
+          "source": "Update Destination",
+          "message": "Actualizar destino"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.desc": {
+          "source": "The unique identifier of the Segment destination to update",
+          "message": "El identificador único del destino de Segment a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.display_name": {
+          "source": "Destination ID",
+          "message": "ID de destino"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZGVzdGluYXRpb25JZA.short_desc": {
+          "source": "The destination ID to update",
+          "message": "El ID del destino a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the destination or `False` to disable it",
+          "message": "Establezca en `True` para habilitar el destino o en `False` para deshabilitarlo"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the destination is enabled",
+          "message": "Indica si el destino está habilitado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the destination",
+          "message": "El nuevo nombre para mostrar legible por humanos del destino"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.bmFtZQ.short_desc": {
+          "source": "Updated destination name",
+          "message": "Nombre del destino actualizado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the destination; the available keys depend on the destination type",
+          "message": "Ajustes de configuración actualizados para el destino; las claves disponibles dependen del tipo de destino"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated destination settings",
+          "message": "Ajustes del destino actualizados"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLWRlc3RpbmF0aW9u.short_desc": {
+          "source": "Update an existing destination",
+          "message": "Actualizar un destino existente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.desc": {
+          "source": "Update an existing Segment source by its ID.",
+          "message": "Actualiza una fuente existente de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "Origen de la actualización"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the source or `False` to disable it",
+          "message": "Establezca en `True` para habilitar la fuente o en `False` para deshabilitarla"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the source is enabled",
+          "message": "Indica si la fuente está habilitada"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the source",
+          "message": "El nuevo nombre para mostrar legible por humanos de la fuente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated source name",
+          "message": "Nombre de la fuente actualizado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.desc": {
+          "source": "The unique identifier of the Segment source to update",
+          "message": "El identificador único de la fuente de Segment a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.display_name": {
+          "source": "Source ID",
+          "message": "ID de la fuente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c291cmNlSWQ.short_desc": {
+          "source": "The source ID to update",
+          "message": "El ID de la fuente a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the source; the available keys depend on the source type",
+          "message": "Ajustes de configuración actualizados para la fuente; las claves disponibles dependen del tipo de fuente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated source settings",
+          "message": "Ajustes de la fuente actualizados"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.desc": {
+          "source": "The new URL-friendly identifier for the source",
+          "message": "El nuevo identificador apto para URL de la fuente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.option.c2x1Zw.short_desc": {
+          "source": "Updated source slug",
+          "message": "Slug de la fuente actualizado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXNvdXJjZQ.short_desc": {
+          "source": "Update an existing source",
+          "message": "Actualizar una fuente existente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.desc": {
+          "source": "Update an existing Segment tracking plan by its ID.",
+          "message": "Actualiza un plan de seguimiento existente de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.display_name": {
+          "source": "Update Tracking Plan",
+          "message": "Actualizar plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the tracking plan",
+          "message": "La nueva descripción para el plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated description",
+          "message": "Descripción actualizada"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.desc": {
+          "source": "The new name for the tracking plan",
+          "message": "El nuevo nombre para el plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.bmFtZQ.short_desc": {
+          "source": "Updated name",
+          "message": "Nombre actualizado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.desc": {
+          "source": "The unique Segment tracking plan ID to update",
+          "message": "El ID único del plan de seguimiento de Segment a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.display_name": {
+          "source": "Tracking Plan ID",
+          "message": "ID del plan de seguimiento"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.option.dHJhY2tpbmdQbGFuSWQ.short_desc": {
+          "source": "The tracking plan ID to update",
+          "message": "El ID del plan de seguimiento a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXRyYWNraW5nLXBsYW4.short_desc": {
+          "source": "Update an existing tracking plan",
+          "message": "Actualizar un plan de seguimiento existente"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.desc": {
+          "source": "Update an existing Segment warehouse by its ID.",
+          "message": "Actualiza un almacén existente de Segment por su ID."
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.display_name": {
+          "source": "Update Warehouse",
+          "message": "Actualizar almacén"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.desc": {
+          "source": "Set to `True` to enable the warehouse or `False` to disable it",
+          "message": "Establezca en `True` para habilitar el almacén o en `False` para deshabilitarlo"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.ZW5hYmxlZA.short_desc": {
+          "source": "Whether the warehouse is enabled",
+          "message": "Indica si el almacén está habilitado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.desc": {
+          "source": "The new human-readable display name for the warehouse",
+          "message": "El nuevo nombre para mostrar legible por humanos del almacén"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated warehouse name",
+          "message": "Nombre del almacén actualizado"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.desc": {
+          "source": "Updated configuration settings for the warehouse (e.g., `hostname`, `port`, `database`, `schema`); the available keys depend on the warehouse type",
+          "message": "Ajustes de configuración actualizados para el almacén (p. ej., `hostname`, `port`, `database`, `schema`); las claves disponibles dependen del tipo de almacén"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Configuración"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated warehouse settings",
+          "message": "Ajustes del almacén actualizados"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.desc": {
+          "source": "The unique identifier of the Segment warehouse to update",
+          "message": "El identificador único del almacén de Segment a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.display_name": {
+          "source": "Warehouse ID",
+          "message": "ID de almacén"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.option.d2FyZWhvdXNlSWQ.short_desc": {
+          "source": "The warehouse ID to update",
+          "message": "El ID del almacén a actualizar"
+        },
+        "app.U2VnbWVudA.action.dXBkYXRlLXdhcmVob3VzZQ.short_desc": {
+          "source": "Update an existing warehouse",
+          "message": "Actualizar un almacén existente"
+        },
+        "app.U2VnbWVudA.desc": {
+          "source": "Twilio Segment is a Customer Data Platform (CDP) that helps you collect, clean, and control your customer data.\n\n**Key Features:**\n- Manage data collection sources\n- Configure integration destinations\n- Connect data warehouses\n- Define and enforce tracking plans\n- Organize resources with labels",
+          "message": "Twilio Segment es una Customer Data Platform (CDP) que le ayuda a recopilar, limpiar y controlar los datos de sus clientes.\n\n**Características principales:**\n- Administrar fuentes de recopilación de datos\n- Configurar destinos de integración\n- Conectar almacenes de datos\n- Definir y aplicar planes de seguimiento\n- Organizar recursos con etiquetas"
+        },
+        "app.U2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Segmento"
+        },
+        "app.U2VnbWVudA.short_desc": {
+          "source": "Twilio Segment CDP services",
+          "message": "Servicios CDP de Twilio Segment"
+        }
+      }
+    }
+  }
+}

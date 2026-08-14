@@ -1,0 +1,2457 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.desc": {
+          "source": "Process a request with a Grok model via the Responses API with optional tool calling and conversation continuation",
+          "message": "Przetwórz żądanie za pomocą modelu Grok za pośrednictwem Responses API z opcjonalnym wywoływaniem narzędzi i kontynuacją konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
+          "source": "Process Request With a Model",
+          "message": "Przetwórz żądanie za pomocą modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Niejawny identyfikator używany do ładowania i zapisywania kontekstu konwersacji. Używany tylko wtedy, gdy skonfigurowany jest magazyn kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Klucz kontekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Klucz magazynu kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Jeśli `true`, odpowiedź będzie przetwarzana asynchronicznie w tle. Użyj akcji `get-response` ze zwróconym identyfikatorem odpowiedzi, aby odpytywać o wynik"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Informacje ogólne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Przetwarzaj odpowiedź asynchronicznie w tle"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Zawartość wejściowa dla odpowiedzi. Każdy element ma rolę, tekst i opcjonalny obraz. W przypadku prostego promptu tekstowego wystarczy pojedynczy element z tekstem"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Dane wejściowe"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Wprowadzony tekst lub wiadomość dla modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Wiadomość systemowa (lub deweloperska) wstawiana na początku kontekstu modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Instrukcje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Instrukcje promptu systemowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych. Jeśli `true`, zwraca prawdopodobieństwa logarytmiczne każdego tokenu wyjściowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "Model Grok do użycia (np. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "Model Grok do użycia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maksymalna liczba tokenów, które mogą zostać wygenerowane w odpowiedzi, w tym zarówno tokeny wyjściowe, jak i tokeny wnioskowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maksymalna liczba tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maksymalna liczba tokenów do wygenerowania, w tym wnioskowanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maksymalna liczba iteracji wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maksymalna liczba tur"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maksymalna liczba rund wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Zestaw par klucz-wartość do dołączenia do odpowiedzi. Maksymalnie 16 par; klucze do 64 znaków, wartości do 512 znaków"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadane"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatkowe pary klucz-wartość metadanych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfiguracja integracji z wyszukiwarką internetową"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Parametry wyszukiwania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfiguracja wyszukiwania w sieci"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatyczny wybór warstwy na podstawie obciążenia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatyczny wybór warstwy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Domyślne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu żądania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Poziom usługi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Jeśli `true`, dane wejściowe i odpowiedź będą przechowywane przez 30 dni przed trwałym usunięciem"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Przechowywać?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Przechowuj dane wejściowe i odpowiedź przez 30 dni"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Jeśli `true`, odpowiedź będzie przesyłana strumieniowo przy użyciu zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Włącz strumieniowanie zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Określa, czy zezwalać na równoległe wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Równoległe wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Zezwalaj na współbieżne wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Unikalny identyfikator poprzedniej odpowiedzi do użycia jako kontekst do kontynuacji bez powtarzania danych wejściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "Identyfikator poprzedniej odpowiedzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "Identyfikator wcześniejszej odpowiedzi do kontynuacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Używane przez xAI do buforowania odpowiedzi na podobne żądania w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Klucz pamięci podręcznej promptu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfiguracja wnioskowania z poziomem wysiłku i typem podsumowania. Obsługiwana tylko przez modele z obsługą wnioskowania (np. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Wnioskowanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfiguracja wnioskowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nie wywoła żadnego narzędzia i zamiast tego wygeneruje wiadomość"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Brak"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nie wywoła żadnego narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model decyduje, czy wywołać narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Wymagane"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Określa, z których narzędzi model może korzystać.\n\nUżyj jednej ze wstępnie zdefiniowanych wartości lub wprowadź wartość niestandardową, aby wymusić określoną funkcję (np. nazwę funkcji)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Kontrola wywoływania narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Lista narzędzi dostępnych dla modelu, w tym funkcje i wyszukiwanie w sieci"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostępne narzędzia (maks. 128)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Liczba całkowita z zakresu od `0` do `20` określająca liczbę najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji tokenu, każdy z powiązanym prawdopodobieństwem logarytmicznym"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Główne prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Liczba najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Próg próbkowania jądrowego, w którym model uwzględnia tokeny tworzące masę prawdopodobieństwa top_p"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Próg próbkowania jądrowego (0–1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej z modelu. Użyj do określenia ustrukturyzowanych danych wyjściowych za pomocą schematu JSON"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Format tekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Temperatura próbkowania od 0 do 2. Wyższe wartości sprawiają, że wyniki są bardziej losowe"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Temperatura próbkowania (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automatycznie obcinaj od środka konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automatycznie obcinaj długie konwersacje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst przekracza limit"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Wyłączone"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst jest za długi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Strategia obcinania, gdy kontekst przekracza maksymalną długość kontekstu modelu. `auto` obcina od środka konwersacji, aby zmieścić się w oknie kontekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Obcinanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Strategia obcinania dla długich konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego na potrzeby monitorowania nadużyć"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identyfikator użytkownika końcowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Process a request with a Grok model via the Responses API",
+          "message": "Przetwarzaj żądanie za pomocą modelu Grok za pośrednictwem Responses API"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.desc": {
+          "source": "Create a response via the Responses API with full control over model selection and options",
+          "message": "Utwórz odpowiedź za pośrednictwem Responses API z pełną kontrolą nad wyborem modelu i opcji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
+          "source": "Create Response",
+          "message": "Utwórz odpowiedź"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Niejawny identyfikator używany do ładowania i zapisywania kontekstu konwersacji. Używany tylko wtedy, gdy skonfigurowany jest magazyn kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Klucz kontekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Klucz magazynu kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Jeśli `true`, odpowiedź będzie przetwarzana asynchronicznie w tle. Użyj akcji `get-response` ze zwróconym identyfikatorem odpowiedzi, aby odpytywać o wynik"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Informacje ogólne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Przetwarzaj odpowiedź asynchronicznie w tle"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Zawartość wejściowa dla odpowiedzi. Każdy element ma rolę, tekst i opcjonalny obraz. W przypadku prostego promptu tekstowego wystarczy pojedynczy element z tekstem"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Dane wejściowe"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Wprowadzony tekst lub wiadomość dla modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Wiadomość systemowa (lub deweloperska) wstawiana na początku kontekstu modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Instrukcje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Instrukcje promptu systemowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych. Jeśli `true`, zwraca prawdopodobieństwa logarytmiczne każdego tokenu wyjściowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model do użycia dla odpowiedzi (np. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the response",
+          "message": "Model do użycia dla odpowiedzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maksymalna liczba tokenów, które mogą zostać wygenerowane w odpowiedzi, w tym zarówno tokeny wyjściowe, jak i tokeny wnioskowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maksymalna liczba tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maksymalna liczba tokenów do wygenerowania, w tym wnioskowanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maksymalna liczba iteracji wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maksymalna liczba tur"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maksymalna liczba rund wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Zestaw par klucz-wartość do dołączenia do odpowiedzi. Maksymalnie 16 par; klucze do 64 znaków, wartości do 512 znaków"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadane"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatkowe pary klucz-wartość metadanych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfiguracja integracji z wyszukiwarką internetową"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Parametry wyszukiwania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfiguracja wyszukiwania w sieci"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatyczny wybór warstwy na podstawie obciążenia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatyczny wybór warstwy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Domyślne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu żądania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Poziom usługi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Jeśli `true`, dane wejściowe i odpowiedź będą przechowywane przez 30 dni przed trwałym usunięciem"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Przechowywać?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Przechowuj dane wejściowe i odpowiedź przez 30 dni"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Jeśli `true`, odpowiedź będzie przesyłana strumieniowo przy użyciu zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Włącz strumieniowanie zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Określa, czy zezwalać na równoległe wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Równoległe wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Zezwalaj na współbieżne wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Unikalny identyfikator poprzedniej odpowiedzi do użycia jako kontekst do kontynuacji bez powtarzania danych wejściowych"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "Identyfikator poprzedniej odpowiedzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "Identyfikator wcześniejszej odpowiedzi do kontynuacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Używane przez xAI do buforowania odpowiedzi na podobne żądania w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Klucz pamięci podręcznej promptu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfiguracja wnioskowania z poziomem wysiłku i typem podsumowania. Obsługiwana tylko przez modele z obsługą wnioskowania (np. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Wnioskowanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfiguracja wnioskowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nie wywoła żadnego narzędzia i zamiast tego wygeneruje wiadomość"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Brak"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nie wywoła żadnego narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model decyduje, czy wywołać narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Wymagane"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Określa, z których narzędzi model może korzystać.\n\nUżyj jednej ze wstępnie zdefiniowanych wartości lub wprowadź wartość niestandardową, aby wymusić określoną funkcję (np. nazwę funkcji)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Kontrola wywoływania narzędzi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Lista narzędzi dostępnych dla modelu, w tym funkcje i wyszukiwanie w sieci"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostępne narzędzia (maks. 128)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Liczba całkowita z zakresu od `0` do `20` określająca liczbę najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji tokenu, każdy z powiązanym prawdopodobieństwem logarytmicznym"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Główne prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Liczba najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Próg próbkowania jądrowego, w którym model uwzględnia tokeny tworzące masę prawdopodobieństwa top_p"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Próg próbkowania jądrowego (0–1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej z modelu. Użyj do określenia ustrukturyzowanych danych wyjściowych za pomocą schematu JSON"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Format tekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Temperatura próbkowania od 0 do 2. Wyższe wartości sprawiają, że wyniki są bardziej losowe"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Temperatura próbkowania (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automatycznie obcinaj od środka konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automatycznie obcinaj długie konwersacje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst przekracza limit"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Wyłączone"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst jest za długi"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Strategia obcinania, gdy kontekst przekracza maksymalną długość kontekstu modelu. `auto` obcina od środka konwersacji, aby zmieścić się w oknie kontekstu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Obcinanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Strategia obcinania dla długich konwersacji"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego na potrzeby monitorowania nadużyć"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identyfikator użytkownika końcowego"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
+          "source": "Create a response via the Responses API without model context",
+          "message": "Utwórz odpowiedź za pośrednictwem Responses API bez kontekstu modelu"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.desc": {
+          "source": "Retrieve a previously stored response by its unique identifier",
+          "message": "Pobierz wcześniej zapisaną odpowiedź na podstawie jej unikalnego identyfikatora"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
+          "source": "Get Response",
+          "message": "Pobierz odpowiedź"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "Unikalny identyfikator odpowiedzi do pobrania"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "ID odpowiedzi"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "Identyfikator odpowiedzi do pobrania"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "Unikalny identyfikator odpowiedzi do pobrania"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "Odpowiedź"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "Identyfikator odpowiedzi do pobrania"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
+          "source": "Retrieve a previously stored response by ID",
+          "message": "Pobierz wcześniej zapisaną odpowiedź według ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.desc": {
+          "source": "Retrieve the result of a deferred chat completion request using the request ID",
+          "message": "Pobierz wynik odroczonego żądania dopełnienia czatu przy użyciu identyfikatora żądania"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
+          "source": "Get Deferred Completion",
+          "message": "Pobierz odroczone dopełnienie"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The request ID returned from a deferred chat completion request",
+          "message": "Identyfikator żądania zwrócony z odroczonego żądania dopełnienia czatu"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "Identyfikator wniosku"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The request ID from a deferred chat completion",
+          "message": "Identyfikator żądania z odroczonego dopełnienia czatu"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {
+          "source": "Retrieve a deferred chat completion result by request ID",
+          "message": "Pobierz wynik odroczonego dopełnienia czatu według identyfikatora żądania"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.desc": {
+          "source": "Delete a previously stored response by its unique identifier",
+          "message": "Usuń wcześniej zapisaną odpowiedź na podstawie jej unikalnego identyfikatora"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
+          "source": "Delete Response",
+          "message": "Usuń odpowiedź"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "Unikalny identyfikator odpowiedzi do usunięcia"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "ID odpowiedzi"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "ID odpowiedzi do usunięcia"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "Unikalny identyfikator odpowiedzi do usunięcia"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "Odpowiedź"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "ID odpowiedzi do usunięcia"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Delete a stored response by ID",
+          "message": "Usuń zapisaną odpowiedź według ID"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Grok AI Services** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Grok AI Services** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżywaj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako pierwszoklasowe akcje w tej aplikacji."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Grok AI Services",
+          "message": "Wykonaj niestandardowe wywołanie API do Grok AI Services"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with Grok by sending multiple messages at once and potentially getting multiple replies",
+          "message": "Rozmawiaj z Grokiem, wysyłając wiele wiadomości naraz i potencjalnie otrzymując wiele odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "Czat wielokrotny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "Jeśli `true`, zwraca request_id, który może być użyty do odpytywania o wynik dopełnienia za pośrednictwem punktu końcowego odroczonego dopełnienia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "Odroczone"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "Zwróć request_id do asynchronicznego pobrania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "Liczba od -2.0 do 2.0. Wartości dodatnie nakładają karę na nowe tokeny na podstawie ich dotychczasowej częstotliwości w tekście, zmniejszając prawdopodobieństwo powtarzania przez model tego samego wiersza dosłownie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Kara za częstotliwość"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "Karze powtarzanie tokenów (-2.0 do 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "Modyfikuje prawdopodobieństwo pojawienia się określonych tokenów w dopełnieniu. Mapuje identyfikatory tokenów (jako ciągi znaków) na wartości bias od `-100` do `100`. Wartości `-100` lub `100` skutkują zablokowaniem lub wyłącznym wyborem danego tokena.\n\n**Przykład**: `{\"50256\": -100}`, aby zapobiec tokenowi końca tekstu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logit Bias"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "Modyfikuj prawdopodobieństwo pojawienia się określonych tokenów w dopełnieniu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych. Jeśli `true`, zwraca prawdopodobieństwa logarytmiczne każdego tokena wyjściowego zwróconego w treści wiadomości"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "Prawdopodobieństwo logarytmiczne"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model do użycia w celu utworzenia odpowiedzi (np. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "Model do użycia w celu utworzenia odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "Górny limit liczby tokenów, które można wygenerować dla dopełnienia, w tym widocznych tokenów wyjściowych i tokenów rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "Maksymalna liczba tokenów dopełnienia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "Górny limit tokenów wygenerowanych w odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "Maksymalna liczba tokenów, które można wygenerować w dopełnieniu czatu. Przestarzałe; zamiast tego użyj max_completion_tokens"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "Maksymalna liczba tokenów (przestarzałe)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "Maksymalna liczba tokenów do wygenerowania (przestarzałe; użyj max_completion_tokens)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Wiadomości"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Lista wiadomości składających się na dotychczasową konwersację"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.desc": {
+          "source": "How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all of the choices",
+          "message": "Liczba wariantów dopełnienia czatu do wygenerowania dla każdej wiadomości wejściowej. Pamiętaj, że opłata jest naliczana na podstawie liczby wygenerowanych tokenów we wszystkich wariantach"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.display_name": {
+          "source": "Number of Choices",
+          "message": "Liczba wariantów"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.short_desc": {
+          "source": "The number of choices to generate for each input message",
+          "message": "Liczba wariantów do wygenerowania dla każdej wiadomości wejściowej"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "Konfiguracja integracji z wyszukiwarką internetową z zakresami dat, źródłami i opcjami cytowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Parametry wyszukiwania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfiguracja wyszukiwania w sieci"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "Jeśli określono, system dołoży wszelkich starań, aby próbkować deterministycznie, tak aby powtarzające się żądania z tym samym ziarnem i parametrami zwracały ten sam wynik"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Ziarno"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "Wartość do próbkowania deterministycznego"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Jeśli `true`, częściowe delty wiadomości będą wysyłane jako zdarzenia SSE (Server-Sent Events) zawierające tylko dane, gdy będą dostępne, a strumień zostanie zakończony wiadomością `data: [DONE]`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "Ustaw, aby włączyć częściowe delty wiadomości przez SSE"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "Opcje strumieniowania odpowiedzi. Ustawiaj tylko wtedy, gdy wybrano `stream: true`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "Opcje strumienia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "Opcje strumieniowania odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "Czy włączyć równoległe wywoływanie funkcji podczas korzystania z narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Równoległe wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "Włącz jednoczesne wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "Liczba od -2.0 do 2.0. Wartości dodatnie nakładają karę na nowe tokeny w zależności od tego, czy pojawiły się już w tekście, zwiększając prawdopodobieństwo poruszania nowych tematów przez model"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Kara za obecność"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "Karze nowe tokeny na podstawie ich wystąpienia w tekście (-2.0 do 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Średni"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "Ogranicza wysiłek włożony w rozumowanie dla modeli z funkcją rozumowania. Obsługiwane tylko przez modele obsługujące rozumowanie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "Poziom ograniczenia modelu wnioskowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "Obiekt określający format, który musi zwrócić model. Ustawienie wartości `{\"type\": \"json_object\"}` włącza tryb JSON, co gwarantuje, że komunikat wygenerowany przez model jest prawidłowym kodem JSON"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "Format odpowiedzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nie wywoła żadnego narzędzia i zamiast tego wygeneruje wiadomość"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Brak"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nie wywoła żadnego narzędzia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Wymagane"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "Kontroluje, które narzędzie (jeśli jakiekolwiek) jest wywoływane przez model. `none` jest wartością domyślną, gdy nie zdefiniowano narzędzi. `auto` jest wartością domyślną, jeśli narzędzia są zdefiniowane"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "Kontroluje, które narzędzie jest wywoływane przez model"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "Lista narzędzi, które model może wywołać. Obecnie jako narzędzia obsługiwane są tylko funkcje. Maksymalnie obsługiwane jest 128 funkcji"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "Lista narzędzi, które model może wywołać (maks. 128)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "Liczba całkowita od 0 do 8 określająca liczbę najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji tokenu. W przypadku użycia tego parametru `logprobs` musi mieć wartość `true`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Prawdopodobieństwo logarytmiczne najlepszych tokenów (Top Logprobs)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "Liczba najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji (0-8)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "Alternatywa dla próbkowania z temperaturą, zwana próbkowaniem jądrowym (nucleus sampling), w której model bierze pod uwagę wyniki tokenów o masie prawdopodobieństwa top_p"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "Masa prawdopodobieństwa próbkowania jądrowego (0-1)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "Temperatura próbkowania do użycia, z zakresu od 0 do 2. Wyższe wartości, takie jak 0,8, sprawią, że wynik będzie bardziej losowy, natomiast niższe wartości, takie jak 0,2, sprawią, że będzie bardziej skupiony i deterministyczny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "Temperatura próbkowania do użycia (0-2)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego na potrzeby monitorowania nadużyć"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with Grok using multiple messages with multi-reply support",
+          "message": "Czatuj z modelem Grok przy użyciu wielu wiadomości z obsługą wielu odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "Czatuj z modelem Grok, wysyłając pojedynczą wiadomość i otrzymując pojedynczą odpowiedź"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Prosty czat"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The message content to send to the model",
+          "message": "Treść wiadomości do wysłania do modelu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Zawartość"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message content",
+          "message": "Treść wiadomości"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "Jeśli `true`, zwraca request_id, który może być użyty do odpytywania o wynik dopełnienia za pośrednictwem punktu końcowego odroczonego dopełnienia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "Odroczone"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "Zwróć request_id do asynchronicznego pobrania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "Liczba od -2.0 do 2.0. Wartości dodatnie nakładają karę na nowe tokeny na podstawie ich dotychczasowej częstotliwości w tekście, zmniejszając prawdopodobieństwo powtarzania przez model tego samego wiersza dosłownie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Kara za częstotliwość"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "Karze powtarzanie tokenów (-2.0 do 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "Modyfikuje prawdopodobieństwo pojawienia się określonych tokenów w dopełnieniu. Mapuje identyfikatory tokenów (jako ciągi znaków) na wartości bias od `-100` do `100`. Wartości `-100` lub `100` skutkują zablokowaniem lub wyłącznym wyborem danego tokena.\n\n**Przykład**: `{\"50256\": -100}`, aby zapobiec tokenowi końca tekstu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logit Bias"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "Modyfikuj prawdopodobieństwo pojawienia się określonych tokenów w dopełnieniu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych. Jeśli `true`, zwraca prawdopodobieństwa logarytmiczne każdego tokena wyjściowego zwróconego w treści wiadomości"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "Prawdopodobieństwo logarytmiczne"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model do użycia w celu utworzenia odpowiedzi (np. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "Model do użycia w celu utworzenia odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "Górny limit liczby tokenów, które można wygenerować dla dopełnienia, w tym widocznych tokenów wyjściowych i tokenów rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "Maksymalna liczba tokenów dopełnienia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "Górny limit tokenów wygenerowanych w odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "Maksymalna liczba tokenów, które można wygenerować w dopełnieniu czatu. Przestarzałe; zamiast tego użyj max_completion_tokens"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "Maksymalna liczba tokenów (przestarzałe)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "Maksymalna liczba tokenów do wygenerowania (przestarzałe; użyj max_completion_tokens)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
+          "source": "An optional name for the participant",
+          "message": "Opcjonalna nazwa uczestnika"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.short_desc": {
+          "source": "An optional name for the participant",
+          "message": "Opcjonalna nazwa uczestnika"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "Konfiguracja integracji z wyszukiwarką internetową z zakresami dat, źródłami i opcjami cytowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Parametry wyszukiwania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfiguracja wyszukiwania w sieci"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "Jeśli określono, system dołoży wszelkich starań, aby próbkować deterministycznie, tak aby powtarzające się żądania z tym samym ziarnem i parametrami zwracały ten sam wynik"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Ziarno"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "Wartość do próbkowania deterministycznego"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekwencje zatrzymujące"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Jeśli `true`, częściowe delty wiadomości będą wysyłane jako zdarzenia SSE (Server-Sent Events) zawierające tylko dane, gdy będą dostępne, a strumień zostanie zakończony wiadomością `data: [DONE]`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "Ustaw, aby włączyć częściowe delty wiadomości przez SSE"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "Opcje strumieniowania odpowiedzi. Ustawiaj tylko wtedy, gdy wybrano `stream: true`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "Opcje strumienia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "Opcje strumieniowania odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "Czy włączyć równoległe wywoływanie funkcji podczas korzystania z narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Równoległe wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "Włącz jednoczesne wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "Liczba od -2.0 do 2.0. Wartości dodatnie nakładają karę na nowe tokeny w zależności od tego, czy pojawiły się już w tekście, zwiększając prawdopodobieństwo poruszania nowych tematów przez model"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Kara za obecność"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "Karze nowe tokeny na podstawie ich wystąpienia w tekście (-2.0 do 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author is an assistant",
+          "message": "Autorem jest asystent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "Asystent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author is an assistant",
+          "message": "Autorem jest asystent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author is the system",
+          "message": "Autorem jest system"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "System"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author is the system",
+          "message": "Autorem jest system"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author is a user",
+          "message": "Autorem jest użytkownik"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author is a user",
+          "message": "Autorem jest użytkownik"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tej wiadomości"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "Rola autora wiadomości"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Średni"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Średni wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Wysoki"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Wysoki wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niski"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Niski wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "Ogranicza wysiłek włożony w rozumowanie dla modeli z funkcją rozumowania. Obsługiwane tylko przez modele obsługujące rozumowanie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Wysiłek rozumowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "Poziom ograniczenia modelu wnioskowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "Obiekt określający format, który musi zwrócić model. Ustawienie wartości `{\"type\": \"json_object\"}` włącza tryb JSON, co gwarantuje, że komunikat wygenerowany przez model jest prawidłowym kodem JSON"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Format odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "Format odpowiedzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nie wywoła żadnego narzędzia i zamiast tego wygeneruje wiadomość"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Brak"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nie wywoła żadnego narzędzia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Wymagane"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "Kontroluje, które narzędzie (jeśli jakiekolwiek) jest wywoływane przez model. `none` jest wartością domyślną, gdy nie zdefiniowano narzędzi. `auto` jest wartością domyślną, jeśli narzędzia są zdefiniowane"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "Kontroluje, które narzędzie jest wywoływane przez model"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "Lista narzędzi, które model może wywołać. Obecnie jako narzędzia obsługiwane są tylko funkcje. Maksymalnie obsługiwane jest 128 funkcji"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "Lista narzędzi, które model może wywołać (maks. 128)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "Liczba całkowita od 0 do 8 określająca liczbę najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji tokenu. W przypadku użycia tego parametru `logprobs` musi mieć wartość `true`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Prawdopodobieństwo logarytmiczne najlepszych tokenów (Top Logprobs)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "Liczba najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji (0-8)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "Alternatywa dla próbkowania z temperaturą, zwana próbkowaniem jądrowym (nucleus sampling), w której model bierze pod uwagę wyniki tokenów o masie prawdopodobieństwa top_p"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "Masa prawdopodobieństwa próbkowania jądrowego (0-1)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "Temperatura próbkowania do użycia, z zakresu od 0 do 2. Wyższe wartości, takie jak 0,8, sprawią, że wynik będzie bardziej losowy, natomiast niższe wartości, takie jak 0,2, sprawią, że będzie bardziej skupiony i deterministyczny"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "Temperatura próbkowania do użycia (0-2)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego na potrzeby monitorowania nadużyć"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "Czatuj z modelem Grok, wysyłając pojedynczą wiadomość i otrzymując pojedynczą odpowiedź"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
+          "message": "Strumieniuj odpowiedź z modelu Grok za pomocą Server-Sent Events w celu dostarczania tokenów w czasie rzeczywistym"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
+          "source": "Stream Response",
+          "message": "Strumieniuj odpowiedź"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Niejawny identyfikator używany do ładowania i zapisywania kontekstu konwersacji. Używany tylko wtedy, gdy skonfigurowany jest magazyn kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Klucz kontekstu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Klucz magazynu kontekstu konwersacji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Jeśli `true`, odpowiedź będzie przetwarzana asynchronicznie w tle. Użyj akcji `get-response` ze zwróconym identyfikatorem odpowiedzi, aby odpytywać o wynik"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Informacje ogólne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Przetwarzaj odpowiedź asynchronicznie w tle"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatkowe dane wyjściowe do uwzględnienia w odpowiedzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Zawartość wejściowa dla odpowiedzi. Każdy element ma rolę, tekst i opcjonalny obraz. W przypadku prostego promptu tekstowego wystarczy pojedynczy element z tekstem"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Dane wejściowe"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Wprowadzony tekst lub wiadomość dla modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Wiadomość systemowa (lub deweloperska) wstawiana na początku kontekstu modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Instrukcje"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Instrukcje promptu systemowego"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych. Jeśli `true`, zwraca prawdopodobieństwa logarytmiczne każdego tokenu wyjściowego"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Określa, czy zwracać prawdopodobieństwa logarytmiczne tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "Model Grok do użycia (np. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "Model Grok do użycia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maksymalna liczba tokenów, które mogą zostać wygenerowane w odpowiedzi, w tym zarówno tokeny wyjściowe, jak i tokeny wnioskowania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maksymalna liczba tokenów wyjściowych"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maksymalna liczba tokenów do wygenerowania, w tym wnioskowanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maksymalna liczba iteracji wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maksymalna liczba tur"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maksymalna liczba rund wywoływania narzędzi przez agenta"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Zestaw par klucz-wartość do dołączenia do odpowiedzi. Maksymalnie 16 par; klucze do 64 znaków, wartości do 512 znaków"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadane"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatkowe pary klucz-wartość metadanych"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfiguracja integracji z wyszukiwarką internetową"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Parametry wyszukiwania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfiguracja wyszukiwania w sieci"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatyczny wybór warstwy na podstawie obciążenia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatyczny wybór warstwy"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Domyślne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Domyślna warstwa przetwarzania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu żądania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Poziom usługi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Określa warstwę opóźnienia do użycia przy przetwarzaniu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Jeśli `true`, dane wejściowe i odpowiedź będą przechowywane przez 30 dni przed trwałym usunięciem"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Przechowywać?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Przechowuj dane wejściowe i odpowiedź przez 30 dni"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Jeśli `true`, odpowiedź będzie przesyłana strumieniowo przy użyciu zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Strumieniować?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Włącz strumieniowanie zdarzeń wysyłanych przez serwer"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Określa, czy zezwalać na równoległe wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Równoległe wywołania narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Zezwalaj na współbieżne wykonywanie narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Unikalny identyfikator poprzedniej odpowiedzi do użycia jako kontekst do kontynuacji bez powtarzania danych wejściowych"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "Identyfikator poprzedniej odpowiedzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "Identyfikator wcześniejszej odpowiedzi do kontynuacji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Używane przez xAI do buforowania odpowiedzi na podobne żądania w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Klucz pamięci podręcznej promptu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfiguracja wnioskowania z poziomem wysiłku i typem podsumowania. Obsługiwana tylko przez modele z obsługą wnioskowania (np. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Wnioskowanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfiguracja wnioskowania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nie wywoła żadnego narzędzia i zamiast tego wygeneruje wiadomość"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Brak"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nie wywoła żadnego narzędzia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model decyduje, czy wywołać narzędzia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Wymagane"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musi wywołać jedno lub więcej narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Określa, z których narzędzi model może korzystać.\n\nUżyj jednej ze wstępnie zdefiniowanych wartości lub wprowadź wartość niestandardową, aby wymusić określoną funkcję (np. nazwę funkcji)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Wybór narzędzia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Kontrola wywoływania narzędzi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Lista narzędzi dostępnych dla modelu, w tym funkcje i wyszukiwanie w sieci"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Narzędzia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostępne narzędzia (maks. 128)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Liczba całkowita z zakresu od `0` do `20` określająca liczbę najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji tokenu, każdy z powiązanym prawdopodobieństwem logarytmicznym"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Główne prawdopodobieństwa logarytmiczne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Liczba najbardziej prawdopodobnych tokenów do zwrócenia na każdej pozycji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Próg próbkowania jądrowego, w którym model uwzględnia tokeny tworzące masę prawdopodobieństwa top_p"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Próg próbkowania jądrowego (0–1)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej z modelu. Użyj do określenia ustrukturyzowanych danych wyjściowych za pomocą schematu JSON"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Format tekstu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfiguracja formatu odpowiedzi tekstowej"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Temperatura próbkowania od 0 do 2. Wyższe wartości sprawiają, że wyniki są bardziej losowe"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Temperatura próbkowania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Temperatura próbkowania (0-2)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automatycznie obcinaj od środka konwersacji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automatycznie obcinaj długie konwersacje"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst przekracza limit"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Wyłączone"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Nie obcinaj; zwróć błąd, jeśli kontekst jest za długi"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Strategia obcinania, gdy kontekst przekracza maksymalną długość kontekstu modelu. `auto` obcina od środka konwersacji, aby zmieścić się w oknie kontekstu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Obcinanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Strategia obcinania dla długich konwersacji"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Unikalny identyfikator reprezentujący użytkownika końcowego na potrzeby monitorowania nadużyć"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Użytkownik"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identyfikator użytkownika końcowego"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events",
+          "message": "Strumieniuj odpowiedź z modelu Grok za pomocą Server-Sent Events"
+        },
+        "app.R3Jvaw.desc": {
+          "source": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n**Features**:\n- **Chat Completions**: multi-message and simple chat with tool calling and web search\n- **Responses API**: create, retrieve, and delete responses with conversation continuation\n- **Streaming**: real-time token delivery via Server-Sent Events\n- **Deferred Completions**: asynchronous request processing\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "Usługi AI xAI Grok zapewniające uzupełnianie czatu, interfejs Responses API oraz strumieniowanie SSE.\n\n**Funkcje**:\n- **Uzupełnianie czatu**: czat wieloetapowy i prosty z wywoływaniem narzędzi oraz wyszukiwaniem w sieci\n- **Responses API**: tworzenie, pobieranie i usuwanie odpowiedzi z kontynuacją konwersacji\n- **Strumieniowanie**: dostarczanie tokenów w czasie rzeczywistym przez Server-Sent Events\n- **Odroczone uzupełniania**: asynchroniczne przetwarzanie żądań\n\nPobierz swój klucz API z poziomu [xAI Console](https://console.x.ai/)"
+        },
+        "app.R3Jvaw.display_name": {
+          "source": "Grok AI Services",
+          "message": "Usługi Grok AI"
+        },
+        "app.R3Jvaw.short_desc": {
+          "source": "xAI Grok AI services",
+          "message": "Usługi xAI Grok AI"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2229 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.desc": {
+          "source": "Copies several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Копіює кілька файлів за один виклик замість одного запиту на файл.\n\nКожен запис вказує `from_path` і `to_path`. **Пакетна операція не переривається повністю у разі помилки**, тому кожен запис має свій власний результат; великий пакет обробляється у фоновому режимі, а відповідь містить ідентифікатор завдання для відстеження за допомогою `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.display_name": {
+          "source": "Copy Files (Batch)",
+          "message": "Копіювати файли (пакетно)"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Операції для виконання у вигляді списку хешів, кожен з яких містить `from_path` та `to_path`.\n\n**Приклад**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Записи"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Переміщення або копіювання для виконання"
+        },
+        "app.RHJvcGJveA.action.Y29weS1iYXRjaA.short_desc": {
+          "source": "Copy several files in one call",
+          "message": "Скопіювати кілька файлів за один виклик"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.desc": {
+          "source": "Copies a file or folder to a new path; copying a folder copies everything in it.",
+          "message": "Копіює файл або папку за новим шляхом; копіювання папки копіює весь її вміст."
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.display_name": {
+          "source": "Copy File or Folder",
+          "message": "Скопіювати файл або папку"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Шлях до файлу або папки для копіювання"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Вихідний шлях"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to copy",
+          "message": "Шлях до файлу або папки для копіювання"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to copy to, including the new name",
+          "message": "Повний шлях для копіювання, включно з новою назвою"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Шлях призначення"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to copy to",
+          "message": "Шлях для копіювання"
+        },
+        "app.RHJvcGJveA.action.Y29weS1maWxl.short_desc": {
+          "source": "Copy a file or folder",
+          "message": "Скопіювати файл або папку"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.desc": {
+          "source": "Follows an operation Dropbox is performing in the background.\n\n`save-url`, `delete-batch`, `move-batch`, and `copy-batch` each finish immediately when the work is small and hand back a job when it is not; this reports whether that job has finished, and what it produced.",
+          "message": "Відстежує операцію, яку Dropbox виконує у фоновому режимі.\n\n`save-url`, `delete-batch`, `move-batch` та `copy-batch` завершуються миттєво, якщо обсяг роботи невеликий, і повертають завдання, якщо ні; це повідомляє, чи завершено завдання та який його результат."
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.display_name": {
+          "source": "Check Job Status",
+          "message": "Перевірити статус завдання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.desc": {
+          "source": "The identifier of the job to check, as returned by the operation that started it",
+          "message": "Ідентифікатор завдання для перевірки, повернутий операцією, яка його запустила"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.YXN5bmNfam9iX2lk.short_desc": {
+          "source": "The job to check",
+          "message": "Завдання для перевірки"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.desc": {
+          "source": "A batch move started by `move-batch`",
+          "message": "Пакетне переміщення, запущене `move-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.display_name": {
+          "source": "Batch Move",
+          "message": "Пакетне переміщення"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOm1vdmVfYmF0Y2g.short_desc": {
+          "source": "A batch move",
+          "message": "Пакетне переміщення"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.desc": {
+          "source": "A batch copy started by `copy-batch`",
+          "message": "Пакетне копіювання, запущене `copy-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.display_name": {
+          "source": "Batch Copy",
+          "message": "Пакетне копіювання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmNvcHlfYmF0Y2g.short_desc": {
+          "source": "A batch copy",
+          "message": "Пакетне копіювання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.desc": {
+          "source": "A batch delete started by `delete-batch`",
+          "message": "Пакетне видалення, запущене `delete-batch`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.display_name": {
+          "source": "Batch Delete",
+          "message": "Пакетне видалення"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOmRlbGV0ZV9iYXRjaA.short_desc": {
+          "source": "A batch delete",
+          "message": "Пакетне видалення"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.desc": {
+          "source": "A file being fetched from a URL by `save-url`",
+          "message": "Файл, що завантажується за URL за допомогою `save-url`"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.display_name": {
+          "source": "Save URL",
+          "message": "Зберегти URL"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.allowed-value.c3RyaW5nOnNhdmVfdXJs.short_desc": {
+          "source": "A file being fetched from a URL",
+          "message": "Файл, що завантажується за URL"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.desc": {
+          "source": "Which operation started the job.\n\nDropbox has a separate status endpoint per operation, so the kind of job has to be named in order to check it",
+          "message": "Яка операція запустила завдання.\n\nDropbox має окрему кінцеву точку статусу для кожної операції, тому тип завдання має бути вказаний для перевірки"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.display_name": {
+          "source": "Job Type",
+          "message": "Тип завдання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.option.am9iX3R5cGU.short_desc": {
+          "source": "Which operation started the job",
+          "message": "Яка операція запустила завдання"
+        },
+        "app.RHJvcGJveA.action.Y2hlY2stam9iLXN0YXR1cw.short_desc": {
+          "source": "Follow an operation Dropbox is performing in the background",
+          "message": "Відстежувати операцію, яку Dropbox виконує у фоновому режимі"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Creates a folder, creating any parent folders that do not yet exist.",
+          "message": "Створює папку, створюючи всі батьківські папки, яких ще немає."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create Folder",
+          "message": "Створити папку"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The full path of the folder to create; parent folders are created as needed",
+          "message": "Повний шлях до створюваної папки; батьківські папки створюються за потреби"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Шлях до папки"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The path of the folder to create",
+          "message": "Шлях до створюваної папки"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a folder",
+          "message": "Створити папку"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.desc": {
+          "source": "Creates a link granting access to a file or folder.\n\n**A `public` link makes the file reachable by anyone who has it, without signing in.**  `team_only`, a password, and an expiry all require a paid Dropbox account; where the account does not support the visibility requested, Dropbox narrows it silently, so the visibility Dropbox actually applied is returned in `visibility`.",
+          "message": "Створює посилання для надання доступу до файлу чи папки.\n\n**Посилання `public` робить файл доступним для будь-кого, хто має посилання, без входу в обліковий запис.** `team_only`, пароль і термін дії вимагають платного облікового запису Dropbox; якщо обліковий запис не підтримує запитану видимість, Dropbox автоматично звужує її, тому фактично застосована Dropbox видимість повертається в `visibility`."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Create Shared Link",
+          "message": "Створити спільне посилання"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.desc": {
+          "source": "When the link stops working; requires a paid Dropbox account",
+          "message": "Коли посилання перестане працювати; потрібен платний обліковий запис Dropbox"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.display_name": {
+          "source": "Expires",
+          "message": "Термін дії"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.ZXhwaXJlcw.short_desc": {
+          "source": "When the link stops working",
+          "message": "Коли посилання перестане працювати"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.desc": {
+          "source": "The password required to use the link; only used when `requested_visibility` is `password`",
+          "message": "Пароль, потрібний для використання посилання; використовується, лише якщо `requested_visibility` має значення `password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.display_name": {
+          "source": "Link Password",
+          "message": "Пароль посилання"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.bGlua19wYXNzd29yZA.short_desc": {
+          "source": "The password required to use the link",
+          "message": "Пароль, потрібний для використання посилання"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to create a shared link for",
+          "message": "Шлях до файлу або папки для створення спільного посилання"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to share",
+          "message": "Шлях до файлу або папки для надання спільного доступу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.desc": {
+          "source": "Anyone with the link can view the file, without signing in; **this makes the file publicly reachable**",
+          "message": "Будь-хто з посиланням може переглядати файл без входу; **це робить файл загальнодоступним**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Публічний"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnB1YmxpYw.short_desc": {
+          "source": "Anyone with the link can view the file",
+          "message": "Будь-хто з посиланням може переглядати файл"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "Anyone with the link and the password can view the file; requires a paid Dropbox account, and the password must be set in `link_password`",
+          "message": "Будь-хто з посиланням і паролем може переглядати файл; потрібен платний обліковий запис Dropbox, а пароль має бути встановлено в `link_password`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.display_name": {
+          "source": "Password Protected",
+          "message": "Захищено паролем"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnBhc3N3b3Jk.short_desc": {
+          "source": "Anyone with the link and the password can view the file",
+          "message": "Будь-хто з посиланням і паролем може переглядати файл"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.desc": {
+          "source": "Only members of the same Dropbox team can view the file; requires a Dropbox Business account",
+          "message": "Лише учасники тієї самої команди Dropbox можуть переглядати файл; потрібен обліковий запис Dropbox Business"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.display_name": {
+          "source": "Team Only",
+          "message": "Лише для команди"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.allowed-value.c3RyaW5nOnRlYW1fb25seQ.short_desc": {
+          "source": "Only members of the same Dropbox team can view the file",
+          "message": "Лише учасники тієї самої команди Dropbox можуть переглядати файл"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.desc": {
+          "source": "Who may use the link; if not set, the account's default is used",
+          "message": "Хто може використовувати посилання; якщо не вказано, використовується значення за замовчуванням облікового запису"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.display_name": {
+          "source": "Visibility",
+          "message": "Видимість"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.option.cmVxdWVzdGVkX3Zpc2liaWxpdHk.short_desc": {
+          "source": "Who may use the link",
+          "message": "Хто може використовувати посилання"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Create a link granting access to a file or folder",
+          "message": "Створити посилання для надання доступу до файлу або папки"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.desc": {
+          "source": "Creates a file directly from text content, without needing a file.\n\nUseful for writing generated reports, manifests, and notes.",
+          "message": "Створює файл безпосередньо з текстового вмісту без потреби у наявному файлі.\n\nКорисно для запису згенерованих звітів, маніфестів і нотаток."
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.display_name": {
+          "source": "Create Text File",
+          "message": "Створити текстовий файл"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.desc": {
+          "source": "The text content for the new file",
+          "message": "Текстовий вміст для нового файлу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.Y29udGVudA.short_desc": {
+          "source": "The text content for the new file",
+          "message": "Текстовий вміст для нового файлу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Замінити будь-який наявний файл за цим шляхом; **попередній вміст можна відновити лише через історію версій файлу**"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Перезаписати"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Замінити будь-який наявний файл за цим шляхом"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Не перезаписувати наявний файл; завантаження зазнає невдачі або вибирається нова назва, якщо встановлено `autorename`"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Додати"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Не перезаписувати наявний файл"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Що робити, якщо файл за цим шляхом уже існує"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Режим запису"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Що робити, якщо файл за цим шляхом уже існує"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change",
+          "message": "Не показувати користувачеві сповіщення на робочому столі про цю зміну"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Вимкнути сповіщення"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Не сповіщати користувача про цю зміну"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The full path to create the file at, including the file name",
+          "message": "Повний шлях для створення файлу, включно з назвою файлу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Шлях призначення"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path to create the file at",
+          "message": "Шлях для створення файлу"
+        },
+        "app.RHJvcGJveA.action.Y3JlYXRlLXRleHQtZmlsZQ.short_desc": {
+          "source": "Create a file from text content",
+          "message": "Створити файл із текстового вмісту"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.desc": {
+          "source": "Grants named people access to a file.\n\n`create-shared-link` hands out a link that anyone holding it can use; this grants access to specific people, which is what an audit trail and a later withdrawal both need.\n\nThe file's membership is returned afterwards, so the result shows who has access rather than only what this call did.",
+          "message": "Надає вказаним користувачам доступ до файлу.\n\n`create-shared-link` надає посилання, яким може скористатися будь-хто; ця дія надає доступ конкретним користувачам, що необхідно для аудиторського сліду та подальшого відкликання доступу.\n\nПісля цього повертається список учасників файлу, тож результат показує, хто має доступ, а не лише те, що зробив цей виклик."
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.display_name": {
+          "source": "Share File with People",
+          "message": "Поділитися файлом із користувачами"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.desc": {
+          "source": "A message to include in the notification email; ignored when `quiet` is set",
+          "message": "Повідомлення для додавання до електронного листа зі сповіщенням; ігнорується, якщо встановлено `quiet`"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.display_name": {
+          "source": "Message",
+          "message": "Повідомлення"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.Y3VzdG9tX21lc3NhZ2U.short_desc": {
+          "source": "A message to include in the notification email",
+          "message": "Повідомлення для додавання до електронного листа зі сповіщенням"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.desc": {
+          "source": "Takes ownership of the file; **the current owner loses it**",
+          "message": "Передає право власності на файл; **поточний власник його втрачає**"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "Owner",
+          "message": "Власник"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOm93bmVy.short_desc": {
+          "source": "Takes ownership of the file",
+          "message": "Передає право власності на файл"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Can view and change the file",
+          "message": "Може переглядати та змінювати файл"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "Редактор"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOmVkaXRvcg.short_desc": {
+          "source": "Can view and change the file",
+          "message": "Може переглядати та змінювати файл"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Can view and comment on the file but not change it",
+          "message": "Може переглядати та коментувати файл, але не змінювати його"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Переглядач"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOnZpZXdlcg.short_desc": {
+          "source": "Can view and comment on the file",
+          "message": "Може переглядати та коментувати файл"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.desc": {
+          "source": "The level of access to grant",
+          "message": "Рівень доступу для надання"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.display_name": {
+          "source": "Access Level",
+          "message": "Рівень доступу"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.YWNjZXNzX2xldmVs.short_desc": {
+          "source": "The level of access to grant",
+          "message": "Рівень доступу для надання"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.desc": {
+          "source": "The email addresses of the people to grant access to",
+          "message": "Електронні адреси користувачів, яким надається доступ"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "Адреси електронної пошти"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZW1haWxz.short_desc": {
+          "source": "The people to grant access to",
+          "message": "Користувачі, яким надається доступ"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.desc": {
+          "source": "The file to share, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Файл, яким потрібно поділитися, у вигляді ідентифікатора файлу Dropbox (`id:...`) або шляху"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "Ідентифікатор файлу"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.ZmlsZQ.short_desc": {
+          "source": "The file to share",
+          "message": "Файл, яким потрібно поділитися"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.desc": {
+          "source": "Do not send a notification email to the people given access",
+          "message": "Не надсилати електронний лист зі сповіщенням користувачам, яким надано доступ"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.display_name": {
+          "source": "Quiet",
+          "message": "Тихий режим"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.option.cXVpZXQ.short_desc": {
+          "source": "Do not send a notification email",
+          "message": "Не надсилати електронний лист зі сповіщенням"
+        },
+        "app.RHJvcGJveA.action.YWRkLWZpbGUtbWVtYmVy.short_desc": {
+          "source": "Grant named people access to a file",
+          "message": "Надати вказаним користувачам доступ до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.desc": {
+          "source": "Retrieves the metadata of a file or folder: its name, size, revision, timestamps, and content hash.\n\nUse `download-file` to retrieve the content itself.",
+          "message": "Отримує метадані файлу або папки: назву, розмір, ревізію, часові позначки та хеш вмісту.\n\nВикористовуйте `download-file`, щоб отримати сам вміст."
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.display_name": {
+          "source": "Get File Info",
+          "message": "Отримати інформацію про файл"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.desc": {
+          "source": "The path of the file or folder whose metadata is wanted",
+          "message": "Шлях до файлу або папки, метадані яких потрібні"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder",
+          "message": "Шлях до файлу або папки"
+        },
+        "app.RHJvcGJveA.action.Z2V0LW1ldGFkYXRh.short_desc": {
+          "source": "Get the metadata of a file or folder",
+          "message": "Отримати метадані файлу або папки"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.desc": {
+          "source": "Returns information about the Dropbox account the connection authenticates as: who it belongs to, the email address it is registered under, and what kind of account it is.\n\nThe account type matters for several other actions: a shared link cannot be password-protected on a `basic` account, and `team_only` link visibility needs a `business` account.",
+          "message": "Повертає інформацію про обліковий запис Dropbox, від імені якого автентифікується з’єднання: кому він належить, адресу електронної пошти, на яку його зареєстровано, та тип облікового запису.\n\nТип облікового запису має значення для кількох інших дій: спільне посилання не можна захистити паролем в обліковому записі `basic`, а видимість посилання `team_only` вимагає облікового запису `business`."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.display_name": {
+          "source": "Get Account Info",
+          "message": "Отримати інформацію про обліковий запис"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWFjY291bnQtaW5mbw.short_desc": {
+          "source": "Get information about the connected Dropbox account",
+          "message": "Отримати інформацію про підключений обліковий запис Dropbox"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.desc": {
+          "source": "Returns a direct download link for a file, valid for four hours and usable without signing in.\n\nUse this to hand a file to a system that cannot authenticate to Dropbox; use `create-shared-link` for a link that lasts.",
+          "message": "Повертає пряме посилання для завантаження файлу, дійсне протягом чотирьох годин і доступне без входу в систему.\n\nВикористовуйте це для передачі файлу системі, яка не може автентифікуватися в Dropbox; використовуйте `create-shared-link` для постійного посилання."
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.display_name": {
+          "source": "Get Temporary Link",
+          "message": "Отримати тимчасове посилання"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.desc": {
+          "source": "The path of the file to produce a temporary link for",
+          "message": "Шлях до файлу, для якого потрібно створити тимчасове посилання"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LWZpbGUtbGluaw.short_desc": {
+          "source": "Get a temporary direct download link for a file",
+          "message": "Отримати тимчасове пряме посилання для завантаження файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.desc": {
+          "source": "Returns a PDF preview of a document.\n\nDropbox renders it, so a document in a format this system cannot read - a Word file, a spreadsheet, a presentation - can still be shown or archived as a PDF.",
+          "message": "Повертає попередній перегляд документа у форматі PDF.\n\nDropbox відтворює його, тому документ у форматі, який ця система не може прочитати (файл Word, електронна таблиця, презентація), усе одно можна відобразити або заархівувати як PDF."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.display_name": {
+          "source": "Get Preview",
+          "message": "Отримати попередній перегляд"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.desc": {
+          "source": "The path of the document to render as a PDF preview",
+          "message": "Шлях до документа для відтворення як попередній перегляд PDF"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXByZXZpZXc.short_desc": {
+          "source": "Get a PDF preview of a document",
+          "message": "Отримати попередній перегляд документа у форматі PDF"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.desc": {
+          "source": "Returns how much of the account's storage is in use, and how much is available.\n\nUseful before a large upload: Dropbox rejects an upload that would exceed the quota, and reports it as an ordinary write failure rather than as a capacity problem.",
+          "message": "Повертає інформацію про те, який обсяг сховища облікового запису використовується та скільки доступно.\n\nКорисно перед великим завантаженням: Dropbox відхиляє завантаження, яке перевищує квоту, і повідомляє про це як про звичайну помилку запису, а не проблему з місткістю."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.display_name": {
+          "source": "Get Space Usage",
+          "message": "Отримати використання сховища"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXNwYWNlLXVzYWdl.short_desc": {
+          "source": "Get how much of the account's storage is in use",
+          "message": "Отримати інформацію про використаний обсяг сховища облікового запису"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.desc": {
+          "source": "Returns a thumbnail image of a file.\n\nDropbox renders it, so a preview can be shown without downloading the file itself.  Thumbnails are available for images and for common document formats.",
+          "message": "Повертає ескіз файлу.\n\nDropbox генерує його, тому попередній перегляд можна відобразити без завантаження самого файлу. Ескізи доступні для зображень і поширених форматів документів."
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.display_name": {
+          "source": "Get Thumbnail",
+          "message": "Отримати ескіз"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.desc": {
+          "source": "JPEG; smaller files, but lossy and with no transparency",
+          "message": "JPEG; менший розмір файлів, але зі стисненням із втратами та без прозорості"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOmpwZWc.short_desc": {
+          "source": "JPEG, smaller but lossy",
+          "message": "JPEG, менший, але зі втратами"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "PNG; larger files, but lossless and with transparency",
+          "message": "PNG; більший розмір файлів, але без втрат і з підтримкою прозорості"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.short_desc": {
+          "source": "PNG, larger but lossless",
+          "message": "PNG, більший, але без втрат"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Формат зображення для ескізу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.display_name": {
+          "source": "Format",
+          "message": "Формат"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.Zm9ybWF0.short_desc": {
+          "source": "The image format for the thumbnail",
+          "message": "Формат зображення для ескізу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 на 320 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.display_name": {
+          "source": "480 x 320",
+          "message": "480 x 320"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc0ODBoMzIw.short_desc": {
+          "source": "480 by 320 pixels",
+          "message": "480 на 320 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 на 480 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.display_name": {
+          "source": "640 x 480",
+          "message": "640 x 480"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NDBoNDgw.short_desc": {
+          "source": "640 by 480 pixels",
+          "message": "640 на 480 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 на 64 пікселі"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.display_name": {
+          "source": "64 x 64",
+          "message": "64 x 64"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc2NGg2NA.short_desc": {
+          "source": "64 by 64 pixels",
+          "message": "64 на 64 пікселі"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 на 640 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.display_name": {
+          "source": "960 x 640",
+          "message": "960 x 640"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnc5NjBoNjQw.short_desc": {
+          "source": "960 by 640 pixels",
+          "message": "960 на 640 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 на 768 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.display_name": {
+          "source": "1024 x 768",
+          "message": "1024 x 768"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMDI0aDc2OA.short_desc": {
+          "source": "1024 by 768 pixels",
+          "message": "1024 на 768 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 на 128 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.display_name": {
+          "source": "128 x 128",
+          "message": "128 x 128"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncxMjhoMTI4.short_desc": {
+          "source": "128 by 128 pixels",
+          "message": "128 на 128 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 на 1536 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.display_name": {
+          "source": "2048 x 1536",
+          "message": "2048 x 1536"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyMDQ4aDE1MzY.short_desc": {
+          "source": "2048 by 1536 pixels",
+          "message": "2048 на 1536 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 на 256 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.display_name": {
+          "source": "256 x 256",
+          "message": "256 x 256"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOncyNTZoMjU2.short_desc": {
+          "source": "256 by 256 pixels",
+          "message": "256 на 256 пікселів"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 на 32 пікселі"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.display_name": {
+          "source": "32 x 32",
+          "message": "32 x 32"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.allowed-value.c3RyaW5nOnczMmgzMg.short_desc": {
+          "source": "32 by 32 pixels",
+          "message": "32 на 32 пікселі"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.desc": {
+          "source": "The dimensions of the thumbnail in pixels",
+          "message": "Розміри мініатюри в пікселях"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Розмір"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.c2l6ZQ.short_desc": {
+          "source": "The dimensions of the thumbnail",
+          "message": "Розміри мініатюри"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.desc": {
+          "source": "The path of the file to render",
+          "message": "Шлях до файлу для візуалізації"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.Z2V0LXRodW1ibmFpbA.short_desc": {
+          "source": "Get a thumbnail image of a file",
+          "message": "Отримати мініатюру файлу"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.desc": {
+          "source": "Downloads a file's content.\n\nThe content is returned base64-encoded, along with the file's metadata.",
+          "message": "Завантажує вміст файлу.\n\nВміст повертається закодованим у base64 разом із метаданими файлу."
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.display_name": {
+          "source": "Download File",
+          "message": "Завантажити файл"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.desc": {
+          "source": "The path of the file to download",
+          "message": "Шлях до файлу для завантаження"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.ZG93bmxvYWQtZmlsZQ.short_desc": {
+          "source": "Download a file's content",
+          "message": "Завантажити вміст файлу"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.desc": {
+          "source": "Deletes several files or folders in one call, rather than one request per path.\n\n**A batch does not fail as a whole**: individual paths can be refused while the request succeeds, so each entry carries its own outcome.  A large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Видаляє кілька файлів або папок за один виклик, а не окремим запитом для кожного шляху.\n\n**Пакет не зазнає загальної помилки**: окремі шляхи можуть бути відхилені, тоді як запит буде виконано успішно, тому кожен запис має власний результат. Великий пакет обробляється у фоновому режимі, а у відповіді повертається назва завдання для відстеження за допомогою `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.display_name": {
+          "source": "Delete Files (Batch)",
+          "message": "Видалити файли (пакетно)"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.desc": {
+          "source": "The paths to delete.\n\nDropbox performs a batch in the background when it is large, so the response may name a job to follow rather than the results themselves",
+          "message": "Шляхи для видалення.\n\nDropbox виконує великі пакети у фоновому режимі, тому у відповіді може повертатися завдання для відстеження, а не самі результати"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.display_name": {
+          "source": "Paths",
+          "message": "Шляхи"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.option.cGF0aHM.short_desc": {
+          "source": "The paths to delete",
+          "message": "Шляхи для видалення"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWJhdGNo.short_desc": {
+          "source": "Delete several files or folders in one call",
+          "message": "Видалити кілька файлів або папок за один виклик"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file or folder.\n\n**Deleting a folder deletes everything in it.**  Dropbox keeps deleted files for a period that depends on the account, so a deletion can usually be undone from the Dropbox web interface, but not through this API.",
+          "message": "Видаляє файл або папку.\n\n**Видалення папки призводить до видалення всього її вмісту.** Dropbox зберігає видалені файли протягом періоду, що залежить від типу облікового запису, тому видалення зазвичай можна скасувати через вебінтерфейс Dropbox, але не через цей API."
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File or Folder",
+          "message": "Видалити файл або папку"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to delete; deleting a folder deletes everything in it",
+          "message": "Шлях до файлу або папки для видалення; видалення папки призводить до видалення всього її вмісту"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path of the file or folder to delete",
+          "message": "Шлях до файлу або папки для видалення"
+        },
+        "app.RHJvcGJveA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file or folder",
+          "message": "Видалити файл або папку"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.desc": {
+          "source": "Fires when a file that was already in the folder being watched is changed.\n\nA file appearing for the first time is reported by `new-file` instead.  A file moved into the watched folder keeps its Dropbox identity, so it arrives here rather than as a new file.",
+          "message": "Спрацьовує, коли змінюється файл, який уже містився у відстежуваній папці.\n\nПро файл, який з'явився вперше, замість цього повідомляє `new-file`. Файл, переміщений до відстежуваної папки, зберігає свій ідентифікатор Dropbox, тому він надходить сюди, а не як новий файл."
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.display_name": {
+          "source": "File Modified",
+          "message": "Файл змінено"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження, щоб відрізнити новий файл від зміненого (за замовчуванням `100000`).\n\nDropbox однаково повідомляє про створення та зміну, тому різницю можна визначити лише за історією переглянутих записів. Якщо досягнуто цього обмеження, у журнал записується попередження; краще звузити область за допомогою `path` та `recursive`, ніж збільшувати це значення"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Максимум відстежуваних записів"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Як часто перевіряти наявність змін, у секундах (мінімум `30`, за замовчуванням `60`)"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Як часто перевіряти наявність змін, у секундах"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Папка для відстеження; залиште порожнім, щоб відстежувати весь обліковий запис від кореня"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Папка"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Папка для відстеження"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Відстежувати вміст підпапок, а також самої папки.\n\nЦе розширює як обсяг звітів, так і індекс, який ведеться для розрізнення нових і змінених файлів, тому вимкніть цей параметр, якщо потрібна лише одна папка"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Рекурсивно"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Відстежувати також підпапки"
+        },
+        "app.RHJvcGJveA.action.ZmlsZS1tb2RpZmllZA.short_desc": {
+          "source": "React to a change to an existing file",
+          "message": "Реагувати на зміну наявного файлу"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.desc": {
+          "source": "Searches for files by name and, for supported file types, by content, and reads the results as a stream of records.\n\nUnlike `search`, which answers one page and leaves the cursor to the caller, this walks every page of matches.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; read the folder instead when the result has to reflect the current state exactly.",
+          "message": "Шукає файли за назвою та, для підтримуваних типів файлів, за вмістом, і зчитує результати як потік записів.\n\nНа відміну від `search`, який повертає одну сторінку і залишає курсор викликачу, цей метод проходить усі сторінки збігів.\n\nDropbox індексує вміст асинхронно, тому щойно завантажений файл може бути ще не знайдено; якщо результат має точно відображати поточний стан, зчитуйте папку безпосередньо."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.display_name": {
+          "source": "Find Files by Search",
+          "message": "Знайти файли за допомогою пошуку"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, comma-separated and without a leading `.`",
+          "message": "Шукати лише файли з цими розширеннями, розділеними комами та без початкової `.`"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Розширення файлів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only these file extensions",
+          "message": "Шукати лише з цими розширеннями файлів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Лише файли, які не було видалено"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Активний"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Лише файли, які не було видалено"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Лише файли, які було видалено і які все ще можна відновити"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Видалено"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Лише видалені файли"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Which files to search",
+          "message": "Які файли шукати"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Статус файлу"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Which files to search",
+          "message": "Які файли шукати"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match file names only rather than searching content as well",
+          "message": "Шукати лише за назвами файлів, а не за вмістом"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "Filename Only",
+          "message": "Лише назва файлу"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match names only, not content",
+          "message": "Шукати лише за назвами, а не за вмістом"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Спочатку нещодавно змінені"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Востаннє змінено"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Спочатку нещодавно змінені"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Спочатку найвідповідніші"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "За релевантністю"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Спочатку найвідповідніші"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for results",
+          "message": "Порядок сортування результатів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for results",
+          "message": "Порядок сортування результатів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.desc": {
+          "source": "Search only within this folder; the empty string searches the whole account",
+          "message": "Шукати лише в цій папці; порожній рядок здійснює пошук по всьому обліковому запису"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Папка"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Шукати лише в цій папці"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.desc": {
+          "source": "How many matches to fetch per request.\n\nThis affects how the walk is split into requests, not how many records are returned",
+          "message": "Скільки збігів отримувати за запит.\n\nЦе впливає на те, як обхід розбивається на запити, а не на загальну кількість повернутих записів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many matches to fetch per request",
+          "message": "Скільки збігів отримувати за запит"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.desc": {
+          "source": "What to search for; matched against file names and, for supported types, content",
+          "message": "Що шукати; порівнюється з назвами файлів і, для підтримуваних типів, із вмістом"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.option.cXVlcnk.short_desc": {
+          "source": "What to search for",
+          "message": "Що шукати"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1ieS1zZWFyY2g.short_desc": {
+          "source": "Search for files and read the results as records",
+          "message": "Шукати файли та зчитувати результати у вигляді записів"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.desc": {
+          "source": "Reads the contents of a folder as a stream of records.\n\nUnlike `list-folder`, which answers one page and leaves the cursor to the caller, this walks the whole folder: pages are fetched as they are reached.\n\nSet `recursive` to include subfolders.  Entries that describe a deletion are not returned, since they are not contents of the folder.",
+          "message": "Зчитує вміст папки як потік записів.\n\nНа відміну від `list-folder`, який повертає одну сторінку та залишає курсор стороні, що викликає, ця дія проходить усю папку: сторінки завантажуються в міру досягнення.\n\nУстановіть `recursive`, щоб включити вкладені папки. Записи, які описують видалення, не повертаються, оскільки вони не є вмістом папки."
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.display_name": {
+          "source": "Find Files in a Folder",
+          "message": "Знайти файли в папці"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.desc": {
+          "source": "The folder to read; the empty string reads the account root",
+          "message": "Папка для зчитування; порожній рядок зчитує кореневу папку облікового запису"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Папка"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGF0aA.short_desc": {
+          "source": "The folder to read",
+          "message": "Папка для зчитування"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.desc": {
+          "source": "How many entries to fetch per request; Dropbox treats this as a hint.\n\nThis affects how the walk is split into requests, not how many records are returned - the iterator fetches further pages as they are needed",
+          "message": "Скільки записів отримувати за один запит; Dropbox розглядає це як підказку.\n\nЦе впливає на те, як обхід розбивається на запити, а не на те, скільки записів повертається — ітератор отримує наступні сторінки за потреби"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "How many entries to fetch per request",
+          "message": "Кількість записів для отримання за запит"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Включати вміст вкладених папок, а також самої папки"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Рекурсивно"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Включати вміст вкладених папок"
+        },
+        "app.RHJvcGJveA.action.ZmluZC1maWxlcw.short_desc": {
+          "source": "Read the contents of a folder as records",
+          "message": "Зчитати вміст папки як записи"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.desc": {
+          "source": "Lists the people and groups who have access to a file, and at what level.\n\nSomeone who has been invited but has not yet accepted appears under `invitees` rather than `users`.",
+          "message": "Перелічує користувачів і групи, які мають доступ до файлу, та їхній рівень доступу.\n\nКористувач, якого запросили, але який ще не прийняв запрошення, відображається у `invitees`, а не у `users`."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.display_name": {
+          "source": "List File Members",
+          "message": "Список учасників файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.desc": {
+          "source": "The file whose members are to be listed, as a Dropbox file ID (`id:...`) or a path",
+          "message": "Файл, список учасників якого потрібно отримати, як ідентифікатор файлу Dropbox (`id:...`) або шлях"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.display_name": {
+          "source": "File ID",
+          "message": "Ідентифікатор файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.ZmlsZQ.short_desc": {
+          "source": "The file whose members are to be listed",
+          "message": "Файл, список учасників якого потрібно отримати"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.desc": {
+          "source": "The maximum number of members to return",
+          "message": "Максимальна кількість учасників для повернення"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of members to return",
+          "message": "Максимальна кількість учасників для повернення"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLW1lbWJlcnM.short_desc": {
+          "source": "List who has access to a file",
+          "message": "Отримати список користувачів із доступом до файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.desc": {
+          "source": "Lists the earlier revisions of a file, newest first.\n\nHow long revisions are kept depends on the account.",
+          "message": "Перелічує попередні версії файлу, спочатку найновіші.\n\nТривалість зберігання версій залежить від облікового запису."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.display_name": {
+          "source": "List File Revisions",
+          "message": "Список версій файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Максимальна кількість версій для повернення"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of revisions to return",
+          "message": "Максимальна кількість версій для повернення"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Return revisions of the file identified by the path, following it through renames and moves",
+          "message": "Повертати версії файлу, визначеного за шляхом, відстежуючи його перейменування та переміщення"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.display_name": {
+          "source": "By File ID",
+          "message": "За ідентифікатором файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOmlk.short_desc": {
+          "source": "Return revisions of the file itself, wherever it now lives",
+          "message": "Повертати версії самого файлу, де б він зараз не знаходився"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.desc": {
+          "source": "Return revisions of whatever file is now at the path; if the file was deleted and another was created with the same name, the revisions of the new file are returned",
+          "message": "Повертати версії будь-якого файлу, який зараз знаходиться за цим шляхом; якщо файл було видалено та створено інший з такою ж назвою, повертаються версії нового файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.display_name": {
+          "source": "By Path",
+          "message": "За шляхом"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.allowed-value.c3RyaW5nOnBhdGg.short_desc": {
+          "source": "Return revisions of whatever file is now at the path",
+          "message": "Повертати версії будь-якого файлу, який зараз знаходиться за цим шляхом"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.desc": {
+          "source": "How the file is identified: by whatever is now at the path, or by the file itself",
+          "message": "Спосіб ідентифікації файлу: за тим, що зараз знаходиться за шляхом, або за самим файлом"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Режим"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.bW9kZQ.short_desc": {
+          "source": "How the file is identified",
+          "message": "Спосіб ідентифікації файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.desc": {
+          "source": "The path of the file whose revisions are wanted",
+          "message": "Шлях до файлу, версії якого потрібно отримати"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1maWxlLXJldmlzaW9ucw.short_desc": {
+          "source": "List the earlier revisions of a file",
+          "message": "Отримати список попередніх версій файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.desc": {
+          "source": "Lists the files and folders in a folder.\n\nResults are paginated; when `has_more` is returned, pass the returned `cursor` back in `cursor` to retrieve the following page.  A cursor already carries the folder and the recursion flag, so the other options are ignored when one is supplied.",
+          "message": "Перелічує файли та папки в папці.\n\nРезультати розбиваються на сторінки; коли повертається `has_more`, передайте отриманий `cursor` назад у `cursor`, щоб отримати наступну сторінку. Курсор уже містить інформацію про папку та прапорець рекурсії, тому інші параметри ігноруються, якщо його вказано."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.display_name": {
+          "source": "List Folder",
+          "message": "Список вмісту папки"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous listing, used to retrieve the following page; when set, every other option is ignored, since the cursor already carries them",
+          "message": "Значення `cursor`, повернене попереднім переліком, яке використовується для отримання наступної сторінки; якщо встановлено, усі інші параметри ігноруються, оскільки курсор уже містить їх"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated listing",
+          "message": "Курсор, повернений попереднім усіченим переліком"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.desc": {
+          "source": "The maximum number of entries to return per page; Dropbox treats this as a hint and may return fewer",
+          "message": "Максимальна кількість записів на сторінку; Dropbox розглядає це як підказку й може повернути менше"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.bGltaXQ.short_desc": {
+          "source": "The maximum number of entries to return per page",
+          "message": "Максимальна кількість записів на сторінку"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.desc": {
+          "source": "The folder to list; the empty string lists the account root",
+          "message": "Папка для переліку; порожній рядок перелічує кореневу папку облікового запису"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Шлях до папки"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cGF0aA.short_desc": {
+          "source": "The folder to list",
+          "message": "Папка для переліку"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.desc": {
+          "source": "Include the contents of subfolders as well as of the folder itself",
+          "message": "Включати вміст вкладених папок, а також самої папки"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Рекурсивно"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Include the contents of subfolders",
+          "message": "Включати вміст вкладених папок"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1mb2xkZXI.short_desc": {
+          "source": "List the contents of a folder",
+          "message": "Отримати вміст папки"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.desc": {
+          "source": "Lists the shared links in the account, or the links granting access to one file or folder.\n\nBy default a link to a parent folder is listed as well, since it also grants access; set `direct_only` to list only links created for the path itself.",
+          "message": "Перелічує спільні посилання в обліковому записі або посилання, що надають доступ до одного файлу чи папки.\n\nЗа замовчуванням також перелічується посилання на батьківську папку, оскільки воно також надає доступ; установіть `direct_only`, щоб перелічити лише посилання, створені саме для цього шляху."
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.display_name": {
+          "source": "List Shared Links",
+          "message": "Список спільних посилань"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.desc": {
+          "source": "List only links created for the path itself, excluding links to a parent folder that also grant access to it",
+          "message": "Перелічувати лише посилання, створені безпосередньо для цього шляху, за винятком посилань на батьківську папку, які також надають до нього доступ"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.display_name": {
+          "source": "Direct Links Only",
+          "message": "Лише прямі посилання"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.ZGlyZWN0X29ubHk.short_desc": {
+          "source": "Exclude links inherited from a parent folder",
+          "message": "Виключити посилання, успадковані від батьківської папки"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.desc": {
+          "source": "List only links to this file or folder; if not set, all of the account's links are listed",
+          "message": "Перелічувати посилання лише на цей файл або папку; якщо не встановлено, повертаються всі посилання облікового запису"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.option.cGF0aA.short_desc": {
+          "source": "List only links to this file or folder",
+          "message": "Перелічувати посилання лише на цей файл або папку"
+        },
+        "app.RHJvcGJveA.action.bGlzdC1zaGFyZWQtbGlua3M.short_desc": {
+          "source": "List the shared links in the account",
+          "message": "Отримати список спільних посилань в обліковому записі"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.desc": {
+          "source": "Moves several files in one call, rather than one request per file.\n\nEach entry names a `from_path` and a `to_path`.  **A batch does not fail as a whole**, so each entry carries its own outcome; a large batch is performed in the background and the response names a job to follow with `check-job-status`.",
+          "message": "Переміщує кілька файлів за один виклик замість одного запиту на файл.\n\nКожен запис визначає `from_path` та `to_path`. **Пакетна операція не завершується помилкою повністю**, тому кожен запис має власний результат; великий пакет виконується у фоновому режимі, а відповідь містить назву завдання для відстеження за допомогою `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.display_name": {
+          "source": "Move Files (Batch)",
+          "message": "Перемістити файли (пакетно)"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.desc": {
+          "source": "The operations to perform, as a list of hashes each carrying `from_path` and `to_path`.\n\n**Example**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```",
+          "message": "Операції для виконання у вигляді списку хешів, кожен з яких містить `from_path` та `to_path`.\n\n**Приклад**:\n```\n[{\"from_path\": \"/in/a.csv\", \"to_path\": \"/done/a.csv\"}]\n```"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.display_name": {
+          "source": "Entries",
+          "message": "Записи"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.option.ZW50cmllcw.short_desc": {
+          "source": "The moves or copies to perform",
+          "message": "Переміщення або копіювання для виконання"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1iYXRjaA.short_desc": {
+          "source": "Move several files in one call",
+          "message": "Перемістити кілька файлів за один виклик"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
+          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
+          "message": "Переміщує файл або папку до нового шляху.\n\nПереміщення під іншою назвою в тій самій папці перейменовує його."
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
+          "source": "Move or Rename File or Folder",
+          "message": "Перемістити або перейменувати файл чи папку"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Шлях до файлу або папки для переміщення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.display_name": {
+          "source": "Source Path",
+          "message": "Вихідний шлях"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.short_desc": {
+          "source": "The path of the file or folder to move",
+          "message": "Шлях до файлу або папки для переміщення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.desc": {
+          "source": "The full path to move to, including the new name; a move to a different name in the same folder renames the file",
+          "message": "Повний шлях для переміщення, включно з новою назвою; переміщення під іншою назвою в тій самій папці перейменовує файл"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Шлях призначення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.option.dG9fcGF0aA.short_desc": {
+          "source": "The path to move to",
+          "message": "Шлях призначення"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
+          "source": "Move or rename a file or folder",
+          "message": "Перемістити або перейменувати файл чи папку"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Dropbox**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть HTTP-метод, шлях URI (відносно базового URL API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Dropbox",
+          "message": "Виконати довільний виклик API до Dropbox"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.desc": {
+          "source": "Fires when a file is created in the folder being watched.\n\nUses Dropbox's delta feed, so the cost of a poll follows what has changed rather than how much the folder holds.\n\nA file that was already there and has since been edited is reported by `file-modified` instead.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Спрацьовує, коли файл створюється у відстежуваній папці.\n\nВикористовує дельта-канал Dropbox, тому витрати на опитування залежать від того, що змінилося, а не від обсягу вмісту папки.\n\nПро файл, який уже існував і згодом був змінений, повідомляється через `file-modified`. Установіть `path`, щоб відстежувати одну папку, і зніміть прапорець `recursive`, щоб ігнорувати її вкладені папки."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.display_name": {
+          "source": "New File",
+          "message": "Новий файл"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження, щоб відрізнити новий файл від зміненого (за замовчуванням `100000`).\n\nDropbox однаково повідомляє про створення та зміну, тому різницю можна визначити лише за історією переглянутих записів. Якщо досягнуто цього обмеження, у журнал записується попередження; краще звузити область за допомогою `path` та `recursive`, ніж збільшувати це значення"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Максимум відстежуваних записів"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Як часто перевіряти наявність змін, у секундах (мінімум `30`, за замовчуванням `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Як часто перевіряти наявність змін, у секундах"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Папка для відстеження; залиште порожнім, щоб відстежувати весь обліковий запис від кореня"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Папка"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Папка для відстеження"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Відстежувати вміст підпапок, а також самої папки.\n\nЦе розширює як обсяг звітів, так і індекс, який ведеться для розрізнення нових і змінених файлів, тому вимкніть цей параметр, якщо потрібна лише одна папка"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Рекурсивно"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Відстежувати також підпапки"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZpbGU.short_desc": {
+          "source": "React to a file being created in a folder",
+          "message": "Реагувати на створення файлу в папці"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.desc": {
+          "source": "Fires when a folder is created in the folder being watched.\n\nA folder that was already there and has since been renamed or moved is **not** reported.  Set `path` to watch one folder, and clear `recursive` to ignore its subfolders.",
+          "message": "Спрацьовує, коли папка створюється у відстежуваній папці.\n\nПро папку, яка вже існувала і була перейменована або переміщена, **не** повідомляється. Установіть `path`, щоб відстежувати одну папку, і зніміть прапорець `recursive`, щоб ігнорувати її вкладені папки."
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.display_name": {
+          "source": "New Folder",
+          "message": "Нова папка"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.desc": {
+          "source": "How many entry identities the watch remembers in order to tell a new file from a modified one (default `100000`).\n\nDropbox reports a creation and a modification identically, so the difference can only come from remembering what has been seen.  A watch that reaches this bound logs a warning; narrow it with `path` and `recursive` rather than raising this",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження, щоб відрізнити новий файл від зміненого (за замовчуванням `100000`).\n\nDropbox однаково повідомляє про створення та зміну, тому різницю можна визначити лише за історією переглянутих записів. Якщо досягнуто цього обмеження, у журнал записується попередження; краще звузити область за допомогою `path` та `recursive`, ніж збільшувати це значення"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.display_name": {
+          "source": "Maximum Tracked Entries",
+          "message": "Максимум відстежуваних записів"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.bWF4X3RyYWNrZWRfZW50cmllcw.short_desc": {
+          "source": "How many entry identities the watch remembers",
+          "message": "Скільки ідентифікаторів записів запам'ятовує процес відстеження"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for changes, in seconds (minimum `30`, default `60`)",
+          "message": "Як часто перевіряти наявність змін, у секундах (мінімум `30`, за замовчуванням `60`)"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for changes, in seconds",
+          "message": "Як часто перевіряти наявність змін, у секундах"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.desc": {
+          "source": "The folder to watch; leave it unset to watch the whole account from its root",
+          "message": "Папка для відстеження; залиште порожнім, щоб відстежувати весь обліковий запис від кореня"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.display_name": {
+          "source": "Folder",
+          "message": "Папка"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cGF0aA.short_desc": {
+          "source": "The folder to watch",
+          "message": "Папка для відстеження"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.desc": {
+          "source": "Watch the contents of subfolders as well as of the folder itself.\n\nThis widens both what is reported and the index the watch keeps to tell a new file from a modified one, so leave it clear when only one folder matters",
+          "message": "Відстежувати вміст підпапок, а також самої папки.\n\nЦе розширює як обсяг звітів, так і індекс, який ведеться для розрізнення нових і змінених файлів, тому вимкніть цей параметр, якщо потрібна лише одна папка"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.display_name": {
+          "source": "Recursive",
+          "message": "Рекурсивно"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.option.cmVjdXJzaXZl.short_desc": {
+          "source": "Watch subfolders as well",
+          "message": "Відстежувати також підпапки"
+        },
+        "app.RHJvcGJveA.action.bmV3LWZvbGRlcg.short_desc": {
+          "source": "React to a folder being created",
+          "message": "Реагувати на створення папки"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.desc": {
+          "source": "Has Dropbox fetch a URL and store the result in the account.\n\n**The content never passes through this system**: Dropbox downloads it from its own servers, so a large file costs nothing here in memory, time, or bandwidth.  The URL must be reachable from the public internet.\n\nA small file is usually fetched before the call returns; a large one is not, and the response then names a job to follow with `check-job-status`.",
+          "message": "Доручає Dropbox завантажити URL-адресу та зберегти результат в обліковому записі.\n\n**Вміст ніколи не проходить через цю систему**: Dropbox завантажує його зі своїх серверів, тому великий файл не витрачає тут пам'ять, час чи пропускну здатність. URL-адреса має бути доступною з публічного інтернету.\n\nНевеликий файл зазвичай завантажується до завершення виклику; для великого файлу це не так, і відповідь містить назву завдання для відстеження за допомогою `check-job-status`."
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.display_name": {
+          "source": "Save URL to Dropbox",
+          "message": "Зберегти URL-адресу в Dropbox"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.desc": {
+          "source": "The path in the Dropbox account to save the downloaded file to",
+          "message": "Шлях в обліковому записі Dropbox для збереження завантаженого файлу"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.cGF0aA.short_desc": {
+          "source": "The path to save the downloaded file to",
+          "message": "Шлях для збереження завантаженого файлу"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.desc": {
+          "source": "The URL for Dropbox to fetch.\n\n**Dropbox fetches it from its own servers**, so the URL must be reachable from the public internet and the content never passes through this system",
+          "message": "URL-адреса, яку Dropbox має отримати.\n\n**Dropbox отримує її зі своїх власних серверів**, тому URL-адреса має бути доступною з публічного інтернету, а вміст ніколи не проходить через цю систему"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL-адреса"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.option.dXJs.short_desc": {
+          "source": "The URL for Dropbox to fetch",
+          "message": "URL-адреса, яку Dropbox має отримати"
+        },
+        "app.RHJvcGJveA.action.c2F2ZS11cmw.short_desc": {
+          "source": "Have Dropbox fetch a URL directly into the account",
+          "message": "Дозволити Dropbox завантажити вміст за URL-адресою безпосередньо в обліковий запис"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.desc": {
+          "source": "Searches for files and folders by name and, for supported file types, by content.\n\nDropbox indexes content asynchronously, so a file uploaded moments earlier may not be found yet; use `list-folder` when the result has to reflect the current state exactly.",
+          "message": "Шукає файли та папки за назвою та, для підтримуваних типів файлів, за вмістом.\n\nDropbox індексує вміст асинхронно, тому щойно завантажений файл може бути ще не знайдено; використовуйте `list-folder`, коли результат має точно відображати поточний стан."
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Пошук"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` value returned by a previous search, used to retrieve the following page.\n\nA cursor already carries the query and every option it was created with, so when it is set the other options are ignored",
+          "message": "Значення `cursor`, повернуте попереднім пошуком, яке використовується для отримання наступної сторінки.\n\nКурсор уже містить пошуковий запит і всі параметри, з якими його було створено, тому якщо його вказано, інші параметри ігноруються"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor returned by a previous truncated search",
+          "message": "Курсор, повернутий попереднім скороченим пошуком"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.desc": {
+          "source": "Match only files with these extensions, given without a leading dot and separated by commas",
+          "message": "Шукати лише файли з цими розширеннями, зазначеними без крапки на початку та розділеними комами"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.display_name": {
+          "source": "File Extensions",
+          "message": "Розширення файлів"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9leHRlbnNpb25z.short_desc": {
+          "source": "Match only files with these extensions",
+          "message": "Шукати лише файли з цими розширеннями"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Лише файли, які не було видалено"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Активний"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.short_desc": {
+          "source": "Only files that have not been deleted",
+          "message": "Лише файли, які не було видалено"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Only files that have been deleted and are still recoverable",
+          "message": "Лише файли, які було видалено і які все ще можна відновити"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Видалено"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.allowed-value.c3RyaW5nOmRlbGV0ZWQ.short_desc": {
+          "source": "Only deleted files",
+          "message": "Лише видалені файли"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Чи шукати активні або видалені файли"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.display_name": {
+          "source": "File Status",
+          "message": "Статус файлу"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZV9zdGF0dXM.short_desc": {
+          "source": "Whether to match active or deleted files",
+          "message": "Чи шукати активні або видалені файли"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.desc": {
+          "source": "Match on the file name only, rather than also searching inside file content",
+          "message": "Шукати лише за назвою файлу, а не за вмістом файлу"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.display_name": {
+          "source": "File Name Only",
+          "message": "Лише назва файлу"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.ZmlsZW5hbWVfb25seQ.short_desc": {
+          "source": "Match on the file name only, not on content",
+          "message": "Шукати лише за назвою файлу, а не за вмістом"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.desc": {
+          "source": "Most recently modified first",
+          "message": "Спочатку нещодавно змінені"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.display_name": {
+          "source": "Last Modified",
+          "message": "Востаннє змінено"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOmxhc3RfbW9kaWZpZWRfdGltZQ.short_desc": {
+          "source": "Most recently modified first",
+          "message": "Спочатку нещодавно змінені"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.desc": {
+          "source": "Best matches first",
+          "message": "Спочатку найвідповідніші"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.display_name": {
+          "source": "Relevance",
+          "message": "За релевантністю"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.allowed-value.c3RyaW5nOnJlbGV2YW5jZQ.short_desc": {
+          "source": "Best matches first",
+          "message": "Спочатку найвідповідніші"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.desc": {
+          "source": "The sort order for matches",
+          "message": "Порядок сортування результатів"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.b3JkZXJfYnk.short_desc": {
+          "source": "The sort order for matches",
+          "message": "Порядок сортування результатів"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Maximum Results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "The maximum number of matches to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.desc": {
+          "source": "Search only within this folder and its subfolders; the empty string searches the whole account",
+          "message": "Шукати лише в цій папці та її підпапках; порожній рядок виконує пошук по всьому обліковому запису"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.display_name": {
+          "source": "Folder Path",
+          "message": "Шлях до папки"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cGF0aA.short_desc": {
+          "source": "Search only within this folder",
+          "message": "Шукати лише в цій папці"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The text to search for, in file names and, for supported file types, in content",
+          "message": "Текст для пошуку в назвах файлів та, для підтримуваних типів файлів, у вмісті"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The text to search for",
+          "message": "Текст для пошуку"
+        },
+        "app.RHJvcGJveA.action.c2VhcmNo.short_desc": {
+          "source": "Search for files and folders",
+          "message": "Пошук файлів і папок"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.desc": {
+          "source": "Removes a file or folder entirely, bypassing the trash.\n\n`delete-file` leaves the file recoverable and still counting against the account's storage; this does not.  **It cannot be undone.**\n\nThe Dropbox app must have been granted permission for this; without it Dropbox refuses the request rather than quietly doing nothing.",
+          "message": "Повністю видаляє файл або папку в обхід кошика.\n\n`delete-file` залишає файл доступним для відновлення і він продовжує враховуватися у сховищі облікового запису; ця дія — ні.  **Цю дію не можна скасувати.**\n\nПрограмі Dropbox має бути надано відповідний дозвіл; без нього Dropbox відхилить запит, а не просто нічого не зробить."
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.display_name": {
+          "source": "Permanently Delete",
+          "message": "Видалити остаточно"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The path of the file or folder to remove permanently",
+          "message": "Шлях до файлу або папки для остаточного видалення"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.cGVybWFuZW50bHktZGVsZXRl.short_desc": {
+          "source": "Remove a file outright, bypassing the trash",
+          "message": "Остаточно видалити файл в обхід кошика"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.desc": {
+          "source": "Withdraws a shared link, so that it no longer grants access.\n\nThe file itself is not changed, and other links to it keep working.",
+          "message": "Відкликає спільне посилання, тому воно більше не надає доступу.\n\nСам файл не змінюється, а інші посилання на нього продовжують працювати."
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.display_name": {
+          "source": "Revoke Shared Link",
+          "message": "Відкликати спільне посилання"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.desc": {
+          "source": "The shared link to revoke, as returned by `create-shared-link` or `list-shared-links`",
+          "message": "Спільне посилання для відкликання, повернуте `create-shared-link` або `list-shared-links`"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL-адреса"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.option.dXJs.short_desc": {
+          "source": "The shared link to revoke",
+          "message": "Спільне посилання для відкликання"
+        },
+        "app.RHJvcGJveA.action.cmV2b2tlLXNoYXJlZC1saW5r.short_desc": {
+          "source": "Withdraw a shared link",
+          "message": "Відкликати спільне посилання"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.desc": {
+          "source": "Restores a file to an earlier revision, listed by `list-file-revisions`.\n\nThe current content becomes a revision in its turn, so a restore can itself be undone.",
+          "message": "Відновлює файл до ранішої ревізії, зазначеної в `list-file-revisions`.\n\nПоточний вміст своєю чергою стає ревізією, тому відновлення можна скасувати."
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.display_name": {
+          "source": "Restore File Revision",
+          "message": "Відновити ревізію файлу"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.desc": {
+          "source": "The path of the file to restore a revision of",
+          "message": "Шлях до файлу, ревізію якого потрібно відновити"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cGF0aA.short_desc": {
+          "source": "The path of the file",
+          "message": "Шлях до файлу"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.desc": {
+          "source": "The revision identifier to restore, as returned by `list-file-revisions`",
+          "message": "Ідентифікатор ревізії для відновлення, повернутий `list-file-revisions`"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.display_name": {
+          "source": "Revision",
+          "message": "Ревізія"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.option.cmV2.short_desc": {
+          "source": "The revision to restore",
+          "message": "Ревізія для відновлення"
+        },
+        "app.RHJvcGJveA.action.cmVzdG9yZS1maWxlLXJldmlzaW9u.short_desc": {
+          "source": "Restore a file to an earlier revision",
+          "message": "Відновити файл до ранішої ревізії"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "Завантажує файл у Dropbox.\n\nЯкщо `path` не вказано, використовується власна назва файлу і файл зберігається в корені облікового запису.  За замовчуванням наявний файл за цим шляхом не замінюється; встановіть для `mode` значення `overwrite` або `autorename`, щоб змінити це.\n\nВеликі файли завантажуються частинами через сеанс завантаження Dropbox, тому в разі переривання передавання не потрібно починати з самого початку."
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Завантажити файл"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.desc": {
+          "source": "Choose a name that does not conflict rather than failing when a file already exists at the destination",
+          "message": "Вибрати ім'я без конфліктів замість помилки, якщо файл уже існує в місці призначення"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.display_name": {
+          "source": "Auto-Rename",
+          "message": "Автоперейменування"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.YXV0b3JlbmFtZQ.short_desc": {
+          "source": "Rename rather than fail when the destination is taken",
+          "message": "Перейменувати замість помилки, якщо місце призначення зайняте"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload, including its name and content",
+          "message": "Файл для завантаження, включно з його назвою та вмістом"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Файл для завантаження"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.desc": {
+          "source": "Replace any existing file at the path; **the previous content is only recoverable through the file's revision history**",
+          "message": "Замінити будь-який наявний файл за цим шляхом; **попередній вміст можна відновити лише через історію версій файлу**"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.display_name": {
+          "source": "Overwrite",
+          "message": "Перезаписати"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOm92ZXJ3cml0ZQ.short_desc": {
+          "source": "Replace any existing file at the path",
+          "message": "Замінити будь-який наявний файл за цим шляхом"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.desc": {
+          "source": "Do not overwrite an existing file; the upload fails, or a new name is chosen when `autorename` is set",
+          "message": "Не перезаписувати наявний файл; завантаження зазнає невдачі або вибирається нова назва, якщо встановлено `autorename`"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.display_name": {
+          "source": "Add",
+          "message": "Додати"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.allowed-value.c3RyaW5nOmFkZA.short_desc": {
+          "source": "Do not overwrite an existing file",
+          "message": "Не перезаписувати наявний файл"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Що робити, якщо файл за цим шляхом уже існує"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.display_name": {
+          "source": "Write Mode",
+          "message": "Режим запису"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bW9kZQ.short_desc": {
+          "source": "What to do when a file already exists at the path",
+          "message": "Що робити, якщо файл за цим шляхом уже існує"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.desc": {
+          "source": "Do not show the user a desktop notification about this change; useful for uploads made in bulk",
+          "message": "Не показувати користувачеві сповіщення на робочому столі про цю зміну; корисно для масових завантажень"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.display_name": {
+          "source": "Mute Notification",
+          "message": "Вимкнути сповіщення"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.bXV0ZQ.short_desc": {
+          "source": "Do not notify the user about this change",
+          "message": "Не сповіщати користувача про цю зміну"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.desc": {
+          "source": "The full path to store the file at, including the file name; if not set, the file's own name is used and the file is stored in the account root",
+          "message": "Повний шлях для збереження файлу, включно з назвою файлу; якщо не вказано, використовується власна назва файлу і файл зберігається в корені облікового запису"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Destination Path",
+          "message": "Шлях призначення"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path to store the file at",
+          "message": "Шлях для збереження файлу"
+        },
+        "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file to Dropbox",
+          "message": "Завантажити файл у Dropbox"
+        },
+        "app.RHJvcGJveA.desc": {
+          "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",
+          "message": "Надає доступ до [Dropbox](https://www.dropbox.com) для хмарного зберігання та обміну файлами.\n\nАдресація файлів здійснюється за шляхом від кореня облікового запису, а шляхи нечутливі до регістру; сам корінь облікового запису є порожнім рядком, а не `/`.\n\n**Типові варіанти використання**:\n- **Обмін файлами**: зберігання згенерованих документів для колег або збирання файлів, які вони завантажують\n- **Розповсюдження вмісту**: створення спільних посилань із терміном дії/паролем чи без них\n- **Резервне копіювання та відновлення**: перегляд списку ревізій файлу та відновлення ранішої ревізії\n- **Організація**: створення папок, а також копіювання, переміщення та видалення файлів\n\nDropbox є торговельною маркою Dropbox, Inc."
+        },
+        "app.RHJvcGJveA.display_name": {
+          "source": "Dropbox",
+          "message": "Dropbox"
+        },
+        "app.RHJvcGJveA.short_desc": {
+          "source": "Dropbox cloud file storage",
+          "message": "Хмарне сховище файлів Dropbox"
+        }
+      }
+    }
+  }
+}

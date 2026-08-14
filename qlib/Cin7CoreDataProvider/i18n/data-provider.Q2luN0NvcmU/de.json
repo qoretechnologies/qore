@@ -1,0 +1,2649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Cin7Core with contact information, addresses, and payment terms.",
+          "message": "Erstellen Sie einen neuen Kunden in Cin7Core mit Kontaktinformationen, Adressen und Zahlungsbedingungen."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Kunde erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "Zusätzliche Notizen zum Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this customer",
+          "message": "Liste der für diesen Kunden zu erstellenden Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Kontaktliste"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Das Kreditlimit des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Kreditlimit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "Kreditlimit"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Dreistelliger ISO-Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Standardwährung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "Der Debitorenkontocode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "Forderungskonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "Debitorenkonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this customer",
+          "message": "Liste der für diesen Kunden zu erstellenden Adressen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adressen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Adressliste"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Standard-Rabattprozentsatz"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Standard-Rabatt in %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name (required)",
+          "message": "Der Name des Kunden oder Firmenname (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "Kundenname"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "Aktiver Kunde"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "Veralteter/inaktiver Kunde"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "Aktiver oder inaktiver Status. Standardmäßig Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "Kundenstatus"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "Die Zahlungsbedingungen für diesen Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Zahlungsbedingung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "Der Erlöskontocode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "Erlöskonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "Erlöskonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "Die Steuernummer des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Steuernummer"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "Steuer-ID"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Die anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "Kommagetrennte Tags für den Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "Kunden-Tags"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Einen neuen Kunden erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Create a new stock adjustment to modify inventory levels.",
+          "message": "Erstellen Sie eine neue Bestandsanpassung, um Bestandsmengen zu ändern."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Create Stock Adjustment",
+          "message": "Bestandsanpassung erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The account for the adjustment",
+          "message": "Das Konto für die Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Konto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Adjustment account",
+          "message": "Anpassungskonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the adjustment (defaults to today)",
+          "message": "Das Datum der Anpassung (standardmäßig heute)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "Anpassungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "Datum der Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment (required)",
+          "message": "Der Lagerort für die Anpassung (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Lagerort"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of stock adjustment line items (required)",
+          "message": "Liste der Bestandsanpassungspositionen (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "Anpassungspositionen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.desc": {
+          "source": "The reason for the stock adjustment",
+          "message": "Der Grund für die Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Grund"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.UmVhc29u.short_desc": {
+          "source": "Adjustment reason",
+          "message": "Anpassungsgrund"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Create a new stock adjustment",
+          "message": "Eine neue Bestandsanpassung erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.desc": {
+          "source": "Create a new supplier in Cin7Core with contact information and payment terms.",
+          "message": "Erstellen Sie einen neuen Lieferanten in Cin7Core mit Kontaktinformationen und Zahlungsbedingungen."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Create Supplier",
+          "message": "Lieferanten erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the supplier",
+          "message": "Zusätzliche Notizen zum Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts to create for this supplier",
+          "message": "Liste der für diesen Lieferanten zu erstellenden Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Kontaktliste"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Dreistelliger ISO-Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Standardwährung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The account payable account code",
+          "message": "Der Kreditorenkontocode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "Verbindlichkeitenkonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "AP account",
+          "message": "Kreditorenkonto"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses to create for this supplier",
+          "message": "Liste der Adressen, die für diesen Lieferanten erstellt werden sollen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adressen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Adressliste"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Standard-Rabattprozentsatz"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Standard-Rabatt in %"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's name or company name (required)",
+          "message": "Der Name oder Firmenname des Lieferanten (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "Lieferantenname"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active supplier",
+          "message": "Aktiver Lieferant"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive supplier",
+          "message": "Veralteter/inaktiver Lieferant"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status. Defaults to Active",
+          "message": "Aktiver oder inaktiver Status. Standardmäßig Active"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "Lieferantenstatus"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "Die Zahlungsbedingungen für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Zahlungsbedingung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "Die Steuernummer des Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Steuernummer"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "Steuer-ID"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Die anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the supplier",
+          "message": "Kommagetrennte Tags für den Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Supplier tags",
+          "message": "Lieferanten-Tags"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Create a new supplier",
+          "message": "Einen neuen Lieferanten erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.desc": {
+          "source": "Create a new sale order in Cin7Core with customer, line items, and shipping details.",
+          "message": "Einen neuen Verkaufsauftrag in Cin7Core mit Kunde, Positionen und Versanddetails erstellen."
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.display_name": {
+          "source": "Create Sale",
+          "message": "Verkauf erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.desc": {
+          "source": "The contact name at the customer",
+          "message": "Der Name des Ansprechpartners beim Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q29udGFjdA.short_desc": {
+          "source": "Contact name",
+          "message": "Name des Ansprechpartners"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier",
+          "message": "Der Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Dreistelliger ISO-Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name (required). Must match an existing customer",
+          "message": "Der Kundenname (erforderlich). Muss mit einem bestehenden Kunden übereinstimmen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "Kundenname"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for the sale",
+          "message": "Die Rechnungsadresse für den Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Rechnungsadresse"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Rechnungsadresse"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "E-Mail-Adresse des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.RW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the sale",
+          "message": "Der Lagerstandort für den Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Lagerort"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "List of line items to add to the order",
+          "message": "Liste der Positionen, die dem Auftrag hinzugefügt werden sollen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Order lines",
+          "message": "Auftragspositionen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "Date when the sale order was created (defaults to today)",
+          "message": "Datum, an dem der Verkaufsauftrag erstellt wurde (Standardwert ist heute)"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Bestelldatum"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Sale order date",
+          "message": "Datum des Verkaufsauftrags"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "Date by which the order must be shipped",
+          "message": "Datum, bis zu dem der Auftrag versendet werden muss"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "Versand bis"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "Spätestes Versanddatum"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for the sale",
+          "message": "Die Lieferadresse für den Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Lieferadresse"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Lieferadresse"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.desc": {
+          "source": "Customer phone number",
+          "message": "Telefonnummer des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonnummer"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "Date by which the order must be delivered",
+          "message": "Datum, bis zu dem der Auftrag geliefert werden muss"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "Erforderlich bis"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required delivery date",
+          "message": "Erforderliches Lieferdatum"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.desc": {
+          "source": "Whether prices include tax",
+          "message": "Gibt an, ob die Preise Steuern enthalten"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.display_name": {
+          "source": "Tax Inclusive",
+          "message": "Inklusive Steuer"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4SW5jbHVzaXZl.short_desc": {
+          "source": "Prices include tax",
+          "message": "Preise enthalten Steuern"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "Tax rule to apply",
+          "message": "Anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for the sale",
+          "message": "Zahlungsbedingungen für den Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.Y3JlYXRlLXNhbGU.short_desc": {
+          "source": "Create a new sale order",
+          "message": "Einen neuen Verkaufsauftrag erstellen"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is created or modified via polling.",
+          "message": "Wird ausgelöst, wenn ein Kunde durch Polling erstellt oder geändert wird."
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "Kunde aktualisiert"
+        },
+        "app.Q2luN0NvcmU.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is created or updated",
+          "message": "Auslösen, wenn ein Kunde erstellt oder aktualisiert wird"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Upload a file attachment to a sale order.",
+          "message": "Einen Dateianhang zu einem Verkaufsauftrag hochladen."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Add Sale Attachment",
+          "message": "Verkaufsanhang hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.desc": {
+          "source": "The file content encoded as Base64 string",
+          "message": "Der Dateiinhalt als Base64-Zeichenfolge codiert"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.display_name": {
+          "source": "Content (Base64)",
+          "message": "Inhalt (Base64)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.Q29udGVudEJhc2U2NA.short_desc": {
+          "source": "File content in Base64",
+          "message": "Dateiinhalt in Base64"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.desc": {
+          "source": "The name of the file being attached",
+          "message": "Der Name der angehängten Datei"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Dateiname"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.RmlsZU5hbWU.short_desc": {
+          "source": "Attachment file name",
+          "message": "Dateiname des Anhangs"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale to attach to",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs, an den angehängt werden soll"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Add an attachment to a sale",
+          "message": "Einen Anhang zu einem Verkauf hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.desc": {
+          "source": "Add shipment details and tracking information to a sale order.",
+          "message": "Sendungsdetails und Sendungsverfolgungsinformationen zu einem Verkaufsauftrag hinzufügen."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.display_name": {
+          "source": "Add Sale Shipment",
+          "message": "Verkaufssendung hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier name",
+          "message": "Der Name des Versanddienstleisters"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of lines to ship with quantities",
+          "message": "Liste der zu versendenden Positionen mit Mengen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Shipment lines",
+          "message": "Sendungspositionen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.desc": {
+          "source": "The date the items were shipped",
+          "message": "Das Datum, an dem die Artikel versendet wurden"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.display_name": {
+          "source": "Ship Date",
+          "message": "Versanddatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcERhdGU.short_desc": {
+          "source": "Shipment date",
+          "message": "Versanddatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes about the shipment",
+          "message": "Hinweise zur Sendung"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "Versandhinweise"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "Versandhinweise"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.desc": {
+          "source": "Date by which shipment is required",
+          "message": "Datum, bis zu dem die Sendung erforderlich ist"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.display_name": {
+          "source": "Required By",
+          "message": "Erforderlich bis"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.UmVxdWlyZUJ5.short_desc": {
+          "source": "Required by date",
+          "message": "Erforderlich-bis-Datum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The fulfilment task ID to add shipment to",
+          "message": "Die Fulfillment-Aufgaben-ID, zu der die Sendung hinzugefügt werden soll"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "Task-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "Fulfilment task ID",
+          "message": "Fulfillment-Aufgaben-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.desc": {
+          "source": "The shipment tracking number",
+          "message": "Die Sendungsverfolgungsnummer"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.display_name": {
+          "source": "Tracking Number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdOdW1iZXI.short_desc": {
+          "source": "Tracking number",
+          "message": "Sendungsverfolgungsnummer"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.desc": {
+          "source": "URL to track the shipment",
+          "message": "URL zur Sendungsverfolgung"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.display_name": {
+          "source": "Tracking URL",
+          "message": "Tracking-URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.option.VHJhY2tpbmdVcmw.short_desc": {
+          "source": "Tracking URL",
+          "message": "Tracking-URL"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtc2hpcG1lbnQ.short_desc": {
+          "source": "Add shipment/tracking to a sale",
+          "message": "Sendung/Tracking zu einem Verkauf hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Record a payment against a sale order.",
+          "message": "Eine Zahlung für einen Verkaufsauftrag erfassen."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Add Sale Payment",
+          "message": "Verkaufszahlung hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount (required)",
+          "message": "Der Zahlungsbetrag (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Zahlungsbetrag"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment to",
+          "message": "Das Konto, auf dem die Zahlung verbucht werden soll"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Konto"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Payment account",
+          "message": "Zahlungskonto"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made (defaults to today)",
+          "message": "Das Datum, an dem die Zahlung getätigt wurde (standardmäßig heute)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "Zahlungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "Zahlungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The GUID of the sale to add the payment to (required)",
+          "message": "Die GUID des Verkaufs, zu dem die Zahlung hinzugefügt werden soll (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "Sale identifier",
+          "message": "Verkaufskennung"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment",
+          "message": "Die Zahlungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "Zahlungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "Zahlungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Payment reference or transaction ID",
+          "message": "Zahlungsreferenz oder Transaktions-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Referenz"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "Zahlungsreferenz"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Add a payment to a sale",
+          "message": "Zahlung zu einem Verkauf hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.desc": {
+          "source": "Create a pack or pick task for fulfilling a sale order.",
+          "message": "Eine Pack- oder Kommissionieraufgabe zur Erfüllung eines Verkaufsauftrags erstellen."
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.display_name": {
+          "source": "Add Sale Pack",
+          "message": "Verkaufspaket hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the pack",
+          "message": "Der Lagerort für das Packen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TG9jYXRpb24.short_desc": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.desc": {
+          "source": "List of lines to pack with quantities",
+          "message": "Liste der zu packenden Positionen mit Mengen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TGluZXM.short_desc": {
+          "source": "Pack lines",
+          "message": "Packpositionen"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.desc": {
+          "source": "Notes or memo for the pack operation",
+          "message": "Notizen oder Vermerk für den Packvorgang"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Memo"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.TWVtbw.short_desc": {
+          "source": "Pack memo",
+          "message": "Pack-Memo"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.desc": {
+          "source": "The date the items were picked",
+          "message": "Das Datum, an dem die Artikel kommissioniert wurden"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.display_name": {
+          "source": "Pick Date",
+          "message": "Kommissionierdatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.option.UGlja0RhdGU.short_desc": {
+          "source": "Pick date",
+          "message": "Kommissionierdatum"
+        },
+        "app.Q2luN0NvcmU.action.YWRkLXNhbGUtcGFjaw.short_desc": {
+          "source": "Add a pack/pick record to a sale",
+          "message": "Einen Pack-/Kommissionierdatensatz zu einem Verkauf hinzufügen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific customer by their unique identifier.",
+          "message": "Detaillierte Informationen über einen bestimmten Kunden anhand seiner eindeutigen Kennung abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Kunde abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to retrieve",
+          "message": "Die eindeutige Kennung (GUID) des abzurufenden Kunden"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Die Kunden-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a customer by ID",
+          "message": "Einen Kunden anhand der ID abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve detailed information about a specific product.",
+          "message": "Detaillierte Informationen über ein bestimmtes Produkt abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Produkt abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the product to retrieve",
+          "message": "Die eindeutige Kennung (GUID) des abzurufenden Produkts"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.display_name": {
+          "source": "Product ID",
+          "message": "Produkt-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.option.SUQ.short_desc": {
+          "source": "The product ID",
+          "message": "Die Produkt-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a product by ID",
+          "message": "Ein Produkt anhand der ID abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Retrieve detailed information about a specific stock adjustment.",
+          "message": "Detaillierte Informationen über eine bestimmte Bestandsanpassung abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Get Stock Adjustment",
+          "message": "Bestandsanpassung abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to retrieve",
+          "message": "Die eindeutige Kennung (GUID) der abzurufenden Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "Task-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "Die Aufgaben-ID der Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Get a stock adjustment by ID",
+          "message": "Eine Bestandsanpassung anhand der ID abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.desc": {
+          "source": "Retrieve detailed information about a specific supplier.",
+          "message": "Detaillierte Informationen über einen bestimmten Lieferanten abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.display_name": {
+          "source": "Get Supplier",
+          "message": "Lieferant abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to retrieve",
+          "message": "Die eindeutige Kennung (GUID) des abzurufenden Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "Lieferanten-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID",
+          "message": "Die Lieferanten-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXN1cHBsaWVy.short_desc": {
+          "source": "Get a supplier by ID",
+          "message": "Einen Lieferanten anhand der ID abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.desc": {
+          "source": "Retrieve detailed information about a specific sale order.",
+          "message": "Detaillierte Informationen über einen bestimmten Verkaufsauftrag abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.display_name": {
+          "source": "Get Sale",
+          "message": "Verkauf abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to retrieve",
+          "message": "Die eindeutige Kennung (GUID) des abzurufenden Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGU.short_desc": {
+          "source": "Get a sale order by ID",
+          "message": "Einen Verkaufsauftrag anhand der ID abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.desc": {
+          "source": "Retrieve pack/pick details for a sale order.",
+          "message": "Pack-/Kommissionierdetails für einen Verkaufsauftrag abrufen."
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.display_name": {
+          "source": "Get Sale Pack",
+          "message": "Verkaufspaket abrufen"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.desc": {
+          "source": "Optional task ID to get a specific pack record",
+          "message": "Optionale Aufgaben-ID zum Abrufen eines bestimmten Packdatensatzes"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "Task-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.option.VGFza0lE.short_desc": {
+          "source": "The fulfilment task ID",
+          "message": "Die Erfüllungsaufgaben-ID"
+        },
+        "app.Q2luN0NvcmU.action.Z2V0LXNhbGUtcGFjaw.short_desc": {
+          "source": "Get pack details for a sale",
+          "message": "Packdetails für einen Verkauf abrufen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Delete or void a stock adjustment in Cin7Core.",
+          "message": "Eine Bestandsanpassung in Cin7Core löschen oder stornieren."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Delete Stock Adjustment",
+          "message": "Bestandsanpassung löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to delete/void",
+          "message": "Die eindeutige Kennung (GUID) der zu löschenden/stornierenden Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "Task-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "Die Aufgaben-ID der Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Delete a stock adjustment",
+          "message": "Eine Bestandsanpassung löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.desc": {
+          "source": "Delete or void a sale order in Cin7Core.",
+          "message": "Einen Verkaufsauftrag in Cin7Core löschen oder stornieren."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.display_name": {
+          "source": "Delete Sale",
+          "message": "Verkauf löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to delete/void",
+          "message": "Die eindeutige Kennung (GUID) des zu löschenden/stornierenden Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to delete",
+          "message": "Die zu löschende Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGU.short_desc": {
+          "source": "Delete (void) a sale order",
+          "message": "Einen Verkaufsauftrag löschen (stornieren)"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.desc": {
+          "source": "Remove a file attachment from a sale order.",
+          "message": "Einen Dateianhang aus einem Verkaufsauftrag entfernen."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.display_name": {
+          "source": "Delete Sale Attachment",
+          "message": "Verkaufsanhang löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the attachment to delete",
+          "message": "Die eindeutige Kennung (GUID) des zu löschenden Anhangs"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.display_name": {
+          "source": "Attachment ID",
+          "message": "Anhangs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.QXR0YWNobWVudElE.short_desc": {
+          "source": "The attachment ID",
+          "message": "Die Anhangs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtYXR0YWNobWVudA.short_desc": {
+          "source": "Delete an attachment from a sale",
+          "message": "Einen Anhang aus einem Verkauf löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Remove a payment from a sale order.",
+          "message": "Eine Zahlung aus einem Verkaufsauftrag entfernen."
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Delete Sale Payment",
+          "message": "Verkaufszahlung löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The unique identifier (GUID) of the payment to delete",
+          "message": "Die eindeutige Kennung (GUID) der zu löschenden Zahlung"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The payment ID",
+          "message": "Die Zahlungs-ID"
+        },
+        "app.Q2luN0NvcmU.action.ZGVsZXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Delete a payment from a sale",
+          "message": "Eine Zahlung aus einem Verkauf löschen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.desc": {
+          "source": "Search for assembly and finished goods tasks.",
+          "message": "Nach Montage- und Fertigwarenaufgaben suchen."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.display_name": {
+          "source": "Find Assemblies",
+          "message": "Baugruppen suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1hc3NlbWJseQ.short_desc": {
+          "source": "Find assembly/finished goods tasks",
+          "message": "Montage-/Fertigwarenaufgaben suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.desc": {
+          "source": "Check product availability and stock levels across warehouse locations.",
+          "message": "Produktverfügbarkeit und Lagerbestände über Lagerstandorte hinweg prüfen."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.display_name": {
+          "source": "Find Product Availability",
+          "message": "Produktverfügbarkeit suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1wcm9kdWN0LWF2YWlsYWJpbGl0eQ.short_desc": {
+          "source": "Check product stock levels",
+          "message": "Produktlagerbestände prüfen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.desc": {
+          "source": "Search for credit notes associated with sale orders.",
+          "message": "Nach Gutschriften suchen, die Verkaufsaufträgen zugeordnet sind."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.display_name": {
+          "source": "Find Sale Credit Notes",
+          "message": "Verkaufsgutschriften suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWNyZWRpdC1ub3Rl.short_desc": {
+          "source": "Find credit notes for sales",
+          "message": "Gutschriften für Verkäufe suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.desc": {
+          "source": "Search for fulfilment, pick, and pack tasks for sales.",
+          "message": "Nach Erfüllungs-, Kommissionier- und Verpackungsaufgaben für Verkäufe suchen."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.display_name": {
+          "source": "Find Sale Fulfilment",
+          "message": "Verkaufserfüllung suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWZ1bGZpbG1lbnQ.short_desc": {
+          "source": "Find fulfilment tasks for sales",
+          "message": "Erfüllungsaufgaben für Verkäufe suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.desc": {
+          "source": "Search for invoices associated with sale orders.",
+          "message": "Nach Rechnungen suchen, die Verkaufsaufträgen zugeordnet sind."
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.display_name": {
+          "source": "Find Sale Invoices",
+          "message": "Verkaufsrechnungen suchen"
+        },
+        "app.Q2luN0NvcmU.action.ZmluZC1zYWxlLWludm9pY2U.short_desc": {
+          "source": "Find invoices for sales",
+          "message": "Rechnungen für Verkäufe suchen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cin7Core** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Cin7Core** unter Verwendung der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.Q2luN0NvcmU.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cin7Core",
+          "message": "Einen benutzerdefinierten API-Aufruf an Cin7Core ausführen"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is detected on a sale via polling.",
+          "message": "Wird ausgelöst, wenn über Polling eine neue Zahlung für einen Verkauf erkannt wird."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Neue Zahlung"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Auslösen, wenn eine neue Zahlung empfangen wird"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.desc": {
+          "source": "Fires when a new sale credit note is authorized via polling.",
+          "message": "Wird ausgelöst, wenn über Polling eine neue Verkaufsgutschrift autorisiert wird."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.display_name": {
+          "source": "New Sale Credit Note Authorized",
+          "message": "Neue Verkaufsgutschrift autorisiert"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtY3JlZGl0LW5vdGUtYXV0aG9yaXplZA.short_desc": {
+          "source": "Trigger when a credit note is authorized",
+          "message": "Auslösen, wenn eine Gutschrift autorisiert wird"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.desc": {
+          "source": "Fires when a new sale invoice is authorized via polling.",
+          "message": "Wird ausgelöst, wenn über Polling eine neue Verkaufsrechnung autorisiert wird."
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.display_name": {
+          "source": "New Sale Invoice Authorized",
+          "message": "Neue Verkaufsrechnung autorisiert"
+        },
+        "app.Q2luN0NvcmU.action.bmV3LXNhbGUtaW52b2ljZS1hdXRob3JpemVk.short_desc": {
+          "source": "Trigger when an invoice is authorized",
+          "message": "Auslösen, wenn eine Rechnung autorisiert wird"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.desc": {
+          "source": "Fires when sale tracking or shipment information changes via polling.",
+          "message": "Wird ausgelöst, wenn sich Verkaufs-Tracking- oder Sendungsinformationen über Polling ändern."
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.display_name": {
+          "source": "Sale Tracking Changed",
+          "message": "Verkaufs-Tracking geändert"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS10cmFja2luZy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when tracking information changes",
+          "message": "Auslösen, wenn sich Tracking-Informationen ändern"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.desc": {
+          "source": "Fires when a sale order is voided via polling.",
+          "message": "Wird ausgelöst, wenn ein Verkaufsauftrag über Polling storniert wird."
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.display_name": {
+          "source": "Sale Voided",
+          "message": "Verkauf storniert"
+        },
+        "app.Q2luN0NvcmU.action.c2FsZS12b2lkZWQ.short_desc": {
+          "source": "Trigger when a sale is voided",
+          "message": "Auslösen, wenn ein Verkauf storniert wird"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Retrieve a list of customers from Cin7Core with optional filtering by name, ID, or modification date.",
+          "message": "Eine Liste von Kunden aus Cin7Core abrufen, mit optionaler Filterung nach Name, ID oder Änderungsdatum."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Kunden suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "List and search customers",
+          "message": "Kunden auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Retrieve a list of products from Cin7Core with optional filtering by SKU, name, category, or brand.",
+          "message": "Eine Liste von Produkten aus Cin7Core abrufen, mit optionaler Filterung nach SKU, Name, Kategorie oder Marke."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Produkte suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "List and search products",
+          "message": "Produkte auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of stock adjustments from Cin7Core.",
+          "message": "Eine Liste von Bestandsanpassungen aus Cin7Core abrufen."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.display_name": {
+          "source": "Search Stock Adjustments",
+          "message": "Bestandsanpassungen suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN0b2NrLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List and search stock adjustments",
+          "message": "Bestandsanpassungen auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.desc": {
+          "source": "Retrieve a list of suppliers from Cin7Core with optional filtering.",
+          "message": "Eine Liste von Lieferanten aus Cin7Core mit optionaler Filterung abrufen."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.display_name": {
+          "source": "Search Suppliers",
+          "message": "Lieferanten suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXN1cHBsaWVycw.short_desc": {
+          "source": "List and search suppliers",
+          "message": "Lieferanten auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.desc": {
+          "source": "Retrieve a list of payments for sales.",
+          "message": "Eine Liste von Zahlungen für Verkäufe abrufen."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.display_name": {
+          "source": "Search Sale Payments",
+          "message": "Verkaufszahlungen suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGUtcGF5bWVudHM.short_desc": {
+          "source": "List and search sale payments",
+          "message": "Verkaufszahlungen auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.desc": {
+          "source": "Retrieve a list of sales orders from Cin7Core with optional filtering.",
+          "message": "Eine Liste von Kundenaufträgen aus Cin7Core mit optionaler Filterung abrufen."
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.display_name": {
+          "source": "Search Sales",
+          "message": "Verkäufe suchen"
+        },
+        "app.Q2luN0NvcmU.action.c2VhcmNoLXNhbGVz.short_desc": {
+          "source": "List and search sales orders",
+          "message": "Kundenaufträge auflisten und suchen"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.desc": {
+          "source": "Fires when product stock/inventory levels change via polling.",
+          "message": "Wird ausgelöst, wenn sich Produktbestände/Lagerbestände über Polling ändern."
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.display_name": {
+          "source": "Stock Level Update",
+          "message": "Lagerbestandsaktualisierung"
+        },
+        "app.Q2luN0NvcmU.action.c3RvY2stbGV2ZWwtdXBkYXRl.short_desc": {
+          "source": "Trigger when stock levels change",
+          "message": "Auslösen, wenn sich Lagerbestände ändern"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a supplier is created or modified via polling.",
+          "message": "Wird ausgelöst, wenn ein Lieferant über Polling erstellt oder geändert wird."
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.display_name": {
+          "source": "Supplier Updated",
+          "message": "Lieferant aktualisiert"
+        },
+        "app.Q2luN0NvcmU.action.c3VwcGxpZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a supplier is created or updated",
+          "message": "Auslösen, wenn ein Lieferant erstellt oder aktualisiert wird"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer's information in Cin7Core.",
+          "message": "Informationen eines bestehenden Kunden in Cin7Core aktualisieren."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Kunde aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional notes about the customer",
+          "message": "Zusätzliche Notizen zum Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this customer",
+          "message": "Liste der Kontakte für diesen Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Kontaktliste"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.desc": {
+          "source": "The customer's credit limit",
+          "message": "Das Kreditlimit des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.display_name": {
+          "source": "Credit Limit",
+          "message": "Kreditlimit"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3JlZGl0TGltaXQ.short_desc": {
+          "source": "Credit limit",
+          "message": "Kreditlimit"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code",
+          "message": "Dreistelliger ISO-Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Standardwährung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.desc": {
+          "source": "The account receivable account code",
+          "message": "Der Debitorenkontocode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.display_name": {
+          "source": "Account Receivable",
+          "message": "Forderungskonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWNjb3VudFJlY2VpdmFibGU.short_desc": {
+          "source": "AR account",
+          "message": "Debitorenkonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this customer",
+          "message": "Liste der Adressen für diesen Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adressen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Adressliste"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.desc": {
+          "source": "Default discount percentage",
+          "message": "Standard-Rabattprozentsatz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount %",
+          "message": "Standard-Rabatt in %"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the customer to update (required)",
+          "message": "Die eindeutige Kennung (GUID) des zu aktualisierenden Kunden (erforderlich)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.SUQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Die Kunden-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.desc": {
+          "source": "The customer's name or company name",
+          "message": "Der Name oder Firmenname des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.TmFtZQ.short_desc": {
+          "source": "Customer name",
+          "message": "Kundenname"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkFjdGl2ZQ.desc": {
+          "source": "Active customer",
+          "message": "Aktiver Kunde"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.allowed-value.c3RyaW5nOkRlcHJlY2F0ZWQ.desc": {
+          "source": "Deprecated/inactive customer",
+          "message": "Veralteter/inaktiver Kunde"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.desc": {
+          "source": "Active or inactive status",
+          "message": "Aktiver oder inaktiver Status"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.U3RhdHVz.short_desc": {
+          "source": "Customer status",
+          "message": "Kundenstatus"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this customer",
+          "message": "Die Zahlungsbedingungen für diesen Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Zahlungsbedingung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.desc": {
+          "source": "The revenue account code",
+          "message": "Der Erlöskontocode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.display_name": {
+          "source": "Revenue Account",
+          "message": "Erlöskonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.UmV2ZW51ZUFjY291bnQ.short_desc": {
+          "source": "Revenue account",
+          "message": "Erlöskonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The customer's tax identification number",
+          "message": "Die Steuernummer des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Steuernummer"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax ID",
+          "message": "Steuer-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Die anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.desc": {
+          "source": "Comma-separated tags for the customer",
+          "message": "Kommagetrennte Tags für den Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.option.VGFncw.short_desc": {
+          "source": "Customer tags",
+          "message": "Kunden-Tags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Einen vorhandenen Kunden aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.desc": {
+          "source": "Update an existing stock adjustment in Cin7Core.",
+          "message": "Eine bestehende Bestandsanpassung in Cin7Core aktualisieren."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.display_name": {
+          "source": "Update Stock Adjustment",
+          "message": "Bestandsanpassung aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.desc": {
+          "source": "The expense account for the adjustment",
+          "message": "Das Aufwandskonto für die Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Konto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWNjb3VudA.short_desc": {
+          "source": "Expense account",
+          "message": "Aufwandskonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.desc": {
+          "source": "The date of the stock adjustment",
+          "message": "Das Datum der Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.display_name": {
+          "source": "Adjustment Date",
+          "message": "Anpassungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.QWRqdXN0bWVudERhdGU.short_desc": {
+          "source": "Date of adjustment",
+          "message": "Datum der Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for the adjustment",
+          "message": "Der Lagerort für die Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Lagerort"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.desc": {
+          "source": "List of products and quantities to adjust",
+          "message": "Liste der Produkte und Mengen zur Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TGluZXM.short_desc": {
+          "source": "Adjustment lines",
+          "message": "Anpassungspositionen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.desc": {
+          "source": "Notes about the adjustment",
+          "message": "Notizen zur Anpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Memo"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.TWVtbw.short_desc": {
+          "source": "Memo/notes",
+          "message": "Memo/Notizen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.desc": {
+          "source": "The status of the adjustment (Draft, Authorized, Void)",
+          "message": "Der Status der Anpassung (Draft, Authorized, Void)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.U3RhdHVz.short_desc": {
+          "source": "Adjustment status",
+          "message": "Anpassungsstatus"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.desc": {
+          "source": "The unique identifier (GUID) of the stock adjustment to update",
+          "message": "Die eindeutige Kennung (GUID) der zu aktualisierenden Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.display_name": {
+          "source": "Task ID",
+          "message": "Task-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.option.VGFza0lE.short_desc": {
+          "source": "The stock adjustment task ID",
+          "message": "Die Aufgaben-ID der Bestandsanpassung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN0b2NrLWFkanVzdG1lbnQ.short_desc": {
+          "source": "Update an existing stock adjustment",
+          "message": "Eine bestehende Bestandsanpassung aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.desc": {
+          "source": "Update an existing supplier's information in Cin7Core.",
+          "message": "Informationen eines bestehenden Lieferanten in Cin7Core aktualisieren."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.display_name": {
+          "source": "Update Supplier",
+          "message": "Lieferant aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.desc": {
+          "source": "Additional comments or notes about the supplier",
+          "message": "Zusätzliche Kommentare oder Notizen zum Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.desc": {
+          "source": "List of contacts for this supplier",
+          "message": "Liste der Kontakte für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakte"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q29udGFjdHM.short_desc": {
+          "source": "Contact list",
+          "message": "Kontaktliste"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.desc": {
+          "source": "The default currency code for this supplier (e.g., USD, EUR)",
+          "message": "Der Standard-Währungscode für diesen Lieferanten (z. B. USD, EUR)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.Q3VycmVuY3k.short_desc": {
+          "source": "Default currency",
+          "message": "Standardwährung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.desc": {
+          "source": "The accounts payable account for this supplier",
+          "message": "Das Verbindlichkeitenkonto für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.display_name": {
+          "source": "Account Payable",
+          "message": "Verbindlichkeitenkonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWNjb3VudFBheWFibGU.short_desc": {
+          "source": "Accounts payable account",
+          "message": "Verbindlichkeitenkonto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.desc": {
+          "source": "List of addresses for this supplier",
+          "message": "Liste der Adressen für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adressen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.QWRkcmVzc2Vz.short_desc": {
+          "source": "Address list",
+          "message": "Adressliste"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.desc": {
+          "source": "The default discount percentage for this supplier",
+          "message": "Der Standard-Rabattsatz für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Rabatt"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.RGlzY291bnQ.short_desc": {
+          "source": "Default discount",
+          "message": "Standardrabatt"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the supplier to update",
+          "message": "Die eindeutige Kennung (GUID) des zu aktualisierenden Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.display_name": {
+          "source": "Supplier ID",
+          "message": "Lieferanten-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.SUQ.short_desc": {
+          "source": "The supplier ID to update",
+          "message": "Die zu aktualisierende Lieferanten-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.desc": {
+          "source": "The supplier's company or individual name",
+          "message": "Der Firmen- oder Einzelname des Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.TmFtZQ.short_desc": {
+          "source": "Supplier name",
+          "message": "Lieferantenname"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.desc": {
+          "source": "The supplier's status (Active, Deprecated, etc.)",
+          "message": "Der Status des Lieferanten (Active, Deprecated usw.)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.U3RhdHVz.short_desc": {
+          "source": "Supplier status",
+          "message": "Lieferantenstatus"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.desc": {
+          "source": "The payment terms for this supplier",
+          "message": "Die Zahlungsbedingungen für diesen Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.display_name": {
+          "source": "Payment Term",
+          "message": "Zahlungsbedingung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.UGF5bWVudFRlcm0.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.desc": {
+          "source": "The supplier's tax identification number",
+          "message": "Die Steuernummer des Lieferanten"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Steuernummer"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4TnVtYmVy.short_desc": {
+          "source": "Tax identification number",
+          "message": "Steueridentifikationsnummer"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply to this supplier",
+          "message": "Die für diesen Lieferanten anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.desc": {
+          "source": "Tags associated with this supplier",
+          "message": "Diesem Lieferanten zugeordnete Tags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.option.VGFncw.short_desc": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXN1cHBsaWVy.short_desc": {
+          "source": "Update an existing supplier",
+          "message": "Einen bestehenden Lieferanten aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.desc": {
+          "source": "Update an existing sale order in Cin7Core.",
+          "message": "Einen bestehenden Kundenauftrag in Cin7Core aktualisieren."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.display_name": {
+          "source": "Update Sale",
+          "message": "Verkauf aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.desc": {
+          "source": "External comments for this sale",
+          "message": "Externe Kommentare für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q29tbWVudHM.short_desc": {
+          "source": "Comments",
+          "message": "Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.desc": {
+          "source": "The shipping carrier for this sale",
+          "message": "Der Versanddienstleister für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q2Fycmllcg.short_desc": {
+          "source": "Shipping carrier",
+          "message": "Versanddienstleister"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code for this sale (e.g., USD, EUR)",
+          "message": "Der Währungscode für diesen Verkauf (z. B. USD, EUR)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Währungscode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "The currency exchange rate",
+          "message": "Der Währungswechselkurs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "Wechselkurs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate",
+          "message": "Wechselkurs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.desc": {
+          "source": "The customer name for this sale",
+          "message": "Der Kundenname für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXI.short_desc": {
+          "source": "Customer name",
+          "message": "Kundenname"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.desc": {
+          "source": "Customer's reference number or PO number",
+          "message": "Referenznummer oder Bestellnummer des Kunden"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.display_name": {
+          "source": "Customer Reference",
+          "message": "Kundenreferenz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.Q3VzdG9tZXJSZWZlcmVuY2U.short_desc": {
+          "source": "Customer reference",
+          "message": "Kundenreferenz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.desc": {
+          "source": "Additional charges for this sale",
+          "message": "Zusätzliche Gebühren für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.display_name": {
+          "source": "Additional Charges",
+          "message": "Zusätzliche Gebühren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QWRkaXRpb25hbENoYXJnZXM.short_desc": {
+          "source": "Additional charges",
+          "message": "Zusatzgebühren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "The billing address for this sale",
+          "message": "Die Rechnungsadresse für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Rechnungsadresse"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.QmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Rechnungsadresse"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the sale to update",
+          "message": "Die eindeutige Kennung (GUID) des zu aktualisierenden Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SUQ.short_desc": {
+          "source": "The sale ID to update",
+          "message": "Die zu aktualisierende Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.desc": {
+          "source": "Internal notes not visible to customer",
+          "message": "Interne Notizen, die für den Kunden nicht sichtbar sind"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.display_name": {
+          "source": "Internal Comments",
+          "message": "Interne Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.SW50ZXJuYWxDb21tZW50cw.short_desc": {
+          "source": "Internal comments",
+          "message": "Interne Kommentare"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.desc": {
+          "source": "The warehouse location for this sale",
+          "message": "Der Lagerstandort für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Standort"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TG9jYXRpb24.short_desc": {
+          "source": "Warehouse location",
+          "message": "Lagerort"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.desc": {
+          "source": "The line items for this sale",
+          "message": "Die Positionen für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.display_name": {
+          "source": "Lines",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.TGluZXM.short_desc": {
+          "source": "Line items",
+          "message": "Positionen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.desc": {
+          "source": "The date when the sale order was created",
+          "message": "Das Datum, an dem der Verkaufsauftrag erstellt wurde"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.display_name": {
+          "source": "Sale Order Date",
+          "message": "Verkaufsauftragsdatum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZU9yZGVyRGF0ZQ.short_desc": {
+          "source": "Date of the order",
+          "message": "Datum des Auftrags"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.desc": {
+          "source": "The sales representative for this sale",
+          "message": "Der Vertriebsmitarbeiter für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.display_name": {
+          "source": "Sales Representative",
+          "message": "Vertriebsmitarbeiter"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2FsZXNSZXByZXNlbnRhdGl2ZQ.short_desc": {
+          "source": "Sales rep",
+          "message": "Vertriebsmitarbeiter"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.desc": {
+          "source": "The date by which the order should be shipped",
+          "message": "Das Datum, bis zu dem der Auftrag versendet werden soll"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.display_name": {
+          "source": "Ship By",
+          "message": "Versand bis"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcEJ5.short_desc": {
+          "source": "Ship by date",
+          "message": "Spätestes Versanddatum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "The shipping address for this sale",
+          "message": "Die Versandadresse für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Lieferadresse"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Lieferadresse"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.desc": {
+          "source": "Notes for shipping",
+          "message": "Versandhinweise"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.display_name": {
+          "source": "Shipping Notes",
+          "message": "Versandhinweise"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U2hpcHBpbmdOb3Rlcw.short_desc": {
+          "source": "Shipping notes",
+          "message": "Versandhinweise"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.desc": {
+          "source": "The current status of the sale",
+          "message": "Der aktuelle Status des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.U3RhdHVz.short_desc": {
+          "source": "Sale status",
+          "message": "Verkaufsstatus"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.desc": {
+          "source": "The price tier for this sale",
+          "message": "Die Preisstufe für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.display_name": {
+          "source": "Price Tier",
+          "message": "Preisstufe"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UHJpY2VUaWVy.short_desc": {
+          "source": "Price tier",
+          "message": "Preisstufe"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.desc": {
+          "source": "The date by which the customer requires the order",
+          "message": "Das Datum, bis zu dem der Kunde den Auftrag benötigt"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.display_name": {
+          "source": "Required By",
+          "message": "Erforderlich bis"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.UmVxdWlyZWRCeQ.short_desc": {
+          "source": "Required by date",
+          "message": "Erforderlich-bis-Datum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.desc": {
+          "source": "How taxes should be calculated (Inclusive, Exclusive)",
+          "message": "Wie Steuern berechnet werden sollen (Inklusive, Exklusive)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.display_name": {
+          "source": "Tax Calculation",
+          "message": "Steuerberechnung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4Q2FsY3VsYXRpb24.short_desc": {
+          "source": "Tax calculation method",
+          "message": "Steuerberechnungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.desc": {
+          "source": "The tax rule to apply",
+          "message": "Die anzuwendende Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.display_name": {
+          "source": "Tax Rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGF4UnVsZQ.short_desc": {
+          "source": "Tax rule",
+          "message": "Steuerregel"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.desc": {
+          "source": "Payment terms for this sale",
+          "message": "Zahlungsbedingungen für diesen Verkauf"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.option.VGVybXM.short_desc": {
+          "source": "Payment terms",
+          "message": "Zahlungsbedingungen"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGU.short_desc": {
+          "source": "Update an existing sale order",
+          "message": "Einen bestehenden Verkaufsauftrag aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.desc": {
+          "source": "Update an existing payment on a sale order.",
+          "message": "Eine bestehende Zahlung für einen Verkaufsauftrag aktualisieren."
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.display_name": {
+          "source": "Update Sale Payment",
+          "message": "Verkaufszahlung aktualisieren"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The payment amount",
+          "message": "Der Zahlungsbetrag"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Zahlungsbetrag"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.desc": {
+          "source": "The account to record the payment",
+          "message": "Das Konto zur Erfassung der Zahlung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Konto"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "Account name",
+          "message": "Accountname"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.desc": {
+          "source": "The date the payment was made",
+          "message": "Das Datum, an dem die Zahlung geleistet wurde"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.display_name": {
+          "source": "Date Paid",
+          "message": "Zahlungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.RGF0ZVBhaWQ.short_desc": {
+          "source": "Payment date",
+          "message": "Zahlungsdatum"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.desc": {
+          "source": "The unique identifier (GUID) of the payment to update",
+          "message": "Die eindeutige Kennung (GUID) der zu aktualisierenden Zahlung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.SUQ.short_desc": {
+          "source": "The payment ID",
+          "message": "Die Zahlungs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.desc": {
+          "source": "The unique identifier (GUID) of the sale",
+          "message": "Die eindeutige Kennung (GUID) des Verkaufs"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.display_name": {
+          "source": "Sale ID",
+          "message": "Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.U2FsZUlE.short_desc": {
+          "source": "The sale ID",
+          "message": "Die Verkaufs-ID"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.desc": {
+          "source": "The method of payment (e.g., Cash, Credit Card, Bank Transfer)",
+          "message": "Die Zahlungsmethode (z. B. Bargeld, Kreditkarte, Banküberweisung)"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.display_name": {
+          "source": "Payment Method",
+          "message": "Zahlungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UGF5bWVudE1ldGhvZA.short_desc": {
+          "source": "Payment method",
+          "message": "Zahlungsmethode"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "Reference number or note for the payment",
+          "message": "Referenznummer oder Notiz für die Zahlung"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Referenz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "Payment reference",
+          "message": "Zahlungsreferenz"
+        },
+        "app.Q2luN0NvcmU.action.dXBkYXRlLXNhbGUtcGF5bWVudA.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Eine bestehende Zahlung aktualisieren"
+        },
+        "app.Q2luN0NvcmU.desc": {
+          "source": "Cin7Core (formerly DEAR Inventory) is a comprehensive inventory management and ERP platform that enables you to manage products, sales, purchases, customers, suppliers, and stock levels.\n\n**Features:**\n- Manage customers and suppliers\n- Create and track sales orders\n- Process payments and invoices\n- Monitor inventory and stock levels\n- Handle stock adjustments\n- Track shipments and fulfillment\n\n**Authentication:**\nCin7Core uses Account ID and API Key authentication. Both credentials are required and can be obtained at https://inventory.dearsystems.com/ExternalApi - create or select an Application, then find the credentials on the Setup tab.",
+          "message": "Cin7Core (ehemals DEAR Inventory) ist eine umfassende Bestandsverwaltungs- und ERP-Plattform, mit der Sie Produkte, Verkäufe, Einkäufe, Kunden, Lieferanten und Lagerbestände verwalten können.\n\n**Funktionen:**\n- Kunden und Lieferanten verwalten\n- Verkaufsaufträge erstellen und verfolgen\n- Zahlungen und Rechnungen verarbeiten\n- Inventar und Lagerbestände überwachen\n- Bestandsanpassungen durchführen\n- Sendungen und Fulfillment nachverfolgen\n\n**Authentifizierung:**\nCin7Core verwendet Authentifizierung über Account-ID und API-Schlüssel. Beide Anmeldedaten sind erforderlich und können unter https://inventory.dearsystems.com/ExternalApi abgerufen werden – erstellen oder wählen Sie eine Anwendung aus und suchen Sie dann die Anmeldedaten auf der Registerkarte „Setup“."
+        },
+        "app.Q2luN0NvcmU.display_name": {
+          "source": "Cin7Core",
+          "message": "Cin7Core"
+        },
+        "app.Q2luN0NvcmU.short_desc": {
+          "source": "Cin7Core inventory management platform",
+          "message": "Cin7Core-Bestandsverwaltungsplattform"
+        }
+      }
+    }
+  }
+}

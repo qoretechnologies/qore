@@ -1,0 +1,2245 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.desc": {
+          "source": "Complete a pending payment in Square",
+          "message": "Completa un pagamento in sospeso in Square"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
+          "source": "Complete Payment",
+          "message": "Completa pagamento"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID pagamento"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to complete",
+          "message": "Il pagamento da completare"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.display_name": {
+          "source": "Version Token",
+          "message": "Token di versione"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.short_desc": {
+          "source": "Version token for concurrency",
+          "message": "Token di versione per la concorrenza"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
+          "source": "Complete a payment",
+          "message": "Completa un pagamento"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.desc": {
+          "source": "Cancel an open order in Square",
+          "message": "Annulla un ordine aperto in Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
+          "source": "Cancel an Order",
+          "message": "Annulla un ordine"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to cancel",
+          "message": "L'ordine da annullare"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the order (for optimistic concurrency)",
+          "message": "La versione corrente dell'ordine (per la concorrenza ottimistica)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Order version",
+          "message": "Versione ordine"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
+          "source": "Cancel an order",
+          "message": "Annulla un ordine"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.desc": {
+          "source": "Cancel a booking (appointment) in Square",
+          "message": "Annulla una prenotazione (appuntamento) in Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
+          "source": "Cancel Booking",
+          "message": "Annulla prenotazione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.desc": {
+          "source": "The current version of the booking (for optimistic concurrency)",
+          "message": "La versione corrente della prenotazione (per la concorrenza ottimistica)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.display_name": {
+          "source": "Booking Version",
+          "message": "Versione prenotazione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.short_desc": {
+          "source": "Booking version",
+          "message": "Versione prenotazione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "ID prenotazione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking to cancel",
+          "message": "La prenotazione da annullare"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
+          "source": "Cancel a booking",
+          "message": "Annulla una prenotazione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.desc": {
+          "source": "Cancel a published invoice in Square",
+          "message": "Annulla una fattura pubblicata in Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
+          "source": "Cancel Invoice",
+          "message": "Annulla fattura"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID fattura"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to cancel",
+          "message": "La fattura da annullare"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "La versione corrente della fattura (per la concorrenza ottimistica)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versione"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Versione fattura"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
+          "source": "Cancel an invoice",
+          "message": "Annulla una fattura"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.desc": {
+          "source": "Change inventory counts in Square (adjustment or physical count)",
+          "message": "Modifica i conteggi dell'inventario in Square (rettifica o conteggio fisico)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
+          "source": "Change Inventory",
+          "message": "Modifica inventario"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation",
+          "message": "L'ID della variante dell'articolo di catalogo"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "ID oggetto catalogo"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation",
+          "message": "Variante articolo"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOkFESlVTVE1FTlQ.desc": {
+          "source": "Add or remove stock (delta quantity)",
+          "message": "Aggiungi o rimuovi scorte (quantità delta)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOlBIWVNJQ0FMX0NPVU5U.desc": {
+          "source": "Set absolute inventory count",
+          "message": "Imposta il conteggio assoluto dell'inventario"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.desc": {
+          "source": "The type of inventory change to apply",
+          "message": "Il tipo di modifica dell'inventario da applicare"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.display_name": {
+          "source": "Change Type",
+          "message": "Tipo di modifica"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.short_desc": {
+          "source": "Type of change",
+          "message": "Tipo di modifica"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state (default)",
+          "message": "Nessuno stato (predefinito)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock",
+          "message": "Disponibile"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Venduto"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Scarto / danneggiato"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.desc": {
+          "source": "Starting inventory state for adjustment changes",
+          "message": "Stato iniziale dell'inventario per le modifiche di rettifica"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.display_name": {
+          "source": "From State",
+          "message": "Dallo stato"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.short_desc": {
+          "source": "Starting state",
+          "message": "Stato iniziale"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "La sede"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity as a string (e.g. '5'). For ADJUSTMENT: delta. For PHYSICAL_COUNT: absolute count.",
+          "message": "La quantità come stringa (es. '5'). Per ADJUSTMENT: delta. Per PHYSICAL_COUNT: conteggio assoluto."
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Quantità"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity",
+          "message": "La quantità"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state",
+          "message": "Nessuno stato"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock (default)",
+          "message": "Disponibile (predefinito)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Venduto"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Scarto / danneggiato"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.desc": {
+          "source": "Ending inventory state for adjustment changes",
+          "message": "Stato finale dell'inventario per le modifiche di rettifica"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.display_name": {
+          "source": "To State",
+          "message": "Allo stato"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.short_desc": {
+          "source": "Ending state",
+          "message": "Stato finale"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
+          "source": "Change inventory counts",
+          "message": "Modifica i conteggi dell'inventario"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Square",
+          "message": "Crea un nuovo ordine in Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Crea un ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "La sede per l'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes: name, quantity (string), base_price_money (hash with amount in cents and currency)",
+          "message": "Elenco di hash di voci: name, quantity (stringa), base_price_money (hash con importo in centesimi e valuta)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Voci"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Voci dell'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "ID riferimento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Riferimento esterno"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Crea un nuovo ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.desc": {
+          "source": "Create a new booking (appointment) in Square",
+          "message": "Crea una nuova prenotazione (appuntamento) in Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
+          "source": "Create Appointment",
+          "message": "Crea appuntamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
+          "source": "Customer Note",
+          "message": "Nota cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.short_desc": {
+          "source": "Note from customer",
+          "message": "Nota dal cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "La sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.display_name": {
+          "source": "Service Variation ID",
+          "message": "ID variante servizio"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.short_desc": {
+          "source": "Service variation",
+          "message": "Variante del servizio"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.display_name": {
+          "source": "Service Version",
+          "message": "Versione servizio"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.short_desc": {
+          "source": "Service variation version",
+          "message": "Versione della variante del servizio"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.desc": {
+          "source": "Start time of the booking (RFC 3339 format)",
+          "message": "Ora di inizio della prenotazione (formato RFC 3339)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.display_name": {
+          "source": "Start At",
+          "message": "Inizia alle"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.short_desc": {
+          "source": "Start time",
+          "message": "Ora di inizio"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "ID membro del team"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Team member",
+          "message": "Membro del team"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
+          "source": "Create a new booking",
+          "message": "Crea una nuova prenotazione"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Square",
+          "message": "Crea un nuovo cliente in Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Crea un cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the customer",
+          "message": "Ragione sociale del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Azienda"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Nome azienda"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the customer",
+          "message": "Nome del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Nome del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address of the customer",
+          "message": "Indirizzo email del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "Email del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the customer",
+          "message": "Cognome del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Cognome del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "A note about the customer",
+          "message": "Una nota sul cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Nota"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Nota cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "Phone number of the customer",
+          "message": "Numero di telefono del cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.desc": {
+          "source": "An external reference ID for the customer",
+          "message": "Un ID di riferimento esterno per il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "ID riferimento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Riferimento esterno"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Crea un nuovo cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Square",
+          "message": "Crea una nuova fattura in Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Crea fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOkVNQUlM.desc": {
+          "source": "Send via email",
+          "message": "Invia tramite email"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNIQVJFX01BTlVBTExZ.desc": {
+          "source": "Share manually",
+          "message": "Condividi manualmente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNNUw.desc": {
+          "source": "Send via SMS",
+          "message": "Invia tramite SMS"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.desc": {
+          "source": "How to deliver the invoice to the customer",
+          "message": "Come recapitare la fattura al cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Metodo di pubblicazione"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "How to deliver",
+          "message": "Come recapitare"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Invoice description",
+          "message": "Descrizione fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "Due date in YYYY-MM-DD format",
+          "message": "Data di scadenza nel formato YYYY-MM-DD"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Invoice due date",
+          "message": "Data di scadenza della fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order associated with this invoice",
+          "message": "L'ID dell'ordine associato a questa fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "L'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "La sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkJBTEFOQ0U.desc": {
+          "source": "Full balance payment",
+          "message": "Pagamento dell'intero saldo"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkRFUE9TSVQ.desc": {
+          "source": "Deposit payment",
+          "message": "Pagamento dell'acconto"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOklOU1RBTExNRU5U.desc": {
+          "source": "Installment payment",
+          "message": "Pagamento a rate"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.desc": {
+          "source": "The type of payment request for this invoice",
+          "message": "Il tipo di richiesta di pagamento per questa fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "Tipo di pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.short_desc": {
+          "source": "Payment request type",
+          "message": "Tipo di richiesta di pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "Invoice title",
+          "message": "Titolo della fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Crea una nuova fattura"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.desc": {
+          "source": "Create a new order in Square and immediately mark it as paid",
+          "message": "Crea un nuovo ordine in Square e contrassegnalo immediatamente come pagato"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
+          "source": "Create Paid Order",
+          "message": "Crea ordine pagato"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "La sede per l'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes",
+          "message": "Elenco di hash delle voci"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Voci"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Voci dell'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.desc": {
+          "source": "List of payment IDs to apply. If empty, uses external payment.",
+          "message": "Elenco di ID di pagamento da applicare. Se vuoto, viene utilizzato il pagamento esterno."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.display_name": {
+          "source": "Payment IDs",
+          "message": "ID di pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.short_desc": {
+          "source": "Existing payment IDs",
+          "message": "ID di pagamento esistenti"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
+          "source": "Create and pay an order",
+          "message": "Crea e paga un ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Create a new payment in Square",
+          "message": "Crea un nuovo pagamento in Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create a Payment",
+          "message": "Crea un pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Il codice valuta (predefinito: USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Codice valuta"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The amount in the smallest currency unit (cents for USD)",
+          "message": "L'importo nell'unità di valuta minima (centesimi per USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Quantità"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Importo del pagamento in centesimi"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.desc": {
+          "source": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment.",
+          "message": "Se `True` (predefinito), il pagamento viene completato immediatamente. Se `False`, deve essere completato in seguito con complete-payment."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.display_name": {
+          "source": "Autocomplete",
+          "message": "Completamento automatico"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.short_desc": {
+          "source": "Complete immediately",
+          "message": "Completa immediatamente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "L'ordine"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "La sede"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Nota"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "Nota di pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.desc": {
+          "source": "The source of funds (payment token, card ID, or 'EXTERNAL')",
+          "message": "La fonte dei fondi (token di pagamento, ID carta o 'EXTERNAL')"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.display_name": {
+          "source": "Source ID",
+          "message": "ID sorgente"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.short_desc": {
+          "source": "Payment source",
+          "message": "Origine del pagamento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "ID riferimento"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Riferimento esterno"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Crea un nuovo pagamento"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in Square. Uses polling to detect new records.",
+          "message": "Si attiva quando viene creato un nuovo cliente in Square. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "New Customer",
+          "message": "Nuovo cliente"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Si attiva quando viene creato un nuovo cliente"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.desc": {
+          "source": "Add a customer to a customer group in Square",
+          "message": "Aggiungi un cliente a un gruppo di clienti in Square"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
+          "source": "Add Customer to Group",
+          "message": "Aggiungi cliente al gruppo"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "L'ID del gruppo di clienti"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "ID gruppo"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to add to",
+          "message": "Il gruppo a cui aggiungere"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
+          "source": "Add a customer to a group",
+          "message": "Aggiungi un cliente a un gruppo"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Square",
+          "message": "Recupera un singolo ordine tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Ottieni un ordine"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "L'ID dell'ordine"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Ottieni un singolo ordine per ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.desc": {
+          "source": "Retrieve multiple orders by their IDs in a single request",
+          "message": "Recupera più ordini tramite i rispettivi ID in una singola richiesta"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
+          "source": "Get Orders",
+          "message": "Ottieni ordini"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.desc": {
+          "source": "List of order ID strings to retrieve",
+          "message": "Elenco di stringhe di ID ordine da recuperare"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "ID ordini"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.short_desc": {
+          "source": "List of order IDs",
+          "message": "Elenco di ID ordine"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtra per ubicazione"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
+          "source": "Get multiple orders by ID",
+          "message": "Ottieni più ordini tramite ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.desc": {
+          "source": "Retrieve a single booking (appointment) by ID from Square",
+          "message": "Recupera una singola prenotazione (appuntamento) tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
+          "source": "Get a Booking",
+          "message": "Ottieni una prenotazione"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "ID prenotazione"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking ID",
+          "message": "L'ID della prenotazione"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
+          "source": "Get a single booking by ID",
+          "message": "Ottieni una singola prenotazione tramite ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from Square",
+          "message": "Recupera un singolo cliente tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Ottieni un cliente"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "L'ID cliente"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Ottieni un singolo cliente tramite ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Square",
+          "message": "Recupera una singola fattura tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Ottieni una fattura"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID fattura"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "L'ID fattura"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Ottieni una singola fattura per ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.desc": {
+          "source": "Get inventory counts for a catalog item variation in Square",
+          "message": "Ottieni i conteggi di inventario per una variante di articolo del catalogo in Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
+          "source": "Get Inventory Count",
+          "message": "Ottieni conteggio inventario"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation to get counts for",
+          "message": "L'ID della variante dell'articolo del catalogo per cui ottenere i conteggi"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "ID oggetto catalogo"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation ID",
+          "message": "ID variante articolo"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.desc": {
+          "source": "Optional list of location IDs to filter counts by",
+          "message": "Elenco opzionale di ID sede in base a cui filtrare i conteggi"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtra per posizioni"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
+          "source": "Get inventory counts for an item",
+          "message": "Ottieni i conteggi di inventario per un articolo"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from Square",
+          "message": "Recupera un singolo pagamento tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get a Payment",
+          "message": "Ottieni un pagamento"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID pagamento"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment ID",
+          "message": "L'ID del pagamento"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "Ottieni un singolo pagamento tramite ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve a single refund by ID from Square",
+          "message": "Recupera un singolo rimborso tramite ID da Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get a Refund",
+          "message": "Ottieni un rimborso"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "ID rimborso"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "The refund ID",
+          "message": "L'ID del rimborso"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Get a single refund by ID",
+          "message": "Ottieni un singolo rimborso tramite ID"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Square",
+          "message": "Elimina un cliente da Square"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Elimina un cliente"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Il cliente da eliminare"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the customer profile (for optimistic concurrency)",
+          "message": "La versione corrente del profilo cliente (per la concorrenza ottimistica)"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versione"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Customer version",
+          "message": "Versione cliente"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Elimina un cliente"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.desc": {
+          "source": "Search for appointment services in the Square catalog",
+          "message": "Cerca servizi di appuntamento nel catalogo di Square"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
+          "source": "Find Service",
+          "message": "Trova servizio"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.desc": {
+          "source": "Filter services by name (partial match)",
+          "message": "Filtra i servizi per nome (corrispondenza parziale)"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.short_desc": {
+          "source": "Service name filter",
+          "message": "Filtro nome servizio"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
+          "source": "Find a service in the catalog",
+          "message": "Trova un servizio nel catalogo"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.desc": {
+          "source": "Fires when an order is created or updated in Square. Uses polling to detect changes.",
+          "message": "Si attiva quando un ordine viene creato o aggiornato in Square. Utilizza il polling per rilevare le modifiche."
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Ordine creato/aggiornato"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Si attiva quando un ordine viene creato o aggiornato"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.desc": {
+          "source": "List bookings (appointments) in Square with optional filtering",
+          "message": "Elenca le prenotazioni (appuntamenti) in Square con filtro opzionale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
+          "source": "List Bookings",
+          "message": "Elenca prenotazioni"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtra per cliente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtra per ubicazione"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.desc": {
+          "source": "Return bookings starting before this timestamp (RFC 3339)",
+          "message": "Restituisce le prenotazioni che iniziano prima di questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.display_name": {
+          "source": "Start At Max",
+          "message": "Inizio massimo"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.short_desc": {
+          "source": "Latest start time",
+          "message": "Ora di inizio massima"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.desc": {
+          "source": "Return bookings starting at or after this timestamp (RFC 3339)",
+          "message": "Restituisce le prenotazioni che iniziano a partire da questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.display_name": {
+          "source": "Start At Min",
+          "message": "Inizio minimo"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.short_desc": {
+          "source": "Earliest start time",
+          "message": "Ora di inizio minima"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "ID membro del team"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Filter by team member",
+          "message": "Filtra per membro del team"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
+          "source": "List bookings",
+          "message": "Elenca prenotazioni"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List customers in Square with optional filtering",
+          "message": "Elenca i clienti in Square con filtro opzionale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Elenca clienti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtra per ID cliente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkNSRUFURURfQVQ.desc": {
+          "source": "Sort by creation time",
+          "message": "Ordina per data di creazione"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkRFRkFVTFQ.desc": {
+          "source": "Default sort order",
+          "message": "Ordinamento predefinito"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.desc": {
+          "source": "The field to sort results by",
+          "message": "Il campo in base al quale ordinare i risultati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Campo di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Campo per cui ordinare"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Ordine crescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Ordine decrescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "La direzione di ordinamento per i risultati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Criterio di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List all customers",
+          "message": "Elenca tutti i clienti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "List invoices in Square for a location",
+          "message": "Elenca le fatture in Square per una sede"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Elenca fatture"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Filter invoices by location (required by Square API, auto-detected if not provided)",
+          "message": "Filtra le fatture per sede (richiesto dall'API di Square, rilevato automaticamente se non fornito)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtra per ubicazione"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List invoices",
+          "message": "Elenca fatture"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "List payments in Square with optional filtering",
+          "message": "Elenca i pagamenti in Square con filtro opzionale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Elenca pagamenti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return payments created at or after this timestamp (RFC 3339)",
+          "message": "Restituisce i pagamenti creati a partire da questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Ora di inizio"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Inizio dell'intervallo temporale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Ora di fine"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Fine dell'intervallo temporale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtra per ubicazione"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Ordine crescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Ordine decrescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "La direzione di ordinamento per i risultati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Criterio di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID pagamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "Filtra per ID pagamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List payments",
+          "message": "Elenca pagamenti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "List refunds in Square with optional filtering",
+          "message": "Elenca i rimborsi in Square con filtro opzionale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "Elenca rimborsi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return refunds created at or after this timestamp (RFC 3339)",
+          "message": "Restituisce i rimborsi creati a partire da questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Ora di inizio"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Inizio dell'intervallo temporale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Ora di fine"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Fine dell'intervallo temporale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtra per ubicazione"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkJBTktfQUNDT1VOVA.desc": {
+          "source": "Bank account payment",
+          "message": "Pagamento tramite conto bancario"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBU0g.desc": {
+          "source": "Cash payment",
+          "message": "Pagamento in contanti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkQ.desc": {
+          "source": "Card payment",
+          "message": "Pagamento con carta"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkVYVEVSTkFM.desc": {
+          "source": "External payment",
+          "message": "Pagamento esterno"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldBTExFVA.desc": {
+          "source": "Digital wallet payment",
+          "message": "Pagamento con portafoglio digitale"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.desc": {
+          "source": "Filter refunds by payment source type",
+          "message": "Filtra i rimborsi per tipo di origine del pagamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "Tipo di origine"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Filter by source type",
+          "message": "Filtra per tipo di origine"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Ordine crescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Ordine decrescente"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "La direzione di ordinamento per i risultati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Criterio di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed refunds",
+          "message": "Rimborsi completati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
+          "source": "Failed refunds",
+          "message": "Rimborsi non riusciti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending refunds",
+          "message": "Rimborsi in sospeso"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlJFSkVDVEVE.desc": {
+          "source": "Rejected refunds",
+          "message": "Rimborsi rifiutati"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.desc": {
+          "source": "Filter refunds by status",
+          "message": "Filtra i rimborsi per stato"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtra per stato"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "Elenca rimborsi"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Square** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Square** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint non ancora esposti come azioni di primo livello in questa app."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Square",
+          "message": "Esegui una chiamata API personalizzata a Square"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new booking (appointment) is created in Square. Uses polling to detect new records.",
+          "message": "Si attiva quando viene creata una nuova prenotazione (appuntamento) in Square. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "Nuovo appuntamento"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new booking is created",
+          "message": "Attiva quando viene creata una nuova prenotazione"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.desc": {
+          "source": "Fires when a new catalog item is created in Square. Uses polling to detect new records.",
+          "message": "Si attiva quando viene creato un nuovo articolo del catalogo in Square. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
+          "source": "New Catalog Item",
+          "message": "Nuovo articolo del catalogo"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
+          "source": "Trigger when a new catalog item is added",
+          "message": "Attiva quando viene aggiunto un nuovo articolo del catalogo"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.desc": {
+          "source": "Fires when new events are detected via the Square Events API. Supports filtering by event type. Uses polling with 28-day event retention.",
+          "message": "Si attiva quando vengono rilevati nuovi eventi tramite l'API Square Events. Supporta l'applicazione di filtri per tipo di evento. Utilizza il polling con una conservazione degli eventi di 28 giorni."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
+          "source": "New Events",
+          "message": "Nuovi eventi"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.desc": {
+          "source": "List of Square event types to watch (e.g. 'payment.created'). Defaults to all supported event types.",
+          "message": "Elenco dei tipi di evento di Square da monitorare (es. 'payment.created'). Il valore predefinito include tutti i tipi di evento supportati."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.display_name": {
+          "source": "Event Types",
+          "message": "Tipi di eventi"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.short_desc": {
+          "source": "Event types to watch",
+          "message": "Tipi di evento da monitorare"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
+          "source": "Trigger when new events occur",
+          "message": "Attiva quando si verificano nuovi eventi"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Square. Uses polling to detect new records.",
+          "message": "Si attiva quando viene creata una nuova fattura in Square. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Nuova fattura"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Si attiva quando viene creata una nuova fattura"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for orders in Square with optional filtering",
+          "message": "Cerca ordini in Square con filtro opzionale"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "Cerca ordini"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Created Before",
+          "message": "Creato prima del"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Created before date",
+          "message": "Creato prima della data"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.desc": {
+          "source": "Return orders created at or after this timestamp (RFC 3339)",
+          "message": "Restituisce gli ordini creati a partire da questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Created After",
+          "message": "Creato dopo il"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Created after date",
+          "message": "Creato dopo la data"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID ordine"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtra per ID ordine"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.desc": {
+          "source": "List of location IDs to search (auto-detected if not provided)",
+          "message": "Elenco degli ID sede in cui cercare (rilevato automaticamente se non fornito)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "ID sede"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtra per posizioni"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.desc": {
+          "source": "Open orders",
+          "message": "Ordini aperti"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled orders",
+          "message": "Ordini annullati"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed orders",
+          "message": "Ordini completati"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft orders",
+          "message": "Ordini in bozza"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.desc": {
+          "source": "Filter orders by state",
+          "message": "Filtra gli ordini per stato"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stato"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by order state",
+          "message": "Filtra per stato dell'ordine"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Updated Before",
+          "message": "Data di aggiornamento finale"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Updated before date",
+          "message": "Aggiornato prima della data"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Updated After",
+          "message": "Data di aggiornamento iniziale"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Updated after date",
+          "message": "Aggiornato dopo la data"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders",
+          "message": "Cerca ordini"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.desc": {
+          "source": "Search for catalog objects (items, variations, categories, etc.) in Square",
+          "message": "Cerca oggetti del catalogo (articoli, variazioni, categorie, ecc.) in Square"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
+          "source": "Search Catalog",
+          "message": "Cerca nel catalogo"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return objects updated at or after this timestamp (RFC 3339)",
+          "message": "Restituisce gli oggetti aggiornati a partire da questo timestamp (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Ora di inizio"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Updated after",
+          "message": "Aggiornato dopo"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.desc": {
+          "source": "Filter by catalog object types (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)",
+          "message": "Filtra per tipi di oggetto del catalogo (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.display_name": {
+          "source": "Object Types",
+          "message": "Tipi di oggetto"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.short_desc": {
+          "source": "Filter by object types",
+          "message": "Filtra per tipi di oggetto"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
+          "source": "Search catalog objects",
+          "message": "Cerca oggetti del catalogo"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Publish and send an invoice in Square",
+          "message": "Pubblica e invia una fattura in Square"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "Invia fattura"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID fattura"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to send",
+          "message": "La fattura da inviare"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "La versione corrente della fattura (per la concorrenza ottimistica)"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versione"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Versione fattura"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send (publish) an invoice",
+          "message": "Invia (pubblica) una fattura"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a payment is created or updated in Square. Uses polling to detect changes.",
+          "message": "Si attiva quando viene creato o aggiornato un pagamento in Square. Utilizza il polling per rilevare le modifiche."
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
+          "source": "Payment Created/Updated",
+          "message": "Pagamento creato/aggiornato"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a payment is created or updated",
+          "message": "Attiva quando un pagamento viene creato o aggiornato"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.desc": {
+          "source": "Create a refund for a payment in Square",
+          "message": "Crea un rimborso per un pagamento in Square"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
+          "source": "Refund Payment",
+          "message": "Rimborsa pagamento"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Il codice valuta (predefinito: USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Valuta"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Codice valuta"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The refund amount in the smallest currency unit (cents for USD)",
+          "message": "L'importo del rimborso nell'unità di valuta più piccola (centesimi per USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Quantità"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "Importo del rimborso in centesimi"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID pagamento"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to refund",
+          "message": "Il pagamento da rimborsare"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Motivo"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.short_desc": {
+          "source": "Reason for refund",
+          "message": "Motivo del rimborso"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
+          "source": "Refund a payment",
+          "message": "Rimborsa un pagamento"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.desc": {
+          "source": "Remove a customer from a customer group in Square",
+          "message": "Rimuovi un cliente da un gruppo di clienti in Square"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
+          "source": "Remove Customer From Group",
+          "message": "Rimuovi cliente dal gruppo"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Il cliente"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "L'ID del gruppo di clienti"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "ID gruppo"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to remove from",
+          "message": "Il gruppo da cui rimuovere"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
+          "source": "Remove a customer from a group",
+          "message": "Rimuovi un cliente da un gruppo"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Square",
+          "message": "Aggiorna un cliente esistente in Square"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Aggiorna un cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Azienda"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Nome azienda"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Il cliente da aggiornare"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Nome del cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "Email del cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Cognome del cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Nota"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Nota cliente"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aggiorna un cliente esistente"
+        },
+        "app.U3F1YXJl.desc": {
+          "source": "Square is a comprehensive commerce platform for payments, online stores, invoicing, and business management.\n\nThis integration supports customers, orders, payments, invoices, bookings, catalog items, inventory, refunds, and events.",
+          "message": "Square è una piattaforma di commercio completa per pagamenti, negozi online, fatturazione e gestione aziendale.\n\nQuesta integrazione supporta clienti, ordini, pagamenti, fatture, prenotazioni, articoli di catalogo, inventario, rimborsi ed eventi."
+        },
+        "app.U3F1YXJl.display_name": {
+          "source": "Square",
+          "message": "Square"
+        },
+        "app.U3F1YXJl.short_desc": {
+          "source": "Square payments and commerce platform",
+          "message": "Piattaforma di pagamenti e commercio Square"
+        }
+      }
+    }
+  }
+}

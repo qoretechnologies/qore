@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a Server Sent Event (SSE) message",
+          "message": "接收伺服器發送事件 (SSE) 訊息"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Server Sent Event (SSE) Message",
+          "message": "伺服器發送事件 (SSE) 訊息"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout to use in milliseconds",
+          "message": "使用的連線逾時（毫秒）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "連線逾時"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connect timeout in milliseconds",
+          "message": "連線逾時（毫秒）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "用於驗證所接收 SSE 事件資料的 AsyncAPI 結構描述 URL 或檔案路徑"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "AsyncAPI 結構描述"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "AsyncAPI 結構描述 URL 或檔案路徑"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "設定 `asyncapi` 時要使用的 AsyncAPI 通道名稱"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "AsyncAPI 通道"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "用於驗證的 AsyncAPI 通道"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; if serialization is set to 'json' and the body is not a string, it will be serialized to JSON automatically. Only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "隨 SSE 連線請求發送的請求內文；如果序列化設定為「json」且內文不是字串，則會自動序列化為 JSON。僅適用於非 GET 方法。每次嘗試重新連線時都會重新發送內文"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "請求內文"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "非 GET SSE 請求的請求內文"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Use no data serialization",
+          "message": "不使用資料序列化"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Use JSON serialization",
+          "message": "使用 JSON 序列化"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.desc": {
+          "source": "data serialization to use:\n - `json`: JSON serialization (default)\n - `none`: no serialization; raw messages\n",
+          "message": "要使用的資料序列化：\n - `json`：JSON 序列化（預設）\n - `none`：無序列化；原始訊息\n"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "資料序列化"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization for string messages",
+          "message": "字串訊息的資料序列化"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.desc": {
+          "source": "HTTP headers to add in the initial connection request",
+          "message": "在初始連線請求中新增的 HTTP 標頭"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.display_name": {
+          "source": "Request Headers",
+          "message": "請求標頭"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.short_desc": {
+          "source": "HTTP headers to send in the request",
+          "message": "在請求中發送的 HTTP 標頭"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "僅限 HTTP/1.0"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "僅限 HTTP/1.1"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "要求 HTTP/2，若伺服器不支援則失敗（需要 TLS）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "要求 HTTP/3 (QUIC)，若不可用則失敗（需要 TLS）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "對 HTTPS 使用 HTTP/3 優先的 Happy Eyeballs；視需要退回至 HTTP/2（預設）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC",
+          "message": "要使用的 HTTP 版本：`auto`（HTTPS 優先使用 HTTP/3 的 Happy Eyeballs，預設）、`1.0`、`1.1`、`2.0` 或 `3.0`。HTTP/2 需要 TLS 並透過 ALPN 協商。HTTP/3 需要 TLS 並使用 QUIC"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "HTTP 版本"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "HTTP version to use",
+          "message": "要使用的 HTTP 版本"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.desc": {
+          "source": "Any logger to use for information about data provider operations",
+          "message": "用於記錄資料提供者操作資訊的記錄器"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.display_name": {
+          "source": "Logger",
+          "message": "記錄器"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.short_desc": {
+          "source": "The logger to use",
+          "message": "要使用的記錄器"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "請求伺服器從此 ID 重新開始發送事件。這將在傳送至 SSE 伺服器的連線請求中的 `Last-Event-ID` 標頭中發送"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "最後事件 ID"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "請求伺服器從此 ID 重新開始發送事件"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "支援的 HTTP 最大重新導向次數"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max HTTP Redirects",
+          "message": "最大 HTTP 重新導向次數"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "支援的 HTTP 最大重新導向次數"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "用於 SSE 連線請求的 HTTP 方法；預設：GET。對於需要請求內文的 API（例如 OpenAI、Anthropic 串流 API），請使用 POST"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "SSE 連線請求的 HTTP 方法"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.desc": {
+          "source": "A `ServerSentEventClient` for the connection; either this or the `url` option must be provided; if this option is provided, then all other options are ignored",
+          "message": "用於連線的 `ServerSentEventClient`；必須提供此選項或 `url` 選項；如果提供了此選項，則所有其他選項都會被忽略"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.display_name": {
+          "source": "ServerSentEvent Client",
+          "message": "ServerSentEvent 用戶端"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.short_desc": {
+          "source": "The ServerSentEventClient object",
+          "message": "ServerSentEventClient 物件"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "HTTP 基本驗證的密碼；僅在 URL 中未設定使用者名稱或密碼且同時使用了 `username` 選項時使用"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "密碼"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "HTTP 基本驗證的密碼"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.desc": {
+          "source": "The proxy URL to use",
+          "message": "要使用的 Proxy URL"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP 代理伺服器"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "要使用的 HTTP 代理伺服器"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "當連線關閉或遺失時自動重新連線"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "是否重新連線？"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.short_desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "當連線關閉或遺失時自動重新連線"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.desc": {
+          "source": "Any bearer token to use for the connection; will be passed as `Authorization: Bearer ...`  (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then OAuth2 options are ignored for login",
+          "message": "用於連線的任何持有人權杖 (Bearer Token)；將在請求標頭中以 `Authorization: Bearer ...` 形式傳遞（假設 `token_type` 為 `Bearer`）；此選項不能與使用者名稱和密碼選項或 URL 中的驗證資訊一起使用；如果設定了此選項，則登入時會忽略 OAuth2 選項"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "授權權杖"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "設定要包含在請求中的授權權杖"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "用於 `Authorization` 標頭的 `token` 類型；若未設定 `token` 選項則會忽略"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "授權權杖類型"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "授權權杖的類型"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "單一 I/O 操作可花費的時間上限（毫秒）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "I/O 逾時"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.short_desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "單一 I/O 操作可花費的時間上限（毫秒）"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.desc": {
+          "source": "A URL for a ServerSentEvent connection; either this or the `sseclient` option must be provided",
+          "message": "ServerSentEvent 連線的 URL；必須提供此選項或 `sseclient` 選項"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.short_desc": {
+          "source": "The URL to connect to",
+          "message": "要連線的 URL"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.desc": {
+          "source": "The username for HTTP basic authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "HTTP 基本驗證的使用者名稱；僅在 URL 中未設定使用者名稱或密碼且同時使用了 `password` 選項時使用"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "設定 HTTP 基本驗證的使用者名稱"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Server Sent Event (SSE) is received",
+          "message": "已收到伺服器發送事件 (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.desc": {
+          "source": "Receive Server Sent Events",
+          "message": "接收伺服器發送事件 (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.display_name": {
+          "source": "Server Sent Events (SSE)",
+          "message": "伺服器發送事件 (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.short_desc": {
+          "source": "Receive Server Sent Events",
+          "message": "接收伺服器發送事件 (SSE)"
+        }
+      }
+    }
+  }
+}

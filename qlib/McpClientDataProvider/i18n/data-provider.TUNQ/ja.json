@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.TUNQ.action.Y29tcGxldGU.desc": {
+          "source": "Get autocompletion suggestions for prompts or resources",
+          "message": "プロンプトまたはリソースの自動補完候補を取得"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.display_name": {
+          "source": "Get Completion",
+          "message": "補完を取得"
+        },
+        "app.TUNQ.action.Y29tcGxldGU.short_desc": {
+          "source": "Get autocompletion suggestions",
+          "message": "自動補完候補を取得"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.desc": {
+          "source": "Execute an MCP tool with the provided arguments and return the result",
+          "message": "指定された引数で MCP ツールを実行し、結果を返します"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.display_name": {
+          "source": "Call Tool",
+          "message": "ツールの呼び出し"
+        },
+        "app.TUNQ.action.Y2FsbC10b29s.short_desc": {
+          "source": "Execute an MCP tool",
+          "message": "MCP ツールを実行"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.desc": {
+          "source": "Get a prompt template from the MCP server with arguments",
+          "message": "引数を指定して MCP サーバーからプロンプトテンプレートを取得"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.display_name": {
+          "source": "Get Prompt",
+          "message": "プロンプトの取得"
+        },
+        "app.TUNQ.action.Z2V0LXByb21wdA.short_desc": {
+          "source": "Get an MCP prompt",
+          "message": "MCP プロンプトを取得"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.desc": {
+          "source": "List all tools available on the MCP server",
+          "message": "MCP サーバーで利用可能なすべてのツールを一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.display_name": {
+          "source": "List Tools",
+          "message": "ツールの一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC10b29scw.short_desc": {
+          "source": "List available MCP tools",
+          "message": "利用可能な MCP ツールを一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.desc": {
+          "source": "List all prompts available on the MCP server",
+          "message": "MCP サーバーで利用可能なすべてのプロンプトを一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.display_name": {
+          "source": "List Prompts",
+          "message": "プロンプトの一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1wcm9tcHRz.short_desc": {
+          "source": "List available MCP prompts",
+          "message": "利用可能な MCP プロンプトを一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.desc": {
+          "source": "List all resources available on the MCP server",
+          "message": "MCP サーバーで利用可能なすべてのリソースを一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.display_name": {
+          "source": "List Resources",
+          "message": "リソースの一覧表示"
+        },
+        "app.TUNQ.action.bGlzdC1yZXNvdXJjZXM.short_desc": {
+          "source": "List available MCP resources",
+          "message": "利用可能な MCP リソースを一覧表示"
+        },
+        "app.TUNQ.action.cGluZw.desc": {
+          "source": "Ping the MCP server to verify connectivity",
+          "message": "MCP サーバーに Ping を送信して接続を確認"
+        },
+        "app.TUNQ.action.cGluZw.display_name": {
+          "source": "Ping Server",
+          "message": "サーバーへの Ping"
+        },
+        "app.TUNQ.action.cGluZw.short_desc": {
+          "source": "Check server connectivity",
+          "message": "サーバーの接続を確認"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read content from an MCP resource by URI",
+          "message": "URI によって MCP リソースからコンテンツを読み取る"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "リソースの読み取り"
+        },
+        "app.TUNQ.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read an MCP resource",
+          "message": "MCP リソースを読み取る"
+        },
+        "app.TUNQ.desc": {
+          "source": "Connect to MCP servers for AI tool, resource, and prompt integration",
+          "message": "AI ツール、リソース、およびプロンプトの統合のために MCP サーバーに接続"
+        },
+        "app.TUNQ.display_name": {
+          "source": "MCP Server",
+          "message": "MCP サーバー"
+        },
+        "app.TUNQ.short_desc": {
+          "source": "Model Context Protocol server",
+          "message": "Model Context Protocol サーバー"
+        }
+      }
+    }
+  }
+}

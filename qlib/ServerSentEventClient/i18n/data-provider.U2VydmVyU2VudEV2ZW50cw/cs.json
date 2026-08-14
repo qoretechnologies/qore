@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a Server Sent Event (SSE) message",
+          "message": "Přijmout zprávu Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "Server Sent Event (SSE) Message",
+          "message": "Zpráva Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "Connection timeout to use in milliseconds",
+          "message": "Časový limit připojení v milisekundách"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Časový limit připojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "Connect timeout in milliseconds",
+          "message": "Časový limit připojení v milisekundách"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.desc": {
+          "source": "AsyncAPI schema URL or file path used to validate received SSE event data",
+          "message": "URL schématu AsyncAPI nebo cesta k souboru pro validaci přijatých dat událostí SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.display_name": {
+          "source": "AsyncAPI Schema",
+          "message": "Schéma AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGk.short_desc": {
+          "source": "AsyncAPI schema URL or file path",
+          "message": "URL schématu AsyncAPI nebo cesta k souboru"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.desc": {
+          "source": "AsyncAPI channel name to use when `asyncapi` is configured",
+          "message": "Název kanálu AsyncAPI, který se použije, když je nakonfigurována možnost `asyncapi`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.display_name": {
+          "source": "AsyncAPI Channel",
+          "message": "Kanál AsyncAPI"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.YXN5bmNhcGlfY2hhbm5lbA.short_desc": {
+          "source": "AsyncAPI channel for validation",
+          "message": "Kanál AsyncAPI pro validaci"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.desc": {
+          "source": "The request body to send with the SSE connection request; if serialization is set to 'json' and the body is not a string, it will be serialized to JSON automatically. Only valid with non-GET methods. The body is resent on each reconnection attempt",
+          "message": "Tělo požadavku, které se odešle s požadavkem na připojení SSE; pokud je serializace nastavena na 'json' a tělo není řetězec, automaticky se serializuje do formátu JSON. Platí pouze pro metody jiné než GET. Tělo se znovu odesílá při každém pokusu o opětovné připojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.display_name": {
+          "source": "Request Body",
+          "message": "Tělo požadavku"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.Ym9keQ.short_desc": {
+          "source": "Request body for non-GET SSE requests",
+          "message": "Tělo požadavku pro SSE požadavky jiné než GET"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Use no data serialization",
+          "message": "Nepoužívat žádnou serializaci dat"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Use JSON serialization",
+          "message": "Použít serializaci JSON"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.desc": {
+          "source": "data serialization to use:\n - `json`: JSON serialization (default)\n - `none`: no serialization; raw messages\n",
+          "message": "Serializace dat, která se má použít:\n - `json`: serializace JSON (výchozí)\n - `none`: bez serializace; nezpracované zprávy\n"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializace dat"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.ZGF0YQ.short_desc": {
+          "source": "Data serialization for string messages",
+          "message": "Serializace dat pro řetězcové zprávy"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.desc": {
+          "source": "HTTP headers to add in the initial connection request",
+          "message": "Hlavičky HTTP, které se mají přidat do počátečního požadavku na připojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.display_name": {
+          "source": "Request Headers",
+          "message": "Hlavičky požadavku"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aGVhZGVycw.short_desc": {
+          "source": "HTTP headers to send in the request",
+          "message": "Hlavičky HTTP k odeslání v požadavku"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Pouze HTTP/1.0"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Pouze HTTP/1.1"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Vyžadovat HTTP/2, selhat, pokud jej server nepodporuje (vyžaduje se TLS)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Vyžadovat HTTP/3 (QUIC), selhat, pokud není k dispozici (vyžaduje se TLS)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Použít algoritmus Happy Eyeballs s prioritou HTTP/3 pro HTTPS; v případě potřeby přejít zpět na HTTP/2 (výchozí)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC",
+          "message": "Verze protokolu HTTP, která se má použít: `auto` (pro HTTPS preferuje HTTP/3 metodou Happy Eyeballs, výchozí), `1.0`, `1.1`, `2.0` nebo `3.0`. HTTP/2 vyžaduje TLS a je sjednáváno přes ALPN. HTTP/3 vyžaduje TLS a používá QUIC"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Verze HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "HTTP version to use",
+          "message": "Verze HTTP, která se má použít"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.desc": {
+          "source": "Any logger to use for information about data provider operations",
+          "message": "Jakýkoli logger, který se má použít pro informace o operacích poskytovatele dat"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.display_name": {
+          "source": "Logger",
+          "message": "Logger"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bG9nZ2Vy.short_desc": {
+          "source": "The logger to use",
+          "message": "Logger, který se má použít"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.desc": {
+          "source": "Request the server restart sending events from this ID. This will be send in the `Last-Event-ID` header in the connection request to the SSE server",
+          "message": "Požádat server o opětovné odesílání událostí od tohoto ID. Bude odesláno v hlavičce `Last-Event-ID` v požadavku na připojení k SSE serveru"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.display_name": {
+          "source": "Last Event ID",
+          "message": "ID poslední události"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.short_desc": {
+          "source": "Request the server restart sending events from this ID",
+          "message": "Požádat server o opětovné odesílání událostí od tohoto ID"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Maximální podporovaný počet přesměrování HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max HTTP Redirects",
+          "message": "Max. přesměrování HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Maximum HTTP redirects to support",
+          "message": "Maximální podporovaný počet přesměrování HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the SSE connection request; default: GET. Use POST for APIs that require a request body (e.g., OpenAI, Anthropic streaming APIs)",
+          "message": "Metoda HTTP, která se má použít pro požadavek na připojení SSE; výchozí: GET. Použijte POST pro rozhraní API, která vyžadují tělo požadavku (např. streamovací API OpenAI, Anthropic)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWV0aG9k.short_desc": {
+          "source": "HTTP method for the SSE connection request",
+          "message": "Metoda HTTP pro požadavek na připojení SSE"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.desc": {
+          "source": "A `ServerSentEventClient` for the connection; either this or the `url` option must be provided; if this option is provided, then all other options are ignored",
+          "message": "Objekt `ServerSentEventClient` pro připojení; musí být zadána buď tato možnost, nebo možnost `url`; pokud je tato možnost zadána, všechny ostatní možnosti jsou ignorovány"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.display_name": {
+          "source": "ServerSentEvent Client",
+          "message": "Klient ServerSentEvent"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.c3NlY2xpZW50.short_desc": {
+          "source": "The ServerSentEventClient object",
+          "message": "Objekt ServerSentEventClient"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for HTTP basic authentication; only used if no username or password is set in the URL and if the `username` option is also used",
+          "message": "Heslo pro základní ověřování HTTP; použije se pouze v případě, že v URL není nastaveno uživatelské jméno ani heslo a je také použita možnost `username`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Heslo"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for HTTP basic authentication",
+          "message": "Heslo pro základní ověřování HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.desc": {
+          "source": "The proxy URL to use",
+          "message": "URL proxy, které se má použít"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "HTTP proxy"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "HTTP proxy, která se má použít"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Automaticky znovu připojit při zavření nebo ztrátě spojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.display_name": {
+          "source": "Reconnect?",
+          "message": "Znovu připojit?"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.cmVjb25uZWN0.short_desc": {
+          "source": "Automatically reconnect when the connection is closed or lost",
+          "message": "Automaticky znovu připojit při zavření nebo ztrátě spojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.desc": {
+          "source": "Any bearer token to use for the connection; will be passed as `Authorization: Bearer ...`  (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then OAuth2 options are ignored for login",
+          "message": "Jakýkoli bearer token pro připojení; bude předán jako `Authorization: Bearer ...` (za předpokladu, že `token_type` je `Bearer`) v hlavičkách požadavku; tuto možnost nelze použít s možnostmi uživatelského jména a hesla ani s ověřovacími údaji v URL; pokud je tato možnost nastavena, možnosti OAuth2 pro přihlášení jsou ignorovány"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Autorizační token"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Nastavte autorizační token, který má být zahrnut do požadavků"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Typ `token`, který se má použít pro hlavičku `Authorization`; ignorováno, pokud není nastavena žádná možnost `token`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Typ autorizačního tokenu"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Typ autorizačního tokenu"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Maximální doba v milisekundách, kterou může trvat jedna vstupně-výstupní (I/O) operace"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Časový limit I/O"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.short_desc": {
+          "source": "Maximum time a single I/O operation can take in milliseconds",
+          "message": "Maximální doba v milisekundách, kterou může trvat jedna vstupně-výstupní (I/O) operace"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.desc": {
+          "source": "A URL for a ServerSentEvent connection; either this or the `sseclient` option must be provided",
+          "message": "URL pro připojení ServerSentEvent; musí být zadána buď tato možnost, nebo možnost `sseclient`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.short_desc": {
+          "source": "The URL to connect to",
+          "message": "URL pro připojení"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.desc": {
+          "source": "The username for HTTP basic authentication; only used if no username or password is set in the URL and if the `password` option is also used",
+          "message": "Uživatelské jméno pro základní ověřování HTTP; použije se pouze v případě, že v URL není nastaveno uživatelské jméno ani heslo a je také použita možnost `password`"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Uživatelské jméno"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for HTTP basic authentication",
+          "message": "Nastavuje uživatelské jméno pro základní ověřování HTTP"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A Server Sent Event (SSE) is received",
+          "message": "Byla přijata událost Server Sent Event (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Přijímat události Server Sent Events"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.display_name": {
+          "source": "Server Sent Events (SSE)",
+          "message": "Server Sent Events (SSE)"
+        },
+        "app.U2VydmVyU2VudEV2ZW50cw.short_desc": {
+          "source": "Receive Server Sent Events",
+          "message": "Přijímat události Server Sent Events"
+        }
+      }
+    }
+  }
+}

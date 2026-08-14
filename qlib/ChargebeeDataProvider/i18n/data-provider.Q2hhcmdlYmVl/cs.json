@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.desc": {
+          "source": "Collect payment for an outstanding invoice using the customer's payment method on file.",
+          "message": "Inkasovat platbu za neuhrazenou fakturu pomocí uložené platební metody zákazníka."
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
+          "source": "Collect Invoice Payment",
+          "message": "Inkasovat platbu faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Částka platby v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The invoice to collect payment for",
+          "message": "Faktura, za kterou se má inkasovat platba"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
+          "source": "Collect payment for an invoice",
+          "message": "Inkasovat platbu za fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Chargebee with contact and billing information.",
+          "message": "Vytvořit nového zákazníka v Chargebee s kontaktními a fakturačními údaji."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Vytvořit zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Křestní jméno zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "Příjmení zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Vytvořit nového zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.desc": {
+          "source": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
+          "message": "Vytvořit nový kupón v Chargebee pro slevy na předplatná nebo faktury."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
+          "source": "Create Coupon",
+          "message": "Vytvořit kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "Nabídka množství"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "Pevná částka"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "Procento"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ slevy"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Typ slevy"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One Time",
+          "message": "Jednorázově"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmZvcmV2ZXI.desc": {
+          "source": "Forever",
+          "message": "Navždy"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmxpbWl0ZWRfcGVyaW9k.desc": {
+          "source": "Limited Period",
+          "message": "Omezená doba"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.display_name": {
+          "source": "Duration Type",
+          "message": "Typ trvání"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.short_desc": {
+          "source": "How long the discount lasts",
+          "message": "Jak dlouho sleva platí"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "ID kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "Unique coupon code/identifier",
+          "message": "Jedinečný kód/identifikátor kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "Zobrazovaný název kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
+          "source": "Create a new coupon",
+          "message": "Vytvořit nový kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Chargebee for a customer.",
+          "message": "Vytvořit novou fakturu v Chargebee pro zákazníka."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Vytvořit fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "Zákazník pro fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Vytvořit novou fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Create a new subscription in Chargebee for a customer with a specified plan.",
+          "message": "Vytvořit nové předplatné v Chargebee pro zákazníka se zadaným plánem."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Create Subscription",
+          "message": "Vytvořit předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the subscription",
+          "message": "Zákazník pro předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Create a new subscription",
+          "message": "Vytvořit nové předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Add promotional credits to a customer's account in Chargebee.",
+          "message": "Přidat propagační kredity na účet zákazníka v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Add Promotional Credit",
+          "message": "Přidat propagační kredit"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kód měny"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Měna pro kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add credits to",
+          "message": "Zákazník, kterému se mají přidat kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Částka kreditu v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Add promotional credits to a customer",
+          "message": "Přidat propagační kredity zákazníkovi"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee customer.",
+          "message": "Načíst podrobné informace o konkrétním zákazníkovi v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Získat zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Získat jednoho zákazníka podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee coupon.",
+          "message": "Načíst podrobné informace o konkrétním kupónu v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
+          "source": "Get Coupon",
+          "message": "Získat kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "ID kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon ID",
+          "message": "ID kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
+          "source": "Get a single coupon by ID",
+          "message": "Získat jeden kupón podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee invoice.",
+          "message": "Načíst podrobné informace o konkrétní faktuře v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Získat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Získat jednu fakturu podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.desc": {
+          "source": "Retrieve a download link for a Chargebee invoice PDF.",
+          "message": "Načíst odkaz ke stažení PDF faktury z Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
+          "source": "Get Invoice Link",
+          "message": "Získat odkaz na fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.short_desc": {
+          "source": "The invoice to get the PDF link for",
+          "message": "Faktura, pro kterou se má získat odkaz na PDF"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
+          "source": "Get a download link for an invoice",
+          "message": "Získat odkaz ke stažení faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee promotional credit.",
+          "message": "Načíst podrobné informace o konkrétním propagačním kreditu v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Get Promotional Credit",
+          "message": "Získat propagační kredit"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.display_name": {
+          "source": "Promotional Credit ID",
+          "message": "ID propagačního kreditu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.short_desc": {
+          "source": "The promotional credit ID",
+          "message": "ID propagačního kreditu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Get a single promotional credit by ID",
+          "message": "Získat jeden propagační kredit podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee subscription.",
+          "message": "Získat podrobné informace o konkrétním předplatném v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "Získat předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Get a single subscription by ID",
+          "message": "Získat jedno předplatné podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee transaction.",
+          "message": "Získat podrobné informace o konkrétní transakci v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "Získat transakci"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID transakce"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "The transaction to retrieve",
+          "message": "Transakce k načtení"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a transaction by ID",
+          "message": "Získat transakci podle ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Deduct promotional credits from a customer's account in Chargebee.",
+          "message": "Odečíst propagační kredity z účtu zákazníka v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Deduct Promotional Credit",
+          "message": "Odečíst propagační kredit"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kód měny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Měna pro kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to deduct credits from",
+          "message": "Zákazník, kterému se mají odečíst kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Částka kreditu v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Deduct promotional credits from a customer",
+          "message": "Odečíst propagační kredity zákazníkovi"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Chargebee. This action cannot be undone.",
+          "message": "Smazat zákazníka ze služby Chargebee. Tuto akci nelze vrátit zpět."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "Smazat zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Zákazník ke smazání"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Smazat zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.desc": {
+          "source": "Delete a coupon from Chargebee. This action cannot be undone.",
+          "message": "Smazat kupón ze služby Chargebee. Tuto akci nelze vrátit zpět."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
+          "source": "Delete Coupon",
+          "message": "Smazat kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "ID kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to delete",
+          "message": "Kupón ke smazání"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
+          "source": "Delete a coupon",
+          "message": "Smazat kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Chargebee. This action cannot be undone.",
+          "message": "Smazat fakturu ze služby Chargebee. Tuto akci nelze vrátit zpět."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Faktura ke smazání"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Smazat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Delete a subscription from Chargebee. This action cannot be undone.",
+          "message": "Smazat předplatné ze služby Chargebee. Tuto akci nelze vrátit zpět."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Delete Subscription",
+          "message": "Smazat předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to delete",
+          "message": "Předplatné ke smazání"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Delete a subscription",
+          "message": "Smazat předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.desc": {
+          "source": "Retrieve a list of coupons from Chargebee.",
+          "message": "Získat seznam kupónů ze služby Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
+          "source": "Find Coupons",
+          "message": "Najít kupóny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "Nabídka množství"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "Pevná částka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "Procento"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ slevy"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Filter by discount type",
+          "message": "Filtrovat podle typu slevy"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.short_desc": {
+          "source": "Filter by coupon name",
+          "message": "Filtrovat podle názvu kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived",
+          "message": "Archivováno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted",
+          "message": "Smazané"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.desc": {
+          "source": "Expired",
+          "message": "Vypršela platnost"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "Budoucí"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by coupon status",
+          "message": "Filtrovat podle stavu kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
+          "source": "Find and search coupons",
+          "message": "Najít a vyhledat kupóny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.desc": {
+          "source": "Retrieve a list of customers from Chargebee with optional filtering by status, email, first name, and last name.",
+          "message": "Získat seznam zákazníků ze služby Chargebee s volitelným filtrováním podle stavu, e-mailu, křestního jména a příjmení."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
+          "source": "Find Customers",
+          "message": "Najít zákazníky"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Filter customers by their email address",
+          "message": "Filtrovat zákazníky podle jejich e-mailové adresy"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovat podle e-mailu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "Filter customers by their first name",
+          "message": "Filtrovat zákazníky podle jejich křestního jména"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Filtrovat podle křestního jména"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.desc": {
+          "source": "Filter customers by their last name",
+          "message": "Filtrovat zákazníky podle jejich příjmení"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "Filtrovat podle příjmení"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Filter customers by their status",
+          "message": "Filtrovat zákazníky podle jejich stavu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by customer status",
+          "message": "Filtrovat podle stavu zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
+          "source": "Find and search customers",
+          "message": "Najít a vyhledat zákazníky"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Chargebee with optional filtering by status.",
+          "message": "Získat seznam faktur ze služby Chargebee s volitelným filtrováním podle stavu."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
+          "source": "Find Invoices",
+          "message": "Najít faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9wYWlk.desc": {
+          "source": "Not Paid",
+          "message": "Nezaplaceno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid",
+          "message": "Zaplaceno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBheW1lbnRfZHVl.desc": {
+          "source": "Payment Due",
+          "message": "K úhradě"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending",
+          "message": "Čekající"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBvc3RlZA.desc": {
+          "source": "Posted",
+          "message": "Zaúčtováno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWRlZA.desc": {
+          "source": "Voided",
+          "message": "Anulováno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by their status",
+          "message": "Filtrovat faktury podle jejich stavu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtrovat podle stavu faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
+          "source": "Find and search invoices",
+          "message": "Najít a vyhledat faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.desc": {
+          "source": "Retrieve a list of promotional credits from Chargebee.",
+          "message": "Získat seznam propagačních kreditů ze služby Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
+          "source": "Find Promotional Credits",
+          "message": "Najít propagační kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovat podle zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmRlY3JlbWVudA.desc": {
+          "source": "Decrement",
+          "message": "Dekrementovat"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmluY3JlbWVudA.desc": {
+          "source": "Increment",
+          "message": "Inkrementovat"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOnNldA.desc": {
+          "source": "Set",
+          "message": "Nastavit"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.short_desc": {
+          "source": "Filter by credit type",
+          "message": "Filtrovat podle typu kreditu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
+          "source": "Find and search promotional credits",
+          "message": "Najít a vyhledat propagační kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "Retrieve a list of subscriptions from Chargebee with optional filtering by status and customer.",
+          "message": "Získat seznam předplatných ze služby Chargebee s volitelným filtrováním podle stavu a zákazníka."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "Find Subscriptions",
+          "message": "Najít předplatná"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter subscriptions by the customer they belong to",
+          "message": "Filtrovat předplatná podle zákazníka, kterému patří"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovat podle zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vbl9yZW5ld2luZw.desc": {
+          "source": "Non-Renewing",
+          "message": "Neobnovující se"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktivní"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "Zrušeno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "Budoucí"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmluX3RyaWFs.desc": {
+          "source": "In Trial",
+          "message": "Ve zkušební době"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused",
+          "message": "Pozastaveno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnRyYW5zZmVycmVk.desc": {
+          "source": "Transferred",
+          "message": "Převedeno"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Filter subscriptions by their status",
+          "message": "Filtrovat předplatná podle jejich stavu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "Filtrovat podle stavu předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "Find and search subscriptions",
+          "message": "Najít a vyhledávat předplatná"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Chargebee** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provede vlastní volání HTTP / REST API do **Chargebee** pomocí autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci vystaveny jako prvotřídní akce."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Chargebee",
+          "message": "Provést vlastní volání API do Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Set the promotional credit balance for a customer's account in Chargebee.",
+          "message": "Nastavit zůstatek propagačního kreditu pro zákaznický účet v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Set Promotional Credit",
+          "message": "Nastavit propagační kredit"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kód měny"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Měna pro kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to set credits for",
+          "message": "Zákazník, pro kterého se mají nastavit kredity"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Částka kreditu v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Set promotional credit balance for a customer",
+          "message": "Nastavit zůstatek propagačního kreditu pro zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.desc": {
+          "source": "Record an offline payment for an invoice in Chargebee.",
+          "message": "Zaznamenat offline platbu za fakturu v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
+          "source": "Record Invoice Payment",
+          "message": "Zaznamenat platbu faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Částka platby v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.short_desc": {
+          "source": "The invoice to record payment for",
+          "message": "Faktura, pro kterou se má zaznamenat platba"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
+          "source": "Record a payment for an invoice",
+          "message": "Zaznamenat platbu za fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.desc": {
+          "source": "Process a refund for a paid invoice in Chargebee.",
+          "message": "Zpracovat refundaci za zaplacenou fakturu v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
+          "source": "Refund Invoice",
+          "message": "Refundovat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to refund",
+          "message": "Faktura k refundaci"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.display_name": {
+          "source": "Refund Amount",
+          "message": "Částka refundace"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "Částka refundace v centech"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
+          "source": "Refund an invoice",
+          "message": "Refundovat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.desc": {
+          "source": "Fires when a new customer is created in Chargebee. Provides customer event details.",
+          "message": "Spustí se při vytvoření nového zákazníka v Chargebee. Poskytuje podrobnosti o události zákazníka."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
+          "source": "Customer Created",
+          "message": "Zákazník vytvořen"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
+          "source": "Trigger when a customer is created",
+          "message": "Spustit při vytvoření zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.desc": {
+          "source": "Fires on any event in Chargebee. Provides full event details for all event types.",
+          "message": "Spustí se při jakékoli události v Chargebee. Poskytuje úplné podrobnosti o události pro všechny typy událostí."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
+          "source": "Any Event (Instant)",
+          "message": "Jakákoli událost (okamžitá)"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
+          "source": "Trigger on any Chargebee event",
+          "message": "Spustit při jakékoli události v Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.desc": {
+          "source": "Fires when a new invoice is generated in Chargebee. Provides invoice event details.",
+          "message": "Spustí se při vygenerování nové faktury v Chargebee. Poskytuje podrobnosti o události faktury."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
+          "source": "Invoice Generated",
+          "message": "Faktura vygenerována"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
+          "source": "Trigger when an invoice is generated",
+          "message": "Spustit při vygenerování faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.desc": {
+          "source": "Fires when a new subscription is created in Chargebee. Provides subscription event details.",
+          "message": "Spustí se při vytvoření nového předplatného v Chargebee. Poskytuje podrobnosti o události předplatného."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
+          "source": "Subscription Created",
+          "message": "Předplatné vytvořeno"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {
+          "source": "Trigger when a subscription is created",
+          "message": "Spustit při vytvoření předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Chargebee. You can modify contact details, billing information, and other customer attributes.",
+          "message": "Aktualizovat existujícího zákazníka v Chargebee. Můžete upravit kontaktní údaje, fakturační údaje a další atributy zákazníka."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Aktualizovat zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Křestní jméno zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Zákazník k aktualizaci"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aktualizovat existujícího zákazníka"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.desc": {
+          "source": "Update an existing coupon in Chargebee.",
+          "message": "Aktualizovat existující kupón v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
+          "source": "Update Coupon",
+          "message": "Aktualizovat kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "ID kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to update",
+          "message": "Kupón k aktualizaci"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "Zobrazovaný název kupónu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
+          "source": "Update an existing coupon",
+          "message": "Aktualizovat existující kupón"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Chargebee.",
+          "message": "Aktualizovat existující fakturu v Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Aktualizovat fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "Faktura k aktualizaci"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Aktualizovat existující fakturu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Update an existing subscription in Chargebee. You can modify the plan, billing cycle, add-ons, and other subscription details.",
+          "message": "Aktualizovat existující předplatné v Chargebee. Můžete upravit plán, fakturační cyklus, doplňky a další podrobnosti předplatného."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Update Subscription",
+          "message": "Aktualizovat předplatné"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to update",
+          "message": "Předplatné k aktualizaci"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Update an existing subscription",
+          "message": "Aktualizovat existující předplatné"
+        },
+        "app.Q2hhcmdlYmVl.desc": {
+          "source": "Chargebee is a subscription billing and revenue management platform that helps businesses automate recurring billing, manage subscriptions, and handle invoicing. This integration enables managing customers, subscriptions, invoices, coupons, promotional credits, and receiving real-time event notifications via webhooks.\n\n**Features:**\n- Customer management (create, update, delete)\n- Subscription lifecycle management (create, update, cancel)\n- Invoice management (create, update, collect payments, refunds)\n- Coupon management (create, update, delete)\n- Promotional credit management (add, deduct, set)\n- Transaction retrieval\n- Real-time webhooks for customers, subscriptions, invoices, and events",
+          "message": "Chargebee je platforma pro fakturaci předplatného a správu příjmů, která pomáhá firmám automatizovat opakovanou fakturaci, spravovat předplatná a zpracovávat faktury. Tato integrace umožňuje správu zákazníků, předplatných, faktur, kupónů, propagačních kreditů a příjem oznámení o událostech v reálném čase prostřednictvím webhooků.\n\n**Funkce:**\n- Správa zákazníků (vytvoření, aktualizace, smazání)\n- Správa životního cyklu předplatného (vytvoření, aktualizace, zrušení)\n- Správa faktur (vytvoření, aktualizace, inkaso plateb, refundace)\n- Správa kupónů (vytvoření, aktualizace, smazání)\n- Správa propagačních kreditů (přidání, odečtení, nastavení)\n- Načítání transakcí\n- Webhooky v reálném čase pro zákazníky, předplatná, faktury a události"
+        },
+        "app.Q2hhcmdlYmVl.display_name": {
+          "source": "Chargebee",
+          "message": "Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.short_desc": {
+          "source": "Chargebee subscription billing and revenue management platform",
+          "message": "Platforma pro fakturaci předplatného a správu příjmů Chargebee"
+        }
+      }
+    }
+  }
+}

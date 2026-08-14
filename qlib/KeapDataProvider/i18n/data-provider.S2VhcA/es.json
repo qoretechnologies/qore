@@ -1,0 +1,2345 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Keap",
+          "message": "Se activa cuando se actualiza un contacto en Keap"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Contacto actualizado"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "Supervisar actualizaciones de contactos"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.desc": {
+          "source": "Triggers when a new contact is created in Keap",
+          "message": "Se activa cuando se crea un nuevo contacto en Keap"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
+          "source": "Contact Added",
+          "message": "Contacto añadido"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Supervisar nuevos contactos"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note for a contact in Keap",
+          "message": "Crear una nueva nota para un contacto en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "Crear una nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "Cuerpo de la nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "Título de la nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.desc": {
+          "source": "The type of note",
+          "message": "El tipo de nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.short_desc": {
+          "source": "Note type",
+          "message": "Tipo de nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Crear una nueva nota"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Keap",
+          "message": "Crear una nueva oportunidad en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Crear una oportunidad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Contacto asociado"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "Hora estimada de cierre"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "Fecha/hora de cierre esperada"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notas"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "Notas de la oportunidad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.desc": {
+          "source": "Title of the opportunity",
+          "message": "Título de la oportunidad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "Título de la oportunidad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID de etapa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Etapa del pipeline"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "Ingresos proyectados máximos"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "Estimación de ingresos alta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "Ingresos proyectados mínimos"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "Estimación de ingresos baja"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Crear una nueva oportunidad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Keap",
+          "message": "Crear un nuevo pedido en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Crear un pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Contacto asociado"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.desc": {
+          "source": "List of order item hashes",
+          "message": "Lista de hashes de elementos del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.display_name": {
+          "source": "Order Items",
+          "message": "Artículos del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.short_desc": {
+          "source": "Items in the order",
+          "message": "Elementos del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.display_name": {
+          "source": "Order Title",
+          "message": "Título del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.short_desc": {
+          "source": "Title of the order",
+          "message": "Título del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.display_name": {
+          "source": "Order Time",
+          "message": "Hora del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.short_desc": {
+          "source": "Date/time of the order",
+          "message": "Fecha/hora del pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.display_name": {
+          "source": "Promo Codes",
+          "message": "Códigos promocionales"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.short_desc": {
+          "source": "Promotional codes",
+          "message": "Códigos promocionales"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Crear un nuevo pedido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.desc": {
+          "source": "Create a new company in Keap",
+          "message": "Crear una nueva empresa en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
+          "source": "Create a Company",
+          "message": "Crear una compañía"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Name of the company",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "Correo electrónico de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Teléfono"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "Teléfono de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Sitio web de la empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Create a new company",
+          "message": "Crear una nueva empresa"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Keap",
+          "message": "Crear un nuevo contacto en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Crear un contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.display_name": {
+          "source": "Anniversary",
+          "message": "Aniversario"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.short_desc": {
+          "source": "Contact anniversary",
+          "message": "Aniversario del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "Cumpleaños"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "Cumpleaños del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "Nombre del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Nombre del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "La dirección de correo electrónico del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Dirección de correo electrónico del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Apellido del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Apellido del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Cargo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Cargo del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "El ID del usuario propietario de este contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID del propietario"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "ID de usuario del propietario del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID de la fuente del cliente potencial"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.short_desc": {
+          "source": "Lead source",
+          "message": "Origen del cliente potencial"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "Segundo nombre"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "Segundo nombre del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk1BTlVBTA.desc": {
+          "source": "Created manually",
+          "message": "Creado manualmente"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFQSQ.desc": {
+          "source": "Created via API",
+          "message": "Creado mediante API"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklNUE9SVA.desc": {
+          "source": "Created via import",
+          "message": "Creado mediante importación"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldFQkZPUk0.desc": {
+          "source": "Created via web form",
+          "message": "Creado mediante formulario web"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "Tipo de origen"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "How the contact was created",
+          "message": "Cómo se creó el contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "Nombre del cónyuge"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "Nombre del cónyuge del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "Sufijo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "Sufijo del nombre (p. ej., Jr., III)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "El número de teléfono del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Número de teléfono"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Número de teléfono del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "Nombre preferido"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "Nombre preferido del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefijo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "Prefijo del nombre (p. ej., Sr., Dr.)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL del sitio web del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Zona horaria"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "Zona horaria del contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Crear un nuevo contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Keap",
+          "message": "Crear una nueva etiqueta en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Crear una etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "ID de categoría"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Tag category",
+          "message": "Categoría de la etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Descripción de la etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "Name of the tag",
+          "message": "Nombre de la etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Nombre de la etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Name of the tag",
+          "message": "Nombre de la etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Crear una nueva etiqueta"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Keap",
+          "message": "Crear una nueva tarea en Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Crear una tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Completada"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "Estado de finalización de la tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Contacto asociado"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.display_name": {
+          "source": "Assigned User ID",
+          "message": "ID de usuario asignado"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Descripción de la tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "Hora de vencimiento"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "Fecha/hora de vencimiento de la tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Prioridad"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "Prioridad de la tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Título de la tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Tipo"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Task type",
+          "message": "Tipo de tarea"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Crear una nueva tarea"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.desc": {
+          "source": "Apply one or more tags to a contact in Keap",
+          "message": "Aplicar una o más etiquetas a un contacto en Keap"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "Aplicar etiqueta a contacto"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "El contacto a etiquetar"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.desc": {
+          "source": "List of integer tag IDs",
+          "message": "Lista de ID de etiqueta enteros"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "ID de etiquetas"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.short_desc": {
+          "source": "Tags to apply",
+          "message": "Etiquetas a aplicar"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "Aplica una etiqueta a un contacto"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Keap",
+          "message": "Recuperar una oportunidad individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Obtener una oportunidad"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "El ID de la oportunidad"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Obtener una oportunidad individual por ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Keap",
+          "message": "Recuperar un pedido individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Obtener un pedido"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "El ID del pedido"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Obtener un solo pedido por ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.desc": {
+          "source": "Retrieve a single company by ID from Keap",
+          "message": "Recuperar una empresa individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
+          "source": "Get a Company",
+          "message": "Obtener una empresa"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID de la empresa"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company ID",
+          "message": "El ID de la empresa"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
+          "source": "Get a single company by ID",
+          "message": "Obtener una sola empresa por ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Keap",
+          "message": "Recuperar un contacto individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Obtener un contacto"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "El ID del contacto"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Obtener un solo contacto por ID"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.desc": {
+          "source": "Get file details from Keap",
+          "message": "Obtener detalles del archivo desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get a File",
+          "message": "Obtener un archivo"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID del archivo"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to retrieve",
+          "message": "El archivo que recuperar"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get file details",
+          "message": "Obtener detalles del archivo"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Keap",
+          "message": "Recuperar un producto individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Obtener un producto"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de producto"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "El ID del producto"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Obtener un solo producto por ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Keap",
+          "message": "Recuperar una etiqueta individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Obtener una etiqueta"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de etiqueta"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "El ID de la etiqueta"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Obtener una única etiqueta por ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Keap",
+          "message": "Recuperar una tarea individual por ID desde Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Obtener una tarea"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "El ID de la tarea"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Obtener una tarea individual por ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Keap",
+          "message": "Eliminar una nota de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "Eliminar una nota"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID de nota"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "La nota a eliminar"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Eliminar una nota"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Keap",
+          "message": "Eliminar una oportunidad de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Eliminar una oportunidad"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "La oportunidad a eliminar"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Eliminar una oportunidad"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.desc": {
+          "source": "Delete a company from Keap",
+          "message": "Eliminar una empresa de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
+          "source": "Delete a Company",
+          "message": "Eliminar una compañía"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID de la empresa"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "La empresa que se eliminará"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
+          "source": "Delete a company",
+          "message": "Eliminar una empresa"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Keap",
+          "message": "Eliminar un contacto de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Eliminar un contacto"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "El contacto que se eliminará"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Eliminar un contacto"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file from Keap",
+          "message": "Eliminar un archivo de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete a File",
+          "message": "Eliminar un archivo"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID del archivo"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to delete",
+          "message": "El archivo que se va a eliminar"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file",
+          "message": "Eliminar un archivo"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Keap",
+          "message": "Eliminar una etiqueta de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Eliminar una etiqueta"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de etiqueta"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "La etiqueta a eliminar"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "Eliminar una etiqueta"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Keap",
+          "message": "Eliminar una tarea de Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Eliminar una tarea"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "La tarea a eliminar"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Eliminar una tarea"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.desc": {
+          "source": "Triggers when a new opportunity is created in Keap",
+          "message": "Se activa cuando se crea una nueva oportunidad en Keap"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
+          "source": "Opportunity Added",
+          "message": "Oportunidad añadida"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
+          "source": "Watch for new opportunities",
+          "message": "Supervisar nuevas oportunidades"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.desc": {
+          "source": "Triggers when a new order is created in Keap",
+          "message": "Se activa cuando se crea un nuevo pedido en Keap"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
+          "source": "Order Added",
+          "message": "Pedido añadido"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
+          "source": "Watch for new orders",
+          "message": "Supervisar nuevos pedidos"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Keap with optional filtering",
+          "message": "Listar etiquetas en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Listar etiquetas"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "ID de categoría"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Filter by category",
+          "message": "Filtrar por categoría"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Nombre de la etiqueta"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by tag name",
+          "message": "Filtrar por nombre de etiqueta"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de etiqueta"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Filtrar por ID de etiqueta"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "Listar todas las etiquetas"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks in Keap with optional filtering",
+          "message": "Listar tareas en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Listar tareas"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Completada"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.short_desc": {
+          "source": "Filter by completion status",
+          "message": "Filtrar por estado de finalización"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtrar por ID de tarea"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID de usuario"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Filtrar por usuario asignado"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List all tasks",
+          "message": "Listar todas las tareas"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.desc": {
+          "source": "List affiliates in Keap",
+          "message": "Listar afiliados en Keap"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
+          "source": "List Affiliates",
+          "message": "Listar afiliados"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
+          "source": "List all affiliates",
+          "message": "Listar todos los afiliados"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "List campaigns in Keap with optional filtering",
+          "message": "Listar campañas en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Listar campañas"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Dirección de orden"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all campaigns",
+          "message": "Listar todas las campañas"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.desc": {
+          "source": "List companies in Keap with optional filtering",
+          "message": "Listar empresas en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
+          "source": "List Companies",
+          "message": "Listar empresas"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID de la empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Filter by company ID",
+          "message": "Filtrar por ID de empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Filter by company name",
+          "message": "Filtrar por nombre de empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Dirección de orden"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
+          "source": "List all companies",
+          "message": "Listar todas las empresas"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Keap with optional filtering",
+          "message": "Listar contactos en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Listar contactos"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrar por ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Filtrar por nombre"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrar por correo electrónico"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Filter by last name",
+          "message": "Filtrar por apellido"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Dirección de orden"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Listar todos los contactos"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.desc": {
+          "source": "List emails in Keap with optional filtering",
+          "message": "Listar correos electrónicos en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "Listar correos electrónicos"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Filtrar por dirección de correo electrónico"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
+          "source": "List emails",
+          "message": "Listar correos electrónicos"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.desc": {
+          "source": "List files in Keap with optional filtering",
+          "message": "Listar archivos en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "Listar archivos"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID del archivo"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.short_desc": {
+          "source": "Filter by file ID",
+          "message": "Filtrar por ID de archivo"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkJPVEg.desc": {
+          "source": "Both user and company files",
+          "message": "Tanto archivos de usuario como de empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkNPTVBBTlk.desc": {
+          "source": "Files owned by the company",
+          "message": "Archivos propiedad de la empresa"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOlVTRVI.desc": {
+          "source": "Files owned by the user",
+          "message": "Archivos propiedad del usuario"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.display_name": {
+          "source": "Permission",
+          "message": "Permiso"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.short_desc": {
+          "source": "Filter by permission",
+          "message": "Filtrar por permiso"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all files",
+          "message": "Listar todos los archivos"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.desc": {
+          "source": "List notes for a contact in Keap",
+          "message": "Listar notas de un contacto en Keap"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "Listar notas"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID de nota"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "Filtrar por ID de nota"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
+          "source": "List notes for a contact",
+          "message": "Listar notas de un contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Keap with optional filtering",
+          "message": "Listar oportunidades en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "Listar oportunidades"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Filtrar por ID de oportunidad"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Dirección de orden"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID de etapa"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Filter by stage",
+          "message": "Filtrar por etapa"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List all opportunities",
+          "message": "Listar todas las oportunidades"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Keap with optional filtering",
+          "message": "Listar pedidos en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Listar pedidos"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Ordenar por"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Campo de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Dirección de orden"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrar por ID de pedido"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.display_name": {
+          "source": "Paid",
+          "message": "Pagado"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.short_desc": {
+          "source": "Filter by payment status",
+          "message": "Filtrar por estado del pago"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "Listar todos los pedidos"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Keap with optional filtering",
+          "message": "Listar productos en Keap con filtrado opcional"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Listar productos"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID de producto"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Filtrar por ID de producto"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "Listar todos los productos"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Keap** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Keap** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUsa esta acción para endpoints que aún no estén expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Keap",
+          "message": "Realizar una llamada personalizada a la API de Keap"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.desc": {
+          "source": "Merge a duplicate contact into a surviving contact in Keap",
+          "message": "Fusionar un contacto duplicado en un contacto superviviente en Keap"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
+          "source": "Merge Contacts",
+          "message": "Fusionar contactos"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Surviving Contact ID",
+          "message": "ID del contacto superviviente"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact that survives",
+          "message": "El contacto que permanece"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.display_name": {
+          "source": "Duplicate Contact ID",
+          "message": "ID del contacto duplicado"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.short_desc": {
+          "source": "The contact to merge and delete",
+          "message": "El contacto a fusionar y eliminar"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
+          "source": "Merge two contacts",
+          "message": "Fusionar dos contactos"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.desc": {
+          "source": "Triggers when a new note is added in Keap",
+          "message": "Se activa cuando se añade una nueva nota en Keap"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
+          "source": "Note Added",
+          "message": "Nota añadida"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {
+          "source": "Watch for new notes",
+          "message": "Supervisar notas nuevas"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove a tag from a contact in Keap",
+          "message": "Eliminar una etiqueta de un contacto en Keap"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Eliminar etiqueta de contacto"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de etiqueta"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove",
+          "message": "La etiqueta a eliminar"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Eliminar una etiqueta de un contacto"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.desc": {
+          "source": "Triggers when a tag is applied to a contact in Keap",
+          "message": "Se activa cuando se aplica una etiqueta a un contacto en Keap"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
+          "source": "Tag Applied",
+          "message": "Etiqueta aplicada"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
+          "source": "Watch for tag applications",
+          "message": "Supervisar aplicaciones de etiquetas"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.desc": {
+          "source": "Triggers when a new task is created in Keap",
+          "message": "Se activa cuando se crea una nueva tarea en Keap"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
+          "source": "Task Created",
+          "message": "Tarea creada"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "Supervisar nuevas tareas"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Keap",
+          "message": "Actualizar una nota existente en Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "Actualizar una nota"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "Cuerpo de la nota"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID de nota"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "La nota a actualizar"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "Título de la nota"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Actualizar una nota existente"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Keap",
+          "message": "Actualizar una oportunidad existente en Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Actualizar una oportunidad"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "Hora estimada de cierre"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "Fecha/hora de cierre esperada"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "La oportunidad a actualizar"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notas"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "Notas de la oportunidad"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "Título de la oportunidad"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID de etapa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Etapa del pipeline"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "Ingresos proyectados máximos"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "Estimación de ingresos alta"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "Ingresos proyectados mínimos"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "Estimación de ingresos baja"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Actualizar una oportunidad existente"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.desc": {
+          "source": "Update an existing company in Keap",
+          "message": "Actualizar una empresa existente en Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
+          "source": "Update a Company",
+          "message": "Actualizar una compañía"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "La empresa a actualizar"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "Nombre de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "Correo electrónico de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Teléfono"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "Teléfono de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Sitio web de la empresa"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Update an existing company",
+          "message": "Actualizar una empresa existente"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Keap",
+          "message": "Actualizar un contacto existente en Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Actualizar un contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "El contacto a actualizar"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "Cumpleaños"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "Cumpleaños del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Nombre del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "La dirección de correo electrónico del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Dirección de correo electrónico del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Apellido del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Cargo"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Cargo del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID del propietario"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "ID de usuario del propietario del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "Segundo nombre"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "Segundo nombre del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "Nombre del cónyuge"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "Nombre del cónyuge del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "Sufijo"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "Sufijo del nombre (p. ej., Jr., III)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "El número de teléfono del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Número de teléfono"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Número de teléfono del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "Nombre preferido"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "Nombre preferido del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefijo"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "Prefijo del nombre (p. ej., Sr., Dr.)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL del sitio web del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Zona horaria"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "Zona horaria del contacto"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Actualizar un contacto existente"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Keap",
+          "message": "Actualizar una tarea existente en Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Actualizar una tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Completada"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "Estado de finalización de la tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Descripción de la tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "Hora de vencimiento"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "Fecha/hora de vencimiento de la tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Prioridad"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "Prioridad de la tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "La tarea que se va a actualizar"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Título de la tarea"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Actualizar una tarea existente"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file to Keap",
+          "message": "Subir un archivo a Keap"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload a File",
+          "message": "Subir un archivo"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Contacto asociado"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.desc": {
+          "source": "Base64-encoded file data",
+          "message": "Datos del archivo codificados en Base64"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.display_name": {
+          "source": "File Data",
+          "message": "Datos del archivo"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.short_desc": {
+          "source": "Base64-encoded file data",
+          "message": "Datos del archivo codificados en Base64"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.display_name": {
+          "source": "File Name",
+          "message": "Nombre del archivo"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "Name of the file",
+          "message": "Nombre del archivo"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.display_name": {
+          "source": "Is Public",
+          "message": "Es público"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.short_desc": {
+          "source": "File visibility",
+          "message": "Visibilidad del archivo"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file",
+          "message": "Subir un archivo"
+        },
+        "app.S2VhcA.desc": {
+          "source": "Keap (formerly Infusionsoft) is a CRM and marketing automation platform for contacts, companies, opportunities, orders, tags, tasks, and email.\n\nThis integration supports full CRUD operations on core CRM resources, tag management, and event-based triggers.",
+          "message": "Keap (anteriormente Infusionsoft) es una plataforma de CRM y automatización de marketing para contactos, empresas, oportunidades, pedidos, etiquetas, tareas y correo electrónico.\n\nEsta integración admite operaciones CRUD completas en los recursos principales del CRM, gestión de etiquetas y activadores basados en eventos."
+        },
+        "app.S2VhcA.display_name": {
+          "source": "Keap",
+          "message": "Keap"
+        },
+        "app.S2VhcA.short_desc": {
+          "source": "Keap CRM and marketing automation platform",
+          "message": "Plataforma de CRM y automatización de marketing Keap"
+        }
+      }
+    }
+  }
+}

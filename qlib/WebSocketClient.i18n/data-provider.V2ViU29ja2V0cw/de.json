@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a WebSocket message from a WebSocket server; react to a WebSocket message",
+          "message": "Eine WebSocket-Nachricht von einem WebSocket-Server empfangen; auf eine WebSocket-Nachricht reagieren"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "WebSocket Message Received",
+          "message": "WebSocket-Nachricht empfangen"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A WebSocket message is received",
+          "message": "Eine WebSocket-Nachricht wird empfangen"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.desc": {
+          "source": "Send a WebSocket data message to a WebSocket server; the message is serialized for sending",
+          "message": "Eine WebSocket-Datennachricht an einen WebSocket-Server senden; die Nachricht wird für das Senden serialisiert"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.display_name": {
+          "source": "Send WebSocket Message",
+          "message": "WebSocket-Nachricht senden"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "Die zu sendenden Daten; werden entsprechend der Serialisierungsoption serialisiert"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Daten"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "Die zu sendenden Daten; werden entsprechend der Serialisierungsoption serialisiert"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
+          "source": "Send a WebSocket data message",
+          "message": "Eine WebSocket-Datennachricht senden"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.desc": {
+          "source": "Send a raw WebSocket message to a WebSocket server",
+          "message": "Eine Raw-WebSocket-Nachricht an einen WebSocket-Server senden"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.display_name": {
+          "source": "Send Raw WebSocket Message",
+          "message": "Raw-WebSocket-Nachricht senden"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.desc": {
+          "source": "The data to send; the data will be sent as-is, no data serialization will be performed",
+          "message": "Die zu sendenden Daten; die Daten werden unverändert gesendet, es wird keine Datenserialisierung durchgeführt"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Daten"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.short_desc": {
+          "source": "The data to send",
+          "message": "Die zu sendenden Daten"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.short_desc": {
+          "source": "Send a raw WebSocket message",
+          "message": "Eine Raw-WebSocket-Nachricht senden"
+        },
+        "app.V2ViU29ja2V0cw.desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "WebSocket-Nachrichten senden und empfangen"
+        },
+        "app.V2ViU29ja2V0cw.display_name": {
+          "source": "WebSocket Messaging",
+          "message": "WebSocket-Messaging"
+        },
+        "app.V2ViU29ja2V0cw.short_desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "WebSocket-Nachrichten senden und empfangen"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "Odešle dokument modelu Document Intelligence a čeká na dokončení analýzy. Životní cyklus je interně řízen přes @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" prostřednictvím `AsyncJobPoller`: POST odeslání → dotazování na URL `Operation-Location` → vrácení analyzovaného `analyzeResult`.\n\nPředejte dokument jedním z těchto způsobů:\n- `document_url` — veřejná URL (Azure dokument stáhne)\n- `document_bytes` — nezpracované bajty (automaticky kódováno do base64)\n- `document_path` — cesta k místnímu souboru (přečteno a kódováno do base64)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "Analyzovat dokument"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
+          "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
+          "message": "Maximální celková doba čekání. Výchozí hodnota je `10m`. Při překročení vyvolá akce chybu `AZURE-DOCUMENT-INTELLIGENCE-ERROR`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.display_name": {
+          "source": "Overall Analysis Timeout",
+          "message": "Celkový časový limit analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.short_desc": {
+          "source": "Maximum total wait time for the polling loop",
+          "message": "Maximální celková doba čekání pro smyčku dotazování"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "Document Intelligence API version (e.g. `2024-11-30`).",
+          "message": "Verze API Document Intelligence (např. `2024-11-30`)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verze API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Document Intelligence API version",
+          "message": "Verze API Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw document bytes — sent as base64-encoded `base64Source`.",
+          "message": "Nezpracované bajty dokumentu – odesílané jako v base64 kódovaný `base64Source`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "Bajty dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw document bytes (base64-encoded automatically)",
+          "message": "Nezpracované bajty dokumentu (automaticky kódováno do base64)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path to read.  Mutually exclusive with `document_url` and `document_bytes`.",
+          "message": "Cesta k místnímu souboru ke čtení. Vzájemně se vylučuje s `document_url` a `document_bytes`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "Cesta k dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and base64-encode",
+          "message": "Cesta k místnímu souboru ke čtení a kódování do base64"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.desc": {
+          "source": "Public URL of the document to analyze.  Azure fetches the document from this URL.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "Veřejná URL dokumentu k analýze. Azure dokument stáhne z této URL. Vzájemně se vylučuje s `document_bytes` a `document_path`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
+          "source": "Document URL",
+          "message": "URL dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.short_desc": {
+          "source": "Public URL of the document to analyze",
+          "message": "Veřejná URL dokumentu k analýze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
+          "source": "Business Card",
+          "message": "Vizitka"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWNvbnRyYWN0.display_name": {
+          "source": "Contract",
+          "message": "Smlouva"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
+          "source": "Document (general layout)",
+          "message": "Dokument (obecné rozvržení)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
+          "source": "US Health Insurance Card",
+          "message": "Karta zdravotního pojištění v USA"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWlkRG9jdW1lbnQ.display_name": {
+          "source": "ID Document",
+          "message": "Průkaz totožnosti"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWludm9pY2U.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
+          "source": "Layout (tables + lines)",
+          "message": "Rozvržení (tabulky + řádky)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlY2VpcHQ.display_name": {
+          "source": "Receipt",
+          "message": "Účtenka"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy4xMDk4.display_name": {
+          "source": "US 1098 Tax Form",
+          "message": "Americký daňový formulář 1098"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
+          "source": "US W-2 Tax Form",
+          "message": "Americký daňový formulář W-2"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
+          "message": "Identifikátor modelu Document Intelligence – předpřipravený nebo vlastní. Rozbalovací nabídka obsahuje zdokumentované předpřipravené modely; identifikátory GUID vlastních modelů natrénovaných na [Azure portálu](https://portal.azure.com) lze zadat jako volný text (`allowed_values_creatable: True`)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Document Intelligence model identifier",
+          "message": "Identifikátor modelu Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Interval between job-status polls.  Defaults to `2s`.",
+          "message": "Interval mezi dotazy na stav úlohy. Výchozí hodnota je `2s`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Polling Interval",
+          "message": "Interval dotazování"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Time between status polls",
+          "message": "Čas mezi dotazy na stav"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Run a Document Intelligence model over a document (async)",
+          "message": "Spustit model Document Intelligence nad dokumentem (asynchronně)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Azure Document Intelligence** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Azure Document Intelligence** s využitím autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci vystaveny jako plnohodnotné akce."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Azure Document Intelligence",
+          "message": "Provést vlastní volání API do Azure Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
+          "message": "Poskytuje přístup ke službě [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (dříve Form Recognizer) – spravované službě Microsoftu pro extrakci dat z dokumentů.\n\n**Předpřipravené modely**:\n- `prebuilt-document` — obecná extrakce klíčů/hodnot\n- `prebuilt-layout` — rozvržení, tabulky, odstavce\n- `prebuilt-invoice` / `prebuilt-receipt` — typované entity faktur / účtenek\n- `prebuilt-idDocument` — řidičské průkazy, pasy, národní průkazy totožnosti\n- `prebuilt-businessCard` — extrakce vizitek\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — daňové formuláře v USA\n- `prebuilt-contract` — smluvní klauzule + smluvní strany\n\n**Vlastní modely** natrénované v portálu Azure jsou odkazovány svým identifikátorem GUID."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.display_name": {
+          "source": "Azure Document Intelligence",
+          "message": "Azure Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.short_desc": {
+          "source": "Azure Document Intelligence (formerly Form Recognizer)",
+          "message": "Azure Document Intelligence (dříve Form Recognizer)"
+        }
+      }
+    }
+  }
+}

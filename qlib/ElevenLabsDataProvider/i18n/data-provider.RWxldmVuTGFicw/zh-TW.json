@@ -1,0 +1,2109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.desc": {
+          "source": "Create a new dubbing project to translate audio/video content to another language",
+          "message": "建立新的配音專案以將音訊/影片內容翻譯為另一種語言"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
+          "source": "Create Dubbing",
+          "message": "建立配音"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.desc": {
+          "source": "If `True`, removes background audio from the final dubbed output",
+          "message": "如果為 `True`，將從最終配音輸出中移除背景音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.display_name": {
+          "source": "Drop Background Audio",
+          "message": "移除背景音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.short_desc": {
+          "source": "Whether to remove background audio",
+          "message": "是否移除背景音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.desc": {
+          "source": "The end position in seconds to clip the source content before dubbing",
+          "message": "配音前裁剪來源內容的結束位置 (秒)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "結束時間"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End position in seconds",
+          "message": "結束位置 (秒)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.desc": {
+          "source": "The source audio or video file to dub. Provide either `file` or `source_url`, not both",
+          "message": "要配音的來源音訊或影片檔案。請提供 `file` 或 `source_url`，兩者勿同時提供"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.display_name": {
+          "source": "Source File",
+          "message": "來源檔案"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.short_desc": {
+          "source": "Source audio or video file for dubbing",
+          "message": "用於配音的來源音訊或影片檔案"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.desc": {
+          "source": "If `True`, uses the highest resolution available for the dubbed content",
+          "message": "如果為 `True`，將為配音內容使用可用的最高解析度"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.display_name": {
+          "source": "Highest Resolution",
+          "message": "最高解析度"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.short_desc": {
+          "source": "Whether to use the highest resolution",
+          "message": "是否使用最高解析度"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.desc": {
+          "source": "The name for the new dubbing project",
+          "message": "新配音專案的名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.short_desc": {
+          "source": "The name of the dubbing project",
+          "message": "配音專案的名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The number of speakers in the source content. Set to `0` to automatically detect the number of speakers",
+          "message": "來源內容中的講者人數。設為 `0` 可自動偵測講者人數"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "講者人數"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Number of speakers in the content",
+          "message": "內容中的講者人數"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.desc": {
+          "source": "The language code of the source content (e.g., `en`)",
+          "message": "來源內容的語言代碼 (例如 `en`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.display_name": {
+          "source": "Source Language",
+          "message": "來源語言"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.short_desc": {
+          "source": "The source language code",
+          "message": "來源語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.desc": {
+          "source": "The URL of the source audio or video content to dub",
+          "message": "要配音的來源音訊或影片內容的 URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.display_name": {
+          "source": "Source URL",
+          "message": "來源 URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.short_desc": {
+          "source": "URL of the source content",
+          "message": "來源內容的 URL"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start position in seconds to clip the source content before dubbing",
+          "message": "配音前裁剪來源內容的開始位置 (秒)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "開始時間"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "Start position in seconds",
+          "message": "開始位置 (秒)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.desc": {
+          "source": "If `True`, adds a watermark to the dubbed content",
+          "message": "如果為 `True`，將在配音內容中加入浮水印"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.display_name": {
+          "source": "Watermark",
+          "message": "浮水印"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.short_desc": {
+          "source": "Whether to add a watermark",
+          "message": "是否加入浮水印"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.desc": {
+          "source": "The language code to dub the content into (e.g., `es`)",
+          "message": "內容要配音成的目標語言代碼 (例如 `es`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.display_name": {
+          "source": "Target Language",
+          "message": "目標語言"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.short_desc": {
+          "source": "The target language code",
+          "message": "目標語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.desc": {
+          "source": "If `True`, profanities in the transcription will be censored. **Note**: this is a beta feature",
+          "message": "如果為 `True`，轉錄中的不雅用語將會被審查過濾。**注意**：此為測試版功能"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.display_name": {
+          "source": "Profanity Filter",
+          "message": "不雅用語過濾器"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.short_desc": {
+          "source": "Whether to censor profanities in transcripts",
+          "message": "是否過濾逐字稿中的不雅用語"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
+          "source": "Create a dubbing project",
+          "message": "建立配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Create a new pronunciation dictionary with custom pronunciation rules",
+          "message": "使用自訂發音規則建立新的發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Create Pronunciation Dictionary",
+          "message": "建立發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the pronunciation dictionary",
+          "message": "發音字典的描述"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Dictionary description",
+          "message": "字典描述"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.desc": {
+          "source": "The name for the new pronunciation dictionary",
+          "message": "新發音字典的名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the dictionary",
+          "message": "字典名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Workspace members can edit the dictionary",
+          "message": "工作區成員可以編輯字典"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "編輯者"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Workspace members can only view the dictionary",
+          "message": "工作區成員僅能檢視字典"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "檢視者"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.desc": {
+          "source": "The access level for workspace members",
+          "message": "工作區成員的存取層級"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.display_name": {
+          "source": "Workspace Access",
+          "message": "工作區存取權限"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.short_desc": {
+          "source": "Access level for workspace members",
+          "message": "工作區成員的存取層級"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Create a pronunciation dictionary",
+          "message": "建立發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.desc": {
+          "source": "Create a new voice with a name and optional description",
+          "message": "建立具有名稱及選填描述的新語音"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
+          "source": "Create Voice",
+          "message": "建立語音"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the voice",
+          "message": "語音的描述"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Voice description",
+          "message": "語音描述"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.desc": {
+          "source": "A list of audio sample files (as binary data) to use for voice cloning. Each file should be a clear recording of the target voice",
+          "message": "用於語音複製的音訊樣本檔案清單（二進位資料）。每個檔案應為目標語音的清晰錄音"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.display_name": {
+          "source": "Audio Files",
+          "message": "音訊檔案"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.short_desc": {
+          "source": "Audio samples for voice cloning",
+          "message": "用於語音複製的音訊樣本"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "要與該語音建立關聯的鍵值標籤"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "標籤"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "語音的標籤"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.desc": {
+          "source": "The name for the new voice",
+          "message": "新語音的名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.short_desc": {
+          "source": "The name of the voice",
+          "message": "語音名稱"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
+          "source": "Create a new voice",
+          "message": "建立新語音"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.desc": {
+          "source": "Add pronunciation rules to an existing pronunciation dictionary. Rules can be alias rules (text replacement) or phoneme rules (IPA/phoneme representation)",
+          "message": "將發音規則新增至現有的發音字典。規則可以是別名規則（文字取代）或音素規則（IPA/音素表示法）"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
+          "source": "Add Pronunciation Rules",
+          "message": "新增發音規則"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to add rules to",
+          "message": "要新增規則之發音字典的唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "字典 ID"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "發音字典的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.desc": {
+          "source": "A list of pronunciation rules to add to the dictionary. Each rule has a `type` (`alias` or `phoneme`), a `string_to_replace`, and either an `alias` or a `phoneme` with `alphabet`",
+          "message": "要新增至字典的發音規則清單。每個規則都有一個 `type`（`alias` 或 `phoneme`）、一個 `string_to_replace`，以及 `alias` 或帶有 `alphabet` 的 `phoneme`"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.display_name": {
+          "source": "Rules",
+          "message": "規則"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.short_desc": {
+          "source": "Pronunciation rules to add",
+          "message": "要新增的發音規則"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {
+          "source": "Add rules to a pronunciation dictionary",
+          "message": "新增規則至發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.desc": {
+          "source": "Remove background noise from audio, isolating the voice using ElevenLabs AI",
+          "message": "從音訊中移除背景噪音，使用 ElevenLabs AI 隔離人聲"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
+          "source": "Audio Isolation",
+          "message": "音訊隔離"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.desc": {
+          "source": "The audio data to isolate voice from. Background noise will be removed and only the voice will be preserved",
+          "message": "要隔離人聲的音訊資料。背景噪音將被移除，僅保留人聲"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "音訊"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.short_desc": {
+          "source": "The audio data to isolate voice from",
+          "message": "要隔離人聲的音訊資料"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
+          "source": "Remove background noise from audio",
+          "message": "從音訊中移除背景噪音"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.desc": {
+          "source": "Get the current status and details of a dubbing project",
+          "message": "取得配音專案的目前狀態與詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
+          "source": "Get Dubbing Status",
+          "message": "取得配音狀態"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to retrieve",
+          "message": "要擷取的配音專案唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "配音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "配音專案的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
+          "source": "Get the status of a dubbing project",
+          "message": "取得配音專案的狀態"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.desc": {
+          "source": "Download the dubbed audio file from a dubbing project for a specific target language",
+          "message": "從配音專案下載特定目標語言的配音音訊檔案"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
+          "source": "Get Dubbing Audio",
+          "message": "取得配音音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to get audio for",
+          "message": "要取得音訊的配音專案唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "配音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "配音專案的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "The language code for the dubbed audio to download (e.g., `es`, `fr`, `de`)",
+          "message": "要下載的配音音訊語言代碼（例如 `es`、`fr`、`de`）"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "The target language code",
+          "message": "目標語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
+          "source": "Get dubbed audio for a specific language",
+          "message": "取得特定語言的配音音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.desc": {
+          "source": "Get the audio file from a specific history item",
+          "message": "從特定歷程記錄項目取得音訊檔案"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
+          "source": "Get History Audio",
+          "message": "取得歷程記錄音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to get audio for",
+          "message": "要取得音訊的歷程記錄項目唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "歷程記錄項目 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "歷程記錄項目的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
+          "source": "Get audio from a history item",
+          "message": "從歷程記錄項目取得音訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Get details of a specific audio generation history item",
+          "message": "取得特定音訊生成歷程記錄項目的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Get History Item",
+          "message": "取得歷程記錄項目"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to retrieve",
+          "message": "要擷取的歷程記錄項目唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "歷程記錄項目 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "歷程記錄項目的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Get details of a history item",
+          "message": "取得歷程記錄項目的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Get details of a specific pronunciation dictionary by its ID",
+          "message": "依 ID 取得特定發音字典的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Get Pronunciation Dictionary",
+          "message": "取得發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to retrieve",
+          "message": "要擷取的發音字典唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "字典 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "發音字典的 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Get details of a pronunciation dictionary",
+          "message": "取得發音字典的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.desc": {
+          "source": "Get details of a specific voice by its ID",
+          "message": "依 ID 取得特定語音的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
+          "source": "Get Voice",
+          "message": "取得語音"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to retrieve",
+          "message": "要擷取的語音唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to retrieve",
+          "message": "要擷取的語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
+          "source": "Get details of a specific voice",
+          "message": "取得特定語音的詳細資訊"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.desc": {
+          "source": "Delete a dubbing project by its ID",
+          "message": "依 ID 刪除配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
+          "source": "Delete Dubbing",
+          "message": "刪除配音"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to delete",
+          "message": "要刪除的配音專案唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "配音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project to delete",
+          "message": "要刪除的配音專案 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
+          "source": "Delete a dubbing project",
+          "message": "刪除配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Delete a specific audio generation history item",
+          "message": "刪除特定的音訊生成歷程記錄項目"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Delete History Item",
+          "message": "刪除歷程記錄項目"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to delete",
+          "message": "要刪除的歷程記錄項目唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "歷程記錄項目 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item to delete",
+          "message": "要刪除的歷史記錄項目 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Delete a history item",
+          "message": "刪除歷史記錄項目"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.desc": {
+          "source": "Delete a voice by its ID",
+          "message": "依 ID 刪除聲音"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
+          "source": "Delete Voice",
+          "message": "刪除聲音"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to delete",
+          "message": "要刪除之聲音的唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to delete",
+          "message": "要刪除的聲音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
+          "source": "Delete a voice",
+          "message": "刪除聲音"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.desc": {
+          "source": "Edit the name, description, or labels of an existing voice",
+          "message": "編輯現有聲音的名稱、描述或標籤"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
+          "source": "Edit Voice",
+          "message": "編輯聲音"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the voice",
+          "message": "聲音的新描述"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new description for the voice",
+          "message": "聲音的新描述"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "要與該語音建立關聯的鍵值標籤"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "標籤"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "語音的標籤"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the voice",
+          "message": "聲音的新名稱"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.short_desc": {
+          "source": "The new name for the voice",
+          "message": "聲音的新名稱"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to edit",
+          "message": "要編輯之聲音的唯一識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to edit",
+          "message": "要編輯的聲音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
+          "source": "Edit an existing voice",
+          "message": "編輯現有聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.desc": {
+          "source": "List available voices with optional filtering and pagination",
+          "message": "列出可用聲音，並提供選用的篩選和分頁功能"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
+          "source": "List Voices",
+          "message": "列出聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.desc": {
+          "source": "Cloned voices",
+          "message": "複製的聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.display_name": {
+          "source": "Cloned",
+          "message": "已複製"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.desc": {
+          "source": "Generated voices",
+          "message": "產生的聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.display_name": {
+          "source": "Generated",
+          "message": "已產生"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.desc": {
+          "source": "Premade voices",
+          "message": "預製聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.display_name": {
+          "source": "Premade",
+          "message": "預製"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.desc": {
+          "source": "Professional voices",
+          "message": "專業聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.display_name": {
+          "source": "Professional",
+          "message": "專業"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter voices by category",
+          "message": "依類別篩選聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "類別"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Filter by voice category",
+          "message": "依聲音類別篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by voice name",
+          "message": "依聲音名稱排序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.desc": {
+          "source": "Sort by creation date",
+          "message": "依建立日期排序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.desc": {
+          "source": "The field to sort results by",
+          "message": "用於排序結果的欄位"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.short_desc": {
+          "source": "Sort field for results",
+          "message": "結果的排序欄位"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "按遞增順序排序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "遞增"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "按遞減順序排序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降序"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.desc": {
+          "source": "The direction to sort results",
+          "message": "結果的排序方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.display_name": {
+          "source": "Sort Direction",
+          "message": "排序方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.short_desc": {
+          "source": "Sort direction for results",
+          "message": "結果的排序方向"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.desc": {
+          "source": "A search term to filter voices by name",
+          "message": "用於依名稱篩選聲音的搜尋詞"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "搜尋"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.short_desc": {
+          "source": "Search term to filter voices",
+          "message": "用於篩選聲音的搜尋詞"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of voices to return per page",
+          "message": "每頁傳回的聲音數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of voices to return per page",
+          "message": "每頁傳回的聲音數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.desc": {
+          "source": "Community voices",
+          "message": "社群聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.display_name": {
+          "source": "Community",
+          "message": "社群"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default voices",
+          "message": "預設聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "預設"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Personal voices",
+          "message": "個人聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "個人"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.desc": {
+          "source": "Workspace voices",
+          "message": "工作區聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.desc": {
+          "source": "Filter voices by type",
+          "message": "依類型篩選聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.display_name": {
+          "source": "Voice Type",
+          "message": "聲音類型"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.short_desc": {
+          "source": "Filter by voice type",
+          "message": "依聲音類型篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
+          "source": "List available voices",
+          "message": "列出可用聲音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.desc": {
+          "source": "List dubbing projects with optional filtering by status and creator",
+          "message": "列出配音專案，可依狀態和建立者進行選用篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
+          "source": "List Dubbing Projects",
+          "message": "列出配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.desc": {
+          "source": "Cursor for fetching the next page of results",
+          "message": "用於獲取下一頁結果的游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor for the next page",
+          "message": "下一頁的分頁游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.desc": {
+          "source": "Successfully completed",
+          "message": "已成功完成"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.display_name": {
+          "source": "Dubbed",
+          "message": "已配音"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.desc": {
+          "source": "Currently being processed",
+          "message": "處理中"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.display_name": {
+          "source": "Dubbing",
+          "message": "配音中"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.desc": {
+          "source": "Processing failed",
+          "message": "處理失敗"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.display_name": {
+          "source": "Failed",
+          "message": "失敗"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.desc": {
+          "source": "Filter dubbing projects by their processing status",
+          "message": "依處理狀態篩選配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.display_name": {
+          "source": "Dubbing Status",
+          "message": "配音狀態"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.short_desc": {
+          "source": "Filter by dubbing status",
+          "message": "依配音狀態篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.desc": {
+          "source": "Show only others' dubbing projects",
+          "message": "僅顯示其他人的配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.display_name": {
+          "source": "Others",
+          "message": "其他人"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Show all dubbing projects",
+          "message": "顯示所有配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "全部"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Show only your dubbing projects",
+          "message": "僅顯示您的配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "個人"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.desc": {
+          "source": "Filter dubbing projects by creator",
+          "message": "依建立者篩選配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.display_name": {
+          "source": "Filter by Creator",
+          "message": "依建立者篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.short_desc": {
+          "source": "Filter by who created the dubbing project",
+          "message": "依配音專案的建立者篩選"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of dubbing projects to return per page (1-200, default: 100)",
+          "message": "每頁返回的配音專案數量 (1-200，預設值：100)"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dubbing projects to return per page",
+          "message": "每頁返回的配音專案數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
+          "source": "List dubbing projects",
+          "message": "列出配音專案"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.desc": {
+          "source": "List previously generated audio history items with optional pagination",
+          "message": "列出先前產生的音訊歷程記錄項目，支援可選分頁"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
+          "source": "List History",
+          "message": "列出歷程記錄"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The history item ID to start after for pagination",
+          "message": "分頁時用於從其後開始的歷程記錄項目 ID"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "Start After History Item ID",
+          "message": "在此歷程記錄項目 ID 之後開始"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "Pagination cursor",
+          "message": "分頁游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of history items to return per page",
+          "message": "每頁返回的歷程記錄項目數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of history items to return",
+          "message": "要返回的歷程記錄項目數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
+          "source": "List generated audio history items",
+          "message": "列出產生的音訊歷程記錄項目"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List available ElevenLabs AI models and their capabilities",
+          "message": "列出可用的 ElevenLabs AI 模型及其功能"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "列出模型"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List available AI models",
+          "message": "列出可用的 AI 模型"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.desc": {
+          "source": "List available pronunciation dictionaries with optional pagination",
+          "message": "列出可用的發音字典，支援可選分頁"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
+          "source": "List Pronunciation Dictionaries",
+          "message": "列出發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor to use for pagination to retrieve the next page of results",
+          "message": "用於分頁以擷取下一頁結果的游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor for pagination",
+          "message": "分頁游標"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of pronunciation dictionaries to return per page",
+          "message": "每頁返回的發音字典數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dictionaries to return per page",
+          "message": "每頁返回的字典數量"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
+          "source": "List available pronunciation dictionaries",
+          "message": "列出可用的發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ElevenLabs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **ElevenLabs** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基本 URL)、選用查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式返回。\n\n對於此應用程式尚未作為頂級動作公開的端點，請使用此動作。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ElevenLabs",
+          "message": "向 ElevenLabs 進行自訂 API 呼叫"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.desc": {
+          "source": "Convert audio from one voice to another using ElevenLabs AI voice conversion",
+          "message": "使用 ElevenLabs AI 語音轉換將音訊從一種聲音轉換為另一種聲音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
+          "source": "Speech to Speech",
+          "message": "語音轉換語音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.desc": {
+          "source": "The source audio data to convert to the target voice",
+          "message": "要轉換為目標聲音的來源音訊資料"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.short_desc": {
+          "source": "The source audio data to convert",
+          "message": "要轉換的來源音訊資料"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "自動偵測音訊格式 (預設)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "其他 (自動偵測)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16 位元、16kHz 單聲道、低位元先送 (little-endian) — 較低延遲"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16 位元 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "輸入音訊檔案的格式。`pcm_s16le_16` 需要 16 位元、16kHz 單聲道、低位元先送的 PCM，並提供較低的延遲"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "檔案格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "輸入音訊的格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 64kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44.1kHz 64kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 128kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44.1kHz 128kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 192kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44.1kHz 192kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 32kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44.1kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "取樣率為 22.05kHz 且位元速率為 32kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22.05kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 44.1kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44.1kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 16kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 22.05kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22.05kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 24kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "取樣率為 8kHz 的 u-law 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the converted speech",
+          "message": "轉換後語音的輸出音訊格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "輸出格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "輸出音訊格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.desc": {
+          "source": "Default speech-to-speech model for English voice conversion",
+          "message": "用於英語聲音轉換的預設語音轉換語音模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.display_name": {
+          "source": "Eleven English STS v2",
+          "message": "Eleven English STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.desc": {
+          "source": "Multilingual speech-to-speech model for voice conversion",
+          "message": "用於聲音轉換的多語言語音轉換語音模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.display_name": {
+          "source": "Eleven Multilingual STS v2",
+          "message": "Eleven Multilingual STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-speech model to use for voice conversion",
+          "message": "用於聲音轉換的語音轉換語音模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STS model to use",
+          "message": "要使用的 STS 模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "若指定，系統將盡最大努力進行確定性取樣，使具有相同種子和參數的重複請求應返回相同的結果。不保證確定性"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "種子"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "用於確定性產生的種子"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.desc": {
+          "source": "If `True`, background noise will be removed from the input audio before conversion",
+          "message": "如果為 `True`，在轉換前將從輸入音訊中移除背景噪音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.display_name": {
+          "source": "Remove Background Noise",
+          "message": "移除背景噪音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.short_desc": {
+          "source": "Whether to remove background noise from the input audio",
+          "message": "是否從輸入音訊中移除背景噪音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "用於轉換的目標聲音識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "用於轉換的目標聲音識別碼"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "覆寫指定聲音已儲存設定的聲音設定。這些設定僅套用於該次請求"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "聲音設定"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the conversion",
+          "message": "用於轉換的聲音設定"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
+          "source": "Convert audio from one voice to another",
+          "message": "將音訊從一種聲音轉換為另一種聲音"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.desc": {
+          "source": "Transcribe audio to text using ElevenLabs Scribe speech-to-text model. Supports 90+ languages with word-level timestamps and speaker diarization",
+          "message": "使用 ElevenLabs Scribe 語音轉文字模型將音訊轉錄為文字。支援 90 種以上語言，並提供字詞級時間戳記與說話者分離功能"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
+          "source": "Speech to Text",
+          "message": "語音轉文字"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.desc": {
+          "source": "The audio data to transcribe to text",
+          "message": "要轉錄為文字的音訊資料"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "音訊"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.short_desc": {
+          "source": "The audio data to transcribe",
+          "message": "要轉錄的音訊資料"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.desc": {
+          "source": "If `True`, the transcription will include speaker diarization, annotating which speaker is talking in each segment",
+          "message": "若為 `True`，轉錄內容將包含說話者分離資訊，標註各片段的說話者"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "說話者區隔辨識"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Whether to annotate who is speaking",
+          "message": "是否標註說話者"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "自動偵測音訊格式 (預設)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "其他 (自動偵測)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM 16 位元、16kHz 單聲道、低位元先送 (little-endian) — 較低延遲"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16 位元 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "輸入音訊檔案的格式。`pcm_s16le_16` 需要 16 位元、16kHz 單聲道、低位元先送的 PCM，並提供較低的延遲"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "檔案格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "輸入音訊的格式"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "An ISO 639-1 language code to specify the language of the audio. If not provided, the model will auto-detect the language",
+          "message": "用以指定音訊語言的 ISO 639-1 語言代碼。若未提供，模型將自動偵測語言"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the audio (ISO 639-1)",
+          "message": "音訊的語言代碼 (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.desc": {
+          "source": "Speech-to-text model supporting 90+ languages with word-level timestamps and speaker diarization",
+          "message": "支援 90 種以上語言並具備字詞級時間戳記與說話者分離功能的語音轉文字模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.display_name": {
+          "source": "Scribe v2",
+          "message": "Scribe v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-text model to use for transcription",
+          "message": "用於轉錄的語音轉文字模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STT model to use",
+          "message": "要使用的 STT 模型"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The maximum number of speakers expected in the audio. Maximum: `32`. Only used when `diarize` is `True`",
+          "message": "預期音訊中的最多說話者人數。上限：`32`。僅在 `diarize` 為 `True` 時使用"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "講者人數"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Maximum number of speakers in the audio",
+          "message": "音訊中的最多說話者人數"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.desc": {
+          "source": "If `True`, audio events such as music, laughter, and applause will be tagged in the transcription",
+          "message": "若為 `True`，轉錄內容將標記音樂、笑聲和掌聲等音訊事件"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.display_name": {
+          "source": "Tag Audio Events",
+          "message": "標記音訊事件"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.short_desc": {
+          "source": "Whether to tag audio events like music or laughter",
+          "message": "是否標記音樂或笑聲等音訊事件"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No timestamps in the response",
+          "message": "回應中不包含時間戳記"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.desc": {
+          "source": "Character-level timestamps",
+          "message": "字元級時間戳記"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.display_name": {
+          "source": "Character",
+          "message": "字元"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.desc": {
+          "source": "Word-level timestamps",
+          "message": "字詞級時間戳記"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.display_name": {
+          "source": "Word",
+          "message": "字詞"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.desc": {
+          "source": "The granularity of timestamps in the transcription response",
+          "message": "轉錄回應中時間戳記的精細度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.display_name": {
+          "source": "Timestamps Granularity",
+          "message": "時間戳記精細度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.short_desc": {
+          "source": "The granularity of timestamps in the response",
+          "message": "回應中時間戳記的精細度"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
+          "source": "Transcribe audio to text",
+          "message": "將音訊轉錄為文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.desc": {
+          "source": "Generate sound effects from a text description using ElevenLabs AI",
+          "message": "使用 ElevenLabs AI 根據文字描述產生音效"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
+          "source": "Text to Sound Effects",
+          "message": "文字轉音效"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.desc": {
+          "source": "The duration of the generated sound effect in seconds. Range: `0.5` to `22.0`",
+          "message": "所產生音效的持續時間（秒）。範圍：`0.5` 至 `22.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.display_name": {
+          "source": "Duration (Seconds)",
+          "message": "持續時間（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.short_desc": {
+          "source": "Duration of the sound effect in seconds",
+          "message": "音效的持續時間（秒）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.desc": {
+          "source": "If `True`, creates a seamlessly looping sound effect",
+          "message": "若為 `True`，則建立無縫循環的音效"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.display_name": {
+          "source": "Loop",
+          "message": "循環"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.short_desc": {
+          "source": "Whether to create a looping sound effect",
+          "message": "是否建立循環音效"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.desc": {
+          "source": "How much the text prompt influences the generated sound effect. Range: `0.0` to `1.0`. Higher values make the output more closely match the prompt",
+          "message": "文字提示對所產生音效的影響程度。範圍：`0.0` 至 `1.0`。數值越高，輸出越符合提示"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.display_name": {
+          "source": "Prompt Influence",
+          "message": "提示影響程度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.short_desc": {
+          "source": "How much the text prompt influences the output",
+          "message": "文字提示對輸出的影響程度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.desc": {
+          "source": "A text description of the sound effect to generate (e.g., `dog barking in a park`)",
+          "message": "要產生之音效的文字描述（例如：`dog barking in a park`）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.short_desc": {
+          "source": "Description of the sound effect to generate",
+          "message": "要產生之音效的描述"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
+          "source": "Generate sound effects from a text description",
+          "message": "根據文字描述產生音效"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.desc": {
+          "source": "Convert text to speech audio using ElevenLabs AI voice synthesis. Supports multiple voices, models, and output formats",
+          "message": "使用 ElevenLabs AI 語音合成將文字轉換為語音音訊。支援多種聲音、模型與輸出格式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
+          "source": "Text to Speech",
+          "message": "文字轉語音"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.desc": {
+          "source": "Disable text normalization",
+          "message": "停用文字正規化"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Off",
+          "message": "關閉"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.desc": {
+          "source": "Always apply text normalization",
+          "message": "一律套用文字正規化"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "On",
+          "message": "開啟"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically decide whether to normalize text (default)",
+          "message": "自動決定是否正規化文字（預設）"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.desc": {
+          "source": "Controls how text is normalized before synthesis",
+          "message": "控制合成前文字的正規化方式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.display_name": {
+          "source": "Text Normalization",
+          "message": "文字正規化"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.short_desc": {
+          "source": "Controls text normalization behavior",
+          "message": "控制文字正規化行為"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 64kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44.1kHz 64kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 128kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44.1kHz 128kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 192kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44.1kHz 192kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "取樣率為 44.1kHz 且位元速率為 32kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44.1kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "取樣率為 22.05kHz 且位元速率為 32kbps 的 MP3 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22.05kHz 32kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 44.1kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44.1kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 16kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 22.05kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22.05kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "取樣率為 24kHz 的 PCM 音訊 (16 位元帶正負號低位元先送)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "取樣率為 8kHz 的 u-law 音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the generated speech",
+          "message": "所產生語音的輸出音訊格式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "輸出格式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "輸出音訊格式"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (ISO 639-1) used to enforce a language for the model. Currently only supported by `eleven_turbo_v2_5`",
+          "message": "用於對模型強制指定語言的語言代碼 (ISO 639-1)。目前僅 `eleven_turbo_v2_5` 支援"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "語言代碼"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the speech (ISO 639-1)",
+          "message": "語音的語言代碼 (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.desc": {
+          "source": "High-quality low-latency model for 32 languages",
+          "message": "支援 32 種語言的高品質、低延遲模型"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.display_name": {
+          "source": "Eleven Turbo v2.5",
+          "message": "Eleven Turbo v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.desc": {
+          "source": "Speed-optimized model with ~75ms latency, 32 languages, 40,000 character limit, 50% lower cost",
+          "message": "速度最佳化模型，具備約 75 毫秒低延遲、支援 32 種語言、40,000 字元上限且成本降低 50%"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.display_name": {
+          "source": "Eleven Flash v2.5",
+          "message": "Eleven Flash v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.desc": {
+          "source": "English-only model optimized for English content",
+          "message": "專為英文內容最佳化的純英文模型"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.display_name": {
+          "source": "Eleven Monolingual v1",
+          "message": "Eleven Monolingual v1"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.desc": {
+          "source": "Mature model supporting 29 languages with 10,000 character limit",
+          "message": "支援 29 種語言且字元上限為 10,000 的成熟模型"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.display_name": {
+          "source": "Eleven Multilingual v2",
+          "message": "Eleven Multilingual v2"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.desc": {
+          "source": "The TTS model to use for speech synthesis",
+          "message": "用於語音合成的 TTS 模型"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The TTS model to use",
+          "message": "要使用的 TTS 模型"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.desc": {
+          "source": "Text that comes after the current text in a multi-part generation. Enhances continuity when concatenating audio from multiple requests",
+          "message": "多部分生成中接在目前文字之後的文字。在串聯來自多個請求的音訊時可增強連貫性"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.display_name": {
+          "source": "Next Text",
+          "message": "後續文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.short_desc": {
+          "source": "Text that comes after for continuity",
+          "message": "用於保持連貫性的後續文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "若指定，系統將盡最大努力進行確定性取樣，使具有相同種子和參數的重複請求應返回相同的結果。不保證確定性"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "種子"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "用於確定性產生的種子"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.desc": {
+          "source": "Controls the speed of the generated speech. Range: `0.25` to `4.0`. Default: `1.0`",
+          "message": "控制生成語音的速度。範圍：`0.25` 至 `4.0`。預設值：`1.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.display_name": {
+          "source": "Speed",
+          "message": "速度"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.short_desc": {
+          "source": "Speech speed multiplier",
+          "message": "語音速度倍率"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.desc": {
+          "source": "Text that came before the current text in a multi-part generation. Improves prosody and continuity when splitting long text across multiple requests",
+          "message": "多部分生成中位於目前文字之前的文字。將長文字拆分至多個請求時可改善韻律與連貫性"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.display_name": {
+          "source": "Previous Text",
+          "message": "前置文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.short_desc": {
+          "source": "Text that came before for continuity",
+          "message": "用於保持連貫性的前置文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.desc": {
+          "source": "A list of pronunciation dictionary locators to apply during synthesis. Maximum of 3 dictionaries",
+          "message": "合成期間要套用的發音字典定位器清單。最多 3 個字典"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.display_name": {
+          "source": "Pronunciation Dictionaries",
+          "message": "發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.short_desc": {
+          "source": "Pronunciation dictionaries to apply",
+          "message": "要套用的發音字典"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to convert to speech",
+          "message": "要轉換為語音的文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "The text to convert to speech",
+          "message": "要轉換為語音的文字"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "用於語音合成的聲音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "語音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "用於語音合成的聲音 ID"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "覆寫指定聲音已儲存設定的聲音設定。這些設定僅套用於該次請求"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "聲音設定"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the synthesis",
+          "message": "用於合成的聲音設定"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
+          "source": "Convert text to speech audio using AI voice synthesis",
+          "message": "使用 AI 語音合成將文字轉換為語音音訊"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.desc": {
+          "source": "Design a new voice from a text description of the desired voice characteristics",
+          "message": "根據所需聲音特徵的文字描述設計新聲音"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
+          "source": "Voice Design",
+          "message": "聲音設計"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.desc": {
+          "source": "Sample text that will be spoken by the generated voice previews",
+          "message": "將由生成的聲音預覽朗讀的範例文字"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.short_desc": {
+          "source": "Sample text to generate with the designed voice",
+          "message": "要使用所設計聲音生成的範例文字"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the desired voice characteristics (e.g., `a warm friendly female voice with a slight British accent`)",
+          "message": "所需聲音特徵的文字描述（例如：`a warm friendly female voice with a slight British accent`）"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.display_name": {
+          "source": "Voice Description",
+          "message": "聲音描述"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.short_desc": {
+          "source": "Text describing desired voice characteristics",
+          "message": "描述所需聲音特徵的文字"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
+          "source": "Design a new voice from a text description",
+          "message": "從文字描述設計新聲音"
+        },
+        "app.RWxldmVuTGFicw.desc": {
+          "source": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice synthesis and audio processing services.\n\nSupported operations:\n- **Speech synthesis**: text-to-speech, speech-to-speech, voice design\n- **Audio processing**: audio isolation, text-to-sound-effects\n- **Transcription**: speech-to-text with speaker diarization\n- **Voice management**: create, edit, delete, and list voices\n- **Dubbing**: create and manage dubbing projects\n- **Pronunciation**: manage pronunciation dictionaries",
+          "message": "提供與 [ElevenLabs](https://elevenlabs.io) AI 語音合成與音訊處理服務的整合。\n\n支援的操作：\n- **語音合成**：文字轉語音、語音轉語音、聲音設計\n- **音訊處理**：音訊隔離、文字轉音效\n- **轉錄**：含說話者分離的語音轉文字\n- **聲音管理**：建立、編輯、刪除與列出聲音\n- **配音**：建立與管理配音專案\n- **發音**：管理發音字典"
+        },
+        "app.RWxldmVuTGFicw.display_name": {
+          "source": "ElevenLabs",
+          "message": "ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.short_desc": {
+          "source": "ElevenLabs AI voice synthesis services",
+          "message": "ElevenLabs AI 語音合成服務"
+        }
+      }
+    }
+  }
+}

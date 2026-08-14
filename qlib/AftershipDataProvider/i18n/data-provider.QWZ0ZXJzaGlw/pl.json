@@ -1,0 +1,2033 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return request for an order",
+          "message": "Utwórz nowy wniosek o zwrot dla zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "Utwórz zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID from the e-commerce platform (used as `order.external_id` in the API request)",
+          "message": "Identyfikator zamówienia z platformy e-commerce (używany jako `order.external_id` w żądaniu API)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "Zewnętrzny identyfikator zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "Order ID from e-commerce platform",
+          "message": "Identyfikator zamówienia z platformy e-commerce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.desc": {
+          "source": "List of items to return with quantities, reasons, and resolutions",
+          "message": "Lista zwracanych pozycji z ilościami, powodami i rozwiązaniami"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.display_name": {
+          "source": "Return Items",
+          "message": "Zwracane pozycje"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.short_desc": {
+          "source": "Items to return",
+          "message": "Pozycje do zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return request",
+          "message": "Utwórz nowy wniosek o zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.desc": {
+          "source": "Create a new package tracking by providing a tracking number and optional courier code",
+          "message": "Utwórz nowe śledzenie przesyłki, podając numer śledzenia i opcjonalny kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
+          "source": "Create Tracking",
+          "message": "Utwórz śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.desc": {
+          "source": "Identifier for the courier connection to use for this tracking",
+          "message": "Identyfikator połączenia kurierskiego do użycia dla tego śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.display_name": {
+          "source": "Courier Connection ID",
+          "message": "Identyfikator połączenia kurierskiego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.short_desc": {
+          "source": "Courier connection reference",
+          "message": "Referencja połączenia kurierskiego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Niestandardowe pary klucz-wartość w postaci ciągów znaków dla dodatkowych danych śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Pola niestandardowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Niestandardowe dane klucz-wartość"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.desc": {
+          "source": "Name of the package recipient",
+          "message": "Nazwa odbiorcy przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.display_name": {
+          "source": "Customer Name",
+          "message": "Nazwa klienta"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Nazwa odbiorcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Od drzwi do drzwi"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Odbiór u kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Odbiór w sklepie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Metoda dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Typ dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Metoda dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Kod ISO Alpha-3 kraju docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Kraj docelowy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kod kraju docelowego (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Stan lub prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Stan/prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Stan lub prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Data złożenia zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Data zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Data złożenia zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Globalny identyfikator zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Globalny identyfikator zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "Adres URL do zamówienia w systemie sprzedawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Ścieżka identyfikatora zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "Adres URL do zamówienia w systemie sprzedawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Czytelny numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Czytelny numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Oczekiwana data dostawy obiecana klientowi"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Obiecana data dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Oczekiwana data dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Kod ISO Alpha-3 kraju nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Kraj nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kod kraju nadania (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Stan lub prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Stan/prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Stan lub prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "Identyfikator lokalizacji sklepu; automatycznie wypełnia pola adresu nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Identyfikator lokalizacji"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "Identyfikator lokalizacji sklepu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Kod języka ISO 639-1 dla powiadomień"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Język"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Język powiadomień (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "User-provided text notes for this tracking",
+          "message": "Notatki tekstowe użytkownika dla tego śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Notatki tekstowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "List of tags to assign to the shipment for categorization",
+          "message": "Lista tagów do przypisania do przesyłki w celu kategoryzacji"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Tagi przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Tags for the shipment",
+          "message": "Tagi dla przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Opis typu usługi przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Typ przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Opis usługi przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Metoda wysyłki wybrana podczas finalizacji zakupu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Metoda wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Metoda usługi wysyłkowej"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Kod grupy kurierów do wykrywania wielu identyfikatorów slug (np. `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Grupa kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Kod grupy kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Unique courier code (e.g., `fedex`, `ups`). If not specified, Aftership will auto-detect",
+          "message": "Unikalny kod kuriera (np. `fedex`, `ups`). Jeśli nie zostanie podany, Aftership wykryje go automatycznie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Unique courier code",
+          "message": "Unikalny kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Instrukcje dotyczące odbioru paczki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Uwaga dotycząca odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Instrukcje odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Szczegóły lokalizacji dotyczące odbioru przez odbiorcę"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Lokalizacja odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Szczegóły miejsca odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking; defaults to the tracking number",
+          "message": "Nazwa wyświetlana dla śledzenia; domyślnie numer śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name for the tracking",
+          "message": "Nazwa wyświetlana dla śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Numer konta przewoźnika dla danych uwierzytelniających śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Numer konta śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Numer konta przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Dane uwierzytelniające śledzenia dla niektórych przewoźników"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klucz śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Dane uwierzytelniające śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Carrier tracking number (4-100 characters)",
+          "message": "Numer śledzenia przewoźnika (4-100 znaków)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Numer śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "Numer śledzenia przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Data wysyłki dla śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Create a new tracking",
+          "message": "Utwórz nowe śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.desc": {
+          "source": "Attach a shipping label or tracking number to a return",
+          "message": "Dołącz etykietę wysyłkową lub numer śledzenia do zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
+          "source": "Add Return Shipment",
+          "message": "Dodaj przesyłkę zwrotną"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier code for the return shipment (e.g., `fedex`, `ups`)",
+          "message": "Kod kuriera dla przesyłki zwrotnej (np. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Return shipment courier",
+          "message": "Kurier przesyłki zwrotnej"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.desc": {
+          "source": "The Aftership return ID to attach the shipping label/tracking to",
+          "message": "Identyfikator zwrotu Aftership, do którego ma zostać dołączona etykieta wysyłkowa/numer śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Identyfikator zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.short_desc": {
+          "source": "The return ID to add shipment to",
+          "message": "Identyfikator zwrotu, do którego ma zostać dodana przesyłka"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the return shipment",
+          "message": "Numer śledzenia przesyłki zwrotnej"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Numer śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Return shipment tracking number",
+          "message": "Numer śledzenia przesyłki zwrotnej"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
+          "source": "Add a shipment to a return",
+          "message": "Dodaj przesyłkę do zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.desc": {
+          "source": "Approve a pending return request",
+          "message": "Zatwierdź oczekujące zgłoszenie zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
+          "source": "Approve Return",
+          "message": "Zatwierdź zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to approve",
+          "message": "Identyfikator zwrotu Aftership do zatwierdzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Identyfikator zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to approve",
+          "message": "Identyfikator zwrotu do zatwierdzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
+          "source": "Approve a return request",
+          "message": "Zatwierdź zgłoszenie zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.desc": {
+          "source": "Retrieve the most recent checkpoint event for a tracking",
+          "message": "Pobierz najnowsze zdarzenie punktu kontrolnego dla śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
+          "source": "Get Last Checkpoint",
+          "message": "Pobierz ostatni punkt kontrolny"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to get the last checkpoint for",
+          "message": "Identyfikator śledzenia Aftership, dla którego ma zostać pobrany ostatni punkt kontrolny"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.short_desc": {
+          "source": "The tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
+          "source": "Get the last checkpoint of a tracking",
+          "message": "Pobierz ostatni punkt kontrolny śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve a single return record by its ID or RMA number",
+          "message": "Pobierz pojedynczy rekord zwrotu według jego identyfikatora lub numeru RMA"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "Pobierz zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID or RMA number to retrieve",
+          "message": "Identyfikator zwrotu Aftership lub numer RMA do pobrania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Identyfikator zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to retrieve",
+          "message": "Identyfikator zwrotu do pobrania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a return by ID",
+          "message": "Pobierz zwrot według identyfikatora"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.desc": {
+          "source": "Retrieve a single tracking record by its Aftership tracking ID",
+          "message": "Pobierz pojedynczy rekord śledzenia według jego identyfikatora śledzenia Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
+          "source": "Get Tracking",
+          "message": "Pobierz śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrieve",
+          "message": "Identyfikator śledzenia Aftership do pobrania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrieve",
+          "message": "Identyfikator śledzenia do pobrania"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
+          "source": "Get a tracking by ID",
+          "message": "Pobierz informacje o śledzeniu po identyfikatorze"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.desc": {
+          "source": "Automatically detect the courier for a given tracking number",
+          "message": "Automatycznie wykryj kuriera dla podanego numeru śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
+          "source": "Detect Courier",
+          "message": "Wykryj kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code to improve detection accuracy",
+          "message": "Kod kraju docelowego ISO Alpha-3 w celu poprawy dokładności wykrywania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Kraj docelowy"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kod kraju docelowego (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination to improve detection accuracy",
+          "message": "Stan lub prowincja miejsca docelowego w celu poprawy dokładności wykrywania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Stan/prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Stan lub prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Destination postal code to improve detection accuracy",
+          "message": "Kod pocztowy miejsca docelowego w celu poprawy dokładności wykrywania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code to improve detection accuracy",
+          "message": "Kod kraju nadania ISO Alpha-3 w celu poprawy dokładności wykrywania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Kraj nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kod kraju nadania (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Kod grupy kurierów do wykrywania wielu identyfikatorów slug (np. `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Grupa kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Kod grupy kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.desc": {
+          "source": "List of courier codes to narrow detection (e.g., `fedex`, `ups`)",
+          "message": "Lista kodów kurierów w celu zawężenia wykrywania (np. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.display_name": {
+          "source": "Courier Slugs",
+          "message": "Kody kurierów (slugs)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier codes",
+          "message": "Filtruj według kodów kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number to help narrow courier detection",
+          "message": "Numer konta przewoźnika pomocny w zawężeniu wykrywania kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Numer konta śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Numer konta przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential to help narrow courier detection",
+          "message": "Dane uwierzytelniające śledzenia pomocne w zawężeniu wykrywania kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klucz śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Dane uwierzytelniające śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to identify the courier for",
+          "message": "Numer śledzenia, dla którego ma zostać zidentyfikowany kurier"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Numer śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number to identify",
+          "message": "Numer śledzenia do zidentyfikowania"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date to help narrow courier detection",
+          "message": "Data wysyłki pomocna w zawężeniu wykrywania kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
+          "source": "Auto-detect courier from tracking number",
+          "message": "Automatycznie wykryj kuriera na podstawie numeru śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.desc": {
+          "source": "Delete an existing tracking by its Aftership tracking ID",
+          "message": "Usuń istniejące śledzenie na podstawie jego identyfikatora śledzenia Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
+          "source": "Delete Tracking",
+          "message": "Usuń śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to delete",
+          "message": "Identyfikator śledzenia Aftership do usunięcia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to delete",
+          "message": "Identyfikator śledzenia do usunięcia"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
+          "source": "Delete a tracking",
+          "message": "Usuń śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "Retrieve a list of all couriers supported by Aftership",
+          "message": "Pobierz listę wszystkich kurierów obsługiwanych przez Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Wyświetl listę kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List all supported couriers",
+          "message": "Wyświetl listę wszystkich obsługiwanych kurierów"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Aftership** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Aftership** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako bezpośrednie akcje w tej aplikacji."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Aftership",
+          "message": "Wykonaj niestandardowe wywołanie API do Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.desc": {
+          "source": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+          "message": "Oznacz śledzenie jako zakończone z podaniem przyczyny (dostarczono, zagubiono lub zwrócono do nadawcy)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
+          "source": "Mark as Completed",
+          "message": "Oznacz jako zakończone"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.desc": {
+          "source": "Timestamp of when the completion event occurred. If not provided, the current time is used",
+          "message": "Znacznik czasu wystąpienia zdarzenia zakończenia. Jeśli nie zostanie podany, używany jest bieżący czas"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.display_name": {
+          "source": "Event Date/Time",
+          "message": "Data/godzina zdarzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.short_desc": {
+          "source": "When the event occurred",
+          "message": "Czas wystąpienia zdarzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to mark as completed",
+          "message": "Identyfikator śledzenia Aftership do oznaczenia jako zakończone"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.short_desc": {
+          "source": "The tracking ID to mark as completed",
+          "message": "Identyfikator śledzenia do oznaczenia jako zakończone"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkRFTElWRVJFRA.display_name": {
+          "source": "Delivered",
+          "message": "Dostarczono"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkxPU1Q.display_name": {
+          "source": "Lost",
+          "message": "Przegrana"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOlJFVFVSTkVEX1RPX1NFTkRFUg.display_name": {
+          "source": "Returned to Sender",
+          "message": "Zwrócono do nadawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.desc": {
+          "source": "Reason for marking the tracking as completed",
+          "message": "Przyczyna oznaczenia śledzenia jako zakończone"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Powód"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.short_desc": {
+          "source": "Completion reason",
+          "message": "Przyczyna zakończenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
+          "source": "Mark a tracking as completed",
+          "message": "Oznacz śledzenie jako zakończone"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.desc": {
+          "source": "Search and list returns with optional filters for status, email, outcome, and date range",
+          "message": "Wyszukaj i wyświetl zwroty z opcjonalnymi filtrami statusu, adresu e-mail, rezultatu i zakresu dat"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
+          "source": "Search Returns",
+          "message": "Wyszukaj zwroty"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter returns created before this date",
+          "message": "Filtruj zwroty utworzone przed tą datą"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Utworzono przed"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtruj według maksymalnej daty utworzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter returns created after this date",
+          "message": "Filtruj zwroty utworzone po tej dacie"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Utworzono po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtruj według minimalnej daty utworzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.desc": {
+          "source": "Filter returns by customer email address",
+          "message": "Filtruj zwroty według adresu e-mail klienta"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.display_name": {
+          "source": "Customer Email",
+          "message": "Adres e-mail klienta"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.short_desc": {
+          "source": "Filter by customer email",
+          "message": "Filtruj według adresu e-mail klienta"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.display_name": {
+          "source": "Approved",
+          "message": "Zatwierdzony"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.display_name": {
+          "source": "Done",
+          "message": "Gotowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Wygasłe"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.display_name": {
+          "source": "Rejected",
+          "message": "Odrzucono"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnN1Ym1pdHRlZA.display_name": {
+          "source": "Submitted",
+          "message": "Przesłano"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.desc": {
+          "source": "Filter returns by approval status",
+          "message": "Filtruj zwroty według statusu zatwierdzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.display_name": {
+          "source": "Approval Status",
+          "message": "Status zatwierdzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.short_desc": {
+          "source": "Filter by approval status",
+          "message": "Filtruj według statusu zatwierdzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.desc": {
+          "source": "Filter by order name (e.g., `#1001`)",
+          "message": "Filtruj według nazwy zamówienia (np. `#1001`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.display_name": {
+          "source": "Order Name",
+          "message": "Nazwa zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.short_desc": {
+          "source": "Filter by order name",
+          "message": "Filtruj według nazwy zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOmV4Y2hhbmdl.display_name": {
+          "source": "Exchange",
+          "message": "Wymiana"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnJlZnVuZA.display_name": {
+          "source": "Refund",
+          "message": "Zwrot środków"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnN0b3JlX2NyZWRpdA.display_name": {
+          "source": "Store Credit",
+          "message": "Kredyt sklepowy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnVwc2VsbA.display_name": {
+          "source": "Upsell",
+          "message": "Dosprzedaż"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.desc": {
+          "source": "Filter returns by outcome type",
+          "message": "Filtruj zwroty według typu rezultatu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.display_name": {
+          "source": "Outcome",
+          "message": "Rezultat"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.short_desc": {
+          "source": "Filter by return outcome",
+          "message": "Filtruj według rezultatu zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.desc": {
+          "source": "Number of returns per page (1-50, default `10`)",
+          "message": "Liczba zwrotów na stronę (1–50, domyślnie `10`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (1-200, default `1`)",
+          "message": "Numer strony przy paginacji (1–200, domyślnie `1`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+          "source": "Customer Courier",
+          "message": "Kurier klienta"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+          "source": "Carrier Dropoff",
+          "message": "Nadanie u przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+          "source": "Carrier Pickup",
+          "message": "Odbiór przez kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+          "source": "Green Return",
+          "message": "Green Return"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+          "source": "Happy Returns",
+          "message": "Happy Returns"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+          "source": "In Store",
+          "message": "W sklepie"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+          "source": "Retail Reworks",
+          "message": "Retail Reworks"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+          "source": "Retailer Label",
+          "message": "Etykieta sprzedawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.desc": {
+          "source": "Filter returns by shipping method",
+          "message": "Filtruj zwroty według metody wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.display_name": {
+          "source": "Return Method",
+          "message": "Metoda zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.short_desc": {
+          "source": "Filter by return method",
+          "message": "Filtruj według metody zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
+          "source": "Search and list returns",
+          "message": "Wyszukuj i wyświetlaj listę zwrotów"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.desc": {
+          "source": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+          "message": "Wyszukuj i wyświetlaj listę przesyłek z opcjonalnymi filtrami według słowa kluczowego, kuriera, statusu i zakresu dat"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
+          "source": "Search Trackings",
+          "message": "Wyszukaj przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings created before this date",
+          "message": "Filtruj przesyłki utworzone przed tą datą"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Utworzono przed"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtruj według maksymalnej daty utworzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings created after this date",
+          "message": "Filtruj przesyłki utworzone po tej dacie"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Utworzono po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtruj według minimalnej daty utworzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.desc": {
+          "source": "Cursor for pagination; use the value from the previous response to get the next page",
+          "message": "Kursor stronicowania; użyj wartości z poprzedniej odpowiedzi, aby pobrać następną stronę"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Kursor stronicowania"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.desc": {
+          "source": "ISO Alpha-3 destination country code(s), comma-separated",
+          "message": "Kod(y) ISO Alpha-3 kraju docelowego, oddzielone przecinkami"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Kraj docelowy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Filter by destination country",
+          "message": "Filtruj według kraju docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.desc": {
+          "source": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+          "message": "Słowo kluczowe do filtrowania przesyłek według numeru śledzenia, tytułu, identyfikatora zamówienia itp."
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Słowo kluczowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "Słowo kluczowe wyszukiwania"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.desc": {
+          "source": "Filter trackings by the order ID",
+          "message": "Filtruj przesyłki według identyfikatora zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtruj według identyfikatora zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.desc": {
+          "source": "ISO Alpha-3 origin country code(s), comma-separated",
+          "message": "Kod(y) ISO Alpha-3 kraju pochodzenia, oddzielone przecinkami"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.display_name": {
+          "source": "Origin Country",
+          "message": "Kraj nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.short_desc": {
+          "source": "Filter by origin country",
+          "message": "Filtruj według kraju pochodzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.desc": {
+          "source": "Number of trackings per page (max 200)",
+          "message": "Liczba przesyłek na stronę (maks. 200)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "Comma-separated shipment tags to filter by",
+          "message": "Oddzielone przecinkami tagi przesyłek do filtrowania"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Tagi przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Filter by shipment tags",
+          "message": "Filtruj według tagów przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.desc": {
+          "source": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+          "message": "Filtruj przesyłki według kodu kuriera (np. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier code",
+          "message": "Filtruj według kodu kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.desc": {
+          "source": "Filter trackings by return-to-sender status. Set to `True` to show only return-to-sender shipments, `False` to exclude them",
+          "message": "Filtruj przesyłki według statusu zwrotu do nadawcy. Ustaw wartość `True`, aby pokazać tylko przesyłki zwracane do nadawcy, lub `False`, aby je wykluczyć"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.display_name": {
+          "source": "Return to Sender",
+          "message": "Zwrot do nadawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.short_desc": {
+          "source": "Filter return-to-sender shipments",
+          "message": "Filtruj przesyłki ze zwrotem do nadawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOk91dEZvckRlbGl2ZXJ5.display_name": {
+          "source": "Out for Delivery",
+          "message": "Wydana do doręczenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF0dGVtcHRGYWls.display_name": {
+          "source": "Attempt Failed",
+          "message": "Nieudana próba doręczenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF2YWlsYWJsZUZvclBpY2t1cA.display_name": {
+          "source": "Available for Pickup",
+          "message": "Gotowa do odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Dostarczono"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4Y2VwdGlvbg.display_name": {
+          "source": "Exception",
+          "message": "Wyjątek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Wygasłe"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluVHJhbnNpdA.display_name": {
+          "source": "In Transit",
+          "message": "W drodze"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluZm9SZWNlaXZlZA.display_name": {
+          "source": "Info Received",
+          "message": "Otrzymano informację"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOlBlbmRpbmc.display_name": {
+          "source": "Pending",
+          "message": "Oczekujące"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.desc": {
+          "source": "Filter trackings by delivery status",
+          "message": "Filtruj przesyłki według statusu doręczenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.display_name": {
+          "source": "Status Tag",
+          "message": "Tag statusu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.short_desc": {
+          "source": "Filter by status tag",
+          "message": "Filtruj według tagu statusu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.desc": {
+          "source": "Comma-separated tracking numbers to filter by (up to 50)",
+          "message": "Oddzielone przecinkami numery śledzenia do filtrowania (maksymalnie 50)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.display_name": {
+          "source": "Tracking Numbers",
+          "message": "Numery śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.short_desc": {
+          "source": "Filter by tracking numbers",
+          "message": "Filtruj według numerów śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings updated before this date",
+          "message": "Filtruj przesyłki zaktualizowane przed tą datą"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.display_name": {
+          "source": "Updated Before",
+          "message": "Zaktualizowano przed"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum update date",
+          "message": "Filtruj według maksymalnej daty aktualizacji"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings updated after this date",
+          "message": "Filtruj przesyłki zaktualizowane po tej dacie"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.display_name": {
+          "source": "Updated After",
+          "message": "Zaktualizowano po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum update date",
+          "message": "Filtruj według minimalnej daty aktualizacji"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
+          "source": "Search and list trackings",
+          "message": "Wyszukuj i wyświetlaj listę przesyłek"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.desc": {
+          "source": "Reactivate tracking for an expired shipment",
+          "message": "Ponownie aktywuj śledzenie wygasłej przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.display_name": {
+          "source": "Retrack",
+          "message": "Wznów śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrack (reactivates expired trackings)",
+          "message": "Identyfikator śledzenia Aftership do ponownego śledzenia (ponownie aktywuje wygasłe śledzenia)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrack",
+          "message": "Identyfikator śledzenia do ponownego śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.short_desc": {
+          "source": "Retrack an expired tracking",
+          "message": "Wznów wygasłe śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.desc": {
+          "source": "Reject a pending return request with an optional reason",
+          "message": "Odrzuć oczekujący wniosek o zwrot z opcjonalnym powodem"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
+          "source": "Reject Return",
+          "message": "Odrzuć zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID to reject",
+          "message": "Identyfikator zwrotu Aftership do odrzucenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Identyfikator zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to reject",
+          "message": "Identyfikator zwrotu do odrzucenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Reason for rejecting the return",
+          "message": "Powód odrzucenia zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Powód"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Rejection reason",
+          "message": "Powód odrzucenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
+          "source": "Reject a return request",
+          "message": "Odrzuć wniosek o zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.desc": {
+          "source": "Mark a return as resolved (completed processing)",
+          "message": "Oznacz zwrot jako rozwiązany (zakończono przetwarzanie)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
+          "source": "Resolve Return",
+          "message": "Rozwiąż zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to mark as resolved",
+          "message": "Identyfikator zwrotu Aftership do oznaczenia jako rozwiązany"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Identyfikator zwrotu"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to resolve",
+          "message": "Identyfikator zwrotu do rozwiązania"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
+          "source": "Resolve a return",
+          "message": "Rozwiąż zwrot"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+          "message": "Odpytuje API Aftership i wyzwala zdarzenie, gdy zmieni się status doręczenia przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Tracking Status Changed",
+          "message": "Zmieniono status przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Watch for tracking status changes",
+          "message": "Obserwuj zmiany statusu przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.desc": {
+          "source": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+          "message": "Zaktualizuj metadane istniejącej przesyłki (tytuł, identyfikator zamówienia, notatki itp.)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
+          "source": "Update Tracking",
+          "message": "Zaktualizuj śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Niestandardowe pary klucz-wartość w postaci ciągów znaków dla dodatkowych danych śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Pola niestandardowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Niestandardowe dane klucz-wartość"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Od drzwi do drzwi"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Odbiór u kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Odbiór w sklepie"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Metoda dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Typ dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Metoda dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Kod ISO Alpha-3 kraju docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Kraj docelowy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kod kraju docelowego (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Miasto docelowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Stan lub prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Stan/prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Stan lub prowincja docelowa"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Kod pocztowy miejsca docelowego"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to update",
+          "message": "Identyfikator śledzenia Aftership do zaktualizowania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Identyfikator śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to update",
+          "message": "Identyfikator śledzenia do zaktualizowania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Data złożenia zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Data zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Data złożenia zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Globalny identyfikator zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Globalny identyfikator zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "Adres URL do zamówienia w systemie sprzedawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Ścieżka identyfikatora zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "Adres URL do zamówienia w systemie sprzedawcy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Czytelny numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Czytelny numer zamówienia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Oczekiwana data dostawy obiecana klientowi"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Obiecana data dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Oczekiwana data dostawy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Miasto nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Kod ISO Alpha-3 kraju nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Kraj nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kod kraju nadania (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Kod pocztowy miejsca nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Stan lub prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Stan/prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Stan lub prowincja nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "Identyfikator lokalizacji sklepu; automatycznie wypełnia pola adresu nadania"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Identyfikator lokalizacji"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "Identyfikator lokalizacji sklepu"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Kod języka ISO 639-1 dla powiadomień"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Język"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Język powiadomień (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "Text notes for this tracking",
+          "message": "Notatki tekstowe dla tego śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Notatki tekstowe"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Opis typu usługi przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Typ przesyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Opis usługi przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Metoda wysyłki wybrana podczas finalizacji zakupu"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Metoda wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Metoda usługi wysyłkowej"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Update the courier code for this tracking (e.g., `fedex`, `ups`)",
+          "message": "Zaktualizuj kod kuriera dla tego śledzenia (np. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Update the courier code",
+          "message": "Zaktualizuj kod kuriera"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Instrukcje dotyczące odbioru paczki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Uwaga dotycząca odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Instrukcje odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Szczegóły lokalizacji dotyczące odbioru przez odbiorcę"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Lokalizacja odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Szczegóły miejsca odbioru"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking",
+          "message": "Nazwa wyświetlana dla śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name",
+          "message": "Nazwa wyświetlana"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Numer konta przewoźnika dla danych uwierzytelniających śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Numer konta śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Numer konta przewoźnika"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Dane uwierzytelniające śledzenia dla niektórych przewoźników"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klucz śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Dane uwierzytelniające śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Data wysyłki dla śledzenia"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Data wysyłki"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Update a tracking",
+          "message": "Zaktualizuj śledzenie"
+        },
+        "app.QWZ0ZXJzaGlw.desc": {
+          "source": "Aftership package tracking and returns management services providing access to tracking, courier detection, and returns APIs",
+          "message": "Usługi śledzenia przesyłek i zarządzania zwrotami Aftership, zapewniające dostęp do interfejsów API śledzenia, wykrywania kurierów i zwrotów"
+        },
+        "app.QWZ0ZXJzaGlw.display_name": {
+          "source": "Aftership",
+          "message": "Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.short_desc": {
+          "source": "Aftership package tracking and returns",
+          "message": "Śledzenie przesyłek i zwroty Aftership"
+        }
+      }
+    }
+  }
+}

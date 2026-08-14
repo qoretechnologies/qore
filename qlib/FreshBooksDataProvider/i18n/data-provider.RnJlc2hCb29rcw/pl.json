@@ -1,0 +1,2729 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new client is created in FreshBooks. Uses polling to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowego klienta w FreshBooks. Używa odpytywania do wykrywania nowych rekordów."
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
+          "source": "New Client",
+          "message": "Nowy klient"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new client is created",
+          "message": "Uruchom, gdy zostanie utworzony nowy klient"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.desc": {
+          "source": "Create a new client in FreshBooks",
+          "message": "Utwórz nowego klienta w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
+          "source": "Create Client",
+          "message": "Utwórz klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.desc": {
+          "source": "Email address of the client (at least one of fname, lname, email, organization is required)",
+          "message": "Adres e-mail klienta (wymagane jest co najmniej jedno z pól: fname, lname, email, organization)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "Adres e-mail klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.desc": {
+          "source": "First name of the client",
+          "message": "Imię klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "Imię"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "Imię klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization or company name",
+          "message": "Nazwa organizacji lub firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "Nazwa firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.desc": {
+          "source": "Last name of the client",
+          "message": "Nazwisko klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nazwisko"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "Nazwisko klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "Notatki o kliencie"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "Miasto"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "Miasto"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "Kod pocztowy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "Kod pocztowy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "Województwo/stan"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "Województwo lub stan"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "Ulica"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "Adres (ulica)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "Telefon służbowy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
+          "source": "Create a new client",
+          "message": "Utwórz nowego klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Create a new expense in FreshBooks",
+          "message": "Utwórz nowy wydatek w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "Utwórz wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.desc": {
+          "source": "The expense category ID",
+          "message": "Identyfikator kategorii wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "Kategoria"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "Kategoria wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kwoty z polami `amount` (ciąg znaków) i `code` (waluta)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Kwota wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "Data wydatku w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Data wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "Notatki dotyczące wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "Identyfikator pracownika powiązanego z tym wydatkiem"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "Pracownik"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "Pracownik dla tego wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "Nazwa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "Nazwa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "Procent podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "Wartość procentowa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.desc": {
+          "source": "Name of the vendor",
+          "message": "Nazwa dostawcy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "Sprzedawca"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "Nazwa dostawcy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "Utwórz nowy wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new estimate/quote in FreshBooks",
+          "message": "Utwórz nowy kosztorys/ofertę w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "Utwórz kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "Data kosztorysu w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "Data kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Currency code (e.g. USD, CAD, EUR)",
+          "message": "Kod waluty (np. USD, CAD, EUR)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "Waluta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "Kod waluty"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Klient dla kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "Numer kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "Unique estimate number",
+          "message": "Unikalny numer kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "Lista pozycji z polami: description, quantity, unit_cost, taxName1, taxPercent1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "Pozycje"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.short_desc": {
+          "source": "Estimate line items",
+          "message": "Pozycje kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notatki klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Warunki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Warunki i zasady"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "Utwórz nowy kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in FreshBooks",
+          "message": "Utwórz nową pozycję produktu lub usługi w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Utwórz pozycję"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Opis pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "Inventory"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "Stan magazynowy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The name of the item",
+          "message": "Nazwa pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Nazwa pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Jednostka magazynowa"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "Ilość"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "Domyślna ilość"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "Podatek 1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "Domyślny podatek 1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "Podatek 2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "Domyślny podatek 2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kosztu jednostkowego z polami `amount` (string) i `code` (currency)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "Koszt jednostkowy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "Koszt za jednostkę"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Utwórz nową pozycję"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in FreshBooks for a customer",
+          "message": "Utwórz nową fakturę w FreshBooks dla klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Utwórz fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "Data faktury w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "Data faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "Waluta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "Kod waluty"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "Klient dla faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.desc": {
+          "source": "Discount amount applied to the invoice",
+          "message": "Kwota rabatu zastosowana do faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "Rabat"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "Wartość rabatu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.desc": {
+          "source": "Number of days from creation until the invoice is due",
+          "message": "Liczba dni od utworzenia do terminu płatności faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "Termin płatności w dniach"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "Dni do terminu płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "A unique invoice number (auto-generated if not provided)",
+          "message": "Unikalny numer faktury (generowany automatycznie, jeśli nie zostanie podany)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Numer faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "Unikalny numer faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "Lista pozycji z polami: description, quantity, unit_cost, taxName1, taxPercent1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "Pozycje"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "Pozycje faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notatki klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Warunki"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Warunki i zasady"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Utwórz nową fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a new payment against an invoice in FreshBooks",
+          "message": "Zarejestruj nową płatność dla faktury w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "Utwórz płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kwoty z polami `amount` (ciąg znaków) i `code` (waluta)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Kwota płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "Data płatności w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "Data płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "Faktura"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.short_desc": {
+          "source": "The invoice for this payment",
+          "message": "Faktura dla tej płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "Notatka do płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "Inny typ płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "Płatność przelewem bankowym"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "Płatność gotówką"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "Płatność czekiem"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "Płatność kartą kredytową"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "Płatność PayPal"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "Typ metody płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "Typ płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Record a new payment",
+          "message": "Zarejestruj nową płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.desc": {
+          "source": "Create a new service in FreshBooks for time tracking",
+          "message": "Utwórz nową usługę w FreshBooks do śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
+          "source": "Create Service",
+          "message": "Utwórz usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.desc": {
+          "source": "Whether this service is billable to clients",
+          "message": "Czy ta usługa podlega rozliczeniu z klientami"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Rozliczalne"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "Określa, czy usługa podlega rozliczeniu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "Identyfikator firmy FreshBooks dla punktów końcowych API śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "Identyfikator firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "Identyfikator firmy FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.desc": {
+          "source": "The name of the service",
+          "message": "Nazwa usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "Nazwa usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Create a new service",
+          "message": "Utwórz nową usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.desc": {
+          "source": "Retrieve a single client by ID from FreshBooks",
+          "message": "Pobierz pojedynczego klienta według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
+          "source": "Get Client",
+          "message": "Pobierz klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
+          "source": "Get a single client by ID",
+          "message": "Pobierz pojedynczego klienta według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve a single expense by ID from FreshBooks",
+          "message": "Pobierz pojedynczy wydatek według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "Pobierz wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "Identyfikator wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense ID",
+          "message": "Identyfikator wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get a single expense by ID",
+          "message": "Pobierz pojedynczy wydatek według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve a single estimate by ID from FreshBooks",
+          "message": "Pobierz pojedynczy kosztorys według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "Pobierz kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "Identyfikator kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate ID",
+          "message": "Identyfikator kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get a single estimate by ID",
+          "message": "Pobierz pojedynczy kosztorys według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve a single item by ID from FreshBooks",
+          "message": "Pobierz pojedynczą pozycję według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Pobierz pozycję"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get a single item by ID",
+          "message": "Pobierz pojedynczą pozycję według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from FreshBooks",
+          "message": "Pobierz pojedynczą fakturę według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Pobierz fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Pobierz pojedynczą fakturę według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from FreshBooks",
+          "message": "Pobierz pojedynczą płatność według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "Pobierz płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "Identyfikator płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment ID",
+          "message": "Identyfikator płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "Pobierz pojedynczą płatność według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.desc": {
+          "source": "Retrieve a single service by ID from FreshBooks",
+          "message": "Pobierz pojedynczą usługę według identyfikatora z FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
+          "source": "Get Service",
+          "message": "Pobierz usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "Identyfikator firmy FreshBooks dla punktów końcowych API śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "Identyfikator firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "Identyfikator firmy FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "Identyfikator usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service ID",
+          "message": "Identyfikator usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
+          "source": "Get a single service by ID",
+          "message": "Pobierz pojedynczą usługę według identyfikatora"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.desc": {
+          "source": "Soft-delete a client in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale klienta w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
+          "source": "Delete Client",
+          "message": "Usuń klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to delete",
+          "message": "Klient do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
+          "source": "Delete a client",
+          "message": "Usuń klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.desc": {
+          "source": "Soft-delete an expense in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale wydatek w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
+          "source": "Delete Expense",
+          "message": "Usuń wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "Identyfikator wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to delete",
+          "message": "Wydatek do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
+          "source": "Delete an expense",
+          "message": "Usuń wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.desc": {
+          "source": "Soft-delete an estimate in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale kosztorys w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
+          "source": "Delete Estimate",
+          "message": "Usuń kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "Identyfikator kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to delete",
+          "message": "Kosztorys do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
+          "source": "Delete an estimate",
+          "message": "Usuń kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Soft-delete an item in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale pozycję w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "Usuń element"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to delete",
+          "message": "Element do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "Usuń pozycję"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Soft-delete an invoice in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale fakturę w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Usuń fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Faktura do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Usuń fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Soft-delete a payment in FreshBooks by setting vis_state to 1",
+          "message": "Usuń nietrwale płatność w FreshBooks poprzez ustawienie vis_state na 1"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "Usuń płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "Identyfikator płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to delete",
+          "message": "Płatność do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "Usuń płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.desc": {
+          "source": "Delete a service in FreshBooks",
+          "message": "Usuń usługę w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
+          "source": "Delete Service",
+          "message": "Usuń usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "Identyfikator firmy FreshBooks dla punktów końcowych API śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "Identyfikator firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "Identyfikator firmy FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "Identyfikator usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to delete",
+          "message": "Usługa do usunięcia"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
+          "source": "Delete a service",
+          "message": "Usuń usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new estimate is created in FreshBooks. Uses polling to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowego kosztorysu w FreshBooks. Używa sondowania do wykrywania nowych rekordów."
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
+          "source": "New Estimate",
+          "message": "Nowy kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "Wyzwala po utworzeniu nowego kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new expense is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "Uruchamiane po zarejestrowaniu nowego wydatku w FreshBooks. Używa sondowania do wykrywania nowych rekordów."
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
+          "source": "New Expense",
+          "message": "Nowy wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "Wyzwala po utworzeniu nowego wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in FreshBooks. Uses polling to detect new records.",
+          "message": "Uruchamiane po utworzeniu nowej faktury w FreshBooks. Używa sondowania do wykrywania nowych rekordów."
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "New Invoice",
+          "message": "Nowa faktura"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Wyzwala po utworzeniu nowej faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FreshBooks** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **FreshBooks** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi oraz treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FreshBooks",
+          "message": "Wykonaj niestandardowe wywołanie API do FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.desc": {
+          "source": "Search for clients in FreshBooks with optional filtering",
+          "message": "Wyszukaj klientów w FreshBooks z opcjonalnym filtrowaniem"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
+          "source": "Search Clients",
+          "message": "Wyszukaj klientów"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.desc": {
+          "source": "Search for clients by email address",
+          "message": "Wyszukaj klientów według adresu e-mail"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtruj według adresu e-mail"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.short_desc": {
+          "source": "Filter by client ID",
+          "message": "Filtruj według ID klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Search for clients by organization name (partial match)",
+          "message": "Wyszukaj klientów według nazwy organizacji (częściowe dopasowanie)"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Filter by organization name",
+          "message": "Filtruj według nazwy organizacji"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return (max 100)",
+          "message": "Maksymalna liczba zwracanych wyników (maks. 100)"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
+          "source": "Search for clients",
+          "message": "Wyszukaj klientów"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.desc": {
+          "source": "Search for expenses in FreshBooks with optional filtering",
+          "message": "Wyszukaj wydatki w FreshBooks z opcjonalnym filtrowaniem"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
+          "source": "Search Expenses",
+          "message": "Wyszukaj wydatki"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "Kategoria"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Filter by category",
+          "message": "Filtruj według kategorii"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "Identyfikator wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.short_desc": {
+          "source": "Filter by expense ID",
+          "message": "Filtruj według ID wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "Sprzedawca"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.short_desc": {
+          "source": "Filter by vendor name",
+          "message": "Filtruj według nazwy dostawcy"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
+          "source": "Search for expenses",
+          "message": "Wyszukaj wydatki"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.desc": {
+          "source": "Search for estimates in FreshBooks",
+          "message": "Wyszukaj kosztorysy w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
+          "source": "Search Estimates",
+          "message": "Wyszukaj kosztorysy"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtruj według klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "Identyfikator kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.short_desc": {
+          "source": "Filter by estimate ID",
+          "message": "Filtruj według ID kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtruj według statusu"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
+          "source": "Search for estimates",
+          "message": "Wyszukaj kosztorysy"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "Search for items in FreshBooks",
+          "message": "Wyszukaj pozycje w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Items",
+          "message": "Wyszukaj pozycje"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.short_desc": {
+          "source": "Filter by item ID",
+          "message": "Filtruj według ID pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "Search for items",
+          "message": "Wyszukaj pozycje"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in FreshBooks with optional filtering",
+          "message": "Wyszukaj faktury w FreshBooks z opcjonalnym filtrowaniem"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Szukaj faktur"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtruj według klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Filtruj według identyfikatora faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtruj według statusu"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices",
+          "message": "Wyszukaj faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.desc": {
+          "source": "Search for payments in FreshBooks with optional filtering",
+          "message": "Wyszukaj płatności w FreshBooks z opcjonalnym filtrowaniem"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
+          "source": "Search Payments",
+          "message": "Wyszukaj płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "Faktura"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.short_desc": {
+          "source": "Filter by invoice",
+          "message": "Filtruj według faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "Identyfikator płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "Filtruj według ID płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
+          "source": "Search for payments",
+          "message": "Wyszukaj płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.desc": {
+          "source": "Search for services in FreshBooks",
+          "message": "Wyszukaj usługi w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
+          "source": "Search Services",
+          "message": "Wyszukaj usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "Identyfikator firmy FreshBooks dla punktów końcowych API śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "Identyfikator firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "Identyfikator firmy FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "Identyfikator usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by service ID",
+          "message": "Filtruj według ID usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maksymalna liczba wyników"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
+          "source": "Search for services",
+          "message": "Wyszukaj usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new payment is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "Uruchamia się, gdy w FreshBooks zostanie zarejestrowana nowa płatność. Używa sondowania (polling) do wykrywania nowych rekordów."
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "New Payment",
+          "message": "Nowa płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak często sprawdzać nowe rekordy (minimum 30 sekund)"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Uruchom, gdy zostanie odebrana nowa płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.desc": {
+          "source": "Update an existing client in FreshBooks",
+          "message": "Zaktualizuj istniejącego klienta w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
+          "source": "Update Client",
+          "message": "Zaktualizuj klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "Adres e-mail klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "Imię"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "Imię klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to update",
+          "message": "Klient do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "Nazwa firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nazwisko"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "Nazwisko klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "Notatki o kliencie"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "Miasto"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "Miasto"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "Kod pocztowy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "Kod pocztowy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "Województwo/stan"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "Województwo lub stan"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "Ulica"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "Adres (ulica)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "Telefon służbowy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
+          "source": "Update an existing client",
+          "message": "Zaktualizuj istniejącego klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense in FreshBooks",
+          "message": "Zaktualizuj istniejący wydatek w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "Zaktualizuj wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "Kategoria"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "Kategoria wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kwoty z polami `amount` (ciąg znaków) i `code` (waluta)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Kwota wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "Data wydatku w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Data wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "Identyfikator wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to update",
+          "message": "Wydatek do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "Notatki dotyczące wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "Identyfikator pracownika powiązanego z tym wydatkiem"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "Pracownik"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "Pracownik dla tego wydatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "Nazwa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "Nazwa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "Procent podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "Wartość procentowa podatku"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "Sprzedawca"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "Nazwa dostawcy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "Zaktualizuj istniejący wydatek"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing estimate in FreshBooks",
+          "message": "Zaktualizuj istniejący kosztorys w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "Zaktualizuj kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "Data kosztorysu w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "Data kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "Waluta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "Kod waluty"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Klient dla kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "Numer kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "The estimate number",
+          "message": "Numer kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "Identyfikator kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "Kosztorys do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Estimate notes",
+          "message": "Notatki do kosztorysu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Warunki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Warunki i zasady"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "Zaktualizuj istniejący kosztorys"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in FreshBooks",
+          "message": "Zaktualizuj istniejącą pozycję w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "Zaktualizuj element"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Opis pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "Inventory"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "Stan magazynowy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "Identyfikator pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to update",
+          "message": "Element do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "Nazwa pozycji"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "Jednostka magazynowa"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "Ilość"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "Domyślna ilość"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "Podatek 1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "Domyślny podatek 1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "Podatek 2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "Domyślny podatek 2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kosztu jednostkowego z polami `amount` (string) i `code` (currency)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "Koszt jednostkowy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "Koszt za jednostkę"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "Zaktualizuj istniejącą pozycję"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in FreshBooks",
+          "message": "Zaktualizuj istniejącą fakturę w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Zaktualizuj fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "Data faktury w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "Data faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "Waluta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "Kod waluty"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "Klient dla faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "Rabat"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "Wartość rabatu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "Termin płatności w dniach"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "Dni do terminu płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Numer faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "Unikalny numer faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "Faktura do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items (replaces existing lines - include ALL desired lines)",
+          "message": "Lista pozycji wiersza (zastępuje istniejące wiersze — uwzględnij WSZYSTKIE żądane wiersze)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "Pozycje"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "Pozycje faktury"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notatki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notatki klienta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "Numer zamówienia zakupu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Warunki"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Warunki i zasady"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Zaktualizuj istniejącą fakturę"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment in FreshBooks",
+          "message": "Zaktualizuj istniejącą płatność w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "Zaktualizuj płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "Obiekt kwoty z polami `amount` (ciąg znaków) i `code` (waluta)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Kwota płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "Identyfikator konta FreshBooks dla punktów końcowych API księgowości"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID konta"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "Identyfikator konta FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "Data płatności w formacie YYYY-MM-DD"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Data"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "Data płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "Identyfikator płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to update",
+          "message": "Płatność do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "Notatka do płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "Inny typ płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "Płatność przelewem bankowym"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "Płatność gotówką"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "Płatność czekiem"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "Płatność kartą kredytową"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "Płatność PayPal"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "Typ metody płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "Typ płatności"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Zaktualizuj istniejącą płatność"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.desc": {
+          "source": "Update an existing service in FreshBooks",
+          "message": "Zaktualizuj istniejącą usługę w FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
+          "source": "Update Service",
+          "message": "Zaktualizuj usługę"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Rozliczalne"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "Określa, czy usługa podlega rozliczeniu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "Identyfikator firmy FreshBooks dla punktów końcowych API śledzenia czasu"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "Identyfikator firmy"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "Identyfikator firmy FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "Identyfikator usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to update",
+          "message": "Usługa do zaktualizowania"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "Nazwa usługi"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Update an existing service",
+          "message": "Zaktualizuj istniejącą usługę"
+        },
+        "app.RnJlc2hCb29rcw.desc": {
+          "source": "FreshBooks is cloud-based accounting software designed for small businesses and freelancers.\n\nThis integration supports clients, invoices, expenses, estimates, items, and services.",
+          "message": "FreshBooks to oprogramowanie księgowe w chmurze stworzone dla małych firm i freelancerów.\n\nTa integracja obsługuje klientów, faktury, wydatki, kosztorysy, pozycje oraz usługi."
+        },
+        "app.RnJlc2hCb29rcw.display_name": {
+          "source": "FreshBooks",
+          "message": "FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.short_desc": {
+          "source": "FreshBooks cloud accounting software",
+          "message": "Oprogramowanie księgowe w chmurze FreshBooks"
+        }
+      }
+    }
+  }
+}

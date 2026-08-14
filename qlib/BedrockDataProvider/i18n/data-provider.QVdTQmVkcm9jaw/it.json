@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.desc": {
+          "source": "Generate a chat completion via the unified Bedrock Converse API. One request body shape works across every supported model family (Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, Amazon Titan / Nova, DeepSeek). Supports text, image, and document content blocks, tool use, and Bedrock Guardrails.",
+          "message": "Genera un completamento di chat tramite l'API Converse unificata di Bedrock. Un'unica struttura del corpo della richiesta funziona su tutte le famiglie di modelli supportate (Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, Amazon Titan / Nova, DeepSeek). Supporta blocchi di contenuto di testo, immagini e documenti, l'uso di strumenti e Bedrock Guardrails."
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.display_name": {
+          "source": "Converse",
+          "message": "Converse"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.desc": {
+          "source": "Model-family-specific request fields not covered by the unified Converse schema (e.g. Anthropic's `anthropic_beta`)",
+          "message": "Campi di richiesta specifici per la famiglia di modelli non coperti dallo schema Converse unificato (es. `anthropic_beta` di Anthropic)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.display_name": {
+          "source": "Additional Model Request Fields",
+          "message": "Campi di richiesta aggiuntivi del modello"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.short_desc": {
+          "source": "Model-family-specific request fields",
+          "message": "Campi di richiesta specifici per la famiglia di modelli"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.desc": {
+          "source": "Apply Bedrock Guardrails: `guardrailIdentifier` (`string`), `guardrailVersion` (`string`), `trace` (`enabled` / `disabled`)",
+          "message": "Applica Bedrock Guardrails: `guardrailIdentifier` (`string`), `guardrailVersion` (`string`), `trace` (`enabled` / `disabled`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.display_name": {
+          "source": "Guardrail Config",
+          "message": "Configurazione guardrail"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.short_desc": {
+          "source": "Bedrock Guardrails to apply",
+          "message": "Bedrock Guardrails da applicare"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.desc": {
+          "source": "Generation parameters: `maxTokens` (`int`), `temperature` (`float`, 0..1), `topP` (`float`), `stopSequences` (`list<string>`)",
+          "message": "Parametri di generazione: `maxTokens` (`int`), `temperature` (`float`, 0..1), `topP` (`float`), `stopSequences` (`list<string>`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.display_name": {
+          "source": "Inference Config",
+          "message": "Configurazione inferenza"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.short_desc": {
+          "source": "Generation knobs",
+          "message": "Parametri di generazione"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock foundation model ID. Examples: `anthropic.claude-3-5-sonnet-20240620-v1:0`, `amazon.nova-pro-v1:0`, `meta.llama3-1-70b-instruct-v1:0`, `mistral.mistral-large-2402-v1:0`",
+          "message": "L'ID del modello di base Bedrock. Esempi: `anthropic.claude-3-5-sonnet-20240620-v1:0`, `amazon.nova-pro-v1:0`, `meta.llama3-1-70b-instruct-v1:0`, `mistral.mistral-large-2402-v1:0`"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "ID modello"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock model identifier",
+          "message": "Identificatore del modello Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.desc": {
+          "source": "Conversation history; each message is a hash with `role` (`user` or `assistant`) and `content` (list of content blocks, each a hash like `{text: \"...\"}`, `{image: {...}}`, or `{toolUse: {...}}`)",
+          "message": "Cronologia della conversazione; ogni messaggio è un hash con `role` (`user` o `assistant`) e `content` (elenco di blocchi di contenuto, ciascuno un hash come `{text: \"...\"}`, `{image: {...}}` o `{toolUse: {...}}`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Conversation messages in Bedrock Converse shape",
+          "message": "Messaggi di conversazione nel formato Bedrock Converse"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.desc": {
+          "source": "Optional system instruction blocks; each is a hash like `{text: \"...\"}`",
+          "message": "Blocchi di istruzioni di sistema opzionali; ciascuno è un hash come `{text: \"...\"}`"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "Prompt di sistema"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.short_desc": {
+          "source": "Optional system prompt blocks",
+          "message": "Blocchi prompt di sistema opzionali"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool configuration: `tools` is a list of `{toolSpec: {name, description, inputSchema: {json: <schema>}}}`; optional `toolChoice` (`{auto: {}}`, `{any: {}}`, or `{tool: {name: \"...\"}}`)",
+          "message": "Configurazione strumenti: `tools` è un elenco di `{toolSpec: {name, description, inputSchema: {json: <schema>}}}`; opzionale `toolChoice` (`{auto: {}}`, `{any: {}}` o `{tool: {name: \"...\"}}`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "Configurazione strumenti"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool definitions for function calling",
+          "message": "Definizioni degli strumenti per il function calling"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.short_desc": {
+          "source": "Generate a chat completion via the unified Converse API",
+          "message": "Genera un completamento di chat tramite l'API Converse unificata"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings for text using a Bedrock embedding model (Amazon Titan Text Embeddings v2, or Cohere `embed-english-v3` / `embed-multilingual-v3`). The action auto-routes to the correct request body shape based on the model ID prefix.",
+          "message": "Genera embedding vettoriali densi per il testo utilizzando un modello di embedding Bedrock (Amazon Titan Text Embeddings v2 o Cohere `embed-english-v3` / `embed-multilingual-v3`). L'azione indirizza automaticamente alla forma corretta del corpo della richiesta in base al prefisso dell'ID del modello."
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "Incorpora testo"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Override the output embedding dimension; supported by Titan Text Embeddings v2 (e.g. 256, 512, 1024)",
+          "message": "Esegui l'override della dimensione dell'embedding di output; supportato da Titan Text Embeddings v2 (es. 256, 512, 1024)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Dimensioni"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Override embedding dimension (Titan v2 only)",
+          "message": "Esegui override dimensione embedding (solo Titan v2)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.desc": {
+          "source": "Text to embed when using a Titan model (single-string body)",
+          "message": "Testo da incorporare quando si usa un modello Titan (corpo stringa singola)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.display_name": {
+          "source": "Input Text",
+          "message": "Testo di input"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.short_desc": {
+          "source": "Text to embed (Titan; single-string)",
+          "message": "Testo da incorporare (Titan; stringa singola)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "Classificazione"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "Clustering"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document",
+          "message": "Documento di ricerca"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query",
+          "message": "Query di ricerca"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Suggerimento input_type per embedding Cohere"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Cohere Input Type",
+          "message": "Tipo di input Cohere"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Suggerimento input_type per embedding Cohere"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock embedding model ID. Examples: `amazon.titan-embed-text-v2:0` (Titan), `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`",
+          "message": "L'ID del modello di embedding Bedrock. Esempi: `amazon.titan-embed-text-v2:0` (Titan), `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "ID modello"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock embedding model identifier",
+          "message": "Identificatore del modello di embedding Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.desc": {
+          "source": "L2-normalize the resulting embedding (Titan v2 only)",
+          "message": "Normalizza L2 l'embedding risultante (solo Titan v2)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.display_name": {
+          "source": "Normalize",
+          "message": "Normalizza"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.short_desc": {
+          "source": "L2-normalize the embedding (Titan v2 only)",
+          "message": "Normalizza L2 l'embedding (solo Titan v2)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "Texts to embed when using a Cohere `embed-*` model (batch); the action automatically picks the right body shape per model family",
+          "message": "Testi da incorporare quando si usa un modello Cohere `embed-*` (batch); l'azione seleziona automaticamente la forma corretta del corpo in base alla famiglia del modello"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "Testi"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "Texts to embed (Cohere; batch)",
+          "message": "Testi da incorporare (Cohere; batch)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via a Bedrock embedding model",
+          "message": "Genera embedding di testo tramite un modello di embedding Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Bedrock** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegue una chiamata API REST / HTTP personalizzata ad **AWS Bedrock** usando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni native in questa app."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Bedrock",
+          "message": "Esegui una chiamata API personalizzata ad AWS Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.desc": {
+          "source": "**AWS Bedrock** provides serverless access to a curated catalog of foundation models through a single SigV4-signed REST API:\n\n- **Unified Converse API** — one body shape across the Anthropic (Claude), Meta (Llama), Mistral, Cohere, AI21 (Jamba), Amazon (Titan, Nova), and DeepSeek-on-Bedrock model families\n- **Embeddings** — Titan Text Embeddings v2 and Cohere embed-english / embed-multilingual models\n- **Multimodal input** — `image` and `document` content blocks natively in the Converse body\n- **Tool use** — function-calling via `toolConfig.tools` with the same shape across all supported model families\n- **Bedrock Guardrails** — apply PII redaction, denied topics, and content filters declaratively\n\nAuthentication uses the standard AWS credential chain: explicit keys → environment variables → ECS task role → IMDSv2 → STS AssumeRole — handled by the underlying `AwsRestClient`.\n\nProject: <https://aws.amazon.com/bedrock/>",
+          "message": "**AWS Bedrock** fornisce l'accesso serverless a un catalogo selezionato di modelli di base tramite un'unica API REST con firma SigV4:\n\n- **Unified Converse API** — una sola struttura di body per le famiglie di modelli Anthropic (Claude), Meta (Llama), Mistral, Cohere, AI21 (Jamba), Amazon (Titan, Nova) e DeepSeek-on-Bedrock\n- **Embeddings** — modelli Titan Text Embeddings v2 e Cohere embed-english / embed-multilingual\n- **Input multimodale** — blocchi di contenuto `image` e `document` nativamente nel body di Converse\n- **Uso di tool** — function calling tramite `toolConfig.tools` con la stessa struttura per tutte le famiglie di modelli supportate\n- **Bedrock Guardrails** — applica redazione di PII, argomenti non consentiti e filtri sui contenuti in modo dichiarativo\n\nL'autenticazione usa la catena standard di credenziali AWS: chiavi esplicite → variabili di ambiente → ruolo attività ECS → IMDSv2 → STS AssumeRole — gestita dal componente sottostante `AwsRestClient`.\n\nProgetto: <https://aws.amazon.com/bedrock/>"
+        },
+        "app.QVdTQmVkcm9jaw.display_name": {
+          "source": "AWS Bedrock",
+          "message": "AWS Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.short_desc": {
+          "source": "Generative AI on AWS Bedrock",
+          "message": "IA generativa su AWS Bedrock"
+        }
+      }
+    }
+  }
+}

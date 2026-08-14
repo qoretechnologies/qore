@@ -1,0 +1,745 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.Q29oZXJl.action.Y2hhdA.desc": {
+          "source": "Sends a list of chat messages to a Cohere Command model via `/v2/chat` and returns the generated response.",
+          "message": "Envía una lista de mensajes de chat a un modelo Cohere Command a través de `/v2/chat` y devuelve la respuesta generada."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.",
+          "message": "Restringe el muestreo a los K siguientes tokens más probables."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.aw.short_desc": {
+          "source": "Sample only from the K most likely next tokens",
+          "message": "Muestrear únicamente de los K siguientes tokens más probables"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.desc": {
+          "source": "Cohere chat model identifier, e.g. `command-r-plus`, `command-r`, `command-r7b`.",
+          "message": "Identificador del modelo de chat de Cohere, p. ej. `command-r-plus`, `command-r`, `command-r7b`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Cohere chat model",
+          "message": "Modelo de chat de Cohere"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Número máximo de tokens a generar."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Máximo de tokens"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Tokens máximos a emitir"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.",
+          "message": "El historial de conversación como una lista de objetos de mensaje."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Mensajes"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Lista de mensajes de chat que forman la conversación"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Semilla entera para muestreo determinista."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Semilla"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Semilla de muestreo determinista"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "List of stop sequences; generation halts when any is emitted.",
+          "message": "Lista de secuencias de parada; la generación se detiene cuando se emite cualquiera de ellas."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "Secuencias de parada"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "List of stop sequences",
+          "message": "Lista de secuencias de parada"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.desc": {
+          "source": "Nucleus sampling cutoff.",
+          "message": "Punto de corte del muestreo nuclear."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cA.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Punto de corte del muestreo nuclear (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}` or `{type: \"json_object\", schema: {...}}`.",
+          "message": "Hash que fuerza una forma de respuesta estructurada, p. ej. `{type: \"json_object\"}` o `{type: \"json_object\", schema: {...}}`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato de respuesta"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON schema)",
+          "message": "Forzar salida estructurada (p. ej., esquema JSON)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Ninguno: no llamar nunca a una herramienta"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Automático: el modelo decide"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Obligatorio: debe llamar a una herramienta"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `required`.",
+          "message": "Modo de invocación de herramientas: `none`, `auto` o `required`."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Elección de herramienta"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Modo de invocación de herramientas"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.  Each entry has `type: function` and a `function` hash with `name`, `description`, and JSON-schema `parameters`.",
+          "message": "Lista de definiciones de herramientas. Cada entrada tiene `type: function` y un hash `function` con `name`, `description` y `parameters` de esquema JSON."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Herramientas"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dG9vbHM.short_desc": {
+          "source": "Tool definitions the model may call",
+          "message": "Definiciones de herramientas que el modelo puede llamar"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Cohere recommends `0.3` as default.",
+          "message": "Controla la aleatoriedad de la salida. Cohere recomienda `0.3` de forma predeterminada."
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1)",
+          "message": "Temperatura de muestreo (0-1)"
+        },
+        "app.Q29oZXJl.action.Y2hhdA.short_desc": {
+          "source": "Generate a chat completion from a Cohere Command model",
+          "message": "Generar una compleción de chat a partir de un modelo Cohere Command"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.desc": {
+          "source": "Classifies text inputs into one of a set of labels using few-shot examples or fine-tuned classification models via Cohere's `/v1/classify` endpoint.\n\nNote: classify currently uses the v1 endpoint; the rest of this provider uses v2.  The request body path is absolute (`/v1/classify`) to address the v1 surface.",
+          "message": "Clasifica entradas de texto en una de un conjunto de etiquetas usando ejemplos de pocos disparos (few-shot) o modelos de clasificación ajustados a través del endpoint `/v1/classify` de Cohere.\n\nNota: classify utiliza actualmente el endpoint v1; el resto de este proveedor utiliza v2. La ruta del cuerpo de la solicitud es absoluta (`/v1/classify`) para dirigirse a la superficie de v1."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.display_name": {
+          "source": "Classify Text",
+          "message": "Clasificar texto"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.desc": {
+          "source": "List of `{text, label}` hashes providing few-shot examples.  Required when no fine-tuned model is supplied; minimum 2 examples per label and at least 2 labels.",
+          "message": "Lista de hashes `{text, label}` que proporcionan ejemplos few-shot. Obligatorio cuando no se proporciona un modelo ajustado; mínimo 2 ejemplos por etiqueta y al menos 2 etiquetas."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.display_name": {
+          "source": "Examples",
+          "message": "Ejemplos"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.ZXhhbXBsZXM.short_desc": {
+          "source": "Few-shot labeled examples (required without fine-tuned model)",
+          "message": "Ejemplos etiquetados few-shot (obligatorio si no hay un modelo ajustado)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.desc": {
+          "source": "List of input texts to classify into one of the labels supplied via `examples` (few-shot) or the fine-tuned model's vocabulary.",
+          "message": "Lista de textos de entrada para clasificar en una de las etiquetas proporcionadas mediante `examples` (few-shot) o el vocabulario del modelo ajustado."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.display_name": {
+          "source": "Inputs",
+          "message": "Entradas"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.aW5wdXRz.short_desc": {
+          "source": "List of input texts to classify",
+          "message": "Lista de textos de entrada para clasificar"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.desc": {
+          "source": "Fine-tuned classification model identifier.  Optional when `examples` is supplied for few-shot classification.",
+          "message": "Identificador del modelo de clasificación ajustado. Opcional cuando se proporciona `examples` para la clasificación few-shot."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.bW9kZWw.short_desc": {
+          "source": "Fine-tuned classification model (optional with examples)",
+          "message": "Modelo de clasificación ajustado (opcional con ejemplos)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.desc": {
+          "source": "Cohere classification preset name (alternative to inline `examples`).",
+          "message": "Nombre del preajuste de clasificación de Cohere (alternativa a `examples` en línea)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.display_name": {
+          "source": "Preset",
+          "message": "Preajuste"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.cHJlc2V0.short_desc": {
+          "source": "Preset name (alternative to inline examples)",
+          "message": "Nombre del preajuste (alternativa a ejemplos en línea)"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.desc": {
+          "source": "Truncation strategy: `NONE`, `START`, or `END` (default).",
+          "message": "Estrategia de truncamiento: `NONE`, `START` o `END` (predeterminado)."
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Truncar"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Cómo truncar las entradas que exceden el contexto"
+        },
+        "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
+          "source": "Classify text inputs into labeled categories using Cohere Classify",
+          "message": "Clasificar entradas de texto en categorías etiquetadas mediante Cohere Classify"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.desc": {
+          "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
+          "message": "Convierte entradas de texto en vectores de incrustación (embedding) a través del endpoint `/v2/embed` de Cohere con selección de `input_type` según la tarea."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.display_name": {
+          "source": "Create Embeddings",
+          "message": "Crear embeddings"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "Clasificación"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "Clustering"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document - text to be indexed",
+          "message": "Documento de búsqueda - texto a indexar"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query - user query",
+          "message": "Consulta de búsqueda - consulta del usuario"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Task hint required by Cohere v3 embedding models.  Choosing the right input type improves retrieval relevance — query and document embeddings are optimized differently.",
+          "message": "Pista de tarea requerida por los modelos de incrustación de Cohere v3. Elegir el tipo de entrada correcto mejora la relevancia de recuperación: las incrustaciones de consultas y de documentos se optimizan de manera diferente."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "Tipo de entrada"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Task hint (required for v3 models)",
+          "message": "Pista de tarea (requerida para modelos v3)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Cohere embedding model identifier.  Examples:\n\n- `embed-multilingual-v3.0` — 100+ languages (recommended default)\n- `embed-english-v3.0` — English-only, slightly faster\n- `embed-multilingual-light-v3.0` — smaller, lower-cost variant",
+          "message": "Identificador del modelo de incrustación de Cohere. Ejemplos:\n\n- `embed-multilingual-v3.0` — más de 100 idiomas (predeterminado recomendado)\n- `embed-english-v3.0` — solo inglés, ligeramente más rápido\n- `embed-multilingual-light-v3.0` — variante más pequeña y de menor costo"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Cohere embedding model",
+          "message": "Modelo de incrustación de Cohere"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "List of input texts to convert to embedding vectors.",
+          "message": "Lista de textos de entrada para convertir a vectores de incrustación."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "Textos"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "List of texts to embed",
+          "message": "Lista de textos a incrustar"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None - error on overflow",
+          "message": "Ninguno - error por desbordamiento"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOkVORA.display_name": {
+          "source": "End - truncate end (default)",
+          "message": "Final - truncar al final (predeterminado)"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.allowed-value.c3RyaW5nOlNUQVJU.display_name": {
+          "source": "Start - truncate beginning",
+          "message": "Inicio - truncar al inicio"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.desc": {
+          "source": "How to handle inputs that exceed the embedding model's context window.  Default `END`.",
+          "message": "Cómo gestionar las entradas que exceden la ventana de contexto del modelo de incrustación. Predeterminado: `END`."
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate",
+          "message": "Truncar"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.option.dHJ1bmNhdGU.short_desc": {
+          "source": "How to truncate inputs that exceed context",
+          "message": "Cómo truncar las entradas que exceden el contexto"
+        },
+        "app.Q29oZXJl.action.ZW1iZWQ.short_desc": {
+          "source": "Generate embedding vectors from a Cohere embedding model",
+          "message": "Generar vectores de incrustación a partir de un modelo de incrustación de Cohere"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Cohere** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada HTTP / REST API personalizada a **Cohere** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUsa esta acción para endpoints que aún no estén disponibles como acciones nativas en esta aplicación."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Cohere",
+          "message": "Realizar una llamada API personalizada a Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.desc": {
+          "source": "Reranks a list of candidate documents against a query using Cohere's rerank-v3.5 cross-encoder via `/v2/rerank`.  Returns top-N documents sorted by relevance score.",
+          "message": "Reordena una lista de documentos candidatos respecto a una consulta mediante el cross-encoder rerank-v3.5 de Cohere a través de `/v2/rerank`. Devuelve los N mejores documentos ordenados por puntuación de relevancia."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "Reordenar documentos"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "List of candidate documents to rerank against the query.",
+          "message": "Lista de documentos candidatos para reordenar respecto a la consulta."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "Documentos"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "Candidate documents to rerank",
+          "message": "Documentos candidatos para reordenar"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Cohere reranker model.  Examples:\n\n- `rerank-v3.5` — latest cross-encoder (recommended default)\n- `rerank-english-v3.0` — English-only v3\n- `rerank-multilingual-v3.0` — multilingual v3",
+          "message": "Modelo de reordenación de Cohere. Ejemplos:\n\n- `rerank-v3.5` — cross-encoder más reciente (predeterminado recomendado)\n- `rerank-english-v3.0` — v3 solo en inglés\n- `rerank-multilingual-v3.0` — v3 multilingüe"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "Cohere reranker model",
+          "message": "Modelo de reordenador de Cohere"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.desc": {
+          "source": "When documents exceed the rerank context window, Cohere chunks them internally.  This caps the number of chunks per document.",
+          "message": "Cuando los documentos superan la ventana de contexto de reordenación, Cohere los divide internamente en fragmentos. Esto limita el número máximo de fragmentos por documento."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.display_name": {
+          "source": "Max Chunks Per Doc",
+          "message": "Fragmentos máximos por documento"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
+          "source": "Maximum chunks per document for long-document rerank",
+          "message": "Fragmentos máximos por documento para la reordenación de documentos extensos"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "Free-form user query.",
+          "message": "Consulta de usuario en texto libre."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Consulta"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The user query to rerank documents against",
+          "message": "La consulta de usuario contra la que reordenar los documentos"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When `True` (default), each result includes the document.",
+          "message": "Cuando es `True` (predeterminado), cada resultado incluye el documento."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Return Documents",
+          "message": "Devolver documentos"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Whether to echo the document text in the response",
+          "message": "Si se debe incluir el texto del documento en la respuesta"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.desc": {
+          "source": "Number of top-ranked documents to return.",
+          "message": "Número de documentos mejor clasificados a devolver."
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.display_name": {
+          "source": "Top N",
+          "message": "N principales"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.option.dG9wX24.short_desc": {
+          "source": "How many top-scoring results to return",
+          "message": "Cuántos resultados con mejor puntuación devolver"
+        },
+        "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
+          "source": "Rerank candidate documents against a query using Cohere Rerank",
+          "message": "Reordenar documentos candidatos frente a una consulta usando Cohere Rerank"
+        },
+        "app.Q29oZXJl.desc": {
+          "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",
+          "message": "Proporciona acceso a [Cohere](https://cohere.com): chat de nivel empresarial con Command R / R+, incrustaciones multilingües y reordenación de primer nivel.\n\n**Casos de uso comunes**:\n- **Agentes de chat con uso de herramientas** con Command R+\n- **Incrustaciones RAG multilingües** con embed-multilingual-v3.0\n- **Reordenación para producción** con rerank-v3.5 (se combina de forma natural con cualquier generador de incrustaciones)\n- **Clasificación de texto** a través del endpoint dedicado /classify"
+        },
+        "app.Q29oZXJl.display_name": {
+          "source": "Cohere",
+          "message": "Cohere"
+        },
+        "app.Q29oZXJl.short_desc": {
+          "source": "Cohere chat (Command R/R+), embeddings, reranking, and classification",
+          "message": "Chat de Cohere (Command R/R+), incrustaciones, reordenación y clasificación"
+        }
+      }
+    }
+  }
+}

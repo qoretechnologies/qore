@@ -1,0 +1,2033 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return request for an order",
+          "message": "Vytvořit nový požadavek na vrácení pro objednávku"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "Vytvořit vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID from the e-commerce platform (used as `order.external_id` in the API request)",
+          "message": "ID objednávky z e-commerce platformy (použito jako `order.external_id` v požadavku API)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "Externí ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "Order ID from e-commerce platform",
+          "message": "ID objednávky z e-commerce platformy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.desc": {
+          "source": "List of items to return with quantities, reasons, and resolutions",
+          "message": "Seznam položek k vrácení s množstvími, důvody a způsoby řešení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.display_name": {
+          "source": "Return Items",
+          "message": "Položky k vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.short_desc": {
+          "source": "Items to return",
+          "message": "Položky k vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return request",
+          "message": "Vytvořit nový požadavek na vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.desc": {
+          "source": "Create a new package tracking by providing a tracking number and optional courier code",
+          "message": "Vytvořit nové sledování zásilky zadáním sledovacího čísla a volitelného kódu kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
+          "source": "Create Tracking",
+          "message": "Vytvořit sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.desc": {
+          "source": "Identifier for the courier connection to use for this tracking",
+          "message": "Identifikátor připojení kurýra, které se má použít pro toto sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.display_name": {
+          "source": "Courier Connection ID",
+          "message": "ID připojení kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.short_desc": {
+          "source": "Courier connection reference",
+          "message": "Odkaz na připojení kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Vlastní textové páry klíč-hodnota pro další údaje o sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Vlastní data klíč-hodnota"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.desc": {
+          "source": "Name of the package recipient",
+          "message": "Jméno příjemce zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.display_name": {
+          "source": "Customer Name",
+          "message": "Customer Name"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Jméno příjemce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Ode dveří ke dveřím"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Vyzvednutí u kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Vyzvednutí na prodejně"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Typ doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Kód cílové země podle ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Cílová země"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kód cílové země (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Cílový stát nebo provincie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Cílový stát"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Cílový stát nebo provincie"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Cílové poštovní směrovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Cílové PSČ"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Cílové poštovní směrovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Datum vytvoření objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Datum objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Datum vytvoření objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Globální identifikátor objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Globální identifikátor objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL objednávky v systému obchodníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Cesta k ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL objednávky v systému obchodníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Čitelné číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Čitelné číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Očekávané datum doručení přislíbené zákazníkovi"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Přislíbené datum doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Očekávané datum doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Kód země odeslání podle ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Země odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kód země odeslání (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Poštovní směrovací číslo odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "PSČ odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "PSČ odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Stát nebo provincie odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Stát odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Stát nebo provincie odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID pobočky obchodu; automaticky vyplní pole adresy odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID umístění"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID pobočky obchodu"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Kód jazyka podle ISO 639-1 pro oznámení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Jazyk oznámení (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "User-provided text notes for this tracking",
+          "message": "Uživatelské textové poznámky k tomuto sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Textové poznámky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "List of tags to assign to the shipment for categorization",
+          "message": "Seznam štítků k přiřazení k zásilce pro kategorizaci"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Štítky zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Tags for the shipment",
+          "message": "Štítky pro zásilku"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Popis typu služby dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Typ zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Popis služby dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Způsob přepravní služby zvolený při pokladně"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Způsob dopravy"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Způsob přepravní služby"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Kód skupiny kurýrů pro detekci více identifikátorů slug (např. `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Skupina kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Kód skupiny kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Unique courier code (e.g., `fedex`, `ups`). If not specified, Aftership will auto-detect",
+          "message": "Jedinečný kód kurýra (např. `fedex`, `ups`). Pokud není zadán, Aftership jej detekuje automaticky"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Unique courier code",
+          "message": "Jedinečný kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Pokyny pro vyzvednutí balíku"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Poznámka k vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Pokyny k vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Podrobnosti o místě pro vyzvednutí příjemcem"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Místo vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Podrobnosti o místě vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking; defaults to the tracking number",
+          "message": "Zobrazovaný název pro sledování; výchozí hodnota je sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name for the tracking",
+          "message": "Zobrazovaný název pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Číslo účtu dopravce pro přihlašovací údaje ke sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Číslo účtu pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Číslo účtu dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Přihlašovací údaj ke sledování pro určité dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klíč sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Přihlašovací údaj ke sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Carrier tracking number (4-100 characters)",
+          "message": "Sledovací číslo dopravce (4–100 znaků)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "Sledovací číslo dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Datum odeslání pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Create a new tracking",
+          "message": "Vytvořit nové sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.desc": {
+          "source": "Attach a shipping label or tracking number to a return",
+          "message": "Připojit přepravní štítek nebo sledovací číslo k vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
+          "source": "Add Return Shipment",
+          "message": "Přidat zpětnou zásilku"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier code for the return shipment (e.g., `fedex`, `ups`)",
+          "message": "Kód kurýra pro zpětnou zásilku (např. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Return shipment courier",
+          "message": "Kurýr zpětné zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.desc": {
+          "source": "The Aftership return ID to attach the shipping label/tracking to",
+          "message": "ID vrácení v Aftership, ke kterému se má připojit přepravní štítek / sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.short_desc": {
+          "source": "The return ID to add shipment to",
+          "message": "ID vrácení, ke kterému se má přidat zásilka"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the return shipment",
+          "message": "Sledovací číslo zpětné zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Return shipment tracking number",
+          "message": "Sledovací číslo zpětné zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
+          "source": "Add a shipment to a return",
+          "message": "Přidat zásilku k vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.desc": {
+          "source": "Approve a pending return request",
+          "message": "Schválit čekající žádost o vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
+          "source": "Approve Return",
+          "message": "Schválit vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to approve",
+          "message": "ID vrácení v Aftership ke schválení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to approve",
+          "message": "ID vrácení ke schválení"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
+          "source": "Approve a return request",
+          "message": "Schválit žádost o vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.desc": {
+          "source": "Retrieve the most recent checkpoint event for a tracking",
+          "message": "Získat nejnovější událost kontrolního bodu pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
+          "source": "Get Last Checkpoint",
+          "message": "Získat poslední kontrolní bod"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to get the last checkpoint for",
+          "message": "ID sledování v Aftership, pro které se má získat poslední kontrolní bod"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.short_desc": {
+          "source": "The tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
+          "source": "Get the last checkpoint of a tracking",
+          "message": "Získat poslední kontrolní bod sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve a single return record by its ID or RMA number",
+          "message": "Získat jeden záznam o vrácení podle jeho ID nebo čísla RMA"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "Získat vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID or RMA number to retrieve",
+          "message": "ID vrácení nebo číslo RMA v Aftership k načtení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to retrieve",
+          "message": "ID vrácení k načtení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a return by ID",
+          "message": "Získat vrácení podle ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.desc": {
+          "source": "Retrieve a single tracking record by its Aftership tracking ID",
+          "message": "Získat jeden záznam sledování podle jeho ID sledování Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
+          "source": "Get Tracking",
+          "message": "Získat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrieve",
+          "message": "ID sledování v Aftership k načtení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrieve",
+          "message": "ID sledování k načtení"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
+          "source": "Get a tracking by ID",
+          "message": "Získat sledování podle ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.desc": {
+          "source": "Automatically detect the courier for a given tracking number",
+          "message": "Automaticky detekovat kurýra pro dané sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
+          "source": "Detect Courier",
+          "message": "Detekovat kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code to improve detection accuracy",
+          "message": "Kód cílové země ISO Alpha-3 pro zvýšení přesnosti detekce"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Cílová země"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kód cílové země (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination to improve detection accuracy",
+          "message": "Cílový stát nebo provincie pro zvýšení přesnosti detekce"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Cílový stát"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Cílový stát nebo provincie"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Destination postal code to improve detection accuracy",
+          "message": "Cílové PSČ pro zvýšení přesnosti detekce"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Cílové PSČ"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Cílové poštovní směrovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code to improve detection accuracy",
+          "message": "Kód výchozí země ISO Alpha-3 pro zvýšení přesnosti detekce"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Země odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kód země odeslání (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Kód skupiny kurýrů pro detekci více identifikátorů slug (např. `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Skupina kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Kód skupiny kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.desc": {
+          "source": "List of courier codes to narrow detection (e.g., `fedex`, `ups`)",
+          "message": "Seznam kódů kurýrů pro zúžení detekce (např. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.display_name": {
+          "source": "Courier Slugs",
+          "message": "Kódy kurýrů (slugs)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier codes",
+          "message": "Filtrovat podle kódů kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number to help narrow courier detection",
+          "message": "Číslo účtu dopravce pro usnadnění zúžení detekce kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Číslo účtu pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Číslo účtu dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential to help narrow courier detection",
+          "message": "Přihlašovací údaj sledování pro usnadnění zúžení detekce kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klíč sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Přihlašovací údaj ke sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to identify the courier for",
+          "message": "Sledovací číslo, pro které se má určit kurýr"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Sledovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number to identify",
+          "message": "Sledovací číslo k identifikaci"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date to help narrow courier detection",
+          "message": "Datum odeslání pro usnadnění zúžení detekce kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
+          "source": "Auto-detect courier from tracking number",
+          "message": "Automaticky detekovat kurýra ze sledovacího čísla"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.desc": {
+          "source": "Delete an existing tracking by its Aftership tracking ID",
+          "message": "Smazat existující sledování podle jeho Aftership tracking ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
+          "source": "Delete Tracking",
+          "message": "Smazat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to delete",
+          "message": "Aftership tracking ID ke smazání"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to delete",
+          "message": "ID sledování ke smazání"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
+          "source": "Delete a tracking",
+          "message": "Smazat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "Retrieve a list of all couriers supported by Aftership",
+          "message": "Získat seznam všech kurýrů podporovaných službou Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Seznam kurýrů"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List all supported couriers",
+          "message": "Vypsat všechny podporované kurýry"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Aftership** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Aftership** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci vystaveny jako prvotřídní akce."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Aftership",
+          "message": "Provést vlastní volání API do Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.desc": {
+          "source": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+          "message": "Označit sledování jako dokončené s uvedením důvodu (doručeno, ztraceno nebo vráceno odesílateli)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
+          "source": "Mark as Completed",
+          "message": "Označit jako dokončené"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.desc": {
+          "source": "Timestamp of when the completion event occurred. If not provided, the current time is used",
+          "message": "Časové razítko události dokončení. Pokud není zadáno, použije se aktuální čas"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.display_name": {
+          "source": "Event Date/Time",
+          "message": "Datum/čas události"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.short_desc": {
+          "source": "When the event occurred",
+          "message": "Kdy k události došlo"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to mark as completed",
+          "message": "Aftership tracking ID k označení jako dokončené"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.short_desc": {
+          "source": "The tracking ID to mark as completed",
+          "message": "ID sledování k označení jako dokončené"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkRFTElWRVJFRA.display_name": {
+          "source": "Delivered",
+          "message": "Doručeno"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkxPU1Q.display_name": {
+          "source": "Lost",
+          "message": "Ztraceno"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOlJFVFVSTkVEX1RPX1NFTkRFUg.display_name": {
+          "source": "Returned to Sender",
+          "message": "Vráceno odesílateli"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.desc": {
+          "source": "Reason for marking the tracking as completed",
+          "message": "Důvod označení sledování jako dokončeného"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Důvod"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.short_desc": {
+          "source": "Completion reason",
+          "message": "Důvod dokončení"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
+          "source": "Mark a tracking as completed",
+          "message": "Označit sledování jako dokončené"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.desc": {
+          "source": "Search and list returns with optional filters for status, email, outcome, and date range",
+          "message": "Vyhledat a vypsat vratky s volitelnými filtry pro stav, e-mail, výsledek a rozsah dat"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
+          "source": "Search Returns",
+          "message": "Hledat vratky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter returns created before this date",
+          "message": "Filtrovat vratky vytvořené před tímto datem"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Vytvořeno před"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtrovat podle maximálního data vytvoření"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter returns created after this date",
+          "message": "Filtrovat vratky vytvořené po tomto datu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Vytvořeno po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtrovat podle minimálního data vytvoření"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.desc": {
+          "source": "Filter returns by customer email address",
+          "message": "Filtrovat vratky podle e-mailové adresy zákazníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.display_name": {
+          "source": "Customer Email",
+          "message": "E-mail zákazníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.short_desc": {
+          "source": "Filter by customer email",
+          "message": "Filtrovat podle e-mailu zákazníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.display_name": {
+          "source": "Approved",
+          "message": "Schváleno"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.display_name": {
+          "source": "Done",
+          "message": "Hotovo"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Vypršela platnost"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.display_name": {
+          "source": "Rejected",
+          "message": "Zamítnuto"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnN1Ym1pdHRlZA.display_name": {
+          "source": "Submitted",
+          "message": "Odesláno"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.desc": {
+          "source": "Filter returns by approval status",
+          "message": "Filtrovat vratky podle stavu schválení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.display_name": {
+          "source": "Approval Status",
+          "message": "Stav schválení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.short_desc": {
+          "source": "Filter by approval status",
+          "message": "Filtrovat podle stavu schválení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.desc": {
+          "source": "Filter by order name (e.g., `#1001`)",
+          "message": "Filtrovat podle názvu objednávky (např. `#1001`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.display_name": {
+          "source": "Order Name",
+          "message": "Název objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.short_desc": {
+          "source": "Filter by order name",
+          "message": "Filtrovat podle názvu objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOmV4Y2hhbmdl.display_name": {
+          "source": "Exchange",
+          "message": "Výměna"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnJlZnVuZA.display_name": {
+          "source": "Refund",
+          "message": "Refundace"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnN0b3JlX2NyZWRpdA.display_name": {
+          "source": "Store Credit",
+          "message": "Kredit v obchodě"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnVwc2VsbA.display_name": {
+          "source": "Upsell",
+          "message": "Upsell"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.desc": {
+          "source": "Filter returns by outcome type",
+          "message": "Filtrovat vratky podle typu výsledku"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.display_name": {
+          "source": "Outcome",
+          "message": "Výsledek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.short_desc": {
+          "source": "Filter by return outcome",
+          "message": "Filtrovat podle výsledku vratky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.desc": {
+          "source": "Number of returns per page (1-50, default `10`)",
+          "message": "Počet vratek na stránku (1–50, výchozí `10`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Počet výsledků na stránku"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (1-200, default `1`)",
+          "message": "Číslo stránky pro stránkování (1–200, výchozí `1`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+          "source": "Customer Courier",
+          "message": "Kurýr zákazníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+          "source": "Carrier Dropoff",
+          "message": "Podání u dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+          "source": "Carrier Pickup",
+          "message": "Vyzvednutí dopravcem"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+          "source": "Green Return",
+          "message": "Ekologické vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+          "source": "Happy Returns",
+          "message": "Happy Returns"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+          "source": "In Store",
+          "message": "Na prodejně"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+          "source": "Retail Reworks",
+          "message": "Retail Reworks"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+          "source": "Retailer Label",
+          "message": "Štítek prodejce"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.desc": {
+          "source": "Filter returns by shipping method",
+          "message": "Filtrovat vrácení podle způsobu dopravy"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.display_name": {
+          "source": "Return Method",
+          "message": "Způsob vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.short_desc": {
+          "source": "Filter by return method",
+          "message": "Filtrovat podle způsobu vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
+          "source": "Search and list returns",
+          "message": "Vyhledat a vypsat vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.desc": {
+          "source": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+          "message": "Vyhledat a vypsat sledování s volitelnými filtry pro klíčové slovo, přepravce, stav a časové období"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
+          "source": "Search Trackings",
+          "message": "Vyhledat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings created before this date",
+          "message": "Filtrovat sledování vytvořená před tímto datem"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Vytvořeno před"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtrovat podle maximálního data vytvoření"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings created after this date",
+          "message": "Filtrovat sledování vytvořená po tomto datu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Vytvořeno po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtrovat podle minimálního data vytvoření"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.desc": {
+          "source": "Cursor for pagination; use the value from the previous response to get the next page",
+          "message": "Kurzor pro stránkování; pro získání další stránky použijte hodnotu z předchozí odpovědi"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Stránkovací kurzor"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.desc": {
+          "source": "ISO Alpha-3 destination country code(s), comma-separated",
+          "message": "Kódy cílových zemí podle ISO Alpha-3, oddělené čárkami"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Cílová země"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Filter by destination country",
+          "message": "Filtrovat podle cílové země"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.desc": {
+          "source": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+          "message": "Klíčové slovo pro vyhledávání a filtrování sledování podle čísla zásilky, názvu, ID objednávky atd."
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Klíčové slovo"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "Klíčové slovo pro vyhledávání"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.desc": {
+          "source": "Filter trackings by the order ID",
+          "message": "Filtrovat sledování podle ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrovat podle ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.desc": {
+          "source": "ISO Alpha-3 origin country code(s), comma-separated",
+          "message": "Kódy výchozích zemí podle ISO Alpha-3, oddělené čárkami"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.display_name": {
+          "source": "Origin Country",
+          "message": "Země odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.short_desc": {
+          "source": "Filter by origin country",
+          "message": "Filtrovat podle výchozí země"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.desc": {
+          "source": "Number of trackings per page (max 200)",
+          "message": "Počet sledování na stránku (max. 200)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Počet výsledků na stránku"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "Comma-separated shipment tags to filter by",
+          "message": "Štítky zásilek oddělené čárkami, podle kterých se má filtrovat"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Štítky zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Filter by shipment tags",
+          "message": "Filtrovat podle štítků zásilek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.desc": {
+          "source": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+          "message": "Filtrovat sledování podle kódu přepravce (např. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier code",
+          "message": "Filtrovat podle kódu přepravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.desc": {
+          "source": "Filter trackings by return-to-sender status. Set to `True` to show only return-to-sender shipments, `False` to exclude them",
+          "message": "Filtrovat sledování podle stavu vrácení odesílateli. Nastavte na `True` pro zobrazení pouze zásilek vracejících se odesílateli, `False` pro jejich vyloučení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.display_name": {
+          "source": "Return to Sender",
+          "message": "Vrácení odesílateli"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.short_desc": {
+          "source": "Filter return-to-sender shipments",
+          "message": "Filtrovat zásilky vracející se odesílateli"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOk91dEZvckRlbGl2ZXJ5.display_name": {
+          "source": "Out for Delivery",
+          "message": "Doručuje se"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF0dGVtcHRGYWls.display_name": {
+          "source": "Attempt Failed",
+          "message": "Neúspěšný pokus o doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF2YWlsYWJsZUZvclBpY2t1cA.display_name": {
+          "source": "Available for Pickup",
+          "message": "Připraveno k vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Doručeno"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4Y2VwdGlvbg.display_name": {
+          "source": "Exception",
+          "message": "Výjimka"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Vypršela platnost"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluVHJhbnNpdA.display_name": {
+          "source": "In Transit",
+          "message": "V přepravě"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluZm9SZWNlaXZlZA.display_name": {
+          "source": "Info Received",
+          "message": "Informace přijaty"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOlBlbmRpbmc.display_name": {
+          "source": "Pending",
+          "message": "Čekající"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.desc": {
+          "source": "Filter trackings by delivery status",
+          "message": "Filtrovat sledování podle stavu doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.display_name": {
+          "source": "Status Tag",
+          "message": "Stavový štítek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.short_desc": {
+          "source": "Filter by status tag",
+          "message": "Filtrovat podle stavového štítku"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.desc": {
+          "source": "Comma-separated tracking numbers to filter by (up to 50)",
+          "message": "Čísla zásilek oddělená čárkami, podle kterých se má filtrovat (až 50)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.display_name": {
+          "source": "Tracking Numbers",
+          "message": "Čísla zásilek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.short_desc": {
+          "source": "Filter by tracking numbers",
+          "message": "Filtrovat podle čísel zásilek"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings updated before this date",
+          "message": "Filtrovat sledování aktualizovaná před tímto datem"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.display_name": {
+          "source": "Updated Before",
+          "message": "Aktualizováno před"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum update date",
+          "message": "Filtrovat podle maximálního data aktualizace"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings updated after this date",
+          "message": "Filtrovat sledování aktualizovaná po tomto datu"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.display_name": {
+          "source": "Updated After",
+          "message": "Aktualizováno po"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum update date",
+          "message": "Filtrovat podle minimálního data aktualizace"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
+          "source": "Search and list trackings",
+          "message": "Vyhledat a vypsat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.desc": {
+          "source": "Reactivate tracking for an expired shipment",
+          "message": "Znovu aktivovat sledování pro expirovanou zásilku"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.display_name": {
+          "source": "Retrack",
+          "message": "Znovu sledovat"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrack (reactivates expired trackings)",
+          "message": "ID sledování Aftership pro obnovení sledování (znovu aktivuje expirovaná sledování)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrack",
+          "message": "ID sledování pro obnovení sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.short_desc": {
+          "source": "Retrack an expired tracking",
+          "message": "Znovu sledovat expirované sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.desc": {
+          "source": "Reject a pending return request with an optional reason",
+          "message": "Odmítnout čekající žádost o vrácení s volitelným důvodem"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
+          "source": "Reject Return",
+          "message": "Odmítnout vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID to reject",
+          "message": "ID vrácení Aftership k odmítnutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to reject",
+          "message": "ID vrácení k odmítnutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Reason for rejecting the return",
+          "message": "Důvod odmítnutí vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Důvod"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Rejection reason",
+          "message": "Důvod odmítnutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
+          "source": "Reject a return request",
+          "message": "Odmítnout žádost o vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.desc": {
+          "source": "Mark a return as resolved (completed processing)",
+          "message": "Označit vrácení jako vyřešené (dokončené zpracování)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
+          "source": "Resolve Return",
+          "message": "Vyřešit vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to mark as resolved",
+          "message": "ID vrácení Aftership k označení jako vyřešené"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to resolve",
+          "message": "ID vrácení k vyřešení"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
+          "source": "Resolve a return",
+          "message": "Vyřešit vrácení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+          "message": "Dotazuje se rozhraní API Aftership a vyvolá událost, když se změní stav doručení zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Tracking Status Changed",
+          "message": "Stav sledování změněn"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Watch for tracking status changes",
+          "message": "Sledovat změny stavu sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.desc": {
+          "source": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+          "message": "Aktualizovat metadata existujícího sledování (název, ID objednávky, poznámky atd.)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
+          "source": "Update Tracking",
+          "message": "Aktualizovat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Vlastní textové páry klíč-hodnota pro další údaje o sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Vlastní data klíč-hodnota"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Ode dveří ke dveřím"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Vyzvednutí u kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Vyzvednutí na prodejně"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Typ doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Způsob doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Kód cílové země podle ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Cílová země"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Kód cílové země (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Cílové město"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Cílový stát nebo provincie"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Cílový stát"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Cílový stát nebo provincie"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Cílové poštovní směrovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Cílové PSČ"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Cílové poštovní směrovací číslo"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to update",
+          "message": "ID sledování Aftership, které se má aktualizovat"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to update",
+          "message": "ID sledování k aktualizaci"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Datum vytvoření objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Datum objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Datum vytvoření objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Globální identifikátor objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Globální identifikátor objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL objednávky v systému obchodníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Cesta k ID objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL objednávky v systému obchodníka"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Čitelné číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Čitelné číslo objednávky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Očekávané datum doručení přislíbené zákazníkovi"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Přislíbené datum doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Očekávané datum doručení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Město odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Kód země odeslání podle ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Země odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Kód země odeslání (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Poštovní směrovací číslo odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "PSČ odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "PSČ odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Stát nebo provincie odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Stát odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Stát nebo provincie odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID pobočky obchodu; automaticky vyplní pole adresy odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID umístění"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID pobočky obchodu"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Kód jazyka podle ISO 639-1 pro oznámení"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Jazyk oznámení (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "Text notes for this tracking",
+          "message": "Textové poznámky k tomuto sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Textové poznámky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Popis typu služby dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Typ zásilky"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Popis služby dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Způsob přepravní služby zvolený při pokladně"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Způsob dopravy"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Způsob přepravní služby"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Update the courier code for this tracking (e.g., `fedex`, `ups`)",
+          "message": "Aktualizovat kód kurýra pro toto sledování (např. `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Update the courier code",
+          "message": "Aktualizovat kód kurýra"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Pokyny pro vyzvednutí balíku"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Poznámka k vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Pokyny k vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Podrobnosti o místě pro vyzvednutí příjemcem"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Místo vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Podrobnosti o místě vyzvednutí"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking",
+          "message": "Zobrazovaný název pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name",
+          "message": "Zobrazovaný název"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Číslo účtu dopravce pro přihlašovací údaje ke sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Číslo účtu pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Číslo účtu dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Přihlašovací údaj ke sledování pro určité dopravce"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Klíč sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Přihlašovací údaj ke sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Datum odeslání pro sledování"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Datum odeslání"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Update a tracking",
+          "message": "Aktualizovat sledování"
+        },
+        "app.QWZ0ZXJzaGlw.desc": {
+          "source": "Aftership package tracking and returns management services providing access to tracking, courier detection, and returns APIs",
+          "message": "Služby Aftership pro sledování zásilek a správu vratek poskytující přístup k rozhraním API pro sledování, detekci kurýrů a vratky"
+        },
+        "app.QWZ0ZXJzaGlw.display_name": {
+          "source": "Aftership",
+          "message": "Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.short_desc": {
+          "source": "Aftership package tracking and returns",
+          "message": "Sledování zásilek a vratky Aftership"
+        }
+      }
+    }
+  }
+}

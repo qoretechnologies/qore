@@ -1,0 +1,1329 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form with content blocks and settings, optionally based on a template or within a specific workspace",
+          "message": "Vytvořit nový formulář s bloky obsahu a nastavením, volitelně na základě šablony nebo v rámci konkrétního pracovního prostoru"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create Form",
+          "message": "Vytvořit formulář"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "List of form content blocks defining the form structure (questions, text, images, etc.); a `FORM_TITLE` block is automatically prepended from the `title` field",
+          "message": "Seznam bloků obsahu formuláře definujících strukturu formuláře (otázky, text, obrázky atd.); blok `FORM_TITLE` je automaticky předřazen z pole `title`"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "Bloky"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Form content blocks",
+          "message": "Bloky obsahu formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Form configuration including closure, notifications, and display options",
+          "message": "Konfigurace formuláře včetně uzavření, oznámení a možností zobrazení"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Nastavení"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Form settings",
+          "message": "Nastavení formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "Prázdné"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Koncept"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "Publikováno"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The initial status of the form",
+          "message": "Počáteční stav formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Initial form status",
+          "message": "Počáteční stav formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The workspace to create the form in; defaults to the user's default workspace",
+          "message": "Pracovní prostor, ve kterém se má formulář vytvořit; výchozí hodnota je výchozí pracovní prostor uživatele"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovního prostoru"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "Target workspace",
+          "message": "Cílový pracovní prostor"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.desc": {
+          "source": "Optional template ID to use as a base for the new form",
+          "message": "Volitelné ID šablony použité jako základ pro nový formulář"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.display_name": {
+          "source": "Template ID",
+          "message": "ID šablony"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGVtcGxhdGVJZA.short_desc": {
+          "source": "Template to base form on",
+          "message": "Šablona jako základ formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.desc": {
+          "source": "The title displayed at the top of the form; automatically creates the required `FORM_TITLE` block as the first block",
+          "message": "Název zobrazený v horní části formuláře; automaticky vytvoří požadovaný blok `FORM_TITLE` jako první blok"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.display_name": {
+          "source": "Form Title",
+          "message": "Název formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.option.dGl0bGU.short_desc": {
+          "source": "The title of the form",
+          "message": "Název formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "Vytvořit nový formulář"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook for a form to receive events when forms are submitted",
+          "message": "Vytvořit nový webhook pro formulář k přijímání událostí při odeslání formulářů"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "Vytvořit webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "Odpověď na formulář"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "Seznam typů událostí k odběru; jedinou platnou hodnotou je `FORM_RESPONSE`"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "Typy událostí"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "Typy událostí k odběru"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.desc": {
+          "source": "Optional identifier for the external subscriber",
+          "message": "Volitelný identifikátor externího odběratele"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.display_name": {
+          "source": "External Subscriber",
+          "message": "Externí odběratel"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.ZXh0ZXJuYWxTdWJzY3JpYmVy.short_desc": {
+          "source": "External subscriber identifier",
+          "message": "Identifikátor externího odběratele"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "ID formuláře, který spouští tento webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form to attach the webhook to",
+          "message": "Formulář, ke kterému se má webhook připojit"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Optional list of custom HTTP header objects (name/value pairs) sent with webhook requests",
+          "message": "Volitelný seznam objektů vlastních HTTP hlaviček (dvojic název/hodnota) odesílaných s požadavky webhooku"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP hlavičky"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Optional secret used to sign webhook payloads for verification",
+          "message": "Volitelný tajný klíč používaný k podepisování datových zátěží webhooku pro ověření"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "Podpisový tajný klíč"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Secret for payload signing",
+          "message": "Tajný klíč pro podepisování datové zátěže"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "Cílová URL adresa, na kterou budou doručovány události webhooku"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook endpoint URL",
+          "message": "URL koncového bodu webhooku"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a new webhook",
+          "message": "Vytvořit nový webhook"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Create a new workspace and assign the authenticated user as a member; requires a Tally Pro or higher subscription",
+          "message": "Vytvořit nový pracovní prostor a přiřadit ověřeného uživatele jako člena; vyžaduje předplatné Tally Pro nebo vyšší"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Create Workspace",
+          "message": "Vytvořit pracovní prostor"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The display name for the new workspace",
+          "message": "Zobrazovaný název nového pracovního prostoru"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Workspace name",
+          "message": "Název pracovního prostoru"
+        },
+        "app.VGFsbHk.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Create a new workspace",
+          "message": "Vytvořit nový pracovní prostor"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieve information about the currently authenticated user",
+          "message": "Získat informace o aktuálně ověřeném uživateli"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "Získat aktuálního uživatele"
+        },
+        "app.VGFsbHk.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the current authenticated user",
+          "message": "Získat aktuálního ověřeného uživatele"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by its ID, including all blocks and settings",
+          "message": "Získat jeden formulář podle jeho ID, včetně všech bloků a nastavení"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "Získat formulář"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to retrieve",
+          "message": "Jedinečný identifikátor formuláře k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "ID formuláře k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a form by ID",
+          "message": "Získat formulář podle ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific form submission with all its responses and the form questions",
+          "message": "Získat konkrétní odeslání formuláře se všemi jeho odpověďmi a otázkami formuláře"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "Získat odeslání"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "ID formuláře obsahujícího odeslání"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to retrieve",
+          "message": "Jedinečný identifikátor odeslání k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "ID odeslání"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "ID odeslání k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a submission by ID",
+          "message": "Získat odeslání podle ID"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.desc": {
+          "source": "Retrieve a single workspace by its ID, including its members and pending invites",
+          "message": "Získat jeden pracovní prostor podle jeho ID, včetně jeho členů a čekajících pozvánek"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.display_name": {
+          "source": "Get Workspace",
+          "message": "Získat pracovní prostor"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to retrieve",
+          "message": "Jedinečný identifikátor pracovního prostoru k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovního prostoru"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to retrieve",
+          "message": "ID pracovního prostoru k načtení"
+        },
+        "app.VGFsbHk.action.Z2V0LXdvcmtzcGFjZQ.short_desc": {
+          "source": "Get a workspace by ID",
+          "message": "Získat pracovní prostor podle ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form by its ID and move it to the trash",
+          "message": "Smazat formulář podle jeho ID a přesunout jej do koše"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete Form",
+          "message": "Smazat formulář"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to delete (moves to trash)",
+          "message": "Jedinečný identifikátor formuláře ke smazání (přesune se do koše)"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to delete",
+          "message": "ID formuláře ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "Odstranit formulář"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Delete a specific submission from a form",
+          "message": "Smazat konkrétní odeslání z formuláře"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "Smazat odeslání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form containing the submission",
+          "message": "ID formuláře obsahujícího odeslání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.desc": {
+          "source": "The unique identifier of the submission to delete",
+          "message": "Jedinečný identifikátor odeslání ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "ID odeslání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to delete",
+          "message": "ID odeslání ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a submission",
+          "message": "Smazat odeslání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook by its ID",
+          "message": "Smazat webhook podle jeho ID"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "Smazat webhook"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to delete",
+          "message": "Jedinečný identifikátor webhooku ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to delete",
+          "message": "ID webhooku ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "Smazat webhook"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Delete a workspace and all its associated forms",
+          "message": "Smazat pracovní prostor a všechny jeho související formuláře"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Delete Workspace",
+          "message": "Smazat pracovní prostor"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to delete; this also deletes all forms in the workspace",
+          "message": "Jedinečný identifikátor pracovního prostoru ke smazání; tímto se smažou také všechny formuláře v pracovním prostoru"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovního prostoru"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to delete",
+          "message": "ID pracovního prostoru ke smazání"
+        },
+        "app.VGFsbHk.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Delete a workspace",
+          "message": "Smazat pracovní prostor"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.desc": {
+          "source": "Fires when a new form submission is received for the specified form",
+          "message": "Spustí se při přijetí nového odeslání formuláře pro zadaný formulář"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.display_name": {
+          "source": "New Form Submission",
+          "message": "Nové odeslání formuláře"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to watch for new submissions",
+          "message": "ID formuláře pro sledování nových odeslání"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "Formulář pro sledování odeslání"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Polling interval in seconds (minimum `30`, default `60`)",
+          "message": "Interval dotazování v sekundách (minimum `30`, výchozí `60`)"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.VGFsbHk.action.Zm9ybS1zdWJtaXNzaW9u.short_desc": {
+          "source": "Trigger when a new form submission is received",
+          "message": "Spustit při přijetí nového odeslání formuláře"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tally** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Proveďte vlastní volání HTTP / REST API do **Tally** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď se vrátí jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci k dispozici jako prvotřídní akce."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.VGFsbHk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tally",
+          "message": "Provést vlastní volání API do Tally"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.desc": {
+          "source": "Search and list forms with optional pagination and workspace filtering",
+          "message": "Vyhledávat a vypisovat formuláře s volitelným stránkováním a filtrováním podle pracovního prostoru"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.display_name": {
+          "source": "Search Forms",
+          "message": "Vyhledat formuláře"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Number of forms per page (1-500, default `50`)",
+          "message": "Počet formulářů na stránku (1-500, výchozí `50`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Počet výsledků na stránku"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Číslo stránky pro stránkování (výchozí `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.desc": {
+          "source": "List of workspace IDs to filter results",
+          "message": "Seznam ID pracovních prostorů pro filtrování výsledků"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.display_name": {
+          "source": "Workspace IDs",
+          "message": "ID pracovních prostorů"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.option.d29ya3NwYWNlSWRz.short_desc": {
+          "source": "Filter by workspace IDs",
+          "message": "Filtrovat podle ID pracovních prostorů"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLWZvcm1z.short_desc": {
+          "source": "Search and list forms",
+          "message": "Vyhledávat a vypisovat formuláře"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.desc": {
+          "source": "List all questions in a specific form",
+          "message": "Vypsat všechny otázky v konkrétním formuláři"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.display_name": {
+          "source": "Search Questions",
+          "message": "Vyhledat otázky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve questions from",
+          "message": "ID formuláře, ze kterého se mají načíst otázky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list questions for",
+          "message": "Formulář, pro který se mají vypsat otázky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXF1ZXN0aW9ucw.short_desc": {
+          "source": "List form questions",
+          "message": "Vypsat otázky formuláře"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.desc": {
+          "source": "Search and list submissions for a specific form with optional filtering by status, date range, and pagination",
+          "message": "Vyhledávat a vypisovat odeslání pro konkrétní formulář s volitelným filtrováním podle stavu, rozsahu dat a stránkování"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.display_name": {
+          "source": "Search Submissions",
+          "message": "Vyhledat odeslání"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.desc": {
+          "source": "Get submissions after a specific submission ID",
+          "message": "Získat odeslání po konkrétním ID odeslání"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.display_name": {
+          "source": "After ID",
+          "message": "Po ID"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.YWZ0ZXJJZA.short_desc": {
+          "source": "Cursor-based pagination",
+          "message": "Stránkování založené na kurzoru"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.desc": {
+          "source": "Filter submissions submitted on or before this date",
+          "message": "Filtrovat odeslání odeslaná k tomuto datu nebo dříve"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.display_name": {
+          "source": "End Date",
+          "message": "Koncové datum"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZW5kRGF0ZQ.short_desc": {
+          "source": "Filter by end date",
+          "message": "Filtrovat podle data ukončení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.desc": {
+          "source": "The ID of the form to retrieve submissions from",
+          "message": "ID formuláře, ze kterého se mají načíst odeslání"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list submissions for",
+          "message": "Formulář, pro který se mají vypsat odeslání"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Vše"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "Dokončeno"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.allowed-value.c3RyaW5nOnBhcnRpYWw.display_name": {
+          "source": "Partial",
+          "message": "Částečné"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions by completion status",
+          "message": "Filtrovat odeslání podle stavu dokončení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtr"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.ZmlsdGVy.short_desc": {
+          "source": "Submission status filter",
+          "message": "Filtr stavu odeslání"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.desc": {
+          "source": "Number of submissions per page (1-500, default `50`)",
+          "message": "Počet odeslání na stránku (1-500, výchozí `50`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Počet výsledků na stránku"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.desc": {
+          "source": "Filter submissions submitted on or after this date",
+          "message": "Filtrovat odeslání odeslaná k tomuto datu nebo později"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "Datum zahájení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.c3RhcnREYXRl.short_desc": {
+          "source": "Filter by start date",
+          "message": "Filtrovat podle data zahájení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Číslo stránky pro stránkování (výchozí `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "Search and list form submissions",
+          "message": "Vyhledávat a vypisovat odeslání formulářů"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.desc": {
+          "source": "List webhook delivery events (status, status code, response, retry count, payload) for a specific webhook; useful for debugging failed deliveries",
+          "message": "Vypsat události doručení webhooku (stav, stavový kód, odpověď, počet opakování, datový obsah) pro konkrétní webhook; užitečné pro ladění neúspěšných doručení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.display_name": {
+          "source": "Search Webhook Events",
+          "message": "Vyhledat události webhooku"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Číslo stránky pro stránkování (výchozí `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook to retrieve delivery events for",
+          "message": "ID webhooku, pro který se mají načíst události doručení"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook to list events for",
+          "message": "Webhook, pro který se mají vypsat události"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2stZXZlbnRz.short_desc": {
+          "source": "List delivery events for a webhook",
+          "message": "Vypsat události doručení pro webhook"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.desc": {
+          "source": "List all webhooks across your accessible forms with optional pagination",
+          "message": "Vypsat všechny webhooky napříč vašimi přístupnými formuláři s volitelným stránkováním"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.display_name": {
+          "source": "Search Webhooks",
+          "message": "Vyhledat webhooky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.desc": {
+          "source": "Number of webhooks per page (1-100, default `25`)",
+          "message": "Počet webhooků na stránku (1–100, výchozí `25`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Počet výsledků na stránku"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Číslo stránky pro stránkování (výchozí `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdlYmhvb2tz.short_desc": {
+          "source": "Search and list webhooks",
+          "message": "Vyhledat a vypsat webhooky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.desc": {
+          "source": "List all workspaces with their members and pending invites; supports page-based pagination",
+          "message": "Zobrazit všechny pracovní prostory s jejich členy a čekajícími pozvánkami; podporuje stránkování"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.display_name": {
+          "source": "Search Workspaces",
+          "message": "Vyhledat pracovní prostory"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (default `1`)",
+          "message": "Číslo stránky pro stránkování (výchozí `1`)"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.VGFsbHk.action.c2VhcmNoLXdvcmtzcGFjZXM.short_desc": {
+          "source": "Search and list workspaces",
+          "message": "Vyhledat a vypsat pracovní prostory"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.desc": {
+          "source": "Retry sending a previously failed webhook event delivery",
+          "message": "Znovu zkusit odeslat dříve neúspěšné doručení události webhooku"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.display_name": {
+          "source": "Retry Webhook Event",
+          "message": "Znovu zkusit událost webhooku"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.desc": {
+          "source": "The ID of the failed webhook event to retry",
+          "message": "ID neúspěšné události webhooku k opakování"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID události"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "The webhook event to retry",
+          "message": "Událost webhooku k opakování"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.desc": {
+          "source": "The ID of the webhook that originally produced the event",
+          "message": "ID webhooku, který původně událost vygeneroval"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.option.d2ViaG9va19pZA.short_desc": {
+          "source": "The webhook owning the event",
+          "message": "Webhook, kterému událost patří"
+        },
+        "app.VGFsbHk.action.cmV0cnktd2ViaG9vay1ldmVudA.short_desc": {
+          "source": "Retry a failed webhook event",
+          "message": "Znovu zkusit neúspěšnou událost webhooku"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update a form's settings, blocks, or status",
+          "message": "Aktualizovat nastavení, bloky nebo stav formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update Form",
+          "message": "Aktualizovat formulář"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.desc": {
+          "source": "Updated list of form content blocks",
+          "message": "Aktualizovaný seznam bloků obsahu formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.display_name": {
+          "source": "Blocks",
+          "message": "Bloky"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.YmxvY2tz.short_desc": {
+          "source": "Updated form blocks",
+          "message": "Aktualizované bloky formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "Jedinečný identifikátor formuláře, který se má aktualizovat"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.aWQ.short_desc": {
+          "source": "The form ID to update",
+          "message": "ID formuláře k aktualizaci"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new display name for the form",
+          "message": "Nový zobrazovaný název formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "Updated form name",
+          "message": "Aktualizovaný název formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.desc": {
+          "source": "Updated form configuration",
+          "message": "Aktualizovaná konfigurace formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "Nastavení"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c2V0dGluZ3M.short_desc": {
+          "source": "Updated form settings",
+          "message": "Aktualizované nastavení formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
+          "source": "Blank",
+          "message": "Prázdné"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "Deleted",
+          "message": "Smazané"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Koncept"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.allowed-value.c3RyaW5nOlBVQkxJU0hFRA.display_name": {
+          "source": "Published",
+          "message": "Publikováno"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.desc": {
+          "source": "The new status for the form",
+          "message": "Nový stav formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.option.c3RhdHVz.short_desc": {
+          "source": "Updated form status",
+          "message": "Aktualizovaný stav formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update a form",
+          "message": "Aktualizovat formulář"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook configuration. The Tally API requires `formId`, `url`, `eventTypes`, and `isEnabled` to be supplied on every update; supply the current value for any field that should not change",
+          "message": "Aktualizovat existující konfiguraci webhooku. Rozhraní Tally API vyžaduje předání `formId`, `url`, `eventTypes` a `isEnabled` při každé aktualizaci; u polí, která se nemají měnit, uveďte jejich stávající hodnotu"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "Aktualizovat webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.allowed-value.c3RyaW5nOkZPUk1fUkVTUE9OU0U.display_name": {
+          "source": "Form Response",
+          "message": "Odpověď na formulář"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.desc": {
+          "source": "List of event types to subscribe to; the only valid value is `FORM_RESPONSE`",
+          "message": "Seznam typů událostí k odběru; jedinou platnou hodnotou je `FORM_RESPONSE`"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.display_name": {
+          "source": "Event Types",
+          "message": "Typy událostí"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.ZXZlbnRUeXBlcw.short_desc": {
+          "source": "Event types to subscribe to",
+          "message": "Typy událostí k odběru"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.desc": {
+          "source": "The ID of the form that triggers this webhook",
+          "message": "ID formuláře, který spouští tento webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.display_name": {
+          "source": "Form ID",
+          "message": "ID formuláře"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.Zm9ybUlk.short_desc": {
+          "source": "The form this webhook is attached to",
+          "message": "Formulář, ke kterému je tento webhook připojen"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.desc": {
+          "source": "Updated list of custom HTTP header objects",
+          "message": "Aktualizovaný seznam vlastních objektů HTTP hlaviček"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.display_name": {
+          "source": "HTTP Headers",
+          "message": "HTTP hlavičky"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aHR0cEhlYWRlcnM.short_desc": {
+          "source": "Updated HTTP headers",
+          "message": "Aktualizované HTTP hlavičky"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.desc": {
+          "source": "The unique identifier of the webhook to update",
+          "message": "Jedinečný identifikátor webhooku k aktualizaci"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aWQ.short_desc": {
+          "source": "The webhook ID to update",
+          "message": "ID webhooku k aktualizaci"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.desc": {
+          "source": "Set to `True` to enable or `False` to disable the webhook",
+          "message": "Nastavte na `True` pro povolení nebo na `False` pro zakázání webhooku"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.display_name": {
+          "source": "Is Enabled",
+          "message": "Povoleno"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.aXNFbmFibGVk.short_desc": {
+          "source": "Enable or disable the webhook",
+          "message": "Povolit nebo zakázat webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.desc": {
+          "source": "Updated secret for payload signing",
+          "message": "Aktualizovaný tajný klíč pro podepisování datové části"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.display_name": {
+          "source": "Signing Secret",
+          "message": "Podpisový tajný klíč"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.c2lnbmluZ1NlY3JldA.short_desc": {
+          "source": "Updated signing secret",
+          "message": "Aktualizovaný podpisový tajný klíč"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "The destination URL where webhook events will be delivered",
+          "message": "Cílová URL adresa, na kterou budou doručovány události webhooku"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Endpoint URL",
+          "message": "URL koncového bodu"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "Aktualizovat webhook"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Update a workspace's information by its ID",
+          "message": "Aktualizovat informace o pracovním prostoru podle jeho ID"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Update Workspace",
+          "message": "Aktualizovat pracovní prostor"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the workspace to update",
+          "message": "Jedinečný identifikátor pracovního prostoru k aktualizaci"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovního prostoru"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.aWQ.short_desc": {
+          "source": "The workspace ID to update",
+          "message": "ID pracovního prostoru k aktualizaci"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the workspace",
+          "message": "Nový zobrazovaný název pracovního prostoru"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Updated workspace name",
+          "message": "Aktualizovaný název pracovního prostoru"
+        },
+        "app.VGFsbHk.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Update a workspace",
+          "message": "Aktualizovat pracovní prostor"
+        },
+        "app.VGFsbHk.desc": {
+          "source": "Provides access to [Tally.so](https://tally.so/) for programmatic form creation, submission management, and webhook configuration.\n\n**Common use cases**:\n- **Form management**: create, update, and publish forms programmatically\n- **Submission processing**: retrieve and filter form submissions for data analysis\n- **Automation**: set up webhooks to trigger workflows when forms are submitted\n- **User management**: retrieve authenticated user information",
+          "message": "Poskytuje přístup k [Tally.so](https://tally.so/) pro programové vytváření formulářů, správu odeslaných odpovědí a konfiguraci webhooků.\n\n**Běžné případy užití**:\n- **Správa formulářů**: programové vytváření, aktualizace a publikování formulářů\n- **Zpracování odeslaných odpovědí**: načítání a filtrování odpovědí z formulářů pro analýzu dat\n- **Automatizace**: nastavení webhooků pro spouštění pracovních postupů při odeslání formulářů\n- **Správa uživatelů**: načítání informací o ověřeném uživateli"
+        },
+        "app.VGFsbHk.display_name": {
+          "source": "Tally",
+          "message": "Tally"
+        },
+        "app.VGFsbHk.short_desc": {
+          "source": "Tally.so form builder and management",
+          "message": "Tvorba a správa formulářů Tally.so"
+        }
+      }
+    }
+  }
+}

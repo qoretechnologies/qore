@@ -1,0 +1,2457 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.desc": {
+          "source": "Process a request with a Grok model via the Responses API with optional tool calling and conversation continuation",
+          "message": "Responses APIを介してGrokモデルでリクエストを処理します（オプションでツール呼び出しや会話の継続が可能）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
+          "source": "Process Request With a Model",
+          "message": "モデルでリクエストを処理"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "会話コンテキストの読み込みおよび保存に使用される不透明な識別子。会話コンテキストストアが構成されている場合にのみ使用されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "コンテキストキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "会話コンテキストストアのキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true` の場合、レスポンスはバックグラウンドで非同期に処理されます。返されたレスポンスIDを使用して `get-response` アクションで結果をポーリングします"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "背景"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "バックグラウンドで非同期に応答を処理"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "モデルのレスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "レスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "レスポンスの入力コンテンツ。各アイテムにはロール、テキスト、オプションの画像があります。シンプルなテキストプロンプトの場合は、テキストを含む単一のアイテムで十分です"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "モデルへのテキストまたはメッセージ入力"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "モデルのコンテキストの先頭に挿入されるシステム（または開発者）メッセージ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "システムプロンプトの指示"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、各出力トークンの対数確率を返します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "対数確率"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返すかどうか"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "使用するGrokモデル（例: `grok-3`、`grok-4`）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "使用するGrokモデル"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "レスポンスで生成できるトークンの最大数（出力トークンと推論トークンの両方を含む）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "最大出力トークン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "推論を含む生成する最大トークン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "エージェントのツール呼び出しイテレーションの最大数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "最大ターン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "エージェントによるツール呼び出しの最大ラウンド数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "レスポンスに添付するキーと値のペアのセット。最大16ペア。キーは最大64文字、値は最大512文字"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "追加のメタデータキー/値ペア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Web検索統合の構成"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "検索パラメーター"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Web検索の構成"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "負荷に基づく自動ティア選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "自動ティア選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "サービスティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true` の場合、入力とレスポンスは完全に削除されるまで30日間保存されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "保存しますか？"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "入力とレスポンスを30日間保持"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true` の場合、レスポンスは Server-Sent Events を使用してストリーミングされます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Server-Sent Events ストリーミングを有効化"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "並列ツール実行を許可するかどうか"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "並列ツール呼び出し"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "ツールの同時実行を許可"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "入力を繰り返さずに継続するためのコンテキストとして使用する前回のレスポンスの一意のID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "前回のレスポンスID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "継続用の以前のレスポンスID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するために、類似したリクエストのレスポンスをキャッシュするために xAI によって使用されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "プロンプトキャッシュキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するためのプロンプトキャッシュ用キー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "努力レベルと要約タイプを含む推論設定。推論対応モデル（例: `grok-3-mini`）でのみサポートされます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "推論"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "推論設定"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "モデルはツールを呼び出しません"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "モデルがツールを呼び出すかどうかを決定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "モデルが使用できるツールを制御します。\n\n事前定義された値のいずれかを使用するか、特定の関数（例: 関数名）を強制するためのカスタム値を入力します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "ツール呼び出し制御"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "関数や Web 検索を含む、モデルが使用できるツールのリスト"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "使用可能なツール（最大128個）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数を指定する `0` から `20` までの整数（それぞれに関連する対数確率が付随）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "各位置で返される最も可能性の高いトークンの数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "モデルが top_p 確率質量を構成するトークンを考慮する Nucleus サンプリングのしきい値"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Nucleus サンプリングのしきい値 (0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "モデルからのテキストレスポンス形式の設定。JSON スキーマを介して構造化出力を指定するために使用します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "テキスト形式"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "テキストレスポンス形式の設定"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0 から 2 までのサンプリング温度。値が大きいほど出力がよりランダムになります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "サンプリング温度（0〜2）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "会話の中間から自動的に切り詰めます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "長い会話を自動的に切り詰め"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "切り詰めを行わず、長すぎる場合はエラーを返す"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "コンテキストがモデルの最大コンテキスト長を超えた場合の切り詰め戦略。`auto` はコンテキストウィンドウ内に収まるように会話の中間から切り詰めます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "切り詰め"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "長い会話の切り詰め戦略"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "エンドユーザー識別子"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Process a request with a Grok model via the Responses API",
+          "message": "Responses API を介して Grok モデルでリクエストを処理します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.desc": {
+          "source": "Create a response via the Responses API with full control over model selection and options",
+          "message": "モデルの選択とオプションを完全に制御して Responses API 経由でレスポンスを作成します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
+          "source": "Create Response",
+          "message": "レスポンスを作成"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "会話コンテキストの読み込みおよび保存に使用される不透明な識別子。会話コンテキストストアが構成されている場合にのみ使用されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "コンテキストキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "会話コンテキストストアのキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true` の場合、レスポンスはバックグラウンドで非同期に処理されます。返されたレスポンスIDを使用して `get-response` アクションで結果をポーリングします"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "背景"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "バックグラウンドで非同期に応答を処理"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "モデルのレスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "レスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "レスポンスの入力コンテンツ。各アイテムにはロール、テキスト、オプションの画像があります。シンプルなテキストプロンプトの場合は、テキストを含む単一のアイテムで十分です"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "モデルへのテキストまたはメッセージ入力"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "モデルのコンテキストの先頭に挿入されるシステム（または開発者）メッセージ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "システムプロンプトの指示"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、各出力トークンの対数確率を返します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "対数確率"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返すかどうか"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
+          "message": "レスポンスに使用するモデル（例: `grok-3`、`grok-4`）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the response",
+          "message": "レスポンスに使用するモデル"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "レスポンスで生成できるトークンの最大数（出力トークンと推論トークンの両方を含む）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "最大出力トークン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "推論を含む生成する最大トークン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "エージェントのツール呼び出しイテレーションの最大数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "最大ターン数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "エージェントによるツール呼び出しの最大ラウンド数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "レスポンスに添付するキーと値のペアのセット。最大16ペア。キーは最大64文字、値は最大512文字"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "追加のメタデータキー/値ペア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Web検索統合の構成"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "検索パラメーター"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Web検索の構成"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "負荷に基づく自動ティア選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "自動ティア選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "サービスティア"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true` の場合、入力とレスポンスは完全に削除されるまで30日間保存されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "保存しますか？"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "入力とレスポンスを30日間保持"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true` の場合、レスポンスは Server-Sent Events を使用してストリーミングされます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Server-Sent Events ストリーミングを有効化"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "並列ツール実行を許可するかどうか"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "並列ツール呼び出し"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "ツールの同時実行を許可"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "入力を繰り返さずに継続するためのコンテキストとして使用する前回のレスポンスの一意のID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "前回のレスポンスID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "継続用の以前のレスポンスID"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するために、類似したリクエストのレスポンスをキャッシュするために xAI によって使用されます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "プロンプトキャッシュキー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するためのプロンプトキャッシュ用キー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "努力レベルと要約タイプを含む推論設定。推論対応モデル（例: `grok-3-mini`）でのみサポートされます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "推論"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "推論設定"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "モデルはツールを呼び出しません"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "モデルがツールを呼び出すかどうかを決定します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "モデルが使用できるツールを制御します。\n\n事前定義された値のいずれかを使用するか、特定の関数（例: 関数名）を強制するためのカスタム値を入力します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "ツール呼び出し制御"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "関数や Web 検索を含む、モデルが使用できるツールのリスト"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "使用可能なツール（最大128個）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数を指定する `0` から `20` までの整数（それぞれに関連する対数確率が付随）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "各位置で返される最も可能性の高いトークンの数"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "モデルが top_p 確率質量を構成するトークンを考慮する Nucleus サンプリングのしきい値"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Nucleus サンプリングのしきい値 (0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "モデルからのテキストレスポンス形式の設定。JSON スキーマを介して構造化出力を指定するために使用します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "テキスト形式"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "テキストレスポンス形式の設定"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0 から 2 までのサンプリング温度。値が大きいほど出力がよりランダムになります"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "サンプリング温度（0〜2）"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "会話の中間から自動的に切り詰めます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "長い会話を自動的に切り詰め"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "切り詰めを行わず、長すぎる場合はエラーを返す"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "コンテキストがモデルの最大コンテキスト長を超えた場合の切り詰め戦略。`auto` はコンテキストウィンドウ内に収まるように会話の中間から切り詰めます"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "切り詰め"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "長い会話の切り詰め戦略"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "エンドユーザー識別子"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
+          "source": "Create a response via the Responses API without model context",
+          "message": "モデルコンテキストなしで Responses API 経由でレスポンスを作成します"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.desc": {
+          "source": "Retrieve a previously stored response by its unique identifier",
+          "message": "一意の識別子によって以前に保存されたレスポンスを取得します"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
+          "source": "Get Response",
+          "message": "回答を取得"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "取得するレスポンスの一意の識別子"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "回答 ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "取得する回答の ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "取得するレスポンスの一意の識別子"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "レスポンス"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "取得する回答の ID"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
+          "source": "Retrieve a previously stored response by ID",
+          "message": "ID によって以前に保存されたレスポンスを取得します"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.desc": {
+          "source": "Retrieve the result of a deferred chat completion request using the request ID",
+          "message": "リクエスト ID を使用して遅延チャット補完リクエストの結果を取得します"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
+          "source": "Get Deferred Completion",
+          "message": "遅延補完を取得"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The request ID returned from a deferred chat completion request",
+          "message": "遅延チャット補完リクエストから返されたリクエスト ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "リクエストID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The request ID from a deferred chat completion",
+          "message": "遅延チャット補完のリクエスト ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {
+          "source": "Retrieve a deferred chat completion result by request ID",
+          "message": "リクエスト ID によって遅延チャット補完の結果を取得します"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.desc": {
+          "source": "Delete a previously stored response by its unique identifier",
+          "message": "一意の識別子によって以前に保存された応答を削除します"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
+          "source": "Delete Response",
+          "message": "応答の削除"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "削除する応答の一意の識別子"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "回答 ID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "削除する応答のID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "削除する応答の一意の識別子"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "レスポンス"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "削除する応答のID"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Delete a stored response by ID",
+          "message": "IDによって保存された応答を削除"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Grok AI Services** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Grok AI Services** へのカスタムHTTP / REST API呼び出しを行います。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。応答は、ステータスコード、応答ヘッダー、および応答本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Grok AI Services",
+          "message": "Grok AI ServicesへのカスタムAPI呼び出しを実行"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with Grok by sending multiple messages at once and potentially getting multiple replies",
+          "message": "一度に複数のメッセージを送信し、潜在的に複数の返信を取得してGrokとチャットします"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "マルチチャット"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "`true` の場合、遅延補完エンドポイント経由で補完結果をポーリングするために使用できる request_id を返します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "保留"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "非同期取得用の request_id を返す"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキスト内の既存の頻度に基づいて新しいトークンにペナルティが課され、モデルが同じ行を逐語的に繰り返す可能性が低下します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "トークンの繰り返しにペナルティを適用 (-2.0～2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "補完に特定のトークンが出現する確率を変更します。トークンID（文字列形式）を `-100` から `100` までのバイアス値にマッピングします。`-100` または `100` の値を設定すると、該当トークンの禁止または排他的選択が行われます。\n\n**例**: テキスト終了トークンを防ぐための `{\"50256\": -100}`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logitバイアス"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "補完に特定のトークンが出現する確率を変更"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、メッセージのコンテンツで返される各出力トークンの対数確率を返します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "対数確率"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返すかどうか"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "応答の作成に使用するモデル（例: `grok-3`、`grok-4`）"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "可視出力トークンと推論トークンを含む、補完用に生成できるトークン数の上限"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "最大補完トークン数"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "応答で生成されるトークンの上限"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "チャット補完で生成できるトークンの最大数。非推奨です。代わりに max_completion_tokens を使用してください"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "最大トークン数 (非推奨)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "生成するトークンの最大数（非推奨。max_completion_tokens を使用してください）"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.desc": {
+          "source": "How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all of the choices",
+          "message": "入力メッセージごとに生成するチャット補完の選択肢の数。すべての選択肢で生成されたトークン数に基づいて課金されることに注意してください"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.display_name": {
+          "source": "Number of Choices",
+          "message": "選択肢の数"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.short_desc": {
+          "source": "The number of choices to generate for each input message",
+          "message": "入力メッセージごとに生成する選択肢の数"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "日付範囲、ソース、引用オプションを含むWeb検索統合の設定"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "検索パラメーター"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Web検索の構成"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "指定された場合、システムは決定論的にサンプリングするよう最善を尽くします。これにより、同じシードとパラメータによる繰り返しのリクエストは同じ結果を返すようになります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "決定論的サンプリング用の値"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`true` の場合、部分的なメッセージ差分が利用可能になり次第データ専用の Server-Sent Events として送信され、ストリームは `data: [DONE]` メッセージによって終了します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "SSE経由で部分メッセージ差分を有効にするよう設定"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "ストリーミング応答のオプション。`stream: true` を設定した場合にのみ設定してください"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "ストリーミング応答のオプション"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "ツール使用中に並列関数呼び出しを有効にするかどうか"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "並列ツール呼び出し"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "同時ツール呼び出しを有効化"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキストに出現したかどうかに基づいて新しいトークンにペナルティが課され、モデルが新しいトピックについて話す可能性が高まります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "テキスト内の出現に基づいて新しいトークンにペナルティを適用 (-2.0～2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "推論モデルの推論に対するエフォートを制約します。推論対応モデルでのみサポートされます"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "推論エフォート"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "推論モデルの制約レベル"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "モデルが出力しなければならないフォーマットを指定するオブジェクト。`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "モデルはツールを呼び出しません"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "モデルはメッセージの生成またはツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。ツールが存在しない場合は `none` がデフォルトです。ツールが存在する場合は `auto` がデフォルトです"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "モデルによって呼び出されるツールを制御"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "モデルが呼び出す可能性のあるツールのリスト。現在、ツールとしては関数のみがサポートされています。最大128個の関数がサポートされています"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "モデルが呼び出す可能性のあるツールのリスト（最大128個）"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "各トークン位置で返す最も可能性の高いトークンの数を指定する0から8までの整数。このパラメータを使用する場合は、`logprobs` を `true` に設定する必要があります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "各位置で返す最も可能性の高いトークンの数 (0-8)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "温度によるサンプリングの代替手段であり、核サンプリング（nucleus sampling）と呼ばれ、モデルはtop_pの確率質量を持つトークンの結果を考慮します"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "核サンプリングの確率質量 (0-1)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "使用するサンプリング温度（0から2の間）。0.8などの高い値を指定すると出力がよりランダムになり、0.2などの低い値を指定するとより集中的かつ決定論的になります"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "使用するサンプリング温度 (0-2)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "エンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with Grok using multiple messages with multi-reply support",
+          "message": "複数返答をサポートするマルチメッセージを使用してGrokとチャット"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "単一メッセージを送信して単一返答を受信することでGrokとチャット"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "シンプルチャット"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The message content to send to the model",
+          "message": "モデルに送信するメッセージ内容"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message content",
+          "message": "メッセージの内容"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "`true` の場合、遅延補完エンドポイント経由で補完結果をポーリングするために使用できる request_id を返します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "保留"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "非同期取得用の request_id を返す"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキスト内の既存の頻度に基づいて新しいトークンにペナルティが課され、モデルが同じ行を逐語的に繰り返す可能性が低下します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "トークンの繰り返しにペナルティを適用 (-2.0～2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "補完に特定のトークンが出現する確率を変更します。トークンID（文字列形式）を `-100` から `100` までのバイアス値にマッピングします。`-100` または `100` の値を設定すると、該当トークンの禁止または排他的選択が行われます。\n\n**例**: テキスト終了トークンを防ぐための `{\"50256\": -100}`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logitバイアス"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "補完に特定のトークンが出現する確率を変更"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、メッセージのコンテンツで返される各出力トークンの対数確率を返します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "対数確率"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返すかどうか"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "応答の作成に使用するモデル（例: `grok-3`、`grok-4`）"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "応答の作成に使用するモデル"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "可視出力トークンと推論トークンを含む、補完用に生成できるトークン数の上限"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "最大補完トークン数"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "応答で生成されるトークンの上限"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "チャット補完で生成できるトークンの最大数。非推奨です。代わりに max_completion_tokens を使用してください"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "最大トークン数 (非推奨)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "生成するトークンの最大数（非推奨。max_completion_tokens を使用してください）"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
+          "source": "An optional name for the participant",
+          "message": "参加者のオプション名"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.short_desc": {
+          "source": "An optional name for the participant",
+          "message": "参加者のオプション名"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "日付範囲、ソース、引用オプションを含むWeb検索統合の設定"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "検索パラメーター"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Web検索の構成"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "指定された場合、システムは決定論的にサンプリングするよう最善を尽くします。これにより、同じシードとパラメータによる繰り返しのリクエストは同じ結果を返すようになります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "決定論的サンプリング用の値"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`true` の場合、部分的なメッセージ差分が利用可能になり次第データ専用の Server-Sent Events として送信され、ストリームは `data: [DONE]` メッセージによって終了します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "SSE経由で部分メッセージ差分を有効にするよう設定"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "ストリーミング応答のオプション。`stream: true` を設定した場合にのみ設定してください"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "ストリームオプション"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "ストリーミング応答のオプション"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "ツール使用中に並列関数呼び出しを有効にするかどうか"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "並列ツール呼び出し"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "同時ツール呼び出しを有効化"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "-2.0から2.0までの数値。正の値を指定すると、これまでのテキストに出現したかどうかに基づいて新しいトークンにペナルティが課され、モデルが新しいトピックについて話す可能性が高まります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "テキスト内の出現に基づいて新しいトークンにペナルティを適用 (-2.0～2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author is an assistant",
+          "message": "作成者はassistantです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "アシスタント"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author is an assistant",
+          "message": "作成者はassistantです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author is the system",
+          "message": "作成者はsystemです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "システム"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author is the system",
+          "message": "作成者はsystemです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author is a user",
+          "message": "作成者はuserです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author is a user",
+          "message": "作成者はuserです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "このメッセージの作成者のロール"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "メッセージ作成者の役割"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "推論モデルの推論に対するエフォートを制約します。推論対応モデルでのみサポートされます"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "推論エフォート"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "推論モデルの制約レベル"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "モデルが出力しなければならないフォーマットを指定するオブジェクト。`{\"type\": \"json_object\"}` に設定するとJSONモードが有効になり、モデルが生成するメッセージが有効なJSONであることが保証されます"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "応答フォーマット"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "モデルはツールを呼び出しません"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "モデルはメッセージの生成またはツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "モデルによってどのツールが呼び出されるか（呼び出される場合）を制御します。ツールが存在しない場合は `none` がデフォルトです。ツールが存在する場合は `auto` がデフォルトです"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "モデルによって呼び出されるツールを制御"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "モデルが呼び出す可能性のあるツールのリスト。現在、ツールとしては関数のみがサポートされています。最大128個の関数がサポートされています"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "モデルが呼び出す可能性のあるツールのリスト（最大128個）"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "各トークン位置で返す最も可能性の高いトークンの数を指定する0から8までの整数。このパラメータを使用する場合は、`logprobs` を `true` に設定する必要があります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Top対数確率"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "各位置で返す最も可能性の高いトークンの数 (0-8)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "温度によるサンプリングの代替手段であり、核サンプリング（nucleus sampling）と呼ばれ、モデルはtop_pの確率質量を持つトークンの結果を考慮します"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "核サンプリングの確率質量 (0-1)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "使用するサンプリング温度（0から2の間）。0.8などの高い値を指定すると出力がよりランダムになり、0.2などの低い値を指定するとより集中的かつ決定論的になります"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "使用するサンプリング温度 (0-2)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "エンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "単一メッセージを送信して単一返答を受信することでGrokとチャット"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
+          "message": "リアルタイムなトークン配信のためにServer-Sent Eventsを使用してGrokモデルからレスポンスをストリーミング"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
+          "source": "Stream Response",
+          "message": "レスポンスのストリーミング"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "会話コンテキストの読み込みおよび保存に使用される不透明な識別子。会話コンテキストストアが構成されている場合にのみ使用されます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "コンテキストキー"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "会話コンテキストストアのキー"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "`true` の場合、レスポンスはバックグラウンドで非同期に処理されます。返されたレスポンスIDを使用して `get-response` アクションで結果をポーリングします"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "背景"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "バックグラウンドで非同期に応答を処理"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "モデルのレスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "レスポンスに含める追加の出力データ"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "レスポンスの入力コンテンツ。各アイテムにはロール、テキスト、オプションの画像があります。シンプルなテキストプロンプトの場合は、テキストを含む単一のアイテムで十分です"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "入力"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "モデルへのテキストまたはメッセージ入力"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "モデルのコンテキストの先頭に挿入されるシステム（または開発者）メッセージ"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "システムプロンプトの指示"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "出力トークンの対数確率を返すかどうか。`true` の場合、各出力トークンの対数確率を返します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "対数確率"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返すかどうか"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "使用するGrokモデル（例: `grok-3`、`grok-4`）"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "使用するGrokモデル"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "レスポンスで生成できるトークンの最大数（出力トークンと推論トークンの両方を含む）"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "最大出力トークン数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "推論を含む生成する最大トークン数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "エージェントのツール呼び出しイテレーションの最大数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "最大ターン数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "エージェントによるツール呼び出しの最大ラウンド数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "レスポンスに添付するキーと値のペアのセット。最大16ペア。キーは最大64文字、値は最大512文字"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "追加のメタデータキー/値ペア"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Web検索統合の構成"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "検索パラメーター"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Web検索の構成"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "負荷に基づく自動ティア選択"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "自動ティア選択"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "デフォルト"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "デフォルトの処理ティア"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "リクエストの処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "サービスティア"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "処理に使用するレイテンシティアを指定します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "`true` の場合、入力とレスポンスは完全に削除されるまで30日間保存されます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "保存しますか？"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "入力とレスポンスを30日間保持"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "`true` の場合、レスポンスは Server-Sent Events を使用してストリーミングされます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Server-Sent Events ストリーミングを有効化"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "並列ツール実行を許可するかどうか"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "並列ツール呼び出し"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "ツールの同時実行を許可"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "入力を繰り返さずに継続するためのコンテキストとして使用する前回のレスポンスの一意のID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "前回のレスポンスID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "継続用の以前のレスポンスID"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するために、類似したリクエストのレスポンスをキャッシュするために xAI によって使用されます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "プロンプトキャッシュキー"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "キャッシュヒット率を最適化するためのプロンプトキャッシュ用キー"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "努力レベルと要約タイプを含む推論設定。推論対応モデル（例: `grok-3-mini`）でのみサポートされます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "推論"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "推論設定"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "モデルはツールを呼び出さず、代わりにメッセージを生成します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "モデルはツールを呼び出しません"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "モデルはメッセージの生成または1つ以上のツールの呼び出しを選択できます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "モデルがツールを呼び出すかどうかを決定します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "必須"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "モデルは1つ以上のツールを呼び出す必要があります"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "モデルが使用できるツールを制御します。\n\n事前定義された値のいずれかを使用するか、特定の関数（例: 関数名）を強制するためのカスタム値を入力します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "ツール選択"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "ツール呼び出し制御"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "関数や Web 検索を含む、モデルが使用できるツールのリスト"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "ツール"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "使用可能なツール（最大128個）"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "各トークン位置で返される最も可能性の高いトークンの数を指定する `0` から `20` までの整数（それぞれに関連する対数確率が付随）"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "各位置で返される最も可能性の高いトークンの数"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "モデルが top_p 確率質量を構成するトークンを考慮する Nucleus サンプリングのしきい値"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Nucleus サンプリングのしきい値 (0-1)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "モデルからのテキストレスポンス形式の設定。JSON スキーマを介して構造化出力を指定するために使用します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "テキスト形式"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "テキストレスポンス形式の設定"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "0 から 2 までのサンプリング温度。値が大きいほど出力がよりランダムになります"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "サンプリング温度（0〜2）"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "会話の中間から自動的に切り詰めます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "長い会話を自動的に切り詰め"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "切り詰めを行わず、コンテキストが制限を超えた場合はエラーを返します"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "無効"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "切り詰めを行わず、長すぎる場合はエラーを返す"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "コンテキストがモデルの最大コンテキスト長を超えた場合の切り詰め戦略。`auto` はコンテキストウィンドウ内に収まるように会話の中間から切り詰めます"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "切り詰め"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "長い会話の切り詰め戦略"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "不正利用の監視を目的としたエンドユーザーを表す一意の識別子"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "エンドユーザー識別子"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events",
+          "message": "Server-Sent Eventsを使用してGrokモデルからレスポンスをストリーミング"
+        },
+        "app.R3Jvaw.desc": {
+          "source": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n**Features**:\n- **Chat Completions**: multi-message and simple chat with tool calling and web search\n- **Responses API**: create, retrieve, and delete responses with conversation continuation\n- **Streaming**: real-time token delivery via Server-Sent Events\n- **Deferred Completions**: asynchronous request processing\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "チャット補完、Responses API、SSEストリーミングを提供するxAI Grok AIサービス。\n\n**機能**:\n- **Chat Completions**: ツール呼び出しおよびWeb検索を備えたマルチメッセージおよびシンプルチャット\n- **Responses API**: 会話の継続を伴うレスポンスの作成、取得、削除\n- **Streaming**: Server-Sent Eventsによるリアルタイムトークン配信\n- **Deferred Completions**: 非同期リクエスト処理\n\nAPIキーは[xAI Console](https://console.x.ai/)から取得してください"
+        },
+        "app.R3Jvaw.display_name": {
+          "source": "Grok AI Services",
+          "message": "Grok AIサービス"
+        },
+        "app.R3Jvaw.short_desc": {
+          "source": "xAI Grok AI services",
+          "message": "xAI Grok AIサービス"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of input tokens that would be used by a message request without actually creating the message. Useful for estimating costs and managing context windows.",
+          "message": "메시지를 실제로 생성하지 않고 메시지 요청에 사용될 입력 토큰 수를 계산합니다. 비용 추정 및 컨텍스트 창 관리에 유용합니다."
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "토큰 수 계산"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model to use for tokenization (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "토큰화에 사용할 모델(예: `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for tokenization",
+          "message": "토큰화에 사용할 모델"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages to count tokens for. Same format as the Messages API",
+          "message": "토큰 수를 계산할 입력 메시지입니다. Messages API와 동일한 형식입니다"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages to count tokens for",
+          "message": "토큰 수를 계산할 입력 메시지"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.desc": {
+          "source": "System prompt to include in the token count",
+          "message": "토큰 수 계산에 포함할 시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.short_desc": {
+          "source": "System prompt to include in token count",
+          "message": "토큰 수 계산에 포함할 시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "확장 사고에 사용할 최대 토큰 수입니다. `1024` 이상이어야 하며 `max_tokens` 미만이어야 합니다. 사고 모드가 `enabled`일 때만 적용됩니다"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "사고 예산 토큰"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "사고에 사용할 최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "적응형"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "모델이 작업에 따라 사고 사용 여부를 결정합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "확장 사고 비활성화"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "사용"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "고정 예산으로 확장 사고 활성화"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "확장 사고의 활성화 여부입니다. 확장 사고를 사용하면 모델이 응답하기 전에 복잡한 문제를 단계별로 추론할 수 있습니다"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "사고 모드"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "확장 사고 활성화 여부"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in a message without creating it",
+          "message": "메시지를 생성하지 않고 포함된 토큰 수 계산"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.desc": {
+          "source": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests are not undone.",
+          "message": "메시지 배치를 취소합니다. 배치가 `canceling` 상태로 전환되며, 이미 처리된 요청은 취소되지 않습니다."
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.display_name": {
+          "source": "Cancel Message Batch",
+          "message": "메시지 배치 취소"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "메시지 배치의 고유 식별자(예: `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "메시지 배치의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.short_desc": {
+          "source": "Cancel a message batch before it finishes processing",
+          "message": "처리가 완료되기 전에 메시지 배치 취소"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Send a structured message to an Anthropic Claude model and receive a complete response. Supports text, images, structured output, and extended thinking.",
+          "message": "Anthropic Claude 모델에 구조화된 메시지를 보내고 전체 응답을 받습니다. 텍스트, 이미지, 구조화된 출력 및 확장 사고를 지원합니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create Message",
+          "message": "메시지 생성"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "여러 요청 간에 컨텍스트를 재사용하기 위한 컨테이너 ID입니다. 컨테이너는 효율적인 다중 턴 상호 작용을 위해 서버에 대화 상태를 저장합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "컨테이너"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "컨텍스트 재사용을 위한 컨테이너 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "구성된 컨텍스트 저장소를 통해 대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 키입니다. 제공되면 이전 메시지가 자동으로 앞에 추가됩니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "대화 키"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "대화 컨텍스트 유지를 위한 키"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "최대"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "최대 노력 및 철저함"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "보통"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "균형 잡힌 노력"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "더 철저한 응답"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "빠르고 덜 철저한 응답"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "모델이 응답에 들여야 하는 노력의 수준을 제어합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "노력"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "모델이 들여야 하는 노력의 수준을 제어합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "모델의 출력이 지정된 구조와 일치하도록 제한하는 JSON Schema 객체입니다. 구조화된 시스템 판독 가능 응답을 가능하게 합니다. 참고: `object` 유형의 경우 `additionalProperties`을 `false`(으)로 설정해야 합니다.\n\n예시:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "출력 스키마"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "구조화된 출력을 위한 JSON Schema"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "프롬프트를 완성할 모델(예: `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "프롬프트를 완성할 모델"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "중단하기 전까지 생성할 최대 토큰 수입니다. Anthropic API에서 필수 항목입니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "생성할 최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "대화를 위한 입력 메시지입니다. 각 메시지는 `role`(`user` 또는 `assistant`) 및 `content`(문자열 또는 콘텐츠 블록 목록)을 포함하는 해시입니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "대화를 위한 입력 메시지"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "사용 가능한 최상의 계층을 자동으로 선택합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "표준 전용"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "우선 순위 용량 없이 표준 계층만 사용합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "요청에 사용할 서비스 계층을 결정합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "서비스 계층"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "요청에 사용할 서비스 계층"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "이 요청에 사용할 에이전트 스킬입니다. 스킬은 문서 생성(pptx, xlsx, docx, pdf)이나 맞춤형 워크플로와 같은 작업을 위한 전문적인 역량으로 Claude의 기능을 확장합니다. 스킬을 선택하면 필요한 코드 실행 도구 및 베타 헤더가 자동으로 구성됩니다.\n\n형식: `{type}/{skill_id}`(예: `anthropic/pptx`, `custom/skill_abc123`). 유형 접두사가 지정되지 않은 경우 `custom`으로 간주됩니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "스킬"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "이 요청에 사용할 에이전트 스킬"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "모델의 생성을 중지하도록 하는 사용자 지정 텍스트 시퀀스입니다. 제공된 시퀀스 중 하나라도 발견되면 모델이 중지됩니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "모델 생성을 중지시키는 사용자 정의 텍스트 시퀀스"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "컨텍스트와 지침을 제공하는 시스템 프롬프트입니다. 문자열이거나 캐시 제어를 위한 콘텐츠 블록 목록일 수 있습니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "대화를 위한 시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "각 후속 토큰에 대해 상위 K개 옵션에서만 샘플링합니다. 롱테일의 낮은 확률 응답을 제거하는 데 사용됩니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "각 후속 토큰에 대해 상위 K개 옵션에서만 샘플링"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "핵 샘플링(Nucleus sampling)을 사용합니다. 핵 샘플링에서는 확률 내림차순으로 각 후속 토큰에 대한 모든 옵션의 누적 분포를 계산하고 `top_p`에 지정된 특정 확률에 도달하면 차단합니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "핵 샘플링 매개변수"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "응답에 주입되는 무작위성의 양입니다. 범위는 `0.0`에서 `1.0`까지입니다. 분석/객관식 작업에는 `0.0`에 가까운 `temperature`을(를) 사용하고, 창의적이고 생성적인 작업에는 `1.0`에 가까운 값을 사용하세요. 기본값: `1.0`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "온도"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "응답에 주입되는 무작위성의 양"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "확장 사고에 사용할 최대 토큰 수입니다. `1024` 이상이어야 하며 `max_tokens` 미만이어야 합니다. 사고 모드가 `enabled`일 때만 적용됩니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "사고 예산 토큰"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "사고에 사용할 최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "적응형"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "모델이 작업에 따라 사고 사용 여부를 결정합니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "확장 사고 비활성화"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "사용"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "고정 예산으로 확장 사고 활성화"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "확장 사고의 활성화 여부입니다. 확장 사고를 사용하면 모델이 응답하기 전에 복잡한 문제를 단계별로 추론할 수 있습니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "사고 모드"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "확장 사고 활성화 여부"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Send a message to a Claude model and receive a response",
+          "message": "Claude 모델에 메시지를 보내고 응답을 받습니다"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. Batches are processed within 24 hours.",
+          "message": "50% 할인된 비용으로 비동기 처리를 위해 메시지 요청 배치를 제출합니다. 배치는 24시간 이내에 처리됩니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Message Batch",
+          "message": "메시지 배치 생성"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.desc": {
+          "source": "List of requests to process. Each item has a `custom_id` for result matching and `params` containing the message creation parameters",
+          "message": "처리할 요청 목록입니다. 각 항목에는 결과 매칭을 위한 `custom_id` 및 메시지 생성 매개변수를 포함하는 `params`이(가) 있습니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "요청"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.short_desc": {
+          "source": "List of message requests to process in batch",
+          "message": "배치로 처리할 메시지 요청 목록"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Submit a batch of message requests for async processing",
+          "message": "비동기 처리를 위해 메시지 요청 배치 제출"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.desc": {
+          "source": "Create a new custom skill that packages domain expertise and workflows. A SKILL.md file is auto-generated from the provided name, description, and instructions. Requires the Skills API beta.",
+          "message": "도메인 전문 지식과 워크플로를 패키지화하는 새 맞춤형 스킬을 생성합니다. 제공된 이름, 설명, 지침을 기반으로 SKILL.md 파일이 자동 생성됩니다. Skills API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.display_name": {
+          "source": "Create Skill",
+          "message": "스킬 생성"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "스킬이 수행하는 작업과 사용해야 하는 시기에 대한 설명입니다. 최대 1024자입니다. 3인칭으로 작성하세요(예: `Retrieves weather data for a city`)."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "스킬 설명"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "스킬의 사람이 읽을 수 있는 제목입니다. UI에 표시되지만 모델로 전송되는 프롬프트에는 포함되지 않습니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "표시 제목"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "사람이 읽을 수 있는 스킬 제목"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "스킬 동작에 대한 자세한 지침입니다. 이는 스킬이 트리거될 때 Claude가 읽는 SKILL.md 파일의 본문을 구성합니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "스킬에 대한 지침"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "SKILL.md 프런트매터에서 사용되는 스킬 식별자입니다. 최대 64자이며 소문자, 숫자, 하이픈만 허용됩니다. `anthropic` 또는 `claude`과 같은 예약어를 포함할 수 없습니다."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "스킬 식별자"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.short_desc": {
+          "source": "Create a custom skill (Beta)",
+          "message": "맞춤형 스킬 생성(베타)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.desc": {
+          "source": "Retrieve details for a specific Anthropic model including capabilities, context window size, and max output tokens.",
+          "message": "기능, 컨텍스트 창 크기, 최대 출력 토큰을 포함하여 특정 Anthropic 모델의 세부 정보를 검색합니다."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "모델 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "The unique identifier or alias for the model (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "모델의 고유 식별자 또는 별칭(예: `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The ID of the model to retrieve",
+          "message": "검색할 모델의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Get details for a specific model by ID or alias",
+          "message": "ID 또는 별칭으로 특정 모델의 세부 정보 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve the status and metadata of a specific message batch. Use this to poll for batch completion.",
+          "message": "특정 메시지 배치의 상태 및 메타데이터를 검색합니다. 배치 완료 여부를 폴링하는 데 사용합니다."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Message Batch",
+          "message": "메시지 배치 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "메시지 배치의 고유 식별자(예: `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "메시지 배치의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Get the status and details of a message batch",
+          "message": "메시지 배치의 상태 및 세부 정보 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
+          "message": "업로드된 특정 파일의 메타데이터를 검색합니다. Files API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File",
+          "message": "파일 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "파일의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "파일 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "파일의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get metadata for a specific file (Beta)",
+          "message": "특정 파일의 메타데이터 가져오기(베타)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.desc": {
+          "source": "Download the content of a previously uploaded file. Only available for files created by skills or code execution where `downloadable` is `True`. Requires the Files API beta.",
+          "message": "이전에 업로드된 파일의 콘텐츠를 다운로드합니다. `downloadable`이(가) `True`인 스킬 또는 코드 실행에 의해 생성된 파일에만 사용할 수 있습니다. Files API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
+          "source": "Get File Content",
+          "message": "파일 콘텐츠 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "파일의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "파일 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "파일의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
+          "source": "Download the content of a file (Beta)",
+          "message": "파일 콘텐츠 다운로드(베타)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.desc": {
+          "source": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
+          "message": "ID로 특정 스킬의 세부 정보를 검색합니다. Skills API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
+          "source": "Get Skill",
+          "message": "스킬 가져오기"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "스킬의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "스킬 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "스킬의 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {
+          "source": "Get details for a specific skill (Beta)",
+          "message": "특정 스킬에 대한 세부 정보 가져오기 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file that was previously uploaded. Requires the Files API beta.",
+          "message": "이전에 업로드된 파일을 삭제합니다. Files API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "파일 삭제"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "파일의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "파일 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "파일의 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file from the workspace (Beta)",
+          "message": "워크스페이스에서 파일 삭제 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.desc": {
+          "source": "Delete a custom skill by ID. Requires the Skills API beta.",
+          "message": "ID로 커스텀 스킬을 삭제합니다. Skills API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.display_name": {
+          "source": "Delete Skill",
+          "message": "스킬 삭제"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "스킬의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "스킬 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "스킬의 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.short_desc": {
+          "source": "Delete a custom skill (Beta)",
+          "message": "커스텀 스킬 삭제 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "List all message batches with pagination support.",
+          "message": "페이지네이션을 지원하여 모든 메시지 배치를 조회합니다."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Message Batches",
+          "message": "메시지 배치 목록 조회"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return batches created after this batch ID (cursor for forward pagination)",
+          "message": "이 배치 ID 이후에 생성된 배치를 반환합니다(순방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "이후 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "순방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.desc": {
+          "source": "Return batches created before this batch ID (cursor for backward pagination)",
+          "message": "이 배치 ID 이전에 생성된 배치를 반환합니다(역방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "이전 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "역방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of batches to return per page. Default: `20`, max: `100`",
+          "message": "페이지당 반환할 최대 배치 수입니다. 기본값: `20`, 최대: `100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of batches to return",
+          "message": "반환할 최대 배치 수"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List all message batches in the workspace",
+          "message": "워크스페이스의 모든 메시지 배치 목록 조회"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.desc": {
+          "source": "List all files that have been uploaded to the workspace with pagination support. Requires the Files API beta.",
+          "message": "페이지네이션을 지원하여 워크스페이스에 업로드된 모든 파일 목록을 조회합니다. Files API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "파일 목록 보기"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return files after this file ID (cursor for forward pagination)",
+          "message": "이 파일 ID 이후의 파일을 반환합니다(순방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "이후 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "순방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.desc": {
+          "source": "Return files before this file ID (cursor for backward pagination)",
+          "message": "이 파일 ID 이전의 파일을 반환합니다(역방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "이전 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "역방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of files to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "페이지당 반환할 최대 파일 수입니다. 기본값: `20`, 범위: `1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of files to return",
+          "message": "반환할 최대 파일 수"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all uploaded files in the workspace (Beta)",
+          "message": "워크스페이스의 모든 업로드된 파일 목록 조회 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List all available Anthropic models including their capabilities, context window sizes, and max output tokens.",
+          "message": "기능, 컨텍스트 윈도우 크기, 최대 출력 토큰을 포함하여 사용 가능한 모든 Anthropic 모델 목록을 조회합니다."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "모델 목록 조회"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return models after this model ID (cursor for forward pagination)",
+          "message": "이 모델 ID 이후의 모델을 반환합니다(순방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "이후 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "순방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.desc": {
+          "source": "Return models before this model ID (cursor for backward pagination)",
+          "message": "이 모델 ID 이전의 모델을 반환합니다(역방향 페이지네이션용 커서)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "이전 ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "역방향 페이지네이션용 커서"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of models to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "페이지당 반환할 최대 모델 수입니다. 기본값: `20`, 범위: `1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of models to return",
+          "message": "반환할 최대 모델 수"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List all available Anthropic models",
+          "message": "사용 가능한 모든 Anthropic 모델 목록 조회"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.desc": {
+          "source": "List all available skills including custom and Anthropic-provided skills with pagination and source filtering. Requires the Skills API beta.",
+          "message": "페이지네이션 및 소스 필터링을 지원하여 커스텀 및 Anthropic 제공 스킬을 포함한 모든 사용 가능한 스킬 목록을 조회합니다. Skills API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
+          "source": "List Skills",
+          "message": "스킬 목록 조회"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of skills to return per page. Default: `20`, max: `100`",
+          "message": "페이지당 반환할 최대 스킬 수입니다. 기본값: `20`, 최대: `100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of skills to return",
+          "message": "반환할 최대 스킬 수"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.display_name": {
+          "source": "Anthropic",
+          "message": "Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.short_desc": {
+          "source": "Only Anthropic-provided skills",
+          "message": "Anthropic 제공 스킬만"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "Custom",
+          "message": "사용자 지정"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.short_desc": {
+          "source": "Only custom skills",
+          "message": "커스텀 스킬만"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.desc": {
+          "source": "Filter skills by their source",
+          "message": "소스별로 스킬 필터링"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.display_name": {
+          "source": "Source Filter",
+          "message": "소스 필터"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.short_desc": {
+          "source": "Filter skills by source",
+          "message": "소스별로 스킬 필터링"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.desc": {
+          "source": "Pagination token from a previous response's `next_page` field for retrieving the next page of results",
+          "message": "다음 결과 페이지를 검색하기 위한 이전 응답의 `next_page` 필드의 페이지네이션 토큰"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.short_desc": {
+          "source": "Pagination token from a previous response",
+          "message": "이전 응답의 페이지네이션 토큰"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
+          "source": "List available skills (Beta)",
+          "message": "사용 가능한 스킬 목록 조회 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Anthropic Claude** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Anthropic Claude**에 커스텀 HTTP / REST API 호출을 실행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정하세요. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 일급 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Anthropic Claude",
+          "message": "Anthropic Claude에 커스텀 API 호출 실행"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.desc": {
+          "source": "Stream a response from an Anthropic Claude model using Server-Sent Events (SSE). Events are emitted incrementally as the model generates content.",
+          "message": "Server-Sent Events(SSE)를 사용하여 Anthropic Claude 모델로부터 응답을 스트리밍합니다. 모델이 콘텐츠를 생성함에 따라 이벤트가 점진적으로 발생합니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.display_name": {
+          "source": "Stream Message",
+          "message": "메시지 스트리밍"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "여러 요청 간에 컨텍스트를 재사용하기 위한 컨테이너 ID입니다. 컨테이너는 효율적인 다중 턴 상호 작용을 위해 서버에 대화 상태를 저장합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "컨테이너"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "컨텍스트 재사용을 위한 컨테이너 ID"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "구성된 컨텍스트 저장소를 통해 대화 컨텍스트를 로드하고 저장하는 데 사용되는 불투명 키입니다. 제공되면 이전 메시지가 자동으로 앞에 추가됩니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "대화 키"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "대화 컨텍스트 유지를 위한 키"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "최대"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "최대 노력 및 철저함"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "보통"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "균형 잡힌 노력"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "더 철저한 응답"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "빠르고 덜 철저한 응답"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "모델이 응답에 들여야 하는 노력의 수준을 제어합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "노력"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "모델이 들여야 하는 노력의 수준을 제어합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "모델의 출력이 지정된 구조와 일치하도록 제한하는 JSON Schema 객체입니다. 구조화된 시스템 판독 가능 응답을 가능하게 합니다. 참고: `object` 유형의 경우 `additionalProperties`을 `false`(으)로 설정해야 합니다.\n\n예시:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "출력 스키마"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "구조화된 출력을 위한 JSON Schema"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "프롬프트를 완성할 모델(예: `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "프롬프트를 완성할 모델"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "중단하기 전까지 생성할 최대 토큰 수입니다. Anthropic API에서 필수 항목입니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "생성할 최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "대화를 위한 입력 메시지입니다. 각 메시지는 `role`(`user` 또는 `assistant`) 및 `content`(문자열 또는 콘텐츠 블록 목록)을 포함하는 해시입니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "대화를 위한 입력 메시지"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "사용 가능한 최상의 계층을 자동으로 선택합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "표준 전용"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "우선 순위 용량 없이 표준 계층만 사용합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "요청에 사용할 서비스 계층을 결정합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "서비스 계층"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "요청에 사용할 서비스 계층"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "이 요청에 사용할 에이전트 스킬입니다. 스킬은 문서 생성(pptx, xlsx, docx, pdf)이나 맞춤형 워크플로와 같은 작업을 위한 전문적인 역량으로 Claude의 기능을 확장합니다. 스킬을 선택하면 필요한 코드 실행 도구 및 베타 헤더가 자동으로 구성됩니다.\n\n형식: `{type}/{skill_id}`(예: `anthropic/pptx`, `custom/skill_abc123`). 유형 접두사가 지정되지 않은 경우 `custom`으로 간주됩니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "스킬"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "이 요청에 사용할 에이전트 스킬"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "모델의 생성을 중지하도록 하는 사용자 지정 텍스트 시퀀스입니다. 제공된 시퀀스 중 하나라도 발견되면 모델이 중지됩니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "중지 시퀀스"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "모델 생성을 중지시키는 사용자 정의 텍스트 시퀀스"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "컨텍스트와 지침을 제공하는 시스템 프롬프트입니다. 문자열이거나 캐시 제어를 위한 콘텐츠 블록 목록일 수 있습니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "대화를 위한 시스템 프롬프트"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "각 후속 토큰에 대해 상위 K개 옵션에서만 샘플링합니다. 롱테일의 낮은 확률 응답을 제거하는 데 사용됩니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "각 후속 토큰에 대해 상위 K개 옵션에서만 샘플링"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "핵 샘플링(Nucleus sampling)을 사용합니다. 핵 샘플링에서는 확률 내림차순으로 각 후속 토큰에 대한 모든 옵션의 누적 분포를 계산하고 `top_p`에 지정된 특정 확률에 도달하면 차단합니다."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "핵 샘플링 매개변수"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "응답에 주입되는 무작위성의 양입니다. 범위는 `0.0`에서 `1.0`까지입니다. 분석/객관식 작업에는 `0.0`에 가까운 `temperature`을(를) 사용하고, 창의적이고 생성적인 작업에는 `1.0`에 가까운 값을 사용하세요. 기본값: `1.0`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "온도"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "응답에 주입되는 무작위성의 양"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "확장 사고에 사용할 최대 토큰 수입니다. `1024` 이상이어야 하며 `max_tokens` 미만이어야 합니다. 사고 모드가 `enabled`일 때만 적용됩니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "사고 예산 토큰"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "사고에 사용할 최대 토큰 수"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "적응형"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "모델이 작업에 따라 사고 사용 여부를 결정합니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "비활성화됨"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "확장 사고 비활성화"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "사용"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "고정 예산으로 확장 사고 활성화"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "확장 사고의 활성화 여부입니다. 확장 사고를 사용하면 모델이 응답하기 전에 복잡한 문제를 단계별로 추론할 수 있습니다"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "사고 모드"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "확장 사고 활성화 여부"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.short_desc": {
+          "source": "Stream a response from a Claude model via Server-Sent Events",
+          "message": "Server-Sent Events를 통해 Claude 모델로부터 응답 스트리밍"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.desc": {
+          "source": "Update an existing custom skill. Requires the Skills API beta.",
+          "message": "기존 커스텀 스킬을 업데이트합니다. Skills API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.display_name": {
+          "source": "Update Skill",
+          "message": "스킬 업데이트"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "스킬이 수행하는 작업과 사용해야 하는 시기에 대한 설명입니다. 최대 1024자입니다. 3인칭으로 작성하세요(예: `Retrieves weather data for a city`)."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "스킬 설명"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "스킬의 사람이 읽을 수 있는 제목입니다. UI에 표시되지만 모델로 전송되는 프롬프트에는 포함되지 않습니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "표시 제목"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "사람이 읽을 수 있는 스킬 제목"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "스킬 동작에 대한 자세한 지침입니다. 이는 스킬이 트리거될 때 Claude가 읽는 SKILL.md 파일의 본문을 구성합니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "스킬에 대한 지침"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "SKILL.md 프런트매터에서 사용되는 스킬 식별자입니다. 최대 64자이며 소문자, 숫자, 하이픈만 허용됩니다. `anthropic` 또는 `claude`과 같은 예약어를 포함할 수 없습니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "스킬 식별자"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "스킬의 고유 식별자"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "스킬 ID"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "스킬의 ID"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.short_desc": {
+          "source": "Update an existing skill (Beta)",
+          "message": "기존 스킬 업데이트 (베타)"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and image files up to 500 MB. Requires the Files API beta.",
+          "message": "여러 API 호출에서 참조할 수 있는 파일을 업로드합니다. 최대 500MB의 PDF, 텍스트 및 이미지 파일을 지원합니다. Files API 베타가 필요합니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "파일 업로드"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Anthropic for reuse across API calls. Supports PDF, text, and image files up to 500 MB",
+          "message": "API 호출 전반에서 재사용하기 위해 Anthropic에 업로드할 파일입니다. 최대 500MB의 PDF, 텍스트 및 이미지 파일을 지원합니다."
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "파일"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "업로드할 파일"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for reuse across API calls (Beta)",
+          "message": "API 호출 전반에서 재사용할 파일 업로드 (베타)"
+        },
+        "app.QW50aHJvcGlj.desc": {
+          "source": "Anthropic Claude AI services providing access to Claude language models for text generation, analysis, and tool use with streaming support",
+          "message": "스트리밍 지원을 통해 텍스트 생성, 분석 및 도구 사용을 위한 Claude 언어 모델에 대한 액세스를 제공하는 Anthropic Claude AI 서비스"
+        },
+        "app.QW50aHJvcGlj.display_name": {
+          "source": "Anthropic Claude",
+          "message": "Anthropic Claude"
+        },
+        "app.QW50aHJvcGlj.short_desc": {
+          "source": "Anthropic Claude AI services",
+          "message": "Anthropic Claude AI 서비스"
+        }
+      }
+    }
+  }
+}

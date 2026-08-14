@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate a Gemini response via Vertex AI's regional `:generateContent` endpoint. The model name in the request is resolved into the URL path (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); the body is otherwise identical to the native Gemini `:generateContent` shape — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`.",
+          "message": "Vygeneruje odpoveď Gemini cez regionálny koncový bod `:generateContent` služby Vertex AI. Názov modelu v požiadavke sa premietne do cesty URL (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); telo je inak identické s natívnou štruktúrou Gemini `:generateContent` — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`."
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Generovať obsah"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "Gemini conversation history; each entry is a hash with `role` (`user` / `model`) and `parts` (list of `{text: \"...\"}`, `{inlineData: {mimeType, data}}`, or `{functionCall: ...}` / `{functionResponse: ...}` parts)",
+          "message": "História konverzácie Gemini; každá položka je hash s `role` (`user` / `model`) a `parts` (zoznam častí `{text: \"...\"}`, `{inlineData: {mimeType, data}}` alebo `{functionCall: ...}` / `{functionResponse: ...}`)"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Obsah"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "Gemini conversation contents",
+          "message": "Obsah konverzácie Gemini"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "Reference to a previously-created cached-content resource (e.g. `projects/{project}/locations/{region}/cachedContents/{id}`); major cost reduction for repeated system prompts",
+          "message": "Odkaz na predtým vytvorený prostriedok cached-content (napr. `projects/{project}/locations/{region}/cachedContents/{id}`); výrazné zníženie nákladov pri opakovaných systémových výzvach"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Obsah vo vyrovnávacej pamäti"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "Vertex context-caching reference",
+          "message": "Odkaz na context-caching vo Vertex"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
+          "message": "Parametre generovania: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Konfigurácia generovania"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Generation knobs",
+          "message": "Parametre generovania"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The Gemini publisher model name (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); becomes the `{model}` segment in the Vertex URL path",
+          "message": "Názov modelu vydavateľa Gemini (napr. `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); stane sa segmentom `{model}` v ceste URL Vertex"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "Gemini publisher model name",
+          "message": "Názov modelu vydavateľa Gemini"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "Per-category safety-filter thresholds; list of `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`",
+          "message": "Prahové hodnoty bezpečnostných filtrov pre jednotlivé kategórie; zoznam `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Nastavenia bezpečnosti"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety-filter thresholds",
+          "message": "Prahové hodnoty bezpečnostných filtrov"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system-instruction block: `{parts: ({text: \"...\"},)}`",
+          "message": "Voliteľný blok systémových inštrukcií: `{parts: ({text: \"...\"},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Systémová inštrukcia"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "Optional system-instruction block",
+          "message": "Voliteľný blok systémových inštrukcií"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool selection policy: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`",
+          "message": "Zásady výberu nástrojov: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "Konfigurácia nástrojov"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool-selection policy",
+          "message": "Pravidlo výberu nástrojov"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.desc": {
+          "source": "Function-calling tools: list of `{functionDeclarations: ({name, description, parameters},)}`",
+          "message": "Nástroje na volanie funkcií: zoznam `{functionDeclarations: ({name, description, parameters},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.short_desc": {
+          "source": "Tool / function-calling definitions",
+          "message": "Definície nástrojov / volania funkcií"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate a Gemini response via Vertex AI",
+          "message": "Generovať odpoveď Gemini cez Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings via Vertex AI's regional `:predict` endpoint on a Gecko / Text-Embedding publisher model. Accepts a batch of `{content: \"...\"}` instances in a single request; supports the `outputDimensionality` parameter on `text-embedding-005` for shorter vectors.",
+          "message": "Generuje husté vektorové embeddingy cez regionálny koncový bod `:predict` služby Vertex AI na modeli vydavateľa Gecko / Text-Embedding. Prijíma dávku inštancií `{content: \"...\"}` v jedinej požiadavke; podporuje parameter `outputDimensionality` na `text-embedding-005` pre kratšie vektory."
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "Vytvoriť embedding textu"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.desc": {
+          "source": "List of `{content: \"<text>\"}` hashes; one instance per text to embed (Vertex predict accepts batches)",
+          "message": "Zoznam hashov `{content: \"<text>\"}`; jedna inštancia na text na vytvorenie embeddingu (Vertex predict prijíma dávky)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.display_name": {
+          "source": "Instances",
+          "message": "Inštancie"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.short_desc": {
+          "source": "Texts to embed",
+          "message": "Texty na vytvorenie embeddingov"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Vertex AI embedding publisher model (e.g. `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)",
+          "message": "Model vydavateľa embeddingov Vertex AI (napr. `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Vertex AI embedding publisher model",
+          "message": "Model vydavateľa embeddingov Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.desc": {
+          "source": "Model-specific parameters: `autoTruncate` (bool), `outputDimensionality` (int)",
+          "message": "Parametre špecifické pre model: `autoTruncate` (bool), `outputDimensionality` (int)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Parameters",
+          "message": "Parametre"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Model-specific parameters",
+          "message": "Parametre špecifické pre model"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via Vertex AI :predict",
+          "message": "Generovať textové embeddingy cez Vertex AI :predict"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Vertex AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Google Vertex AI** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako predvolené akcie v tejto aplikácii."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Vertex AI",
+          "message": "Vykonať vlastné volanie API do Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.desc": {
+          "source": "**Google Vertex AI** is Google Cloud's managed platform for generative model access, exposing the Gemini family + publisher partner models (Claude on Vertex, Llama on Vertex) and Google's Gecko text-embedding models through a single regional REST API.\n\n- **Gemini :generateContent** — same body shape as the native Gemini REST API but routed through `{region}-aiplatform.googleapis.com` with GCP auth\n- **Gecko :predict embeddings** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` via the batch-capable `:predict` endpoint\n- **Vertex Context Caching** — major cost reduction for repeated system prompts (referenced via `cachedContent`)\n- **Application Default Credentials** — explicit service-account JSON, `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud` user creds, or the GCE/GKE/Cloud-Run metadata server are all honored\n- **Per-region endpoints** — pick `us-central1`, `europe-west4`, `asia-east1`, etc. for data residency\n\nTokens are cached and refreshed transparently by `GcpAuth`.\n\nProject: <https://cloud.google.com/vertex-ai>",
+          "message": "**Google Vertex AI** je spravovaná platforma od Google Cloud na prístup ku generatívnym modelom, ktorá sprístupňuje rodinu Gemini + partnerské modely vydavateľov (Claude on Vertex, Llama on Vertex) a modely Google Gecko na textové embeddingy prostredníctvom jedného regionálneho REST API.\n\n- **Gemini :generateContent** — rovnaká štruktúra tela ako v natívnom Gemini REST API, ale smerovaná cez `{region}-aiplatform.googleapis.com` s GCP autentifikáciou\n- **Embeddingy Gecko :predict** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` cez koncový bod `:predict` s podporou dávkového spracovania\n- **Vertex Context Caching** — výrazné zníženie nákladov pri opakovaných systémových výzvach (odkazované cez `cachedContent`)\n- **Application Default Credentials** — explicitný JSON servisného účtu, `GOOGLE_APPLICATION_CREDENTIALS`, používateľské prihlasovacie údaje `gcloud` alebo server metadát GCE/GKE/Cloud-Run sú plne rešpektované\n- **Koncové body pre jednotlivé regióny** — vyberte si `us-central1`, `europe-west4`, `asia-east1` atď. z hľadiska umiestnenia údajov\n\nTokeny sú transparentne ukladané do vyrovnávacej pamäte a obnovované prostredníctvom `GcpAuth`.\n\nProjekt: <https://cloud.google.com/vertex-ai>"
+        },
+        "app.VmVydGV4QUk.display_name": {
+          "source": "Google Vertex AI",
+          "message": "Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.short_desc": {
+          "source": "Google Vertex AI generative-model platform",
+          "message": "Platforma generatívnych modelov Google Vertex AI"
+        }
+      }
+    }
+  }
+}

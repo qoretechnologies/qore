@@ -1,0 +1,1717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new chart of accounts entry in a Wave business",
+          "message": "在 Wave 商家中建立新的會計科目表項目"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "建立帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the account",
+          "message": "帳戶的幣別代碼"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "The account currency",
+          "message": "帳戶幣別"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the account in",
+          "message": "要建立帳戶的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the account in",
+          "message": "要建立帳戶的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the account",
+          "message": "帳戶的說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The account description",
+          "message": "帳戶說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "帳戶名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "The account name",
+          "message": "帳戶名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.desc": {
+          "source": "The subtype of the account",
+          "message": "帳戶的子類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.display_name": {
+          "source": "Subtype",
+          "message": "子類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.short_desc": {
+          "source": "The account subtype",
+          "message": "帳戶子類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.desc": {
+          "source": "Asset account",
+          "message": "資產帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.display_name": {
+          "source": "Asset",
+          "message": "資產"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.desc": {
+          "source": "Equity account",
+          "message": "權益帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.display_name": {
+          "source": "Equity",
+          "message": "權益"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.desc": {
+          "source": "Expense account",
+          "message": "費用帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.display_name": {
+          "source": "Expense",
+          "message": "費用"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.desc": {
+          "source": "Income account",
+          "message": "收入帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.display_name": {
+          "source": "Income",
+          "message": "收入"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.desc": {
+          "source": "Liability account",
+          "message": "負債帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.display_name": {
+          "source": "Liability",
+          "message": "負債"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.desc": {
+          "source": "The type of account",
+          "message": "帳戶的類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.short_desc": {
+          "source": "The account type",
+          "message": "帳戶類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account in Wave",
+          "message": "在 Wave 中建立新帳戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in a Wave business with name, email, and contact details",
+          "message": "在 Wave 商家中建立包含姓名、電子郵件及聯絡資訊的新客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "建立客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the customer in",
+          "message": "要在其中建立客戶的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the customer in",
+          "message": "要在其中建立客戶的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The email address of the customer",
+          "message": "客戶的電子郵件地址"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The customer email",
+          "message": "客戶電子郵件"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the customer contact",
+          "message": "客戶聯絡人的名字"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The customer first name",
+          "message": "客戶名字"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes about the customer (not visible to the customer)",
+          "message": "關於客戶的內部備註（客戶不可見）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "內部備註"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes about the customer",
+          "message": "關於客戶的內部備註"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the customer contact",
+          "message": "客戶聯絡人的姓氏"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The customer last name",
+          "message": "客戶姓氏"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The name of the customer",
+          "message": "客戶名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The customer name",
+          "message": "客戶名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The phone number of the customer",
+          "message": "客戶的電話號碼"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The customer phone number",
+          "message": "客戶電話號碼"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the customer",
+          "message": "客戶的網站網址"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The customer website",
+          "message": "客戶網站"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer in Wave",
+          "message": "在 Wave 中建立新客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.desc": {
+          "source": "Create a new income or expense entry in a Wave business",
+          "message": "在 Wave 商家中建立新的收入或支出項目"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
+          "source": "Create Income/Expense",
+          "message": "建立收入/支出"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the income/expense entry in",
+          "message": "要在其中建立收入/支出項目的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the entry in",
+          "message": "要在其中建立項目的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.desc": {
+          "source": "The date of the income or expense entry",
+          "message": "收入或支出項目的日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "交易日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the income or expense entry",
+          "message": "收入或支出項目的描述"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "交易描述"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "交易的唯一外部識別碼（用於冪等性）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "外部交易 ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.desc": {
+          "source": "Expense entry",
+          "message": "支出項目"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.display_name": {
+          "source": "Expense",
+          "message": "費用"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.desc": {
+          "source": "Income entry",
+          "message": "收入項目"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.display_name": {
+          "source": "Income",
+          "message": "收入"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.desc": {
+          "source": "The type of the entry: income or expense",
+          "message": "項目類型：收入或支出"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.short_desc": {
+          "source": "The entry type",
+          "message": "項目類型"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
+          "source": "Create an income or expense entry in Wave",
+          "message": "在 Wave 中建立收入或支出項目"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice for a customer in a Wave business",
+          "message": "在 Wave 商家中為客戶建立新發票"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "建立發票"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the invoice",
+          "message": "發票的幣別代碼"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.short_desc": {
+          "source": "The invoice currency",
+          "message": "發票幣別"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.desc": {
+          "source": "The customer to create the invoice for",
+          "message": "要為其建立發票的客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer to invoice",
+          "message": "要開立發票的客戶"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the invoice in",
+          "message": "要在其中建立發票的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the invoice in",
+          "message": "要在其中建立發票的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.desc": {
+          "source": "The payment due date of the invoice (YYYY-MM-DD format)",
+          "message": "發票的付款到期日（格式為 YYYY-MM-DD）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "到期日"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "The due date",
+          "message": "到期日"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.desc": {
+          "source": "The footer text on the invoice",
+          "message": "發票上的頁尾文字"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.display_name": {
+          "source": "Footer",
+          "message": "頁尾"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.short_desc": {
+          "source": "The invoice footer",
+          "message": "發票頁尾"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.desc": {
+          "source": "The date of the invoice (YYYY-MM-DD format)",
+          "message": "發票日期（格式為 YYYY-MM-DD）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.display_name": {
+          "source": "Invoice Date",
+          "message": "發票日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.short_desc": {
+          "source": "The invoice date",
+          "message": "發票日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.desc": {
+          "source": "A memo/note on the invoice",
+          "message": "發票上的備忘/備註"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.display_name": {
+          "source": "Memo",
+          "message": "備忘"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.short_desc": {
+          "source": "The invoice memo",
+          "message": "發票備忘"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoice",
+          "message": "草稿發票"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoice",
+          "message": "已儲存的發票"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "已儲存"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.desc": {
+          "source": "The initial status of the invoice",
+          "message": "發票的初始狀態"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.short_desc": {
+          "source": "The invoice status",
+          "message": "發票狀態"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.desc": {
+          "source": "The subheading of the invoice",
+          "message": "發票的副標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.display_name": {
+          "source": "Subhead",
+          "message": "副標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.short_desc": {
+          "source": "The invoice subhead",
+          "message": "發票副標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.desc": {
+          "source": "The purchase order number associated with the invoice",
+          "message": "與發票相關聯的採購單號"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.display_name": {
+          "source": "PO Number",
+          "message": "採購單號"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.short_desc": {
+          "source": "The purchase order number",
+          "message": "採購單號"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.desc": {
+          "source": "The title of the invoice",
+          "message": "發票標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "The invoice title",
+          "message": "發票標題"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice in Wave",
+          "message": "在 Wave 中建立新發票"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product or service in a Wave business",
+          "message": "在 Wave 商家中建立新產品或服務"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "建立產品"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the product in",
+          "message": "要在其中建立產品的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the product in",
+          "message": "要在其中建立產品的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the product or service",
+          "message": "產品或服務的描述"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description",
+          "message": "產品描述"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product or service",
+          "message": "產品或服務的名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "產品名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The unit price of the product or service",
+          "message": "產品或服務的單價"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "單價"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The unit price",
+          "message": "單價"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product in Wave",
+          "message": "在 Wave 中建立新產品"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.desc": {
+          "source": "Create a new sales tax rate in a Wave business",
+          "message": "在 Wave 商家中建立新的銷售稅率"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
+          "source": "Create Sales Tax",
+          "message": "建立銷售稅"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.desc": {
+          "source": "The abbreviation for the sales tax",
+          "message": "銷售稅的縮寫"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.display_name": {
+          "source": "Abbreviation",
+          "message": "縮寫"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.short_desc": {
+          "source": "The tax abbreviation",
+          "message": "稅率縮寫"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the sales tax in",
+          "message": "要在其中建立銷售稅的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the sales tax in",
+          "message": "要在其中建立銷售稅的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the sales tax",
+          "message": "銷售稅的說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The tax description",
+          "message": "稅率說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.desc": {
+          "source": "Whether the tax is a compound tax (calculated on top of other taxes)",
+          "message": "此稅項是否為複稅（在其他稅項之上計算）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.display_name": {
+          "source": "Is Compound",
+          "message": "是否為複稅"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.short_desc": {
+          "source": "Whether the tax is compound",
+          "message": "稅項是否為複稅"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.desc": {
+          "source": "Whether the tax is recoverable (can be claimed back)",
+          "message": "此稅項是否可退回（可申請退稅）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.display_name": {
+          "source": "Is Recoverable",
+          "message": "是否可退回"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.short_desc": {
+          "source": "Whether the tax is recoverable",
+          "message": "稅項是否可退回"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.desc": {
+          "source": "The name of the sales tax",
+          "message": "銷售稅名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.short_desc": {
+          "source": "The sales tax name",
+          "message": "銷售稅名稱"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.desc": {
+          "source": "The tax rate as a percentage",
+          "message": "稅率（以百分比表示）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.short_desc": {
+          "source": "The tax rate",
+          "message": "稅率"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.desc": {
+          "source": "The tax registration number",
+          "message": "稅籍登記號碼"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "稅號"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.short_desc": {
+          "source": "The tax number",
+          "message": "統一編號/稅號"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
+          "source": "Create a new sales tax in Wave",
+          "message": "在 Wave 中建立新銷售稅"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.desc": {
+          "source": "Create a new money transaction in a Wave business",
+          "message": "在 Wave 商家中建立新的金錢交易"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "建立交易"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the transaction in",
+          "message": "要在其中建立交易的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the transaction in",
+          "message": "要在其中建立交易的商家"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.desc": {
+          "source": "The date of the transaction (YYYY-MM-DD format)",
+          "message": "交易日期（格式為 YYYY-MM-DD）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "交易日期"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the transaction",
+          "message": "交易說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "交易描述"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "交易的唯一外部識別碼（用於冪等性）"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "外部交易 ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a new transaction in Wave",
+          "message": "在 Wave 中建立新交易"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.desc": {
+          "source": "Approve a draft or saved invoice in Wave, making it ready to send",
+          "message": "在 Wave 中核准草稿或已儲存的發票，使其可供傳送"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
+          "source": "Approve Invoice",
+          "message": "核准發票"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to approve",
+          "message": "要核准的發票"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to approve",
+          "message": "要核准的發票"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
+          "source": "Approve an invoice by ID",
+          "message": "依 ID 核准發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a specific customer by their ID",
+          "message": "依客戶 ID 擷取特定客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "取得客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "客戶所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "客戶所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to retrieve",
+          "message": "要擷取的客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to retrieve",
+          "message": "要擷取的客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a specific customer from Wave",
+          "message": "從 Wave 取得特定客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.desc": {
+          "source": "Retrieve a specific customer by their email address",
+          "message": "依電子郵件地址擷取特定客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
+          "source": "Get Customer by Email",
+          "message": "依電子郵件取得客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "客戶所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "客戶所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.desc": {
+          "source": "The email address of the customer to retrieve",
+          "message": "要擷取的客戶電子郵件地址"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.short_desc": {
+          "source": "The customer email to search for",
+          "message": "要搜尋的客戶電子郵件"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
+          "source": "Get a specific customer by email from Wave",
+          "message": "從 Wave 依電子郵件取得特定客戶"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a specific invoice by its ID",
+          "message": "依發票 ID 擷取特定發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "取得發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the invoice belongs to",
+          "message": "發票所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the invoice belongs to",
+          "message": "發票所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.desc": {
+          "source": "The invoice to retrieve",
+          "message": "要擷取的發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "要擷取的發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a specific invoice from Wave",
+          "message": "從 Wave 取得特定發票"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a specific product by its ID",
+          "message": "依產品 ID 擷取特定產品"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "取得產品"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the product belongs to",
+          "message": "產品所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the product belongs to",
+          "message": "產品所屬的商家"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to retrieve",
+          "message": "要擷取的商品"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to retrieve",
+          "message": "要擷取的商品"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a specific product from Wave",
+          "message": "從 Wave 取得特定產品"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete an existing customer from a Wave business",
+          "message": "從 Wave 商家中刪除現有客戶"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "刪除客戶"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to delete",
+          "message": "要刪除的客戶"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "要刪除的客戶"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer in Wave",
+          "message": "在 Wave 中刪除客戶"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.desc": {
+          "source": "Execute an arbitrary GraphQL query or mutation against the Wave API",
+          "message": "對 Wave API 執行自訂 GraphQL 查詢或 Mutation"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.display_name": {
+          "source": "Execute GraphQL",
+          "message": "執行 GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.desc": {
+          "source": "The GraphQL query or mutation string to execute",
+          "message": "要執行的 GraphQL 查詢或 Mutation 字串"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.short_desc": {
+          "source": "The GraphQL query",
+          "message": "GraphQL 查詢"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.desc": {
+          "source": "Optional variables to pass to the GraphQL query",
+          "message": "傳遞給 GraphQL 查詢的選填變數"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.display_name": {
+          "source": "Variables",
+          "message": "變數"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.short_desc": {
+          "source": "The query variables",
+          "message": "查詢變數"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.short_desc": {
+          "source": "Execute an arbitrary GraphQL query",
+          "message": "執行自訂 GraphQL 查詢"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in Wave. Uses webhooks for real-time notifications.",
+          "message": "在 Wave 中建立新發票時觸發。使用 Webhook 進行即時通知。"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "Invoice Created",
+          "message": "已建立發票"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.desc": {
+          "source": "Only trigger for invoices in this business (optional)",
+          "message": "僅針對此商家中的發票觸發（選填）"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "Filter to invoices from a specific business",
+          "message": "篩選來自特定商家的發票"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "建立新發票時觸發"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Wave** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Wave** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基底 URL）、選填查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊傳回。\n\n對於尚未在此應用程式上作為頂級動作公開的端點，請使用此動作。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Wave",
+          "message": "向 Wave 發出自訂 API 呼叫"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search for chart of accounts entries in a Wave business",
+          "message": "在 Wave 商家中搜尋會計科目表分錄"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "搜尋帳戶"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search accounts in",
+          "message": "要在其中搜尋帳戶的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search accounts in",
+          "message": "要在其中搜尋帳戶的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果數量上限"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search for accounts in Wave",
+          "message": "在 Wave 中搜尋帳戶"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Search for customers in a Wave business with optional filters",
+          "message": "在 Wave 商家中搜尋客戶（含選填篩選條件）"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "搜尋客戶"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search customers in",
+          "message": "要在其中搜尋客戶的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search customers in",
+          "message": "要在其中搜尋客戶的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果數量上限"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "Search for customers in Wave",
+          "message": "在 Wave 中搜尋客戶"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in a Wave business with optional status filter",
+          "message": "在 Wave 商家中搜尋發票（含選填狀態篩選條件）"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "搜尋發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search invoices in",
+          "message": "要在其中搜尋發票的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search invoices in",
+          "message": "要在其中搜尋發票的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果數量上限"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.desc": {
+          "source": "Overdue invoices",
+          "message": "逾期發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.display_name": {
+          "source": "Overdue",
+          "message": "逾期"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoices",
+          "message": "草稿發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid invoices",
+          "message": "已付款的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.display_name": {
+          "source": "Paid",
+          "message": "已付款"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.desc": {
+          "source": "Partially paid invoices",
+          "message": "部分付款的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.display_name": {
+          "source": "Partial",
+          "message": "部分"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoices",
+          "message": "已儲存的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "已儲存"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.desc": {
+          "source": "Sent invoices",
+          "message": "已傳送的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.display_name": {
+          "source": "Sent",
+          "message": "已發送"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.desc": {
+          "source": "Unpaid invoices",
+          "message": "未付款的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.display_name": {
+          "source": "Unpaid",
+          "message": "未付款"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.desc": {
+          "source": "Viewed invoices",
+          "message": "已檢視的發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.display_name": {
+          "source": "Viewed",
+          "message": "已檢視"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "依狀態篩選發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "依發票狀態篩選"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Wave",
+          "message": "在 Wave 中搜尋發票"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Search for products in a Wave business",
+          "message": "在 Wave 商家中搜尋產品"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "搜尋產品"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search products in",
+          "message": "要搜尋產品的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search products in",
+          "message": "要搜尋產品的商家"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果數量上限"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "Search for products in Wave",
+          "message": "在 Wave 中搜尋產品"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Send an approved invoice to the customer via email",
+          "message": "透過電子郵件向客戶傳送已核准的發票"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "傳送發票"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to send",
+          "message": "要傳送的發票"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to send",
+          "message": "要傳送的發票"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send an invoice in Wave",
+          "message": "在 Wave 中傳送發票"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the properties of an existing customer in Wave",
+          "message": "更新 Wave 中現有客戶的屬性"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "更新客戶"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The new email address of the customer",
+          "message": "客戶的新電子郵件地址"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The new email",
+          "message": "新電子郵件"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The new first name of the customer contact",
+          "message": "客戶聯絡人的新名字"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The new first name",
+          "message": "新名字"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "The new internal notes about the customer",
+          "message": "關於客戶的新內部備註"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "內部備註"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "The new internal notes",
+          "message": "新內部備註"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to update",
+          "message": "要更新的客戶"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "要更新的客戶"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The new last name of the customer contact",
+          "message": "客戶聯絡人的新姓氏"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The new last name",
+          "message": "新姓氏"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The new name of the customer",
+          "message": "客戶的新名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The new customer name",
+          "message": "新客戶名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The new phone number of the customer",
+          "message": "客戶的新電話號碼"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The new phone number",
+          "message": "新電話號碼"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The new website URL of the customer",
+          "message": "客戶的新網站 URL"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The new website",
+          "message": "新網站"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer in Wave",
+          "message": "更新 Wave 中的現有客戶"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update the properties of an existing product in Wave",
+          "message": "更新 Wave 中現有產品的屬性"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "更新產品"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the product",
+          "message": "產品的新描述"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new product description",
+          "message": "新產品描述"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to update",
+          "message": "要更新的產品"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to update",
+          "message": "要更新的產品"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the product",
+          "message": "產品的新名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The new product name",
+          "message": "新產品名稱"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The new unit price of the product",
+          "message": "產品的新單價"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "單價"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The new unit price",
+          "message": "新單價"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product in Wave",
+          "message": "更新 Wave 中的現有產品"
+        },
+        "app.V2F2ZQ.desc": {
+          "source": "Wave is a free accounting, invoicing, and receipt scanning software for small businesses. This integration enables managing customers, invoices, products, accounts, and transactions through Wave's GraphQL API.",
+          "message": "Wave 是一款適用於小型企業的免費會計、開立發票與收據掃描軟體。此整合可透過 Wave 的 GraphQL API 管理客戶、發票、產品、帳戶與交易。"
+        },
+        "app.V2F2ZQ.display_name": {
+          "source": "Wave",
+          "message": "Wave"
+        },
+        "app.V2F2ZQ.short_desc": {
+          "source": "Wave accounting and invoicing",
+          "message": "Wave 會計與開立發票"
+        }
+      }
+    }
+  }
+}

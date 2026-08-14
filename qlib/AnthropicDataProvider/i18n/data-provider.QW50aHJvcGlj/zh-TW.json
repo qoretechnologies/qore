@@ -1,0 +1,1573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of input tokens that would be used by a message request without actually creating the message. Useful for estimating costs and managing context windows.",
+          "message": "計算訊息請求將使用的輸入權杖數量，而不實際建立訊息。適用於預估成本及管理上下文視窗。"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "計算權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model to use for tokenization (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "用於權杖化 (Tokenization) 的模型（例如 `claude-sonnet-4-6-20250514`）"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for tokenization",
+          "message": "用於權杖化的模型"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages to count tokens for. Same format as the Messages API",
+          "message": "要計算權杖數的輸入訊息。格式與 Messages API 相同"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages to count tokens for",
+          "message": "要計算權杖數的輸入訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.desc": {
+          "source": "System prompt to include in the token count",
+          "message": "要計入權杖數的系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.short_desc": {
+          "source": "System prompt to include in token count",
+          "message": "要計入權杖數的系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "用於延伸思考的最大權杖數量。必須至少為 `1024` 且小於 `max_tokens`。僅在思考模式為 `enabled` 時適用"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "思考預算權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "思考的最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "自適應"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "模型會根據任務自行決定是否使用思考功能"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "已停用"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "停用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "啟用具備固定預算的延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "是否啟用延伸思考。延伸思考可讓模型在回應前按部就班地推理複雜問題"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "思考模式"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "是否啟用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in a message without creating it",
+          "message": "計算訊息中的權杖數量而不實際建立訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.desc": {
+          "source": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests are not undone.",
+          "message": "取消批次訊息。批次將進入 `canceling` 狀態；已處理的請求將不會復原。"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.display_name": {
+          "source": "Cancel Message Batch",
+          "message": "取消批次訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "批次訊息的專屬識別碼（例如 `msgbatch_013Zva2CMbUFEYkeWyl6QV`）"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "批次 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "批次訊息的 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.short_desc": {
+          "source": "Cancel a message batch before it finishes processing",
+          "message": "在批次訊息完成處理前將其取消"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Send a structured message to an Anthropic Claude model and receive a complete response. Supports text, images, structured output, and extended thinking.",
+          "message": "傳送結構化訊息至 Anthropic Claude 模型並接收完整回應。支援文字、圖片、結構化輸出及延伸思考。"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create Message",
+          "message": "建立訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "用於在多個請求間重複使用上下文的容器 ID。容器會將對話狀態儲存在伺服器上，以實現高效的多輪互動"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "容器"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "用於重複使用上下文的容器 ID"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "透過已設定的上下文存放區載入與儲存對話上下文的不透明金鑰。提供時，將自動在前面附加先前的訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "對話金鑰"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "用於對話上下文持久化的金鑰"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "最大"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "最高投入度與徹底度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "均衡投入度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "更詳盡徹底的回應"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "快速且較不深入的回應"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "控制模型在產生回應時應投入的精力程度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "投入度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "控制模型應投入的精力程度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "限制模型輸出以符合特定結構的 JSON Schema 物件。可實現結構化且機器可讀的回應。注意：針對 `object` 類型，`additionalProperties` 必須設定為 `false`。\n\n範例：\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "輸出結構描述"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "用於結構化輸出的 JSON 結構描述"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "將完成提示詞的模型（例如 `claude-sonnet-4-6-20250514`）"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "將完成提示詞的模型"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "停止前生成的最大權杖 (token) 數。Anthropic API 所必需"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "要生成的最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "對話的輸入訊息。每則訊息都是包含 `role`（`user` 或 `assistant`）和 `content`（字串或內容區塊列表）的雜湊"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "對話的輸入訊息"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "自動選取最佳可用層級"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "僅限標準"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "僅使用標準層級，一律不使用優先容量"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "決定用於該請求的服務層級"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "服務層級"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "請求的服務層級"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "此請求要使用的代理技能。技能可透過建立文件（pptx、xlsx、docx、pdf）或自訂工作流程等任務的專門知識來擴展 Claude 的功能。選取技能時，將自動設定所需的程式碼執行工具和測試版標頭。\n\n格式：`{type}/{skill_id}`（例如 `anthropic/pptx`、`custom/skill_abc123`）。如果未提供類型前綴，則預設為 `custom`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "技能"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "此請求要使用的代理技能"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "會使模型停止生成的自訂文字序列。當遇到任何提供的序列時，模型將停止"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止序列"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "會使模型停止生成的自訂文字序列"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "提供上下文與指示的系統提示詞。可以是字串，也可以是用於快取控制的內容區塊列表"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "對話的系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "僅從每個後續權杖的前 K 個選項中抽樣。用於移除長尾低機率回應"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "僅從每個後續權杖的前 K 個選項中抽樣"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "使用核抽樣 (nucleus sampling)。在核抽樣中，我們會按機率遞減順序計算每個後續權杖所有選項的累積分布，並在達到由 `top_p` 指定的特定機率時將其截斷"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "核抽樣參數"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "注入回應的隨機性量。範圍從 `0.0` 到 `1.0`。對於分析／選擇題任務，請使用較接近 `0.0` 的 `temperature`；對於創意和生成任務，請使用較接近 `1.0` 的值。預設值：`1.0`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "溫度"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "注入回應的隨機性量"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "用於延伸思考的最大權杖數量。必須至少為 `1024` 且小於 `max_tokens`。僅在思考模式為 `enabled` 時適用"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "思考預算權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "思考的最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "自適應"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "模型會根據任務自行決定是否使用思考功能"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "已停用"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "停用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "啟用具備固定預算的延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "是否啟用延伸思考。延伸思考可讓模型在回應前按部就班地推理複雜問題"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "思考模式"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "是否啟用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Send a message to a Claude model and receive a response",
+          "message": "傳送訊息給 Claude 模型並接收回應"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. Batches are processed within 24 hours.",
+          "message": "提交一批訊息請求以進行非同步處理，費用降低 50%。批次作業會在 24 小時內處理完成。"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Message Batch",
+          "message": "建立訊息批次"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.desc": {
+          "source": "List of requests to process. Each item has a `custom_id` for result matching and `params` containing the message creation parameters",
+          "message": "要處理的請求列表。每個項目都包含用於結果比對的 `custom_id` 以及包含訊息建立參數的 `params`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "請求"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.short_desc": {
+          "source": "List of message requests to process in batch",
+          "message": "要進行批次處理的訊息請求列表"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Submit a batch of message requests for async processing",
+          "message": "提交訊息請求批次以進行非同步處理"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.desc": {
+          "source": "Create a new custom skill that packages domain expertise and workflows. A SKILL.md file is auto-generated from the provided name, description, and instructions. Requires the Skills API beta.",
+          "message": "建立封裝領域專業知識和工作流程的新自訂技能。系統會根據提供的名稱、描述和指示自動產生 SKILL.md 檔案。需要 Skills API 測試版。"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.display_name": {
+          "source": "Create Skill",
+          "message": "建立技能"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "技能功能以及應當何時使用的描述。最多 1024 個字元。請以第三人稱撰寫（例如 `Retrieves weather data for a city`）"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "技能描述"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "人類可讀的技能標題。這會顯示在 UI 中，但不會包含在傳送給模型的提示詞中"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "顯示標題"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "人類可讀的技能標題"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "技能行為的詳細指示。這些指示構成 SKILL.md 檔案的正文，Claude 在觸發技能時會讀取該檔案"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "技能的指示"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "SKILL.md 前言 (frontmatter) 中使用的技能識別碼。最多 64 個字元，僅限小寫字母、數字和連字號。不能包含像 `anthropic` 或 `claude` 等保留字"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "技能識別碼"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.short_desc": {
+          "source": "Create a custom skill (Beta)",
+          "message": "建立自訂技能 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.desc": {
+          "source": "Retrieve details for a specific Anthropic model including capabilities, context window size, and max output tokens.",
+          "message": "擷取特定 Anthropic 模型的詳細資訊，包括功能、上下文視窗大小和最大輸出權杖數。"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "取得模型"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "The unique identifier or alias for the model (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "模型的唯一識別碼或別名（例如 `claude-sonnet-4-6-20250514`）"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The ID of the model to retrieve",
+          "message": "要擷取的模型 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Get details for a specific model by ID or alias",
+          "message": "依 ID 或別名取得特定模型的詳細資訊"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve the status and metadata of a specific message batch. Use this to poll for batch completion.",
+          "message": "擷取特定訊息批次的狀態和中繼資料。用此來輪詢批次完成狀態。"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Message Batch",
+          "message": "取得訊息批次"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "批次訊息的專屬識別碼（例如 `msgbatch_013Zva2CMbUFEYkeWyl6QV`）"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "批次 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "批次訊息的 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Get the status and details of a message batch",
+          "message": "取得訊息批次的狀態和詳細資訊"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
+          "message": "擷取特定已上傳檔案的中繼資料。需要 Files API 測試版。"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File",
+          "message": "取得檔案"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "檔案的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "檔案 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "檔案的 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get metadata for a specific file (Beta)",
+          "message": "取得特定檔案的中繼資料 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.desc": {
+          "source": "Download the content of a previously uploaded file. Only available for files created by skills or code execution where `downloadable` is `True`. Requires the Files API beta.",
+          "message": "下載先前上傳檔案的內容。僅適用於由技能或程式碼執行建立且 `downloadable` 為 `True` 的檔案。需要 Files API 測試版。"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
+          "source": "Get File Content",
+          "message": "取得檔案內容"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "檔案的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "檔案 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "檔案的 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
+          "source": "Download the content of a file (Beta)",
+          "message": "下載檔案內容 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.desc": {
+          "source": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
+          "message": "透過 ID 擷取特定技能的詳細資訊。需要 Skills API beta。"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
+          "source": "Get Skill",
+          "message": "取得技能"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "該技能的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "技能 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "技能的 ID"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {
+          "source": "Get details for a specific skill (Beta)",
+          "message": "取得特定技能的詳細資訊 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file that was previously uploaded. Requires the Files API beta.",
+          "message": "刪除先前上傳的檔案。需要 Files API beta。"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "刪除檔案"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "檔案的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "檔案 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "檔案的 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file from the workspace (Beta)",
+          "message": "從工作區刪除檔案 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.desc": {
+          "source": "Delete a custom skill by ID. Requires the Skills API beta.",
+          "message": "透過 ID 刪除自訂技能。需要 Skills API beta。"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.display_name": {
+          "source": "Delete Skill",
+          "message": "刪除技能"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "該技能的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "技能 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "技能的 ID"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.short_desc": {
+          "source": "Delete a custom skill (Beta)",
+          "message": "刪除自訂技能 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "List all message batches with pagination support.",
+          "message": "列出所有訊息批次，支援分頁。"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Message Batches",
+          "message": "列出訊息批次"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return batches created after this batch ID (cursor for forward pagination)",
+          "message": "傳回在此批次 ID 之後建立的批次 (向前分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "After ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "向前分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.desc": {
+          "source": "Return batches created before this batch ID (cursor for backward pagination)",
+          "message": "傳回在此批次 ID 之前建立的批次 (向後分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "Before ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "向後分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of batches to return per page. Default: `20`, max: `100`",
+          "message": "每頁傳回的批次數量上限。預設值：`20`，最大值：`100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of batches to return",
+          "message": "傳回的批次數量上限"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List all message batches in the workspace",
+          "message": "列出工作區中的所有訊息批次"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.desc": {
+          "source": "List all files that have been uploaded to the workspace with pagination support. Requires the Files API beta.",
+          "message": "列出所有已上傳至工作區的檔案，支援分頁。需要 Files API beta。"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "列出檔案"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return files after this file ID (cursor for forward pagination)",
+          "message": "傳回在此檔案 ID 之後的檔案 (向前分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "After ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "向前分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.desc": {
+          "source": "Return files before this file ID (cursor for backward pagination)",
+          "message": "傳回在此檔案 ID 之前的檔案 (向後分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "Before ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "向後分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of files to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "每頁傳回的檔案數量上限。預設值：`20`，範圍：`1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of files to return",
+          "message": "要傳回的檔案數量上限"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all uploaded files in the workspace (Beta)",
+          "message": "列出工作區中所有已上傳的檔案 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List all available Anthropic models including their capabilities, context window sizes, and max output tokens.",
+          "message": "列出所有可用的 Anthropic 模型，包含其功能、上下文視窗大小及最大輸出 Token 數。"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "列出模型"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return models after this model ID (cursor for forward pagination)",
+          "message": "傳回在此模型 ID 之後的模型 (向前分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "After ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "向前分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.desc": {
+          "source": "Return models before this model ID (cursor for backward pagination)",
+          "message": "傳回在此模型 ID 之前的模型 (向後分頁游標)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "Before ID"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "向後分頁游標"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of models to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "每頁傳回的模型數量上限。預設值：`20`，範圍：`1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of models to return",
+          "message": "要返回的模型最大數量"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List all available Anthropic models",
+          "message": "列出所有可用的 Anthropic 模型"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.desc": {
+          "source": "List all available skills including custom and Anthropic-provided skills with pagination and source filtering. Requires the Skills API beta.",
+          "message": "列出所有可用的技能，包含自訂技能與 Anthropic 提供的技能，支援分頁與來源篩選。需要 Skills API beta。"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
+          "source": "List Skills",
+          "message": "列出技能"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of skills to return per page. Default: `20`, max: `100`",
+          "message": "每頁傳回的技能數量上限。預設值：`20`，最大值：`100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of skills to return",
+          "message": "傳回的技能數量上限"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.display_name": {
+          "source": "Anthropic",
+          "message": "Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.short_desc": {
+          "source": "Only Anthropic-provided skills",
+          "message": "僅限 Anthropic 提供的技能"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "Custom",
+          "message": "自訂"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.short_desc": {
+          "source": "Only custom skills",
+          "message": "僅限自訂技能"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.desc": {
+          "source": "Filter skills by their source",
+          "message": "依來源篩選技能"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.display_name": {
+          "source": "Source Filter",
+          "message": "來源篩選器"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.short_desc": {
+          "source": "Filter skills by source",
+          "message": "依來源篩選技能"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.desc": {
+          "source": "Pagination token from a previous response's `next_page` field for retrieving the next page of results",
+          "message": "來自前次回應中 `next_page` 欄位的分頁權杖，用於擷取下一頁結果"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.display_name": {
+          "source": "Page Token",
+          "message": "頁面 Token"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.short_desc": {
+          "source": "Pagination token from a previous response",
+          "message": "來自前次回應的分頁權杖"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
+          "source": "List available skills (Beta)",
+          "message": "列出可用技能 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Anthropic Claude** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Anthropic Claude** 發送自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基礎 URL)、選填的查詢參數、標頭以及請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n對於此應用程式中尚未作為頂級動作公開的端點，請使用此動作。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Anthropic Claude",
+          "message": "向 Anthropic Claude 發送自訂 API 呼叫"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.desc": {
+          "source": "Stream a response from an Anthropic Claude model using Server-Sent Events (SSE). Events are emitted incrementally as the model generates content.",
+          "message": "使用伺服器發送事件 (SSE) 串流來自 Anthropic Claude 模型的即時回應。事件會在模型產生內容時逐步發送。"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.display_name": {
+          "source": "Stream Message",
+          "message": "串流訊息"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "用於在多個請求間重複使用上下文的容器 ID。容器會將對話狀態儲存在伺服器上，以實現高效的多輪互動"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "容器"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "用於重複使用上下文的容器 ID"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "透過已設定的上下文存放區載入與儲存對話上下文的不透明金鑰。提供時，將自動在前面附加先前的訊息"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "對話金鑰"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "用於對話上下文持久化的金鑰"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "最大"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "最高投入度與徹底度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "均衡投入度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "更詳盡徹底的回應"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "快速且較不深入的回應"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "控制模型在產生回應時應投入的精力程度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "投入度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "控制模型應投入的精力程度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "限制模型輸出以符合特定結構的 JSON Schema 物件。可實現結構化且機器可讀的回應。注意：針對 `object` 類型，`additionalProperties` 必須設定為 `false`。\n\n範例：\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "輸出結構描述"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "用於結構化輸出的 JSON 結構描述"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "將完成提示詞的模型（例如 `claude-sonnet-4-6-20250514`）"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "將完成提示詞的模型"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "停止前生成的最大權杖 (token) 數。Anthropic API 所必需"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "要生成的最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "對話的輸入訊息。每則訊息都是包含 `role`（`user` 或 `assistant`）和 `content`（字串或內容區塊列表）的雜湊"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "訊息"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "對話的輸入訊息"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "自動選取最佳可用層級"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "僅限標準"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "僅使用標準層級，一律不使用優先容量"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "決定用於該請求的服務層級"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "服務層級"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "請求的服務層級"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "此請求要使用的代理技能。技能可透過建立文件（pptx、xlsx、docx、pdf）或自訂工作流程等任務的專門知識來擴展 Claude 的功能。選取技能時，將自動設定所需的程式碼執行工具和測試版標頭。\n\n格式：`{type}/{skill_id}`（例如 `anthropic/pptx`、`custom/skill_abc123`）。如果未提供類型前綴，則預設為 `custom`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "技能"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "此請求要使用的代理技能"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "會使模型停止生成的自訂文字序列。當遇到任何提供的序列時，模型將停止"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止序列"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "會使模型停止生成的自訂文字序列"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "提供上下文與指示的系統提示詞。可以是字串，也可以是用於快取控制的內容區塊列表"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "對話的系統提示詞"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "僅從每個後續權杖的前 K 個選項中抽樣。用於移除長尾低機率回應"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "僅從每個後續權杖的前 K 個選項中抽樣"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "使用核抽樣 (nucleus sampling)。在核抽樣中，我們會按機率遞減順序計算每個後續權杖所有選項的累積分布，並在達到由 `top_p` 指定的特定機率時將其截斷"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "核抽樣參數"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "注入回應的隨機性量。範圍從 `0.0` 到 `1.0`。對於分析／選擇題任務，請使用較接近 `0.0` 的 `temperature`；對於創意和生成任務，請使用較接近 `1.0` 的值。預設值：`1.0`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "溫度"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "注入回應的隨機性量"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "用於延伸思考的最大權杖數量。必須至少為 `1024` 且小於 `max_tokens`。僅在思考模式為 `enabled` 時適用"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "思考預算權杖數"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "思考的最大權杖數"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "自適應"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "模型會根據任務自行決定是否使用思考功能"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "已停用"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "停用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "已啟用"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "啟用具備固定預算的延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "是否啟用延伸思考。延伸思考可讓模型在回應前按部就班地推理複雜問題"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "思考模式"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "是否啟用延伸思考"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.short_desc": {
+          "source": "Stream a response from a Claude model via Server-Sent Events",
+          "message": "透過伺服器發送事件串流來自 Claude 模型的回應"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.desc": {
+          "source": "Update an existing custom skill. Requires the Skills API beta.",
+          "message": "更新現有的自訂技能。需要 Skills API beta。"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.display_name": {
+          "source": "Update Skill",
+          "message": "更新技能"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "技能功能以及應當何時使用的描述。最多 1024 個字元。請以第三人稱撰寫（例如 `Retrieves weather data for a city`）"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "技能描述"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "人類可讀的技能標題。這會顯示在 UI 中，但不會包含在傳送給模型的提示詞中"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "顯示標題"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "人類可讀的技能標題"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "技能行為的詳細指示。這些指示構成 SKILL.md 檔案的正文，Claude 在觸發技能時會讀取該檔案"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "指示"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "技能的指示"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "SKILL.md 前言 (frontmatter) 中使用的技能識別碼。最多 64 個字元，僅限小寫字母、數字和連字號。不能包含像 `anthropic` 或 `claude` 等保留字"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "技能識別碼"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "該技能的唯一識別碼"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "技能 ID"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "技能的 ID"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.short_desc": {
+          "source": "Update an existing skill (Beta)",
+          "message": "更新現有技能 (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and image files up to 500 MB. Requires the Files API beta.",
+          "message": "上傳可在多個 API 呼叫中引用的檔案。支援最大 500 MB 的 PDF、文字和圖片檔案。需要 Files API beta。"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "上傳檔案"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Anthropic for reuse across API calls. Supports PDF, text, and image files up to 500 MB",
+          "message": "要上傳至 Anthropic 以便在不同 API 呼叫之間重複使用的檔案。支援最大 500 MB 的 PDF、文字和圖片檔案"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "檔案"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "要上傳的檔案"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for reuse across API calls (Beta)",
+          "message": "上傳檔案以便在多個 API 呼叫間重複使用 (Beta)"
+        },
+        "app.QW50aHJvcGlj.desc": {
+          "source": "Anthropic Claude AI services providing access to Claude language models for text generation, analysis, and tool use with streaming support",
+          "message": "Anthropic Claude AI 服務，提供存取 Claude 語言模型以進行文字生成、分析和工具調用，並支援串流傳輸"
+        },
+        "app.QW50aHJvcGlj.display_name": {
+          "source": "Anthropic Claude",
+          "message": "Anthropic Claude"
+        },
+        "app.QW50aHJvcGlj.short_desc": {
+          "source": "Anthropic Claude AI services",
+          "message": "Anthropic Claude AI 服務"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of input tokens that would be used by a message request without actually creating the message. Useful for estimating costs and managing context windows.",
+          "message": "Conta il numero di token di input che verrebbero utilizzati da una richiesta di messaggio senza effettivamente creare il messaggio. Utile per stimare i costi e gestire le finestre di contesto."
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "Conta token"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model to use for tokenization (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "Il modello da utilizzare per la tokenizzazione (ad es. `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for tokenization",
+          "message": "Il modello da utilizzare per la tokenizzazione"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages to count tokens for. Same format as the Messages API",
+          "message": "Messaggi di input per cui contare i token. Stesso formato dell'API Messages"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages to count tokens for",
+          "message": "Messaggi di input per cui contare i token"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.desc": {
+          "source": "System prompt to include in the token count",
+          "message": "Prompt di sistema da includere nel conteggio dei token"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "Prompt di sistema"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.c3lzdGVt.short_desc": {
+          "source": "System prompt to include in token count",
+          "message": "Prompt di sistema da includere nel conteggio dei token"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "Il numero massimo di token da utilizzare per il pensiero esteso. Deve essere almeno `1024` e inferiore a `max_tokens`. Applicabile solo quando la modalità di pensiero è `enabled`"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "Token del budget di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "Token massimi per il pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "Adattivo"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "Il modello decide se utilizzare il pensiero in base all'attività"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Disabilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "Disabilita il pensiero esteso"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "Abilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "Abilita il pensiero esteso con un budget fisso"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "Indica se il pensiero esteso è abilitato o disabilitato. Il pensiero esteso consente al modello di ragionare su problemi complessi passo dopo passo prima di rispondere"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "Modalità di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "Indica se il pensiero esteso è abilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in a message without creating it",
+          "message": "Conta il numero di token in un messaggio senza crearlo"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.desc": {
+          "source": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests are not undone.",
+          "message": "Annulla un batch di messaggi. Il batch entra in uno stato `canceling`; le richieste già elaborate non vengono annullate."
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.display_name": {
+          "source": "Cancel Message Batch",
+          "message": "Annulla batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "L'identificatore univoco per il batch di messaggi (ad es. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID batch"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "L'ID del batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Y2FuY2VsLWJhdGNo.short_desc": {
+          "source": "Cancel a message batch before it finishes processing",
+          "message": "Annulla un batch di messaggi prima che finisca l'elaborazione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Send a structured message to an Anthropic Claude model and receive a complete response. Supports text, images, structured output, and extended thinking.",
+          "message": "Invia un messaggio strutturato a un modello Anthropic Claude e ricevi una risposta completa. Supporta testo, immagini, output strutturato e pensiero esteso."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create Message",
+          "message": "Crea messaggio"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "Un ID contenitore per riutilizzare il contesto in più richieste. Il contenitore memorizza lo stato della conversazione sul server per interazioni multi-turno efficienti"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "Contenitore"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "ID contenitore per il riutilizzo del contesto"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "Una chiave opaca utilizzata per caricare e salvare il contesto della conversazione tramite l'archivio del contesto configurato. Se fornita, i messaggi precedenti vengono anteposti automaticamente"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "Chiave di conversazione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "Chiave per la persistenza del contesto di conversazione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "Max"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "Massimo impegno e accuratezza"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Media"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "Impegno bilanciato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Alta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "Risposte più approfondite"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Bassa"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "Risposte rapide e meno approfondite"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "Controlla l'impegno che il modello deve dedicare alla risposta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "Impegno"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "Controlla l'impegno che il modello deve dedicare"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "Un oggetto JSON Schema che vincola l'output del modello affinché corrisponda alla struttura specificata. Consente risposte strutturate e leggibili da macchina. Nota: per i tipi `object`, `additionalProperties` deve essere impostato su `false`.\n\nEsempio:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "Schema di output"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "JSON Schema per l'output strutturato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "Il modello che completerà il prompt (ad es. `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "Il modello che completerà il prompt"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "Il numero massimo di token da generare prima di interrompere l'operazione. Richiesto dall'API Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Token massimi"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Il numero massimo di token da generare"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "Messaggi di input per la conversazione. Ogni messaggio è un hash con `role` (`user` o `assistant`) e `content` (stringa o elenco di blocchi di contenuto)"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "Messaggi di input per la conversazione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "Seleziona automaticamente il miglior livello disponibile"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "Solo standard"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "Usa solo il livello standard, mai la capacità con priorità"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "Determina quale livello di servizio utilizzare per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Livello di servizio"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "Livello di servizio per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "Una skill dell'agente da utilizzare per questa richiesta. Le skill estendono le funzionalità di Claude con competenze specializzate per attività quali la creazione di documenti (pptx, xlsx, docx, pdf) o flussi di lavoro personalizzati. Quando viene selezionata una skill, lo strumento di esecuzione del codice richiesto e le intestazioni beta vengono configurati automaticamente.\n\nFormato: `{type}/{skill_id}` (es. `anthropic/pptx`, `custom/skill_abc123`). Se non viene fornito alcun prefisso di tipo, viene assunto `custom`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "Skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "Una skill dell'agente da utilizzare per questa richiesta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "Sequenze di testo personalizzate che interromperanno la generazione da parte del modello. Il modello si fermerà quando incontra una qualsiasi delle sequenze fornite"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sequenze di arresto"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "Sequenze di testo personalizzate che interromperanno la generazione da parte del modello"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "Prompt di sistema che fornisce contesto e istruzioni. Può essere una stringa o un elenco di blocchi di contenuto per il controllo della cache"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "Prompt di sistema"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "Prompt di sistema per la conversazione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "Campiona solo tra le prime K opzioni per ogni token successivo. Utilizzato per rimuovere risposte a bassa probabilità nella coda lunga"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "Campiona solo tra le prime K opzioni per ogni token successivo"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "Usa il campionamento nucleus. Nel campionamento nucleus, viene calcolata la distribuzione cumulativa su tutte le opzioni per ogni token successivo in ordine decrescente di probabilità e interrotta una volta raggiunta una probabilità specifica indicata da `top_p`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "Parametro di campionamento nucleus"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "Quantità di casualità inserita nella risposta. Varia da `0.0` a `1.0`. Usa `temperature` più vicino a `0.0` per attività analitiche o a scelta multipla e più vicino a `1.0` per attività creative e generative. Predefinito: `1.0`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "Quantità di casualità inserita nella risposta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "Il numero massimo di token da utilizzare per il pensiero esteso. Deve essere almeno `1024` e inferiore a `max_tokens`. Applicabile solo quando la modalità di pensiero è `enabled`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "Token del budget di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "Token massimi per il pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "Adattivo"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "Il modello decide se utilizzare il pensiero in base all'attività"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Disabilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "Disabilita il pensiero esteso"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "Abilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "Abilita il pensiero esteso con un budget fisso"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "Indica se il pensiero esteso è abilitato o disabilitato. Il pensiero esteso consente al modello di ragionare su problemi complessi passo dopo passo prima di rispondere"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "Modalità di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "Indica se il pensiero esteso è abilitato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Send a message to a Claude model and receive a response",
+          "message": "Invia un messaggio a un modello Claude e ricevi una risposta"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. Batches are processed within 24 hours.",
+          "message": "Invia un batch di richieste di messaggi per l'elaborazione asincrona con una riduzione del costo del 50%. I batch vengono elaborati entro 24 ore."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Message Batch",
+          "message": "Crea batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.desc": {
+          "source": "List of requests to process. Each item has a `custom_id` for result matching and `params` containing the message creation parameters",
+          "message": "Elenco di richieste da elaborare. Ogni elemento include un `custom_id` per la corrispondenza dei risultati e `params` contenente i parametri di creazione del messaggio"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "Richieste"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.option.cmVxdWVzdHM.short_desc": {
+          "source": "List of message requests to process in batch",
+          "message": "Elenco di richieste di messaggi da elaborare in batch"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Submit a batch of message requests for async processing",
+          "message": "Invia un batch di richieste di messaggi per l'elaborazione asincrona"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.desc": {
+          "source": "Create a new custom skill that packages domain expertise and workflows. A SKILL.md file is auto-generated from the provided name, description, and instructions. Requires the Skills API beta.",
+          "message": "Crea una nuova skill personalizzata che racchiude competenze di dominio e flussi di lavoro. Un file SKILL.md viene generato automaticamente dal nome, dalla descrizione e dalle istruzioni fornite. Richiede la versione beta dell'API Skills."
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.display_name": {
+          "source": "Create Skill",
+          "message": "Crea skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "Una descrizione di cosa fa la skill e quando dovrebbe essere utilizzata. Massimo 1024 caratteri. Scrivi in terza persona (es. `Retrieves weather data for a city`)"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "Descrizione della skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "Un titolo leggibile dall'utente per la skill. Viene mostrato nell'interfaccia utente ma non incluso nel prompt inviato al modello"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "Titolo visualizzato"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "Titolo leggibile della skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "Istruzioni dettagliate per il comportamento della skill. Queste formano il corpo del file SKILL.md letto da Claude quando la skill viene attivata"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Istruzioni"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "Istruzioni per la skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "L'identificatore della skill utilizzato nel frontmatter di SKILL.md. Massimo 64 caratteri, solo lettere minuscole, numeri e trattini. Non può contenere parole riservate come `anthropic` o `claude`"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "Identificatore skill"
+        },
+        "app.QW50aHJvcGlj.action.Y3JlYXRlLXNraWxs.short_desc": {
+          "source": "Create a custom skill (Beta)",
+          "message": "Crea una skill personalizzata (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.desc": {
+          "source": "Retrieve details for a specific Anthropic model including capabilities, context window size, and max output tokens.",
+          "message": "Recupera i dettagli di uno specifico modello Anthropic, incluse funzionalità, dimensioni della finestra di contesto e token massimi di output."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "Recupera modello"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "The unique identifier or alias for the model (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "L'identificatore univoco o l'alias del modello (es. `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modello"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The ID of the model to retrieve",
+          "message": "L'ID del modello da recuperare"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Get details for a specific model by ID or alias",
+          "message": "Recupera i dettagli di uno specifico modello tramite ID o alias"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve the status and metadata of a specific message batch. Use this to poll for batch completion.",
+          "message": "Recupera lo stato e i metadati di un batch di messaggi specifico. Usalo per eseguire il polling del completamento del batch."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Message Batch",
+          "message": "Recupera batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "The unique identifier for the message batch (e.g. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)",
+          "message": "L'identificatore univoco per il batch di messaggi (ad es. `msgbatch_013Zva2CMbUFEYkeWyl6QV`)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID batch"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "The ID of the message batch",
+          "message": "L'ID del batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Get the status and details of a message batch",
+          "message": "Recupera lo stato e i dettagli di un batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
+          "message": "Recupera i metadati di uno specifico file caricato. Richiede la versione beta dell'API Files."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get File",
+          "message": "Recupera file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "L'identificatore univoco del file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "L'ID del file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get metadata for a specific file (Beta)",
+          "message": "Recupera i metadati di uno specifico file (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.desc": {
+          "source": "Download the content of a previously uploaded file. Only available for files created by skills or code execution where `downloadable` is `True`. Requires the Files API beta.",
+          "message": "Scarica il contenuto di un file caricato in precedenza. Disponibile solo per i file creati da skill o dall'esecuzione di codice in cui `downloadable` è `True`. Richiede la versione beta dell'API Files."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.display_name": {
+          "source": "Get File Content",
+          "message": "Recupera contenuto del file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "L'identificatore univoco del file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "L'ID del file"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LWZpbGUtY29udGVudA.short_desc": {
+          "source": "Download the content of a file (Beta)",
+          "message": "Scarica il contenuto di un file (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.desc": {
+          "source": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
+          "message": "Recupera i dettagli per una competenza specifica tramite ID. Richiede la versione beta dell'API Skills."
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.display_name": {
+          "source": "Get Skill",
+          "message": "Ottieni competenza"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "L'identificatore univoco per la competenza"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "ID competenza"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "L'ID della competenza"
+        },
+        "app.QW50aHJvcGlj.action.Z2V0LXNraWxs.short_desc": {
+          "source": "Get details for a specific skill (Beta)",
+          "message": "Ottieni dettagli per una competenza specifica (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file that was previously uploaded. Requires the Files API beta.",
+          "message": "Elimina un file caricato in precedenza. Richiede la versione beta dell'API Files."
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Elimina file"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.desc": {
+          "source": "The unique identifier for the file",
+          "message": "L'identificatore univoco del file"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ID file"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The ID of the file",
+          "message": "L'ID del file"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file from the workspace (Beta)",
+          "message": "Elimina un file dall'area di lavoro (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.desc": {
+          "source": "Delete a custom skill by ID. Requires the Skills API beta.",
+          "message": "Elimina una competenza personalizzata tramite ID. Richiede la versione beta dell'API Skills."
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.display_name": {
+          "source": "Delete Skill",
+          "message": "Elimina competenza"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "L'identificatore univoco per la competenza"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "ID competenza"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "L'ID della competenza"
+        },
+        "app.QW50aHJvcGlj.action.ZGVsZXRlLXNraWxs.short_desc": {
+          "source": "Delete a custom skill (Beta)",
+          "message": "Elimina una competenza personalizzata (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "List all message batches with pagination support.",
+          "message": "Elenca tutti i batch di messaggi con supporto per la paginazione."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Message Batches",
+          "message": "Elenca batch di messaggi"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return batches created after this batch ID (cursor for forward pagination)",
+          "message": "Restituisce i batch creati dopo questo ID batch (cursore per la paginazione in avanti)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "ID successivo"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "Cursore per la paginazione in avanti"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.desc": {
+          "source": "Return batches created before this batch ID (cursor for backward pagination)",
+          "message": "Restituisce i batch creati prima di questo ID batch (cursore per la paginazione all'indietro)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "ID precedente"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "Cursore per la paginazione all'indietro"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of batches to return per page. Default: `20`, max: `100`",
+          "message": "Numero massimo di batch da restituire per pagina. Predefinito: `20`, max: `100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of batches to return",
+          "message": "Numero massimo di batch da restituire"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List all message batches in the workspace",
+          "message": "Elenca tutti i batch di messaggi nell'area di lavoro"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.desc": {
+          "source": "List all files that have been uploaded to the workspace with pagination support. Requires the Files API beta.",
+          "message": "Elenca tutti i file caricati nell'area di lavoro con supporto per la paginazione. Richiede la versione beta dell'API Files."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "Elenca file"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return files after this file ID (cursor for forward pagination)",
+          "message": "Restituisce i file successivi a questo ID file (cursore per la paginazione in avanti)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "ID successivo"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "Cursore per la paginazione in avanti"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.desc": {
+          "source": "Return files before this file ID (cursor for backward pagination)",
+          "message": "Restituisce i file precedenti a questo ID file (cursore per la paginazione all'indietro)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "ID precedente"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "Cursore per la paginazione all'indietro"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of files to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "Numero massimo di file da restituire per pagina. Predefinito: `20`, intervallo: `1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of files to return",
+          "message": "Numero massimo di file da restituire"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all uploaded files in the workspace (Beta)",
+          "message": "Elenca tutti i file caricati nell'area di lavoro (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List all available Anthropic models including their capabilities, context window sizes, and max output tokens.",
+          "message": "Elenca tutti i modelli Anthropic disponibili incluse le relative funzionalità, dimensioni della finestra di contesto e token massimi di output."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Elenca modelli"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.desc": {
+          "source": "Return models after this model ID (cursor for forward pagination)",
+          "message": "Restituisce i modelli successivi a questo ID modello (cursore per la paginazione in avanti)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.display_name": {
+          "source": "After ID",
+          "message": "ID successivo"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YWZ0ZXJfaWQ.short_desc": {
+          "source": "Cursor for forward pagination",
+          "message": "Cursore per la paginazione in avanti"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.desc": {
+          "source": "Return models before this model ID (cursor for backward pagination)",
+          "message": "Restituisce i modelli precedenti a questo ID modello (cursore per la paginazione all'indietro)"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.display_name": {
+          "source": "Before ID",
+          "message": "ID precedente"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.YmVmb3JlX2lk.short_desc": {
+          "source": "Cursor for backward pagination",
+          "message": "Cursore per la paginazione all'indietro"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of models to return per page. Default: `20`, range: `1`-`1000`",
+          "message": "Numero massimo di modelli da restituire per pagina. Predefinito: `20`, intervallo: `1`-`1000`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of models to return",
+          "message": "Numero massimo di modelli da restituire"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List all available Anthropic models",
+          "message": "Elenca tutti i modelli Anthropic disponibili"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.desc": {
+          "source": "List all available skills including custom and Anthropic-provided skills with pagination and source filtering. Requires the Skills API beta.",
+          "message": "Elenca tutte le competenze disponibili incluse quelle personalizzate e fornite da Anthropic con paginazione e filtro per origine. Richiede la versione beta dell'API Skills."
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.display_name": {
+          "source": "List Skills",
+          "message": "Elenca competenze"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of skills to return per page. Default: `20`, max: `100`",
+          "message": "Numero massimo di competenze da restituire per pagina. Predefinito: `20`, max: `100`"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of skills to return",
+          "message": "Numero massimo di competenze da restituire"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.display_name": {
+          "source": "Anthropic",
+          "message": "Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmFudGhyb3BpYw.short_desc": {
+          "source": "Only Anthropic-provided skills",
+          "message": "Solo competenze fornite da Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "Custom",
+          "message": "Personalizzato"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.allowed-value.c3RyaW5nOmN1c3RvbQ.short_desc": {
+          "source": "Only custom skills",
+          "message": "Solo competenze personalizzate"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.desc": {
+          "source": "Filter skills by their source",
+          "message": "Filtra competenze in base alla loro origine"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.display_name": {
+          "source": "Source Filter",
+          "message": "Filtro origine"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.c291cmNl.short_desc": {
+          "source": "Filter skills by source",
+          "message": "Filtra competenze per origine"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.desc": {
+          "source": "Pagination token from a previous response's `next_page` field for retrieving the next page of results",
+          "message": "Token di paginazione dal campo `next_page` di una risposta precedente per recuperare la pagina successiva di risultati"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.option.cGFnZQ.short_desc": {
+          "source": "Pagination token from a previous response",
+          "message": "Token di paginazione da una risposta precedente"
+        },
+        "app.QW50aHJvcGlj.action.bGlzdC1za2lsbHM.short_desc": {
+          "source": "List available skills (Beta)",
+          "message": "Elenca competenze disponibili (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Anthropic Claude** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegue una chiamata API HTTP / REST personalizzata ad **Anthropic Claude** utilizzando l'autenticazione della connessione configurata.\n\nSpecificare il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizzare questa azione per gli endpoint non ancora esposti come azioni native in questa app."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Anthropic Claude",
+          "message": "Esegui una chiamata API personalizzata ad Anthropic Claude"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.desc": {
+          "source": "Stream a response from an Anthropic Claude model using Server-Sent Events (SSE). Events are emitted incrementally as the model generates content.",
+          "message": "Ricevi in streaming una risposta da un modello Anthropic Claude utilizzando Server-Sent Events (SSE). Gli eventi vengono emessi in modo incrementale man mano che il modello genera contenuti."
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.display_name": {
+          "source": "Stream Message",
+          "message": "Messaggio in streaming"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.desc": {
+          "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
+          "message": "Un ID contenitore per riutilizzare il contesto in più richieste. Il contenitore memorizza lo stato della conversazione sul server per interazioni multi-turno efficienti"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "Contenitore"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container ID for context reuse",
+          "message": "ID contenitore per il riutilizzo del contesto"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.desc": {
+          "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
+          "message": "Una chiave opaca utilizzata per caricare e salvare il contesto della conversazione tramite l'archivio del contesto configurato. Se fornita, i messaggi precedenti vengono anteposti automaticamente"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+          "source": "Conversation Key",
+          "message": "Chiave di conversazione"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+          "source": "Key for conversation context persistence",
+          "message": "Chiave per la persistenza del contesto di conversazione"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+          "source": "Max",
+          "message": "Max"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+          "source": "Maximum effort and thoroughness",
+          "message": "Massimo impegno e accuratezza"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Media"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Balanced effort",
+          "message": "Impegno bilanciato"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Alta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "More thorough responses",
+          "message": "Risposte più approfondite"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Bassa"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Fast, less thorough responses",
+          "message": "Risposte rapide e meno approfondite"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.desc": {
+          "source": "Controls how much effort the model should spend on the response",
+          "message": "Controlla l'impegno che il modello deve dedicare alla risposta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.display_name": {
+          "source": "Effort",
+          "message": "Impegno"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.ZWZmb3J0.short_desc": {
+          "source": "Controls how much effort the model should spend",
+          "message": "Controlla l'impegno che il modello deve dedicare"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.desc": {
+          "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
+          "message": "Un oggetto JSON Schema che vincola l'output del modello affinché corrisponda alla struttura specificata. Consente risposte strutturate e leggibili da macchina. Nota: per i tipi `object`, `additionalProperties` deve essere impostato su `false`.\n\nEsempio:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.display_name": {
+          "source": "Output Schema",
+          "message": "Schema di output"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.b3V0cHV0X3NjaGVtYQ.short_desc": {
+          "source": "JSON Schema for structured output",
+          "message": "JSON Schema per l'output strutturato"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.desc": {
+          "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
+          "message": "Il modello che completerà il prompt (ad es. `claude-sonnet-4-6-20250514`)"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bW9kZWw.short_desc": {
+          "source": "The model that will complete your prompt",
+          "message": "Il modello che completerà il prompt"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
+          "message": "Il numero massimo di token da generare prima di interrompere l'operazione. Richiesto dall'API Anthropic"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Token massimi"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Il numero massimo di token da generare"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.desc": {
+          "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
+          "message": "Messaggi di input per la conversazione. Ogni messaggio è un hash con `role` (`user` o `assistant`) e `content` (stringa o elenco di blocchi di contenuto)"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Input messages for the conversation",
+          "message": "Messaggi di input per la conversazione"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically select the best available tier",
+          "message": "Seleziona automaticamente il miglior livello disponibile"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+          "source": "Standard Only",
+          "message": "Solo standard"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+          "source": "Use only the standard tier, never prioritized capacity",
+          "message": "Usa solo il livello standard, mai la capacità con priorità"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.desc": {
+          "source": "Determines which tier of service to use for the request",
+          "message": "Determina quale livello di servizio utilizzare per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Livello di servizio"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Service tier for the request",
+          "message": "Livello di servizio per la richiesta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.desc": {
+          "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
+          "message": "Una skill dell'agente da utilizzare per questa richiesta. Le skill estendono le funzionalità di Claude con competenze specializzate per attività quali la creazione di documenti (pptx, xlsx, docx, pdf) o flussi di lavoro personalizzati. Quando viene selezionata una skill, lo strumento di esecuzione del codice richiesto e le intestazioni beta vengono configurati automaticamente.\n\nFormato: `{type}/{skill_id}` (es. `anthropic/pptx`, `custom/skill_abc123`). Se non viene fornito alcun prefisso di tipo, viene assunto `custom`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.display_name": {
+          "source": "Skill",
+          "message": "Skill"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c2tpbGw.short_desc": {
+          "source": "An agent skill to use for this request",
+          "message": "Una skill dell'agente da utilizzare per questa richiesta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.desc": {
+          "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
+          "message": "Sequenze di testo personalizzate che interromperanno la generazione da parte del modello. Il modello si fermerà quando incontra una qualsiasi delle sequenze fornite"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sequenze di arresto"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+          "source": "Custom text sequences that will cause the model to stop generating",
+          "message": "Sequenze di testo personalizzate che interromperanno la generazione da parte del modello"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.desc": {
+          "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
+          "message": "Prompt di sistema che fornisce contesto e istruzioni. Può essere una stringa o un elenco di blocchi di contenuto per il controllo della cache"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "Prompt di sistema"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.short_desc": {
+          "source": "System prompt for the conversation",
+          "message": "Prompt di sistema per la conversazione"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.desc": {
+          "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
+          "message": "Campiona solo tra le prime K opzioni per ogni token successivo. Utilizzato per rimuovere risposte a bassa probabilità nella coda lunga"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX2s.short_desc": {
+          "source": "Only sample from the top K options for each subsequent token",
+          "message": "Campiona solo tra le prime K opzioni per ogni token successivo"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.desc": {
+          "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
+          "message": "Usa il campionamento nucleus. Nel campionamento nucleus, viene calcolata la distribuzione cumulativa su tutte le opzioni per ogni token successivo in ordine decrescente di probabilità e interrotta una volta raggiunta una probabilità specifica indicata da `top_p`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "Parametro di campionamento nucleus"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
+          "message": "Quantità di casualità inserita nella risposta. Varia da `0.0` a `1.0`. Usa `temperature` più vicino a `0.0` per attività analitiche o a scelta multipla e più vicino a `1.0` per attività creative e generative. Predefinito: `1.0`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Amount of randomness injected into the response",
+          "message": "Quantità di casualità inserita nella risposta"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+          "message": "Il numero massimo di token da utilizzare per il pensiero esteso. Deve essere almeno `1024` e inferiore a `max_tokens`. Applicabile solo quando la modalità di pensiero è `enabled`"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+          "source": "Thinking Budget Tokens",
+          "message": "Token del budget di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens for thinking",
+          "message": "Token massimi per il pensiero"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+          "source": "Adaptive",
+          "message": "Adattivo"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+          "source": "Model decides whether to use thinking based on the task",
+          "message": "Il modello decide se utilizzare il pensiero in base all'attività"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Disabilitato"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Disable extended thinking",
+          "message": "Disabilita il pensiero esteso"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+          "source": "Enabled",
+          "message": "Abilitato"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+          "source": "Enable extended thinking with a fixed budget",
+          "message": "Abilita il pensiero esteso con un budget fisso"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.desc": {
+          "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
+          "message": "Indica se il pensiero esteso è abilitato o disabilitato. Il pensiero esteso consente al modello di ragionare su problemi complessi passo dopo passo prima di rispondere"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.display_name": {
+          "source": "Thinking Mode",
+          "message": "Modalità di pensiero"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.dGhpbmtpbmdfbW9kZQ.short_desc": {
+          "source": "Whether extended thinking is enabled",
+          "message": "Indica se il pensiero esteso è abilitato"
+        },
+        "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.short_desc": {
+          "source": "Stream a response from a Claude model via Server-Sent Events",
+          "message": "Ricevi in streaming una risposta da un modello Claude tramite Server-Sent Events"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.desc": {
+          "source": "Update an existing custom skill. Requires the Skills API beta.",
+          "message": "Aggiorna una competenza personalizzata esistente. Richiede la versione beta dell'API Skills."
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.display_name": {
+          "source": "Update Skill",
+          "message": "Aggiorna competenza"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what the skill does and when it should be used. Maximum 1024 characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+          "message": "Una descrizione di cosa fa la skill e quando dovrebbe essere utilizzata. Massimo 1024 caratteri. Scrivi in terza persona (es. `Retrieves weather data for a city`)"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Description of the skill",
+          "message": "Descrizione della skill"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.desc": {
+          "source": "A human-readable title for the skill. This is shown in the UI but not included in the prompt sent to the model",
+          "message": "Un titolo leggibile dall'utente per la skill. Viene mostrato nell'interfaccia utente ma non incluso nel prompt inviato al modello"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.display_name": {
+          "source": "Display Title",
+          "message": "Titolo visualizzato"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.ZGlzcGxheV90aXRsZQ.short_desc": {
+          "source": "Human-readable skill title",
+          "message": "Titolo leggibile della skill"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Detailed instructions for the skill's behavior. These form the body of the SKILL.md file that Claude reads when the skill is triggered",
+          "message": "Istruzioni dettagliate per il comportamento della skill. Queste formano il corpo del file SKILL.md letto da Claude quando la skill viene attivata"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Istruzioni"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Instructions for the skill",
+          "message": "Istruzioni per la skill"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.desc": {
+          "source": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, lowercase letters, numbers, and hyphens only. Cannot contain reserved words like `anthropic` or `claude`",
+          "message": "L'identificatore della skill utilizzato nel frontmatter di SKILL.md. Massimo 64 caratteri, solo lettere minuscole, numeri e trattini. Non può contenere parole riservate come `anthropic` o `claude`"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.bmFtZQ.short_desc": {
+          "source": "Skill identifier",
+          "message": "Identificatore skill"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.desc": {
+          "source": "The unique identifier for the skill",
+          "message": "L'identificatore univoco per la competenza"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.display_name": {
+          "source": "Skill ID",
+          "message": "ID competenza"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.option.c2tpbGxfaWQ.short_desc": {
+          "source": "The ID of the skill",
+          "message": "L'ID della competenza"
+        },
+        "app.QW50aHJvcGlj.action.dXBkYXRlLXNraWxs.short_desc": {
+          "source": "Update an existing skill (Beta)",
+          "message": "Aggiorna una competenza esistente (Beta)"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and image files up to 500 MB. Requires the Files API beta.",
+          "message": "Carica un file a cui poter fare riferimento in più chiamate API. Supporta file PDF, di testo e immagini fino a 500 MB. Richiede la versione beta dell'API Files."
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Carica file"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Anthropic for reuse across API calls. Supports PDF, text, and image files up to 500 MB",
+          "message": "Il file da caricare su Anthropic per il riutilizzo tra chiamate API. Supporta file PDF, di testo e immagini fino a 500 MB"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "File"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Il file da caricare"
+        },
+        "app.QW50aHJvcGlj.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for reuse across API calls (Beta)",
+          "message": "Carica un file per il riutilizzo tra chiamate API (Beta)"
+        },
+        "app.QW50aHJvcGlj.desc": {
+          "source": "Anthropic Claude AI services providing access to Claude language models for text generation, analysis, and tool use with streaming support",
+          "message": "Servizi AI Anthropic Claude che forniscono accesso ai modelli linguistici Claude per la generazione di testo, l'analisi e l'uso di strumenti con supporto per lo streaming"
+        },
+        "app.QW50aHJvcGlj.display_name": {
+          "source": "Anthropic Claude",
+          "message": "Anthropic Claude"
+        },
+        "app.QW50aHJvcGlj.short_desc": {
+          "source": "Anthropic Claude AI services",
+          "message": "Servizi AI Anthropic Claude"
+        }
+      }
+    }
+  }
+}

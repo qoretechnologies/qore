@@ -1,0 +1,2337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.WGVybw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Crée de nouveaux enregistrements dans la table spécifiée"
+        },
+        "app.WGVybw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Créer des enregistrements"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "La table avec laquelle travailler : `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` ou `project-tasks`"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tableau"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Le nom de la table avec laquelle travailler"
+        },
+        "app.WGVybw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Créer de nouveaux enregistrements dans la table spécifiée"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.desc": {
+          "source": "Applies a credit note to one or more invoices.\n\n`Allocations` is an **array** even for one allocation, and each names the `Invoice` it applies to and the `Amount` applied. The credit note has to have enough remaining credit, and the invoice has to be `AUTHORISED`.",
+          "message": "Applique un avoir à une ou plusieurs factures.\n\n`Allocations` est un **tableau** même pour une seule affectation, et chacune indique le `Invoice` auquel elle s'applique ainsi que le `Amount` appliqué. L'avoir doit avoir suffisamment de crédit restant, et la facture doit être `AUTHORISED`."
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
+          "source": "Allocate Credit Note",
+          "message": "Affecter un avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "Identifiant unique pour un avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.display_name": {
+          "source": "Credit Note",
+          "message": "Avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.short_desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "Identifiant unique pour un avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.display_name": {
+          "source": "Allocations",
+          "message": "Affectations"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.short_desc": {
+          "source": "The invoices to apply the credit to, and how much to each",
+          "message": "Les factures auxquelles appliquer le crédit, et le montant pour chacune"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
+          "source": "Apply a credit note to an invoice",
+          "message": "Appliquer un avoir à une facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Adds a note to an invoice's history.\n\n`HistoryRecords` is an **array** even for one note, and the note itself is its `Details` property.",
+          "message": "Ajoute une note à l'historique d'une facture.\n\n`HistoryRecords` est un **tableau** même pour une seule note, et la note elle-même est sa propriété `Details`."
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Add Note to Invoice",
+          "message": "Ajouter une note à la facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.short_desc": {
+          "source": "The notes to record; each one's text is its \"Details\"",
+          "message": "Les notes à enregistrer ; le texte de chacune correspond à ses « Details »"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Identifiant unique pour une facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "La facture à laquelle cela s'applique"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Record a note against an invoice",
+          "message": "Enregistrer une note sur une facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.desc": {
+          "source": "Records a payment.\n\nUnlike most of the accounting API this takes **one** payment rather than an envelope of them. It needs the `Invoice` it pays, the `Account` it is paid from or into, an `Amount` and a `Date`.\n\nThe account has to be one that allows payments - a bank account, in practice - and the invoice has to be `AUTHORISED`.",
+          "message": "Enregistre un paiement.\n\nContrairement à la majeure partie de l'API de comptabilité, cela prend **un** paiement plutôt qu'une enveloppe de paiements. Il nécessite le `Invoice` qu'il règle, le `Account` depuis ou vers lequel il est payé, un `Amount` et un `Date`.\n\nLe compte doit être un compte autorisant les paiements - un compte bancaire, en pratique - et la facture doit être `AUTHORISED`."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.display_name": {
+          "source": "Create Payment",
+          "message": "Créer un paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.desc": {
+          "source": "Code of account you are using to make the payment e.g. 001 (note- not all accounts have a code value)",
+          "message": "Code du compte utilisé pour effectuer le paiement, ex. 001 (remarque : tous les comptes n'ont pas de valeur de code)"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.display_name": {
+          "source": "Code",
+          "message": "Code"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
+          "source": "Code of account you are using to make the payment e",
+          "message": "Code du compte utilisé pour effectuer le paiement, ex"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
+          "source": "Credit Note",
+          "message": "Avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.short_desc": {
+          "source": "The credit note being paid, instead of an invoice",
+          "message": "L'avoir en cours de paiement, au lieu d'une facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "Numéro de facture ou d'avoir auquel vous appliquez le paiement, ex. INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
+          "source": "Credit Note Number",
+          "message": "Numéro de l'avoir"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "Numéro de facture ou d'avoir auquel vous appliquez le paiement, ex"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
+          "message": "Taux de change à la réception du paiement. Utilisé uniquement pour les factures et avoirs dans une devise autre que la devise de base, ex. 0.7500"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "Taux de change"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate when payment is received",
+          "message": "Taux de change à la réception du paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The amount of the payment. Must be less than or equal to the outstanding amount owing on the invoice e.g. 200.00",
+          "message": "Le montant du paiement. Doit être inférieur ou égal au montant restant dû sur la facture, ex. 200.00"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "The amount of the payment",
+          "message": "Le montant du paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "The account the payment is made from or into",
+          "message": "Le compte depuis ou vers lequel le paiement est effectué"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50.display_name": {
+          "source": "Batch Payment",
+          "message": "Paiement groupé"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.desc": {
+          "source": "Present if the payment was created as part of a batch.",
+          "message": "Présent si le paiement a été créé dans le cadre d'un lot."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.display_name": {
+          "source": "Batch Payment ID",
+          "message": "ID de paiement groupé"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.short_desc": {
+          "source": "Present if the payment was created as part of a batch",
+          "message": "Présent si le paiement a été créé dans le cadre d'un lot"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Le numéro de compte bancaire du fournisseur auquel le paiement est effectué"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.display_name": {
+          "source": "Bank Account Number",
+          "message": "Numéro de compte bancaire"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Le numéro de compte bancaire du fournisseur auquel le paiement est effectué"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.desc": {
+          "source": "The amount of the payment in the currency of the bank account.",
+          "message": "Le montant du paiement dans la devise du compte bancaire."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.display_name": {
+          "source": "Bank Amount",
+          "message": "Montant bancaire"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.short_desc": {
+          "source": "The amount of the payment in the currency of the bank account",
+          "message": "Le montant du paiement dans la devise du compte bancaire"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "Date à laquelle le paiement est effectué (AAAA-MM-JJ), ex. 2009-09-06"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e",
+          "message": "Date à laquelle le paiement est effectué (AAAA-MM-JJ) e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "Les informations à faire figurer sur le compte bancaire du fournisseur"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "Détails"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.short_desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "Les informations à faire figurer sur le compte bancaire du fournisseur"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.display_name": {
+          "source": "Invoice",
+          "message": "Facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.short_desc": {
+          "source": "The invoice being paid",
+          "message": "La facture en cours de paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "Numéro de facture ou d'avoir auquel vous appliquez le paiement, ex. INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
+          "source": "Invoice Number",
+          "message": "Numéro de facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "Numéro de facture ou d'avoir auquel vous appliquez le paiement, ex"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
+          "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
+          "message": "Un paramètre facultatif pour le paiement. Un booléen indiquant si vous souhaitez que le paiement soit créé comme rapproché lors de l'utilisation de PUT, ou si un paiement a été rapproché lors de l'utilisation de GET"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.display_name": {
+          "source": "Is Reconciled",
+          "message": "Est rapproché"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.short_desc": {
+          "source": "An optional parameter for the payment",
+          "message": "Un paramètre facultatif pour le paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.T3ZlcnBheW1lbnQ.display_name": {
+          "source": "Overpayment",
+          "message": "Trop-perçu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.desc": {
+          "source": "The status of the payment.",
+          "message": "Le statut du paiement."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.short_desc": {
+          "source": "The status of the payment",
+          "message": "Le statut du paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "L'identifiant Xero d'un paiement, ex. 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "ID du paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The Xero identifier for an Payment e",
+          "message": "L'identifiant Xero d'un paiement e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
+          "source": "ACCPAYPAYMENT",
+          "message": "ACCPAYPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1JFQ1BBWU1FTlQ.display_name": {
+          "source": "ACCRECPAYMENT",
+          "message": "ACCRECPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "APCREDITPAYMENT",
+          "message": "APCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQT1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "APOVERPAYMENTPAYMENT",
+          "message": "APOVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "APPREPAYMENTPAYMENT",
+          "message": "APPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "ARCREDITPAYMENT",
+          "message": "ARCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFST1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "AROVERPAYMENTPAYMENT",
+          "message": "AROVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "ARPREPAYMENTPAYMENT",
+          "message": "ARPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.desc": {
+          "source": "See Payment Types.",
+          "message": "Voir les types de paiement."
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "Type de paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.short_desc": {
+          "source": "See Payment Types",
+          "message": "Voir les types de paiement"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Le numéro de compte bancaire du fournisseur auquel le paiement est effectué"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.display_name": {
+          "source": "Particulars",
+          "message": "Détails"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "Le numéro de compte bancaire du fournisseur auquel le paiement est effectué"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UHJlcGF5bWVudA.display_name": {
+          "source": "Prepayment",
+          "message": "Paiement anticipé"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "Une description facultative pour le paiement, ex. Prélèvement automatique"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "An optional description for the payment e",
+          "message": "Une description facultative pour le paiement e"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
+          "source": "Record a payment against an invoice",
+          "message": "Enregistrer un paiement pour une facture"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.desc": {
+          "source": "Creates a project.\n\n`contactId` and `name` are required; `estimateAmount` and `deadlineUtc` are the budget and the due date.",
+          "message": "Crée un projet.\n\n`contactId` et `name` sont obligatoires ; `estimateAmount` et `deadlineUtc` sont le budget et la date d'échéance."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.display_name": {
+          "source": "Create Project",
+          "message": "Créer un projet"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.desc": {
+          "source": "Identifier of the contact this project was created for.",
+          "message": "Identifiant du contact pour lequel ce projet a été créé."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact",
+          "message": "Contact"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact the project is for",
+          "message": "Le contact auquel le projet est destiné"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.desc": {
+          "source": "Deadline for the project. UTC Date Time in ISO-8601 format.",
+          "message": "Date limite pour le projet. Date et heure UTC au format ISO-8601."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
+          "source": "Deadline Utc",
+          "message": "Date limite UTC"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
+          "source": "Deadline for the project",
+          "message": "Date limite pour le projet"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZXN0aW1hdGVBbW91bnQ.display_name": {
+          "source": "Estimate Amount",
+          "message": "Montant estimé"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.desc": {
+          "source": "Name of the project.",
+          "message": "Nom du projet."
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.short_desc": {
+          "source": "Name of the project",
+          "message": "Nom du projet"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.short_desc": {
+          "source": "Create a project for a contact",
+          "message": "Créer un projet pour un contact"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.desc": {
+          "source": "Creates a task in a project.\n\n`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a `TIME` task needs a `rate`.",
+          "message": "Crée une tâche dans un projet.\n\n`chargeType` détermine le mode de facturation (`TIME`, `FIXED` ou `NON_CHARGEABLE`) et une tâche `TIME` nécessite un `rate`."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
+          "source": "Create Task",
+          "message": "Créer une tâche"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "Peut être `TIME`, `FIXED` ou `NON_CHARGEABLE`, définit la manière dont la tâche sera facturée. Utilisez `TIME` pour facturer à l'heure et `FIXED` pour facturer un montant fixe. Si la tâche ne doit pas être facturée, utilisez `NON_CHARGEABLE`."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "Type de facturation"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "Peut être 'TIME', 'FIXED' ou 'NON_CHARGEABLE', définit la manière dont la tâche sera facturée"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.desc": {
+          "source": "An estimated time to perform the task",
+          "message": "Une estimation du temps nécessaire pour exécuter la tâche"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.display_name": {
+          "source": "Estimate Minutes",
+          "message": "Minutes estimées"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.short_desc": {
+          "source": "An estimated time to perform the task",
+          "message": "Une estimation du temps nécessaire pour exécuter la tâche"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.desc": {
+          "source": "Name of the task. Max length 100 characters.",
+          "message": "Nom de la tâche. Longueur maximale de 100 caractères."
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.short_desc": {
+          "source": "Name of the task",
+          "message": "Nom de la tâche"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Vous pouvez spécifier un projet particulier en ajoutant le projectId au point de terminaison"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projet"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Vous pouvez spécifier un projet particulier en ajoutant le projectId au point de terminaison"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tarif"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
+          "source": "Add a task to a project",
+          "message": "Ajouter une tâche à un projet"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.desc": {
+          "source": "Lists contacts - customers, suppliers and everyone else in the address book.\n\n`where` filters with Xero's expression language: `IsCustomer==true`, `Name.StartsWith(\"Acme\")`. `IDs` takes a **comma-separated** list of contact IDs rather than a list.\n\nThe response is `{Contacts: [...]}`.",
+          "message": "Liste les contacts : clients, fournisseurs et tous les autres membres du carnet d'adresses.\n\n`where` filtre avec le langage d'expression de Xero : `IsCustomer==true`, `Name.StartsWith(\"Acme\")`. `IDs` prend une liste d'ID de contact **séparés par des virgules** plutôt qu'une liste.\n\nLa réponse est `{Contacts: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.display_name": {
+          "source": "Find Contacts",
+          "message": "Rechercher des contacts"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "Filtrer par une liste de ContactID séparés par des virgules. Permet de récupérer un ensemble spécifique de contacts en un seul appel."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.display_name": {
+          "source": "Contact IDs",
+          "message": "IDs de contact"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "Une liste d'ID de contact séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "ex. includeArchived=true - Les contacts ayant le statut ARCHIVED seront inclus dans la réponse"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "Inclure les éléments archivés"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "Paramètre de recherche effectuant une recherche textuelle insensible à la casse sur les champs Name, FirstName, LastName, ContactNumber et EmailAddress."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "Terme de recherche"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "Paramètre de recherche qui effectue une recherche textuelle insensible à la casse dans les champs Name, FirstName, LastName, ContactNumber et EmailAddress"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "Utilisez summaryOnly=true dans le point de terminaison GET Contacts et Invoices pour récupérer une version plus légère de l'objet de réponse. Cela renvoie uniquement les champs légers, en excluant les champs nécessitant des calculs lourds de la réponse, ce qui rend les appels d'API rapides et efficaces."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "Résumé uniquement"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "Utilisez summaryOnly=true dans le point de terminaison GET Contacts et Invoices pour récupérer une version plus légère de l'objet de réponse"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.short_desc": {
+          "source": "List the contacts in the organisation",
+          "message": "Lister les contacts de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.desc": {
+          "source": "Lists credit notes.\n\nThis is exported so that the credit note dropdown and the **New Credit Note** event have something to read; the application this module replaces offered both without exporting the endpoint behind them.\n\nThe response is `{CreditNotes: [...]}`.",
+          "message": "Répertorie les avoirs.\n\nCeci est exporté afin que la liste déroulante des avoirs et l'événement **New Credit Note** aient des données à lire ; l'application que ce module remplace proposait les deux sans exporter le point de terminaison sous-jacent.\n\nLa réponse est `{CreditNotes: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.display_name": {
+          "source": "Find Credit Notes",
+          "message": "Rechercher des avoirs"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
+          "source": "List the credit notes in the organisation",
+          "message": "Lister les avoirs de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.desc": {
+          "source": "Lists the chart of accounts with each account's code, name, type and tax type.\n\nThis is what backs the account, account-code and bank-account dropdowns; the application this module replaces offered all three without exporting the endpoint that fills them. `Type==\"BANK\"` narrows it to bank accounts.\n\nThe response is `{Accounts: [...]}`.",
+          "message": "Répertorie le plan comptable avec le code, le nom, le type et le type de taxe de chaque compte.\n\nC'est ce qui alimente les listes déroulantes de compte, de code de compte et de compte bancaire ; l'application que ce module remplace proposait les trois sans exporter le point de terminaison qui les remplit. `Type==\"BANK\"` restreint la liste aux comptes bancaires.\n\nLa réponse est `{Accounts: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.display_name": {
+          "source": "Find Accounts",
+          "message": "Rechercher des comptes"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.short_desc": {
+          "source": "List the chart of accounts",
+          "message": "Lister le plan comptable"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.desc": {
+          "source": "Lists bank transactions - spend and receive money entries against a bank account.\n\nThis is exported so that the bank transaction dropdown and the **New Bank Transaction** event have something to read.\n\nThe response is `{BankTransactions: [...]}`.",
+          "message": "Répertorie les transactions bancaires - entrées de dépenses et de réceptions d'argent sur un compte bancaire.\n\nCeci est exporté afin que la liste déroulante des transactions bancaires et l'événement **New Bank Transaction** aient des données à lire.\n\nLa réponse est `{BankTransactions: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Find Bank Transactions",
+          "message": "Rechercher des transactions bancaires"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "Filtrer par une liste de références séparées par des virgules"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "Références"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.short_desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "Filtrer par une liste de références séparées par des virgules"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "List the bank transactions in the organisation",
+          "message": "Lister les transactions bancaires de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.desc": {
+          "source": "Lists the employees in the organisation's payroll.\n\n**Which payroll API is used comes from the connection's `payroll_region`**, because Xero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe regions wrap the result differently - `{Employees: [...]}` in Australia and `{employees: [...], pagination}` in the other two - and this action returns the employees as a plain list either way.\n\nThe application this module replaces read employees through the accounting API, where they do not exist, so this never returned anything at all.",
+          "message": "Répertorie les employés dans la paie de l'organisation.\n\n**L'API de paie utilisée provient de `payroll_region` de la connexion**, car Xero ne dispose pas d'une API de paie unique : l'Australie est desservie à l'adresse `payroll.xro/1.0`, et la Nouvelle-Zélande ainsi que le Royaume-Uni à l'adresse `payroll.xro/2.0`. Une connexion sans région définie le signale plutôt que d'en deviner une.\n\nLes régions encapsulent le résultat différemment - `{Employees: [...]}` en Australie et `{employees: [...], pagination}` dans les deux autres - et cette action renvoie les employés sous forme de liste simple dans les deux cas.\n\nL'application que ce module remplace lisait les employés via l'API de comptabilité, où ils n'existent pas, donc cela ne renvoyait jamais rien du tout."
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
+          "source": "Find Employees",
+          "message": "Rechercher des employés"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
+          "source": "List the employees in the payroll organisation",
+          "message": "Lister les employés de l'organisation de paie"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Reads the history of an invoice: who changed it, when, and any notes recorded against it.",
+          "message": "Lit l'historique d'une facture : qui l'a modifiée, quand, et toutes les notes enregistrées à son sujet."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Find Invoice History",
+          "message": "Rechercher l'historique de facture"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Identifiant unique pour une facture"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Facture"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "La facture à laquelle cela s'applique"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Read an invoice's history and notes",
+          "message": "Lire l'historique et les notes d'une facture"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.desc": {
+          "source": "Lists invoices.\n\n**Bills are invoices here**: `Type==\"ACCPAY\"` selects what Xero's UI calls a bill and `Type==\"ACCREC\"` a sales invoice, and without a filter both are returned.\n\n`IDs`, `InvoiceNumbers`, `ContactIDs` and `Statuses` each take a **comma-separated** list. The response is `{Invoices: [...]}`.",
+          "message": "Répertorie les factures.\n\n**Les factures fournisseurs sont des factures ici** : `Type==\"ACCPAY\"` sélectionne ce que l'interface utilisateur de Xero appelle une facture fournisseur et `Type==\"ACCREC\"` une facture client ; sans filtre, les deux sont renvoyées.\n\n`IDs`, `InvoiceNumbers`, `ContactIDs` et `Statuses` prennent chacune une liste **séparée par des virgules**. La réponse est `{Invoices: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.display_name": {
+          "source": "Find Invoices",
+          "message": "Rechercher des factures"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.desc": {
+          "source": "Filter by a comma-separated list of ContactIDs.",
+          "message": "Filtrer par une liste de ContactID séparés par des virgules."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.display_name": {
+          "source": "Contact IDs",
+          "message": "IDs de contact"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "Une liste d'ID de contact séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "Filtrer par une liste de ContactID séparés par des virgules. Permet de récupérer un ensemble spécifique de contacts en un seul appel."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.display_name": {
+          "source": "Invoice IDs",
+          "message": "ID des factures"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.short_desc": {
+          "source": "A comma-separated list of invoice IDs",
+          "message": "Une liste d'ID de facture séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers.",
+          "message": "Filtrer par une liste d'InvoiceNumber séparés par des virgules."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.display_name": {
+          "source": "Invoice Numbers",
+          "message": "Numéros de facture"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.short_desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers",
+          "message": "Filtrer par une liste d'InvoiceNumber séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.desc": {
+          "source": "Filter by a comma-separated list Statuses. For faster response times we recommend using these explicit parameters instead of passing OR conditions into the Where filter.",
+          "message": "Filtrer par une liste de statuts séparés par des virgules. Pour des temps de réponse plus rapides, nous vous recommandons d'utiliser ces paramètres explicites au lieu de passer des conditions OR dans le filtre Where."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.display_name": {
+          "source": "Statuses",
+          "message": "Statuts"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.short_desc": {
+          "source": "Filter by a comma-separated list Statuses",
+          "message": "Filtrer par une liste de statuts séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "Lorsque défini sur true, vous ne récupérerez que les factures créées par votre application"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
+          "source": "Created By My App",
+          "message": "Créé par mon application"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "Lorsque défini sur true, vous ne récupérerez que les factures créées par votre application"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "ex. includeArchived=true - Les contacts ayant le statut ARCHIVED seront inclus dans la réponse"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "Inclure les éléments archivés"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "Paramètre de recherche effectuant une recherche textuelle insensible à la casse sur les champs Name, FirstName, LastName, ContactNumber et EmailAddress."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "Terme de recherche"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "Paramètre de recherche qui effectue une recherche textuelle insensible à la casse dans les champs Name, FirstName, LastName, ContactNumber et EmailAddress"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "Utilisez summaryOnly=true dans le point de terminaison GET Contacts et Invoices pour récupérer une version plus légère de l'objet de réponse. Cela renvoie uniquement les champs légers, en excluant les champs nécessitant des calculs lourds de la réponse, ce qui rend les appels d'API rapides et efficaces."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "Résumé uniquement"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "Utilisez summaryOnly=true dans le point de terminaison GET Contacts et Invoices pour récupérer une version plus légère de l'objet de réponse"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
+          "source": "List invoices and bills",
+          "message": "Lister les factures clients et fournisseurs"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.desc": {
+          "source": "Lists inventory and service items with their codes, prices and accounts.\n\nThe response is `{Items: [...]}`.",
+          "message": "Répertorie les articles de stock et de service avec leurs codes, prix et comptes.\n\nLa réponse est `{Items: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.display_name": {
+          "source": "Find Items",
+          "message": "Rechercher des articles"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
+          "source": "List the items in the organisation",
+          "message": "Lister les articles de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.desc": {
+          "source": "Lists payments made against invoices and credit notes.\n\nThis is exported so that the **New Payment** event has something to read: the application this module replaces polled payments without exporting any way to list one.\n\nThe response is `{Payments: [...]}`.",
+          "message": "Répertorie les paiements effectués pour des factures et des avoirs.\n\nCeci est exporté afin que l'événement **New Payment** ait des données à lire : l'application que ce module remplace interrogeait les paiements sans exporter de moyen d'en lister un.\n\nLa réponse est `{Payments: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.display_name": {
+          "source": "Find Payments",
+          "message": "Rechercher des paiements"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.short_desc": {
+          "source": "List the payments in the organisation",
+          "message": "Lister les paiements de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.desc": {
+          "source": "Lists the users of the projects API - the people time can be recorded against.",
+          "message": "Répertorie les utilisateurs de l'API de projets - les personnes pour lesquelles du temps peut être enregistré."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.display_name": {
+          "source": "Find Project Users",
+          "message": "Rechercher des utilisateurs de projet"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "défini sur 1 par défaut. Le numéro demandé de la page dans la réponse paginée - Doit être un nombre supérieur à 0."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.short_desc": {
+          "source": "List the users who can be assigned to project tasks",
+          "message": "Lister les utilisateurs pouvant être assignés à des tâches de projet"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.desc": {
+          "source": "Lists projects.\n\n`contactID` narrows the listing to one contact's projects and `states` to `INPROGRESS` or `CLOSED`.\n\nThe projects API answers `{items, pagination}` in `camelCase`, where the accounting API answers a `PascalCase` envelope named after the type.",
+          "message": "Répertorie les projets.\n\n`contactID` restreint la liste aux projets d'un contact et `states` à `INPROGRESS` ou `CLOSED`.\n\nL'API de projets renvoie `{items, pagination}` dans `camelCase`, tandis que l'API de comptabilité renvoie une enveloppe `PascalCase` nommée d'après le type."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.display_name": {
+          "source": "Find Projects",
+          "message": "Rechercher des projets"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.desc": {
+          "source": "Filter for projects for a specific contact",
+          "message": "Filtrer les projets pour un contact spécifique"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.display_name": {
+          "source": "Contact",
+          "message": "Contact"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.short_desc": {
+          "source": "Return only this contact's projects",
+          "message": "Renvoyer uniquement les projets de ce contact"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "Filtrer les projets selon un état particulier (INPROGRESS ou CLOSED)"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.display_name": {
+          "source": "States",
+          "message": "États"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.short_desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "Filtrer les projets selon un état particulier (INPROGRESS ou CLOSED)"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "défini sur 1 par défaut. Le numéro demandé de la page dans la réponse paginée - Doit être un nombre supérieur à 0."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.desc": {
+          "source": "Search for all projects that match a comma separated list of projectIds",
+          "message": "Rechercher tous les projets correspondant à une liste d'ID de projets séparés par des virgules"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.display_name": {
+          "source": "Projects",
+          "message": "Projets"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.short_desc": {
+          "source": "Return only these projects",
+          "message": "Renvoyer uniquement ces projets"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.short_desc": {
+          "source": "List the projects in the organisation",
+          "message": "Lister les projets de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.desc": {
+          "source": "Lists purchase orders.\n\n`Status` selects one state, and `DateFrom` and `DateTo` bound the listing by order date. Xero writes those two as calendar dates, so they take a date here and are sent as `YYYY-MM-DD`.\n\nThe response is `{PurchaseOrders: [...]}`.",
+          "message": "Répertorie les bons de commande.\n\n`Status` sélectionne un état, et `DateFrom` et `DateTo` délimitent la liste par date de commande. Xero écrit ces deux valeurs sous forme de dates calendaires, elles prennent donc une date ici et sont envoyées sous la forme `YYYY-MM-DD`.\n\nLa réponse est `{PurchaseOrders: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.display_name": {
+          "source": "Find Purchase Orders",
+          "message": "Rechercher des bons de commande"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "Filtrer par date de bon de commande (ex. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nCette valeur est envoyée sous forme de date calendaire au format « YYYY-MM-DD »."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.display_name": {
+          "source": "Date From",
+          "message": "Date de début"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.short_desc": {
+          "source": "Return only orders dated on or after this day",
+          "message": "Renvoyer uniquement les commandes datées de ce jour ou après"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "Filtrer par date de bon de commande (ex. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nCette valeur est envoyée sous forme de date calendaire au format « YYYY-MM-DD »."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.display_name": {
+          "source": "Date To",
+          "message": "Date de fin"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.short_desc": {
+          "source": "Return only orders dated on or before this day",
+          "message": "Renvoyer uniquement les commandes datées de ce jour ou avant"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date.\n\nC'est ce qui permet un balayage incrémentiel : sans cela, chaque appel lit l'intégralité de la collection."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "Modifié depuis"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "Renvoie uniquement les enregistrements créés ou modifiés depuis cette date"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkJJTExFRA.display_name": {
+          "source": "BILLED",
+          "message": "FACTURÉ"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "DRAFT",
+          "message": "BROUILLON"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOlNVQk1JVFRFRA.display_name": {
+          "source": "SUBMITTED",
+          "message": "SOUMIS"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.desc": {
+          "source": "Filter by purchase order status",
+          "message": "Filtrer par statut de bon de commande"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "Filtrer par statut de bon de commande"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "ex. page=1 - Jusqu'à 100 contacts seront renvoyés dans un seul appel d'API."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.short_desc": {
+          "source": "List the purchase orders in the organisation",
+          "message": "Lister les bons de commande de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.desc": {
+          "source": "Lists tax rates with the `TaxType` code a line item uses to name one.\n\nThis is what backs the tax type dropdown; the application this module replaces offered it without exporting the endpoint that fills it.\n\nThe response is `{TaxRates: [...]}`.",
+          "message": "Répertorie les taux de taxe avec le code `TaxType` qu'une ligne utilise pour en désigner un.\n\nC'est ce qui alimente la liste déroulante des types de taxe ; l'application que ce module remplace le proposait sans exporter le point de terminaison qui le remplit.\n\nLa réponse est `{TaxRates: [...]}`."
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.display_name": {
+          "source": "Find Tax Rates",
+          "message": "Rechercher des taux de taxe"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "Trier par n'importe quel élément"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordre"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "Un champ selon lequel trier, ex. : \"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "Un filtre dans le langage d'expression propre à Xero, ex. : `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nIl ne s'agit ni de SQL ni d'une chaîne de requête : les valeurs de chaîne sont entre guillemets doubles, un GUID est entouré de `guid(...)` et les conditions sont jointes avec `AND`."
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "Filtre"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Une expression de filtre Xero"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.short_desc": {
+          "source": "List the tax rates in the organisation",
+          "message": "Lister les taux de taxe de l'organisation"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.desc": {
+          "source": "Lists a project's tasks with their rates, charge types and estimates.",
+          "message": "Répertorie les tâches d'un projet avec leurs taux, types de facturation et estimations."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.display_name": {
+          "source": "Find Tasks",
+          "message": "Rechercher des tâches"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "Peut être `TIME`, `FIXED` ou `NON_CHARGEABLE`, définit la manière dont la tâche sera facturée. Utilisez `TIME` pour facturer à l'heure et `FIXED` pour facturer un montant fixe. Si la tâche ne doit pas être facturée, utilisez `NON_CHARGEABLE`."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "Type de facturation"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "Peut être 'TIME', 'FIXED' ou 'NON_CHARGEABLE', définit la manière dont la tâche sera facturée"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.desc": {
+          "source": "Set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "Défini sur 1 par défaut. Le numéro de la page demandé dans la réponse paginée - Doit être un nombre supérieur à 0."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Page"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "Numéro de la page à retourner, en commençant par 1"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "Nombre d'enregistrements à renvoyer sur une page. La valeur par défaut de Xero est de 100 et son maximum est de 1000."
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Taille de la page"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Nombre d'enregistrements à renvoyer dans une page"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Vous pouvez spécifier un projet particulier en ajoutant le projectId au point de terminaison"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "Projet"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "Vous pouvez spécifier un projet particulier en ajoutant le projectId au point de terminaison"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET https://.../tasks?taskIds={taskID},{taskID}",
+          "message": "Rechercher toutes les tâches correspondant à une liste d'identifiants de tâches (taskIds) séparés par des virgules, ex. GET https://.../tasks?taskIds={taskID},{taskID}"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.display_name": {
+          "source": "Task Ids",
+          "message": "Identifiants de tâches"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i",
+          "message": "Rechercher toutes les tâches correspondant à une liste de taskIds séparés par des virgules, c"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
+          "source": "List the tasks in a project",
+          "message": "Lister les tâches d'un projet"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.desc": {
+          "source": "Sends an invoice to the email address on its contact.\n\nXero decides the recipient and the template; there is nothing to fill in but the invoice. The invoice has to be `AUTHORISED` - a draft cannot be sent.",
+          "message": "Envoie une facture à l'adresse e-mail de son contact.\n\nXero détermine le destinataire et le modèle ; il n'y a rien d'autre à renseigner que la facture. La facture doit être `AUTHORISED` - un brouillon ne peut pas être envoyé."
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
+          "source": "Email Invoice",
+          "message": "Envoyer la facture par e-mail"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "Identifiant unique pour une facture"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "Facture"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "La facture à laquelle cela s'applique"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "Au moins un champ est requis pour créer un corps JSON vide"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.short_desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "Au moins un champ est requis pour créer un corps JSON vide"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
+          "source": "Send an invoice to its contact by email",
+          "message": "Envoyer une facture à son contact par e-mail"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Xero** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Passe un appel API HTTP / REST personnalisé vers **Xero** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un objet contenant le code de statut, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre dans cette application."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Xero",
+          "message": "Effectuer un appel d'API personnalisé vers Xero"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.desc": {
+          "source": "Fires for each bank transaction created or changed - money spent or received against a bank account.\n\nThe event carries the bank transaction record Xero returns.",
+          "message": "Se déclenche pour chaque transaction bancaire créée ou modifiée - argent dépensé ou reçu sur un compte bancaire.\n\nL'événement transmet l'enregistrement de transaction bancaire renvoyé par Xero."
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
+          "source": "New Bank Transaction",
+          "message": "Nouvelle transaction bancaire"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
+          "source": "Fires when a bank transaction is created or changed",
+          "message": "Se déclenche lorsqu'une transaction bancaire est créée ou modifiée"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.desc": {
+          "source": "Fires for each bill created or changed.\n\nA bill is an invoice of type `ACCPAY`, which is the filter this event applies; a sales invoice (`ACCREC`) does not fire it. The event carries the invoice record Xero returns.",
+          "message": "Se déclenche pour chaque facture fournisseur créée ou modifiée.\n\nUne facture fournisseur est une facture de type `ACCPAY`, qui est le filtre appliqué par cet événement ; une facture client (`ACCREC`) ne le déclenche pas. L'événement transmet l'enregistrement de facture renvoyé par Xero."
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.display_name": {
+          "source": "New Bill",
+          "message": "Nouvelle facture fournisseur"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
+          "source": "Fires when a bill is created or changed",
+          "message": "Se déclenche lorsqu'une facture fournisseur est créée ou modifiée"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.desc": {
+          "source": "Fires for each contact created or changed in the organisation.\n\nXero positions a contact by `UpdatedDateUTC` and offers no \"created since\" filter, so a contact edited later fires this again. The event carries the contact record Xero returns.",
+          "message": "Se déclenche pour chaque contact créé ou modifié dans l'organisation.\n\nXero positionne un contact par `UpdatedDateUTC` et ne propose aucun filtre « créé depuis », de sorte qu'un contact modifié ultérieurement déclenche à nouveau cet événement. L'événement transmet l'enregistrement de contact renvoyé par Xero."
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nouveau contact"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "Se déclenche lorsqu'un contact est créé ou modifié"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.desc": {
+          "source": "Fires for each credit note created or changed.\n\nThe event carries the credit note record Xero returns. The application this module replaces polled credit notes without exporting any way to list or read one; **Find Credit Notes** exists so that this event has a counterpart.",
+          "message": "Se déclenche pour chaque avoir créé ou modifié.\n\nL'événement transmet l'enregistrement d'avoir renvoyé par Xero. L'application que ce module remplace interrogeait les avoirs sans exporter aucun moyen d'en lister ou d'en lire un ; **Rechercher des avoirs** existe afin que cet événement ait un équivalent."
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
+          "source": "New Credit Note",
+          "message": "Nouvel avoir"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
+          "source": "Fires when a credit note is created or changed",
+          "message": "Se déclenche lorsqu'un avoir est créé ou modifié"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.desc": {
+          "source": "Fires for each employee added to the organisation's payroll or changed.\n\n**Which payroll API is polled comes from the connection's `payroll_region`**: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe application this module replaces polled employees through the **accounting** API, where they do not exist, so this event never fired at all.",
+          "message": "Se déclenche pour chaque employé ajouté à la paie de l'organisation ou modifié.\n\n**L'API de paie interrogée dépend du paramètre `payroll_region` de la connexion** : l'Australie est desservie à l'adresse `payroll.xro/1.0`, et la Nouvelle-Zélande et le Royaume-Uni à l'adresse `payroll.xro/2.0`. Une connexion sans région définie le signale plutôt que d'en deviner une.\n\nL'application que ce module remplace interrogeait les employés via l'API **accounting**, où ils n'existent pas, de sorte que cet événement ne s'est jamais déclenché."
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
+          "source": "New Employee",
+          "message": "Nouvel employé"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {
+          "source": "Fires when an employee is added to payroll or changed",
+          "message": "Se déclenche lorsqu'un employé est ajouté à la paie ou modifié"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.desc": {
+          "source": "Fires for each purchase order created or changed.\n\nThe event carries the purchase order record Xero returns.",
+          "message": "Se déclenche pour chaque bon de commande créé ou modifié.\n\nL'événement transmet l'enregistrement de bon de commande renvoyé par Xero."
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "Nouveau bon de commande"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
+          "source": "Fires when a purchase order is created or changed",
+          "message": "Se déclenche lorsqu'un bon de commande est créé ou modifié"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.desc": {
+          "source": "Fires for each payment created or changed against an invoice or a credit note.\n\nThe event carries the payment record Xero returns.",
+          "message": "Se déclenche pour chaque paiement créé ou modifié associé à une facture ou à un avoir.\n\nL'événement transmet l'enregistrement de paiement renvoyé par Xero."
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nouveau paiement"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
+          "source": "Fires when a payment is created or changed",
+          "message": "Se déclenche lorsqu'un paiement est créé ou modifié"
+        },
+        "app.WGVybw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Renvoie tous les enregistrements de la table indiquée correspondant aux critères de recherche"
+        },
+        "app.WGVybw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Rechercher des enregistrements"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "La table avec laquelle travailler : `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` ou `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tableau"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Le nom de la table avec laquelle travailler"
+        },
+        "app.WGVybw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Rechercher des enregistrements correspondants dans la table indiquée"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Renvoie l'unique enregistrement de la table indiquée correspondant aux critères de recherche ; une erreur est générée si plusieurs enregistrements correspondent"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Trouver un seul enregistrement"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "La table avec laquelle travailler : `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` ou `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tableau"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Le nom de la table avec laquelle travailler"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Rechercher un enregistrement correspondant unique dans la table indiquée"
+        },
+        "app.WGVybw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Met à jour chaque enregistrement du tableau donné correspondant aux critères de recherche"
+        },
+        "app.WGVybw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Mettre à jour des enregistrements"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "La table avec laquelle travailler : `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` ou `project-tasks`"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tableau"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Le nom de la table avec laquelle travailler"
+        },
+        "app.WGVybw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Mettre à jour les enregistrements correspondant aux critères de recherche"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.desc": {
+          "source": "Creates or updates bank transactions.\n\n`BankTransactions` is an **array** even for one. Each needs a `Type` - `SPEND` or `RECEIVE` - a `Contact`, a `BankAccount` and `LineItems`.\n\nThe bank account must be an account of type `BANK`, which is what its dropdown offers; a line item needs `AccountCode` or `AccountID` to say which account it posts to.",
+          "message": "Crée ou met à jour des transactions bancaires.\n\n`BankTransactions` est un **tableau** même pour une seule transaction. Chacune nécessite un `Type` - `SPEND` ou `RECEIVE` - un `Contact`, un `BankAccount` et `LineItems`.\n\nLe compte bancaire doit être un compte de type `BANK`, ce que propose sa liste déroulante ; une ligne nécessite `AccountCode` ou `AccountID` pour indiquer le compte sur lequel imputer."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.display_name": {
+          "source": "Create Bank Transaction",
+          "message": "Créer une transaction bancaire"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Bank Transactions",
+          "message": "Transactions bancaires"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "The transactions to create or update; an array even for one",
+          "message": "Les transactions à créer ou mettre à jour ; un tableau même pour une seule"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
+          "source": "Record money spent or received against a bank account",
+          "message": "Enregistrer de l'argent dépensé ou reçu sur un compte bancaire"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.desc": {
+          "source": "Creates or updates contacts.\n\n`Contacts` is an **array** even for one contact - that is Xero's envelope. A member carrying `ContactID` updates that contact; one without creates a new one.\n\n`summarizeErrors` set to `false` makes Xero accept the members it can and report the rest, instead of rejecting the whole batch.",
+          "message": "Crée ou met à jour des contacts.\n\n`Contacts` est un **tableau** même pour un seul contact - c'est l'enveloppe de Xero. Un élément contenant `ContactID` met à jour ce contact ; un élément sans ce champ en crée un nouveau.\n\n`summarizeErrors` défini sur `false` permet à Xero d'accepter les éléments valides et de signaler les autres, au lieu de rejeter l'ensemble du lot."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.display_name": {
+          "source": "Create or Update Contacts",
+          "message": "Créer ou mettre à jour des contacts"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Contacts"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.short_desc": {
+          "source": "The contacts to create or update; an array even for one",
+          "message": "Les contacts à créer ou mettre à jour ; un tableau même pour un seul"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
+          "source": "Create contacts, or update them by ID",
+          "message": "Créer des contacts ou les mettre à jour par ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.desc": {
+          "source": "Creates employees in the organisation's payroll.\n\n`Employees` is a list even for one employee. Australia's payroll API takes a list directly; New Zealand's and the United Kingdom's take one employee per call, so a list of several is sent one at a time and the results collected.\n\n**Which payroll API is used comes from the connection's `payroll_region`.** The fields an employee needs differ by region - a United Kingdom employee has a National Insurance number where a New Zealand one has an IRD number - so this passes the employee through as given rather than declaring one region's shape for all of them.",
+          "message": "Crée des employés dans la paie de l'organisation.\n\n`Employees` est une liste même pour un seul employé. L'API de paie australienne accepte directement une liste ; celles de Nouvelle-Zélande et du Royaume-Uni prennent un employé par appel, donc une liste comportant plusieurs employés est envoyée un par un et les résultats sont rassemblés.\n\n**L'API de paie utilisée dépend du paramètre `payroll_region` de la connexion.** Les champs requis pour un employé diffèrent selon la région (un employé du Royaume-Uni a un numéro de sécurité sociale National Insurance là où un employé de Nouvelle-Zélande a un numéro IRD), ce qui permet de transmettre l'employé tel quel plutôt que d'imposer la structure d'une seule région pour tous."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
+          "source": "Create Employees",
+          "message": "Créer des employés"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
+          "source": "Create employees in the payroll organisation",
+          "message": "Créer des employés dans l'organisation de paie"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.desc": {
+          "source": "Creates or updates invoices.\n\n`Invoices` is an **array** even for one invoice. Each member needs `Type` - `ACCREC` for a sales invoice, `ACCPAY` for a bill - a `Contact`, and `LineItems`.\n\nA line item needs an amount and an account: give `AccountCode`, or an `ItemCode` whose item already carries one. `Status` decides whether it is a draft: leave it unset for `DRAFT`, or set `AUTHORISED` to approve it as it is created.",
+          "message": "Crée ou met à jour des factures.\n\n`Invoices` est un **tableau** même pour une seule facture. Chaque élément nécessite `Type` - `ACCREC` pour une facture client, `ACCPAY` pour une facture fournisseur - un `Contact`, et `LineItems`.\n\nUne ligne nécessite un montant et un compte : fournissez `AccountCode`, ou un `ItemCode` dont l'article en possède déjà un. `Status` détermine s'il s'agit d'un brouillon : laissez non défini pour `DRAFT`, ou définissez `AUTHORISED` pour l'approuver dès sa création."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Invoices",
+          "message": "Créer ou mettre à jour des factures"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Factures"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.short_desc": {
+          "source": "The invoices to create or update; an array even for one",
+          "message": "Les factures à créer ou mettre à jour ; un tableau même pour une seule"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "Permet la création d'une facture même lorsqu'une ou plusieurs lignes contiennent des articles en stock suivi dont la quantité facturée rendrait la quantité disponible négative"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.display_name": {
+          "source": "Allow Backorders",
+          "message": "Autoriser les commandes différées"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "Permet la création d'une facture même lorsqu'une ou plusieurs lignes contiennent des articles en stock suivi dont la quantité facturée rendrait la quantité disponible négative"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
+          "source": "Create invoices or bills, or update them by ID",
+          "message": "Créer des factures clients ou fournisseurs, ou les mettre à jour par ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.desc": {
+          "source": "Creates or updates items.\n\n`Items` is an **array** even for one item, and `Code` is what identifies an item to a line item elsewhere.",
+          "message": "Crée ou met à jour des articles.\n\n`Items` est un **tableau** même pour un seul article, et `Code` est ce qui identifie un article pour une ligne ailleurs."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.display_name": {
+          "source": "Create or Update Items",
+          "message": "Créer ou mettre à jour des articles"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.display_name": {
+          "source": "Items",
+          "message": "Éléments"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.short_desc": {
+          "source": "The items to create or update; an array even for one",
+          "message": "Les articles à créer ou mettre à jour ; un tableau même pour un seul"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "ex. unitdp=4 – (Unit Decimal Places) Vous pouvez choisir d'utiliser quatre décimales pour les montants unitaires"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "e"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
+          "source": "Create items, or update them by ID",
+          "message": "Créer des articles ou les mettre à jour par ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.desc": {
+          "source": "Creates or updates quotes.\n\n`Quotes` is an **array** even for one quote, and each needs a `Contact`, a `Date` and `LineItems`.",
+          "message": "Crée ou met à jour des devis.\n\n`Quotes` est un **tableau** même pour un seul devis, et chacun nécessite un `Contact`, un `Date` et `LineItems`."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.display_name": {
+          "source": "Create or Update Quotes",
+          "message": "Créer ou mettre à jour des devis"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.display_name": {
+          "source": "Quotes",
+          "message": "Devis"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.short_desc": {
+          "source": "The quotes to create or update; an array even for one",
+          "message": "Les devis à créer ou mettre à jour ; un tableau même pour un seul"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
+          "source": "Create quotes, or update them by ID",
+          "message": "Créer des devis ou les mettre à jour par ID"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.desc": {
+          "source": "Creates or updates repeating invoice templates.\n\n`Schedule` is what makes it repeat - its period, unit and next scheduled date - and `Status` decides whether Xero sends each occurrence (`AUTHORISED`) or leaves it as a draft (`DRAFT`).",
+          "message": "Crée ou met à jour des modèles de factures récurrentes.\n\n`Schedule` définit la récurrence (période, unité et prochaine date planifiée) et `Status` détermine si Xero envoie chaque occurrence (`AUTHORISED`) ou la conserve comme brouillon (`DRAFT`)."
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Repeating Invoices",
+          "message": "Créer ou mettre à jour des factures récurrentes"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.display_name": {
+          "source": "Repeating Invoices",
+          "message": "Factures récurrentes"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.short_desc": {
+          "source": "The templates to create or update; an array even for one",
+          "message": "Les modèles à créer ou mettre à jour ; un tableau même pour un seul"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "Résumer les erreurs"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "Si faux, renvoie 200 OK et un mélange d'objets créés avec succès et d'autres avec des erreurs de validation"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
+          "source": "Set up an invoice that repeats on a schedule",
+          "message": "Configurer une facture récurrente selon un calendrier"
+        },
+        "app.WGVybw.desc": {
+          "source": "Provides access to [Xero](https://www.xero.com), the online accounting platform.\n\n**Common use cases**:\n- **Contacts**: find, create and update customers and suppliers\n- **Invoices**: find, create and update sales invoices and bills, add notes and email them\n- **Payments**: record payments, allocate credit notes and read bank transactions\n- **Items and accounts**: read the chart of accounts and tax rates, and manage items\n- **Projects**: find and create projects and their tasks\n- **Payroll**: find and create employees in the organisation's regional payroll\n\n**The organisation is the connection**: a Xero credential can reach several organisations and every call has to name one, so `tenant_id` belongs to the connection rather than to each action.\n\nXero is a trademark of Xero Limited.",
+          "message": "Fournit un accès à [Xero](https://www.xero.com), la plateforme de comptabilité en ligne.\n\n**Cas d'usage courants** :\n- **Contacts** : rechercher, créer et mettre à jour les clients et fournisseurs\n- **Factures** : rechercher, créer et mettre à jour les factures de vente et d'achat, ajouter des notes et les envoyer par e-mail\n- **Paiements** : enregistrer les paiements, imputer les avoirs et consulter les transactions bancaires\n- **Articles et comptes** : consulter le plan comptable et les taux de taxe, et gérer les articles\n- **Projets** : rechercher et créer des projets et leurs tâches\n- **Paie** : rechercher et créer des employés dans la paie régionale de l'organisation\n\n**L'organisation correspond à la connexion** : un identifiant Xero peut accéder à plusieurs organisations et chaque appel doit en spécifier une, ainsi `tenant_id` appartient à la connexion plutôt qu'à chaque action.\n\nXero est une marque déposée de Xero Limited."
+        },
+        "app.WGVybw.display_name": {
+          "source": "Xero",
+          "message": "Xero"
+        },
+        "app.WGVybw.short_desc": {
+          "source": "Work with Xero contacts, invoices, payments, projects and payroll",
+          "message": "Travailler avec les contacts, factures, paiements, projets et la paie Xero"
+        }
+      }
+    }
+  }
+}

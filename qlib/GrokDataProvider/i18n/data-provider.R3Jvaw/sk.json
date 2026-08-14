@@ -1,0 +1,2457 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.desc": {
+          "source": "Process a request with a Grok model via the Responses API with optional tool calling and conversation continuation",
+          "message": "Spracovať požiadavku pomocou modelu Grok cez Responses API s voliteľným volaním nástrojov a pokračovaním konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.display_name": {
+          "source": "Process Request With a Model",
+          "message": "Spracovať požiadavku pomocou modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Nepriehľadný identifikátor používaný na načítanie a ukladanie kontextu konverzácie. Používa sa len vtedy, keď je nakonfigurované úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Kľúč kontextu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Kľúč pre úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Ak je nastavené na `true`, odpoveď sa spracuje asynchrónne na pozadí. Pomocou akcie `get-response` s vráteným ID odpovede môžete zisťovať výsledok"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Pozadie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Spracovať odpoveď asynchrónne na pozadí"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Vstupný obsah pre odpoveď. Každá položka má rolu, text a voliteľný obrázok. Pre jednoduchú textovú výzvu stačí jedna položka s textom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Vstup"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Textový alebo správový vstup do modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Systémová (alebo vývojárska) správa vložená na začiatok kontextu modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Pokyny"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Inštrukcie systémovej výzvy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov. Ak je nastavené na `true`, vráti logaritmické pravdepodobnosti každého výstupného tokenu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "Model Grok, ktorý sa má použiť (napr. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "Model Grok, ktorý sa má použiť"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maximálny počet tokenov, ktoré možno vygenerovať v odpovedi, vrátane výstupných tokenov aj tokenov uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maximálny počet výstupných tokenov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maximálny počet tokenov na vygenerovanie vrátane uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maximálny počet iterácií volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maximálny počet ťahov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maximálny počet kôl volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Sada párov kľúč – hodnota, ktoré sa majú pripojiť k odpovedi. Maximálne 16 párov; kľúče do 64 znakov, hodnoty do 512 znakov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadáta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatočné páry kľúč – hodnota metadát"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfigurácia pre integráciu webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfigurácia webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatický výber úrovne na základe zaťaženia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatický výber úrovne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predvolené"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie požiadavky"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Úroveň služby"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Ak je `true`, vstup a odpoveď sa uložia na 30 dní pred trvalým odstránením"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Uložiť?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Uchovať vstup a odpoveď na 30 dní"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Ak je `true`, odpoveď sa bude streamovať pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Povoliť streamovanie pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Či povoliť paralelné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Paralelné volania nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Povoliť súbežné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Jedinečný identifikátor predchádzajúcej odpovede, ktorý sa použije ako kontext na pokračovanie bez opakovania vstupu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "ID predchádzajúcej odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "ID predchádzajúcej odpovede na pokračovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Používané službou xAI na ukladanie odpovedí do vyrovnávacej pamäte pre podobné požiadavky na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Kľúč vyrovnávacej pamäte výzvy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfigurácia uvažovania s úrovňou úsilia a typom zhrnutia. Podporované iba modelmi so schopnosťou uvažovania (napr. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Uvažovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfigurácia uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nezavolá žiadny nástroj a namiesto toho vygeneruje správu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nezavolá žiadny nástroj"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo zavolaním jedného či viacerých nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model rozhodne, či zavolá nástroje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Určuje, ktoré nástroje môže model použiť.\n\nPoužite jednu z preddefinovaných hodnôt alebo zadajte vlastnú hodnotu na vynútenie konkrétnej funkcie (napr. názov funkcie)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Riadenie volania nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Zoznam nástrojov dostupných pre model vrátane funkcií a webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostupné nástroje (max. 128)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Celé číslo medzi `0` a `20`, ktoré určuje počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii tokenu, každý s priradenou logaritmickou pravdepodobnosťou"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Najvyššie logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Prah vzorkovania jadra (nucleus sampling), kde model berie do úvahy tokeny tvoriace pravdepodobnostnú hmotu top_p"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Prah vzorkovania jadra (0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfigurácia formátu textovej odpovede z modelu. Použite na špecifikovanie štruktúrovaného výstupu prostredníctvom JSON schémy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Formát textu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfigurácia formátu textovej odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Teplota vzorkovania medzi 0 a 2. Vyššie hodnoty spôsobujú väčšiu náhodnosť výstupu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Teplota vzorkovania (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automaticky orezať zo stredu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automaticky orezať dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Neorezávať; ak kontext prekročí limit, vrátiť chybu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Zakázané"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Neorezávať; vrátiť chybu, ak je príliš dlhé"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Stratégia orezania, keď kontext prekročí maximálnu dĺžku kontextu modelu. `auto` oreže zo stredu konverzácie, aby sa zmestila do kontextového okna"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Orezanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Stratégia orezania pre dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identifikátor koncového používateľa"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Process a request with a Grok model via the Responses API",
+          "message": "Spracovať požiadavku pomocou modelu Grok prostredníctvom Responses API"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.desc": {
+          "source": "Create a response via the Responses API with full control over model selection and options",
+          "message": "Vytvoriť odpoveď prostredníctvom Responses API s plnou kontrolou nad výberom modelu a možnosťami"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.display_name": {
+          "source": "Create Response",
+          "message": "Vytvoriť odpoveď"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Nepriehľadný identifikátor používaný na načítanie a ukladanie kontextu konverzácie. Používa sa len vtedy, keď je nakonfigurované úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Kľúč kontextu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Kľúč pre úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Ak je nastavené na `true`, odpoveď sa spracuje asynchrónne na pozadí. Pomocou akcie `get-response` s vráteným ID odpovede môžete zisťovať výsledok"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Pozadie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Spracovať odpoveď asynchrónne na pozadí"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Vstupný obsah pre odpoveď. Každá položka má rolu, text a voliteľný obrázok. Pre jednoduchú textovú výzvu stačí jedna položka s textom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Vstup"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Textový alebo správový vstup do modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Systémová (alebo vývojárska) správa vložená na začiatok kontextu modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Pokyny"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Inštrukcie systémovej výzvy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov. Ak je nastavené na `true`, vráti logaritmické pravdepodobnosti každého výstupného tokenu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model, ktorý sa má použiť na odpoveď (napr. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the response",
+          "message": "Model, ktorý sa má použiť na odpoveď"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maximálny počet tokenov, ktoré možno vygenerovať v odpovedi, vrátane výstupných tokenov aj tokenov uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maximálny počet výstupných tokenov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maximálny počet tokenov na vygenerovanie vrátane uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maximálny počet iterácií volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maximálny počet ťahov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maximálny počet kôl volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Sada párov kľúč – hodnota, ktoré sa majú pripojiť k odpovedi. Maximálne 16 párov; kľúče do 64 znakov, hodnoty do 512 znakov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadáta"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatočné páry kľúč – hodnota metadát"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfigurácia pre integráciu webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfigurácia webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatický výber úrovne na základe zaťaženia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatický výber úrovne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predvolené"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie požiadavky"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Úroveň služby"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Ak je `true`, vstup a odpoveď sa uložia na 30 dní pred trvalým odstránením"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Uložiť?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Uchovať vstup a odpoveď na 30 dní"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Ak je `true`, odpoveď sa bude streamovať pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Povoliť streamovanie pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Či povoliť paralelné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Paralelné volania nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Povoliť súbežné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Jedinečný identifikátor predchádzajúcej odpovede, ktorý sa použije ako kontext na pokračovanie bez opakovania vstupu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "ID predchádzajúcej odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "ID predchádzajúcej odpovede na pokračovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Používané službou xAI na ukladanie odpovedí do vyrovnávacej pamäte pre podobné požiadavky na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Kľúč vyrovnávacej pamäte výzvy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfigurácia uvažovania s úrovňou úsilia a typom zhrnutia. Podporované iba modelmi so schopnosťou uvažovania (napr. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Uvažovanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfigurácia uvažovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nezavolá žiadny nástroj a namiesto toho vygeneruje správu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nezavolá žiadny nástroj"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo zavolaním jedného či viacerých nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model rozhodne, či zavolá nástroje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Určuje, ktoré nástroje môže model použiť.\n\nPoužite jednu z preddefinovaných hodnôt alebo zadajte vlastnú hodnotu na vynútenie konkrétnej funkcie (napr. názov funkcie)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Riadenie volania nástrojov"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Zoznam nástrojov dostupných pre model vrátane funkcií a webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostupné nástroje (max. 128)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Celé číslo medzi `0` a `20`, ktoré určuje počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii tokenu, každý s priradenou logaritmickou pravdepodobnosťou"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Najvyššie logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Prah vzorkovania jadra (nucleus sampling), kde model berie do úvahy tokeny tvoriace pravdepodobnostnú hmotu top_p"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Prah vzorkovania jadra (0-1)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfigurácia formátu textovej odpovede z modelu. Použite na špecifikovanie štruktúrovaného výstupu prostredníctvom JSON schémy"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Formát textu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfigurácia formátu textovej odpovede"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Teplota vzorkovania medzi 0 a 2. Vyššie hodnoty spôsobujú väčšiu náhodnosť výstupu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Teplota vzorkovania (0-2)"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automaticky orezať zo stredu konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automaticky orezať dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Neorezávať; ak kontext prekročí limit, vrátiť chybu"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Zakázané"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Neorezávať; vrátiť chybu, ak je príliš dlhé"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Stratégia orezania, keď kontext prekročí maximálnu dĺžku kontextu modelu. `auto` oreže zo stredu konverzácie, aby sa zmestila do kontextového okna"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Orezanie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Stratégia orezania pre dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identifikátor koncového používateľa"
+        },
+        "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.short_desc": {
+          "source": "Create a response via the Responses API without model context",
+          "message": "Vytvoriť odpoveď cez Responses API bez kontextu modelu"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.desc": {
+          "source": "Retrieve a previously stored response by its unique identifier",
+          "message": "Získať predtým uloženú odpoveď podľa jej jedinečného identifikátora"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.display_name": {
+          "source": "Get Response",
+          "message": "Získať odpoveď"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "Jedinečný identifikátor odpovede, ktorá sa má získať"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "ID odpovede"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "ID odpovede, ktorá sa má získať"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to retrieve",
+          "message": "Jedinečný identifikátor odpovede, ktorá sa má získať"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "Odpoveď"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to retrieve",
+          "message": "ID odpovede, ktorá sa má získať"
+        },
+        "app.R3Jvaw.action.Z2V0LXJlc3BvbnNl.short_desc": {
+          "source": "Retrieve a previously stored response by ID",
+          "message": "Získať predtým uloženú odpoveď podľa ID"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.desc": {
+          "source": "Retrieve the result of a deferred chat completion request using the request ID",
+          "message": "Získať výsledok odloženej požiadavky na dokončenie chatu pomocou ID požiadavky"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.display_name": {
+          "source": "Get Deferred Completion",
+          "message": "Získať odložené dokončenie"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The request ID returned from a deferred chat completion request",
+          "message": "ID požiadavky vrátené z odloženej požiadavky na dokončenie chatu"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "ID žiadosti"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The request ID from a deferred chat completion",
+          "message": "ID požiadavky z odloženého dokončenia chatu"
+        },
+        "app.R3Jvaw.action.ZGVmZXJyZWQtY29tcGxldGlvbg.short_desc": {
+          "source": "Retrieve a deferred chat completion result by request ID",
+          "message": "Získať výsledok odloženého dokončenia chatu podľa ID požiadavky"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.desc": {
+          "source": "Delete a previously stored response by its unique identifier",
+          "message": "Odstrániť predtým uloženú odpoveď podľa jej jedinečného identifikátora"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.display_name": {
+          "source": "Delete Response",
+          "message": "Odstrániť odpoveď"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "Jedinečný identifikátor odpovede, ktorá sa má odstrániť"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.display_name": {
+          "source": "Response ID",
+          "message": "ID odpovede"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.aWQ.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "ID odpovede, ktorá sa má odstrániť"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.desc": {
+          "source": "The unique identifier of the response to delete",
+          "message": "Jedinečný identifikátor odpovede, ktorá sa má odstrániť"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.display_name": {
+          "source": "Response",
+          "message": "Odpoveď"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.option.cmVzcG9uc2U.short_desc": {
+          "source": "The ID of the response to delete",
+          "message": "ID odpovede, ktorá sa má odstrániť"
+        },
+        "app.R3Jvaw.action.ZGVsZXRlLXJlc3BvbnNl.short_desc": {
+          "source": "Delete a stored response by ID",
+          "message": "Odstrániť uloženú odpoveď podľa ID"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Grok AI Services** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Grok AI Services** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Grok AI Services",
+          "message": "Vykonať vlastné volanie API do Grok AI Services"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with Grok by sending multiple messages at once and potentially getting multiple replies",
+          "message": "Chatujte s Grokom odoslaním viacerých správ naraz a potenciálnym získaním viacerých odpovedí"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "Viacnásobný chat"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "Ak je `true`, vráti request_id, ktoré možno použiť na dopytovanie výsledku dokončenia cez koncový bod odloženého dokončenia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "Odložené"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "Vrátiť request_id na asynchrónne načítanie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "Číslo medzi -2.0 a 2.0. Kladné hodnoty penalizujú nové tokeny na základe ich doterajšej frekvencie v texte, čím znižujú pravdepodobnosť, že model bude doslovne opakovať rovnaký riadok"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalizácia frekvencie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "Penalizuje opakovanie tokenov (-2.0 až 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "Upravuje pravdepodobnosť výskytu zadaných tokenov v dokončení. Mapuje ID tokenov (ako reťazce) na hodnoty skreslenia od `-100` do `100`. Hodnoty `-100` alebo `100` vedú k zakázaniu alebo výhradnému výberu daného tokenu.\n\n**Príklad**: `{\"50256\": -100}` na zabránenie tokenu konca textu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logit skreslenie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "Upraviť pravdepodobnosť výskytu zadaných tokenov v dokončení"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov. Ak je `true`, vráti logaritmické pravdepodobnosti každého výstupného tokenu vráteného v obsahu správy"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "Logaritmická pravdepodobnosť"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model, ktorý sa má použiť na vytvorenie odpovede (napr. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "Model, ktorý sa má použiť na vytvorenie odpovede"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "Horná hranica počtu tokenov, ktoré možno vygenerovať pre dokončenie, vrátane viditeľných výstupných tokenov a uvažovacích tokenov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "Maximálny počet tokenov dokončenia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "Horná hranica počtu tokenov vygenerovaných v odpovedi"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "Maximálny počet tokenov, ktoré možno vygenerovať v dokončení chatu. Zastarané; namiesto toho použite max_completion_tokens"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "Maximálny počet tokenov (zastarané)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "Maximálny počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Zoznam správ tvoriacich doterajšiu konverzáciu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.desc": {
+          "source": "How many chat completion choices to generate for each input message. Note that you will be charged based on the number of generated tokens across all of the choices",
+          "message": "Koľko možností dokončenia chatu sa má vygenerovať pre každú vstupnú správu. Upozorňujeme, že vám budú účtované poplatky podľa počtu vygenerovaných tokenov vo všetkých možnostiach"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.display_name": {
+          "source": "Number of Choices",
+          "message": "Počet možností"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bg.short_desc": {
+          "source": "The number of choices to generate for each input message",
+          "message": "Počet možností, ktoré sa majú vygenerovať pre každú vstupnú správu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "Konfigurácia pre integráciu vyhľadávania na webe s rozsahmi dátumov, zdrojmi a možnosťami citácií"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfigurácia webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "Ak je zadané, systém vyvinie maximálne úsilie na deterministické vzorkovanie, takže opakované požiadavky s rovnakým seed a parametrami by mali vrátiť rovnaký výsledok"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "Hodnota pre deterministické vzorkovanie"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Ak je `true`, čiastočné delty správ sa budú odosielať ako udalosti typu server-sent events iba s dátami hneď, ako budú k dispozícii, pričom stream sa ukončí správou `data: [DONE]`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "Nastavte na povolenie čiastočných rozdielov správ cez SSE"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "Možnosti pre streamovanie odpovede. Nastavte len vtedy, keď nastavíte `stream: true`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "Možnosti streamovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "Možnosti pre streamovanie odpovede"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "Či sa má povoliť paralelné volanie funkcií počas používania nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Paralelné volania nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "Povoliť súčasné volania nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "Číslo medzi -2.0 a 2.0. Kladné hodnoty penalizujú nové tokeny na základe toho, či sa doteraz vyskytujú v texte, čím zvyšujú pravdepodobnosť, že model bude hovoriť o nových témach"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalizácia prítomnosti"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "Penalizuje nové tokeny na základe výskytu v texte (-2.0 až 2.0)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Stredná"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "Obmedzuje úsilie pri uvažovaní pre uvažovacie modely. Podporované iba modelmi schopnými uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "Úroveň obmedzenia uvažovacieho modelu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "Objekt špecifikujúci formát, ktorý musí model vytvoriť na výstupe. Nastavenie na `{\"type\": \"json_object\"}` povolí režim JSON, ktorý zaručí, že správa vygenerovaná modelom je platný formát JSON"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "Formát odpovede"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nezavolá žiadny nástroj a namiesto toho vygeneruje správu"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nezavolá žiadny nástroj"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo zavolaním jedného či viacerých nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo volaním nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "Určuje, ktorý nástroj (ak vôbec nejaký) model zavolá. `none` je predvolená hodnota, ak nie sú k dispozícii žiadne nástroje. `auto` je predvolená hodnota, ak sú nástroje k dispozícii"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "Určuje, ktorý nástroj model zavolá"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "Zoznam nástrojov, ktoré môže model zavolať. V súčasnosti sú ako nástroj podporované iba funkcie. Podporovaných je maximálne 128 funkcií"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "Zoznam nástrojov, ktoré môže model zavolať (max. 128)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "Celé číslo medzi 0 a 8 určujúce počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii tokenu. Ak sa použije tento parameter, `logprobs` musí byť nastavené na `true`"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Najvyššia logaritmická pravdepodobnosť"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii (0 – 8)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "Alternatíva k vzorkovaniu s teplotou, nazývaná jadrové vzorkovanie, kde model zvažuje výsledky tokenov s pravdepodobnostnou hmotou top_p"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "Pravdepodobnostná hmota jadrového vzorkovania (0 – 1)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "Akú vzorkovaciu teplotu použiť, medzi 0 a 2. Vyššie hodnoty ako 0,8 spôsobia, že výstup bude náhodnejší, zatiaľ čo nižšie hodnoty ako 0,2 ho urobia sústredenejším a deterministickejším"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "Vzorkovacia teplota, ktorá sa má použiť (0 – 2)"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa"
+        },
+        "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with Grok using multiple messages with multi-reply support",
+          "message": "Chatujte s Grokom pomocou viacerých správ s podporou viacerých odpovedí"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "Chatujte s Grokom odoslaním jednej správy a prijatím jednej odpovede"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Jednoduchý chat"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The message content to send to the model",
+          "message": "Obsah správy na odoslanie modelu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message content",
+          "message": "Obsah správy"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.desc": {
+          "source": "If `true`, returns a request_id that can be used to poll for the completion result via the deferred completion endpoint",
+          "message": "Ak je `true`, vráti request_id, ktoré možno použiť na dopytovanie výsledku dokončenia cez koncový bod odloženého dokončenia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.display_name": {
+          "source": "Deferred",
+          "message": "Odložené"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZGVmZXJyZWQ.short_desc": {
+          "source": "Return request_id for asynchronous retrieval",
+          "message": "Vrátiť request_id na asynchrónne načítanie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim",
+          "message": "Číslo medzi -2.0 a 2.0. Kladné hodnoty penalizujú nové tokeny na základe ich doterajšej frekvencie v texte, čím znižujú pravdepodobnosť, že model bude doslovne opakovať rovnaký riadok"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalizácia frekvencie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalizes token repetition (-2.0 to 2.0)",
+          "message": "Penalizuje opakovanie tokenov (-2.0 až 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.desc": {
+          "source": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs (as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a ban or exclusive selection of the relevant token.\n\n**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+          "message": "Upravuje pravdepodobnosť výskytu zadaných tokenov v dokončení. Mapuje ID tokenov (ako reťazce) na hodnoty skreslenia od `-100` do `100`. Hodnoty `-100` alebo `100` vedú k zakázaniu alebo výhradnému výberu daného tokenu.\n\n**Príklad**: `{\"50256\": -100}` na zabránenie tokenu konca textu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.display_name": {
+          "source": "Logit Bias",
+          "message": "Logit skreslenie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9naXRfYmlhcw.short_desc": {
+          "source": "Modify likelihood of specified tokens appearing in the completion",
+          "message": "Upraviť pravdepodobnosť výskytu zadaných tokenov v dokončení"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token returned in the content of the message",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov. Ak je `true`, vráti logaritmické pravdepodobnosti každého výstupného tokenu vráteného v obsahu správy"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probability",
+          "message": "Logaritmická pravdepodobnosť"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
+          "message": "Model, ktorý sa má použiť na vytvorenie odpovede (napr. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use to create the response",
+          "message": "Model, ktorý sa má použiť na vytvorenie odpovede"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.desc": {
+          "source": "An upper bound for the number of tokens that can be generated for a completion, including visible output tokens and reasoning tokens",
+          "message": "Horná hranica počtu tokenov, ktoré možno vygenerovať pre dokončenie, vrátane viditeľných výstupných tokenov a uvažovacích tokenov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.display_name": {
+          "source": "Max Completion Tokens",
+          "message": "Maximálny počet tokenov dokončenia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X2NvbXBsZXRpb25fdG9rZW5z.short_desc": {
+          "source": "Upper bound for tokens generated in the response",
+          "message": "Horná hranica počtu tokenov vygenerovaných v odpovedi"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Deprecated; use max_completion_tokens instead",
+          "message": "Maximálny počet tokenov, ktoré možno vygenerovať v dokončení chatu. Zastarané; namiesto toho použite max_completion_tokens"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens (Deprecated)",
+          "message": "Maximálny počet tokenov (zastarané)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
+          "message": "Maximálny počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
+          "source": "An optional name for the participant",
+          "message": "Voliteľné meno účastníka"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.short_desc": {
+          "source": "An optional name for the participant",
+          "message": "Voliteľné meno účastníka"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration with date ranges, sources, and citation options",
+          "message": "Konfigurácia pre integráciu vyhľadávania na webe s rozsahmi dátumov, zdrojmi a možnosťami citácií"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfigurácia webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result",
+          "message": "Ak je zadané, systém vyvinie maximálne úsilie na deterministické vzorkovanie, takže opakované požiadavky s rovnakým seed a parametrami by mali vrátiť rovnaký výsledok"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
+          "source": "A value for deterministic sampling",
+          "message": "Hodnota pre deterministické vzorkovanie"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "Až 4 sekvencie, pri ktorých API prestane generovať ďalšie tokeny"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Ak je `true`, čiastočné delty správ sa budú odosielať ako udalosti typu server-sent events iba s dátami hneď, ako budú k dispozícii, pričom stream sa ukončí správou `data: [DONE]`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Set to enable partial message deltas via SSE",
+          "message": "Nastavte na povolenie čiastočných rozdielov správ cez SSE"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.desc": {
+          "source": "Options for streaming response. Only set this when you set `stream: true`",
+          "message": "Možnosti pre streamovanie odpovede. Nastavte len vtedy, keď nastavíte `stream: true`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.display_name": {
+          "source": "Stream Options",
+          "message": "Možnosti streamovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX29wdGlvbnM.short_desc": {
+          "source": "Options for streaming response",
+          "message": "Možnosti pre streamovanie odpovede"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to enable parallel function calling during tool use",
+          "message": "Či sa má povoliť paralelné volanie funkcií počas používania nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Paralelné volania nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Enable simultaneous tool calls",
+          "message": "Povoliť súčasné volania nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics",
+          "message": "Číslo medzi -2.0 a 2.0. Kladné hodnoty penalizujú nové tokeny na základe toho, či sa doteraz vyskytujú v texte, čím zvyšujú pravdepodobnosť, že model bude hovoriť o nových témach"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalizácia prítomnosti"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
+          "message": "Penalizuje nové tokeny na základe výskytu v texte (-2.0 až 2.0)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author is an assistant",
+          "message": "Autorom je asistent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "Asistent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author is an assistant",
+          "message": "Autorom je asistent"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author is the system",
+          "message": "Autorom je systém"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "Systém"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author is the system",
+          "message": "Autorom je systém"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author is a user",
+          "message": "Autorom je používateľ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author is a user",
+          "message": "Autorom je používateľ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "Rola autora tejto správy"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "Rola autora správy"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Stredná"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Stredné úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Vysoké úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Nízke úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Constrains effort on reasoning for reasoning models. Only supported by reasoning-capable models",
+          "message": "Obmedzuje úsilie pri uvažovaní pre uvažovacie modely. Podporované iba modelmi schopnými uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Úsilie uvažovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Reasoning model constraint level",
+          "message": "Úroveň obmedzenia uvažovacieho modelu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Setting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON",
+          "message": "Objekt špecifikujúci formát, ktorý musí model vytvoriť na výstupe. Nastavenie na `{\"type\": \"json_object\"}` povolí režim JSON, ktorý zaručí, že správa vygenerovaná modelom je platný formát JSON"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The response format",
+          "message": "Formát odpovede"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nezavolá žiadny nástroj a namiesto toho vygeneruje správu"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nezavolá žiadny nástroj"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo zavolaním jedného či viacerých nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model can pick between generating a message or calling tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo volaním nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which (if any) tool is called by the model. `none` is the default when no tools are present. `auto` is the default if tools are present",
+          "message": "Určuje, ktorý nástroj (ak vôbec nejaký) model zavolá. `none` je predvolená hodnota, ak nie sú k dispozícii žiadne nástroje. `auto` je predvolená hodnota, ak sú nástroje k dispozícii"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Controls which tool is called by the model",
+          "message": "Určuje, ktorý nástroj model zavolá"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.desc": {
+          "source": "A list of tools the model may call. Currently, only functions are supported as a tool. A max of 128 functions are supported",
+          "message": "Zoznam nástrojov, ktoré môže model zavolať. V súčasnosti sú ako nástroj podporované iba funkcie. Podporovaných je maximálne 128 funkcií"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbHM.short_desc": {
+          "source": "A list of tools the model may call (max 128)",
+          "message": "Zoznam nástrojov, ktoré môže model zavolať (max. 128)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between 0 and 8 specifying the number of most likely tokens to return at each token position. `logprobs` must be set to `true` if this parameter is used",
+          "message": "Celé číslo medzi 0 a 8 určujúce počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii tokenu. Ak sa použije tento parameter, `logprobs` musí byť nastavené na `true`"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probability",
+          "message": "Najvyššia logaritmická pravdepodobnosť"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position (0-8)",
+          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii (0 – 8)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
+          "message": "Alternatíva k vzorkovaniu s teplotou, nazývaná jadrové vzorkovanie, kde model zvažuje výsledky tokenov s pravdepodobnostnou hmotou top_p"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass (0-1)",
+          "message": "Pravdepodobnostná hmota jadrového vzorkovania (0 – 1)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic",
+          "message": "Akú vzorkovaciu teplotu použiť, medzi 0 a 2. Vyššie hodnoty ako 0,8 spôsobia, že výstup bude náhodnejší, zatiaľ čo nižšie hodnoty ako 0,2 ho urobia sústredenejším a deterministickejším"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use (0-2)",
+          "message": "Vzorkovacia teplota, ktorá sa má použiť (0 – 2)"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dXNlcg.short_desc": {
+          "source": "A unique identifier representing your end-user",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa"
+        },
+        "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with Grok by sending a single message and receiving a single reply",
+          "message": "Chatujte s Grokom odoslaním jednej správy a prijatím jednej odpovede"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
+          "message": "Streamujte odpoveď z modelu Grok pomocou Server-Sent Events pre doručovanie tokenov v reálnom čase"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.display_name": {
+          "source": "Stream Response",
+          "message": "Streamovať odpoveď"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.desc": {
+          "source": "An opaque identifier used to load and save conversation context. Only used when a conversation context store is configured",
+          "message": "Nepriehľadný identifikátor používaný na načítanie a ukladanie kontextu konverzácie. Používa sa len vtedy, keď je nakonfigurované úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.display_name": {
+          "source": "Context Key",
+          "message": "Kľúč kontextu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.Y29udGV4dF9rZXk.short_desc": {
+          "source": "Key for conversation context store",
+          "message": "Kľúč pre úložisko kontextu konverzácie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.desc": {
+          "source": "If `true`, the response will be processed asynchronously in the background. Use the `get-response` action with the returned response ID to poll for the result",
+          "message": "Ak je nastavené na `true`, odpoveď sa spracuje asynchrónne na pozadí. Pomocou akcie `get-response` s vráteným ID odpovede môžete zisťovať výsledok"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.display_name": {
+          "source": "Background",
+          "message": "Pozadie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Process the response asynchronously in the background",
+          "message": "Spracovať odpoveď asynchrónne na pozadí"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.desc": {
+          "source": "Additional output data to include in the model response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Additional output data to include in the response",
+          "message": "Dodatočné výstupné údaje, ktoré sa majú zahrnúť do odpovede"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.desc": {
+          "source": "The input content for the response. Each item has a role, text, and optional image. For a simple text prompt, a single item with text is sufficient",
+          "message": "Vstupný obsah pre odpoveď. Každá položka má rolu, text a voliteľný obrázok. Pre jednoduchú textovú výzvu stačí jedna položka s textom"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Vstup"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
+          "source": "Text or message input to the model",
+          "message": "Textový alebo správový vstup do modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "A system (or developer) message inserted at the top of the model's context",
+          "message": "Systémová (alebo vývojárska) správa vložená na začiatok kontextu modelu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Pokyny"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "System prompt instructions",
+          "message": "Inštrukcie systémovej výzvy"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `true`, returns the log probabilities of each output token",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov. Ak je nastavené na `true`, vráti logaritmické pravdepodobnosti každého výstupného tokenu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
+          "source": "Whether to return log probabilities of output tokens",
+          "message": "Či sa majú vrátiť logaritmické pravdepodobnosti výstupných tokenov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
+          "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
+          "message": "Model Grok, ktorý sa má použiť (napr. `grok-3`, `grok-4`)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.short_desc": {
+          "source": "The Grok model to use",
+          "message": "Model Grok, ktorý sa má použiť"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.desc": {
+          "source": "Maximum number of tokens that can be generated in a response, including both output and reasoning tokens",
+          "message": "Maximálny počet tokenov, ktoré možno vygenerovať v odpovedi, vrátane výstupných tokenov aj tokenov uvažovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maximálny počet výstupných tokenov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X291dHB1dF90b2tlbnM.short_desc": {
+          "source": "Maximum tokens to generate including reasoning",
+          "message": "Maximálny počet tokenov na vygenerovanie vrátane uvažovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.desc": {
+          "source": "Maximum number of agentic tool-calling iterations",
+          "message": "Maximálny počet iterácií volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.display_name": {
+          "source": "Max Turns",
+          "message": "Maximálny počet ťahov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWF4X3R1cm5z.short_desc": {
+          "source": "Maximum agentic tool-calling rounds",
+          "message": "Maximálny počet kôl volania nástrojov agentom"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.desc": {
+          "source": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 characters, values up to 512 characters",
+          "message": "Sada párov kľúč – hodnota, ktoré sa majú pripojiť k odpovedi. Maximálne 16 párov; kľúče do 64 znakov, hodnoty do 512 znakov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadáta"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Additional metadata key-value pairs",
+          "message": "Dodatočné páry kľúč – hodnota metadát"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.desc": {
+          "source": "Configuration for web search integration",
+          "message": "Konfigurácia pre integráciu webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VhcmNoX3BhcmFtZXRlcnM.short_desc": {
+          "source": "Web search configuration",
+          "message": "Konfigurácia webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatic tier selection based on load",
+          "message": "Automatický výber úrovne na základe zaťaženia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatic tier selection",
+          "message": "Automatický výber úrovne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predvolené"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "Default processing tier",
+          "message": "Predvolená úroveň spracovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.desc": {
+          "source": "Specifies the latency tier to use for processing the request",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie požiadavky"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.display_name": {
+          "source": "Service Tier",
+          "message": "Úroveň služby"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c2VydmljZV90aWVy.short_desc": {
+          "source": "Specifies the latency tier to use for processing",
+          "message": "Určuje úroveň latencie, ktorá sa má použiť na spracovanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.desc": {
+          "source": "If `true`, the input and response will be stored for 30 days before permanent deletion",
+          "message": "Ak je `true`, vstup a odpoveď sa uložia na 30 dní pred trvalým odstránením"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.display_name": {
+          "source": "Store?",
+          "message": "Uložiť?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
+          "source": "Persist input and response for 30 days",
+          "message": "Uchovať vstup a odpoveď na 30 dní"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
+          "source": "If `true`, the response will be streamed using server-sent events",
+          "message": "Ak je `true`, odpoveď sa bude streamovať pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Streamovať?"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.short_desc": {
+          "source": "Enable server-sent events streaming",
+          "message": "Povoliť streamovanie pomocou udalostí odosielaných serverom"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.desc": {
+          "source": "Whether to allow parallel tool execution",
+          "message": "Či povoliť paralelné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.display_name": {
+          "source": "Parallel Tool Calls",
+          "message": "Paralelné volania nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cGFyYWxsZWxfdG9vbF9jYWxscw.short_desc": {
+          "source": "Allow concurrent tool execution",
+          "message": "Povoliť súbežné spúšťanie nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.desc": {
+          "source": "The unique ID of a previous response to use as context for continuation without repeating input",
+          "message": "Jedinečný identifikátor predchádzajúcej odpovede, ktorý sa použije ako kontext na pokračovanie bez opakovania vstupu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.display_name": {
+          "source": "Previous Response ID",
+          "message": "ID predchádzajúcej odpovede"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJldmlvdXNfcmVzcG9uc2VfaWQ.short_desc": {
+          "source": "Prior response ID for continuation",
+          "message": "ID predchádzajúcej odpovede na pokračovanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.desc": {
+          "source": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+          "message": "Používané službou xAI na ukladanie odpovedí do vyrovnávacej pamäte pre podobné požiadavky na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.display_name": {
+          "source": "Prompt Cache Key",
+          "message": "Kľúč vyrovnávacej pamäte výzvy"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
+          "source": "A key for caching prompts to optimize cache hit rates",
+          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
+          "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
+          "message": "Konfigurácia uvažovania s úrovňou úsilia a typom zhrnutia. Podporované iba modelmi so schopnosťou uvažovania (napr. `grok-3-mini`)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.display_name": {
+          "source": "Reasoning",
+          "message": "Uvažovanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.short_desc": {
+          "source": "Reasoning configuration",
+          "message": "Konfigurácia uvažovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "The model will not call any tool and instead generates a message",
+          "message": "Model nezavolá žiadny nástroj a namiesto toho vygeneruje správu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "The model will not call any tool",
+          "message": "Model nezavolá žiadny nástroj"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "The model can pick between generating a message or calling one or more tools",
+          "message": "Model si môže vybrať medzi vygenerovaním správy alebo zavolaním jedného či viacerých nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "The model decides whether to call tools",
+          "message": "Model rozhodne, či zavolá nástroje"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "Povinné"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.short_desc": {
+          "source": "The model must call one or more tools",
+          "message": "Model musí zavolať jeden alebo viacero nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls which tools the model may use.\n\nUse one of the predefined values, or enter a custom value to force a specific function (e.g., a function name)",
+          "message": "Určuje, ktoré nástroje môže model použiť.\n\nPoužite jednu z preddefinovaných hodnôt alebo zadajte vlastnú hodnotu na vynútenie konkrétnej funkcie (napr. názov funkcie)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation control",
+          "message": "Riadenie volania nástrojov"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.desc": {
+          "source": "A list of tools available to the model, including functions and web search",
+          "message": "Zoznam nástrojov dostupných pre model vrátane funkcií a webového vyhľadávania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbHM.short_desc": {
+          "source": "Available tools (max 128)",
+          "message": "Dostupné nástroje (max. 128)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `20` specifying the number of most likely tokens to return at each token position, each with an associated log probability",
+          "message": "Celé číslo medzi `0` a `20`, ktoré určuje počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii tokenu, každý s priradenou logaritmickou pravdepodobnosťou"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Najvyššie logaritmické pravdepodobnosti"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return at each position",
+          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling threshold where the model considers tokens comprising the top_p probability mass",
+          "message": "Prah vzorkovania jadra (nucleus sampling), kde model berie do úvahy tokeny tvoriace pravdepodobnostnú hmotu top_p"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold (0-1)",
+          "message": "Prah vzorkovania jadra (0-1)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.desc": {
+          "source": "Configuration for text response format from the model. Use to specify structured output via JSON schema",
+          "message": "Konfigurácia formátu textovej odpovede z modelu. Použite na špecifikovanie štruktúrovaného výstupu prostredníctvom JSON schémy"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.display_name": {
+          "source": "Text Format",
+          "message": "Formát textu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGV4dA.short_desc": {
+          "source": "Configuration for text response format",
+          "message": "Konfigurácia formátu textovej odpovede"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between 0 and 2. Higher values make output more random",
+          "message": "Teplota vzorkovania medzi 0 a 2. Vyššie hodnoty spôsobujú väčšiu náhodnosť výstupu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2)",
+          "message": "Teplota vzorkovania (0-2)"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically truncate from the middle of the conversation",
+          "message": "Automaticky orezať zo stredu konverzácie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Automatically truncate long conversations",
+          "message": "Automaticky orezať dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Do not truncate; return an error if the context exceeds the limit",
+          "message": "Neorezávať; ak kontext prekročí limit, vrátiť chybu"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+          "source": "Disabled",
+          "message": "Zakázané"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+          "source": "Do not truncate; return error if too long",
+          "message": "Neorezávať; vrátiť chybu, ak je príliš dlhé"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "Truncation strategy when the context exceeds the model's maximum context length. `auto` truncates from the middle of the conversation to fit within the context window",
+          "message": "Stratégia orezania, keď kontext prekročí maximálnu dĺžku kontextu modelu. `auto` oreže zo stredu konverzácie, aby sa zmestila do kontextového okna"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Truncation",
+          "message": "Orezanie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Truncation strategy for long conversations",
+          "message": "Stratégia orezania pre dlhé konverzácie"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.desc": {
+          "source": "A unique identifier representing your end-user for abuse monitoring",
+          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa na monitorovanie zneužitia"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Používateľ"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Identifikátor koncového používateľa"
+        },
+        "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
+          "source": "Stream a response from a Grok model with Server-Sent Events",
+          "message": "Streamujte odpoveď z modelu Grok pomocou Server-Sent Events"
+        },
+        "app.R3Jvaw.desc": {
+          "source": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n**Features**:\n- **Chat Completions**: multi-message and simple chat with tool calling and web search\n- **Responses API**: create, retrieve, and delete responses with conversation continuation\n- **Streaming**: real-time token delivery via Server-Sent Events\n- **Deferred Completions**: asynchronous request processing\n\nGet your API key from the [xAI Console](https://console.x.ai/)",
+          "message": "Služby umelej inteligencie xAI Grok poskytujúce dopĺňanie chatu, Responses API a streamovanie SSE.\n\n**Funkcie**:\n- **Dopĺňanie chatu**: viacsprávový a jednoduchý chat s volaním nástrojov a webovým vyhľadávaním\n- **Responses API**: vytváranie, načítanie a odstraňovanie odpovedí s pokračovaním v konverzácii\n- **Streamovanie**: doručovanie tokenov v reálnom čase cez Server-Sent Events\n- **Odložené dokončenia**: asynchrónne spracovanie požiadaviek\n\nZískajte svoj kľúč API z [xAI Console](https://console.x.ai/)"
+        },
+        "app.R3Jvaw.display_name": {
+          "source": "Grok AI Services",
+          "message": "Služby Grok AI"
+        },
+        "app.R3Jvaw.short_desc": {
+          "source": "xAI Grok AI services",
+          "message": "Služby umelej inteligencie xAI Grok"
+        }
+      }
+    }
+  }
+}

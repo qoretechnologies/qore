@@ -1,0 +1,1757 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Squarespace",
+          "message": "Vytvoriť novú objednávku v službe Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Vytvoriť objednávku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "Názov kanála tretej strany (max. 30 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.display_name": {
+          "source": "Channel Name",
+          "message": "Názov kanála"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.short_desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "Názov kanála tretej strany (max. 30 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.desc": {
+          "source": "When the order was placed",
+          "message": "Kedy bola objednávka odoslaná"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.display_name": {
+          "source": "Created On",
+          "message": "Vytvorené dňa"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.short_desc": {
+          "source": "When the order was placed",
+          "message": "Kedy bola objednávka odoslaná"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.display_name": {
+          "source": "Customer Email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.short_desc": {
+          "source": "Customer email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "Billing address for the order",
+          "message": "Fakturačná adresa objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "Fakturačná adresa"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "Fakturačná adresa"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.desc": {
+          "source": "Order grand total with `currency` and `value`",
+          "message": "Celková suma objednávky s `currency` a `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.display_name": {
+          "source": "Grand Total",
+          "message": "Celkový súčet"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.short_desc": {
+          "source": "Order grand total",
+          "message": "Celková suma objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.desc": {
+          "source": "Discount total with `currency` and `value`",
+          "message": "Celková zľava s `currency` a `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.display_name": {
+          "source": "Discount Total",
+          "message": "Celková zľava"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.short_desc": {
+          "source": "Discount total",
+          "message": "Celková zľava"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "Referencia objednávky tretej strany (max. 200 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.display_name": {
+          "source": "External Order Reference",
+          "message": "Externá referencia objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.short_desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "Referencia objednávky tretej strany (max. 200 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Order has been fulfilled",
+          "message": "Objednávka bola vybavená"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Order is pending fulfillment",
+          "message": "Objednávka čaká na vybavenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.desc": {
+          "source": "`PENDING` or `FULFILLED`",
+          "message": "`PENDING` alebo `FULFILLED`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.display_name": {
+          "source": "Fulfillment Status",
+          "message": "Stav vybavenia"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.short_desc": {
+          "source": "PENDING or FULFILLED",
+          "message": "PENDING alebo FULFILLED"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOkRFRFVDVA.desc": {
+          "source": "Deduct from inventory",
+          "message": "Odpočítať zo zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOlNLSVA.desc": {
+          "source": "Do not adjust inventory",
+          "message": "Neupravovať stav zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.desc": {
+          "source": "`DEDUCT` or `SKIP` (default: `SKIP`)",
+          "message": "`DEDUCT` alebo `SKIP` (predvolené: `SKIP`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.display_name": {
+          "source": "Inventory Behavior",
+          "message": "Správanie zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.short_desc": {
+          "source": "DEDUCT or SKIP (default: SKIP)",
+          "message": "DEDUCT alebo SKIP (predvolené: SKIP)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.desc": {
+          "source": "The list of line items for the order",
+          "message": "Zoznam položiek objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.display_name": {
+          "source": "Line Items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "Shipping address for the order",
+          "message": "Dodacia adresa objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "Dodacia adresa"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "Dodacia adresa"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.desc": {
+          "source": "Shipping total with `currency` and `value`",
+          "message": "Cena dopravy celkom s `currency` a `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.display_name": {
+          "source": "Shipping Total",
+          "message": "Doprava celkom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.short_desc": {
+          "source": "Shipping total",
+          "message": "Doprava celkom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.desc": {
+          "source": "Order subtotal with `currency` and `value`",
+          "message": "Medzisúčet objednávky s `currency` a `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "Medzisúčet"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.short_desc": {
+          "source": "Order subtotal",
+          "message": "Medzisúčet objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOkVYQ0xVU0lWRQ.desc": {
+          "source": "Prices exclude tax",
+          "message": "Ceny bez dane"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOklOQ0xVU0lWRQ.desc": {
+          "source": "Prices include tax",
+          "message": "Ceny zahŕňajú daň"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.desc": {
+          "source": "`EXCLUSIVE` or `INCLUSIVE`",
+          "message": "`EXCLUSIVE` alebo `INCLUSIVE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.display_name": {
+          "source": "Price Tax Interpretation",
+          "message": "Interpretácia dane v cene"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.short_desc": {
+          "source": "EXCLUSIVE or INCLUSIVE",
+          "message": "EXCLUSIVE alebo INCLUSIVE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.desc": {
+          "source": "Tax total with `currency` and `value`",
+          "message": "Celková daň s `currency` a `value`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.display_name": {
+          "source": "Tax Total",
+          "message": "Daň celkom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.short_desc": {
+          "source": "Tax total",
+          "message": "Celková daň"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Vytvoriť novú objednávku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in Squarespace",
+          "message": "Vytvoriť nový produkt v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "Vytvoriť produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description in HTML format (max 102,400 characters)",
+          "message": "Popis produktu vo formáte HTML (max. 102 400 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "Popis produktu (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store; defaults to hidden if omitted",
+          "message": "Určuje, či je produkt viditeľný v obchode; ak nie je uvedené, predvolene je skrytý"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "Je viditeľný"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Určuje, či je produkt viditeľný v obchode"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name (max 200 characters)",
+          "message": "Názov produktu (max. 200 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Názov produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.desc": {
+          "source": "The store page ID to add the product to",
+          "message": "ID stránky obchodu, do ktorej sa má produkt pridať"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.display_name": {
+          "source": "Store Page ID",
+          "message": "ID stránky obchodu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.short_desc": {
+          "source": "The store page to add the product to",
+          "message": "Stránka obchodu, do ktorej sa má produkt pridať"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product (max 100 tags, each max 100 characters)",
+          "message": "Zoznam značiek pre produkt (max. 100 značiek, každá max. 100 znakov)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "Zoznam značiek pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "Darčeková karta"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product with shipping",
+          "message": "Fyzický produkt s dopravou"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "Produkt typu služba"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "The product type: `PHYSICAL`, `SERVICE`, or `GIFT_CARD`. Note: `DIGITAL` products cannot be created via the API.",
+          "message": "Typ produktu: `PHYSICAL`, `SERVICE` alebo `GIFT_CARD`. Poznámka: Produkty typu `DIGITAL` nie je možné vytvoriť cez API."
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "The product type",
+          "message": "Typ produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product (alphanumeric + hyphens, must be unique)",
+          "message": "Slug URL pre produkt (alfanumerické znaky + spojovníky, musí byť jedinečný)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "Slug URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "Slug URL pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color); PHYSICAL and SERVICE products only",
+          "message": "Zoznam názvov atribútov variantu (napr. Veľkosť, Farba); iba pre produkty typu PHYSICAL a SERVICE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "Atribúty variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "Zoznam názvov atribútov variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.desc": {
+          "source": "List of product variants (1-100 items); fields depend on product type",
+          "message": "Zoznam variantov produktu (1 – 100 položiek); polia závisia od typu produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.display_name": {
+          "source": "Variants",
+          "message": "Varianty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.short_desc": {
+          "source": "List of product variants",
+          "message": "Zoznam variantov produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Vytvoriť nový produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Create a new product variant in Squarespace",
+          "message": "Vytvoriť nový variant produktu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Create a Product Variant",
+          "message": "Vytvoriť variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "Atribúty variantu (voľné dvojice kľúč-hodnota)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Atribúty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "Atribúty variantu (dvojice kľúč-hodnota)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "Prepravné rozmery vrátane `weight` a `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "Prepravné rozmery"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "Prepravné rozmery"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "Identifikátor skladovej jednotky (SKU) pre variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "SKU variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "Informácie o zásobách vrátane `quantity` a `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Skladové zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "Informácie o zásobách"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "Cena variantu vrátane `basePrice`, `salePrice` a `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "Ceny"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "Cena variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to add the variant to",
+          "message": "ID produktu, do ktorého sa má variant pridať"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to add the variant to",
+          "message": "ID produktu, do ktorého sa má variant pridať"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Create a new product variant",
+          "message": "Vytvoriť nový variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Assign a product image to a variant in Squarespace",
+          "message": "Priradiť obrázok produktu k variantu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Assign a Product Image",
+          "message": "Priradiť obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to assign",
+          "message": "ID obrázka, ktorý sa má priradiť"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to assign the image to",
+          "message": "ID produktu, ku ktorému sa má priradiť obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the variant to assign the image to",
+          "message": "ID variantu, ku ktorému sa má priradiť obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Assign an image to a variant",
+          "message": "Priradiť obrázok k variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Squarespace",
+          "message": "Získať jednu objednávku podľa ID zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Získať objednávku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Získať jednu objednávku podľa ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.desc": {
+          "source": "Retrieve inventory for a specific variant from Squarespace",
+          "message": "Získať zásoby pre konkrétny variant zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
+          "source": "Get Inventory",
+          "message": "Získať zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
+          "source": "Get inventory for a variant",
+          "message": "Získať zásoby pre variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Squarespace",
+          "message": "Získať jeden produkt podľa ID zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Získať produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Získať jeden produkt podľa ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve a single transaction by ID from Squarespace",
+          "message": "Získať jednu transakciu podľa ID zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get a Transaction",
+          "message": "Získať transakciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID transakcie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction ID",
+          "message": "ID transakcie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a single transaction by ID",
+          "message": "Získať jednu transakciu podľa ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.desc": {
+          "source": "Delete a product from Squarespace",
+          "message": "Odstrániť produkt zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
+          "source": "Delete a Product",
+          "message": "Odstrániť produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to delete",
+          "message": "ID produktu na odstránenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to delete",
+          "message": "ID produktu na odstránenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Delete a product",
+          "message": "Odstrániť produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Delete a product image from Squarespace",
+          "message": "Odstrániť obrázok produktu zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Delete a Product Image",
+          "message": "Odstrániť obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to delete",
+          "message": "ID obrázka, ktorý sa má odstrániť"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "ID produktu, ktorý vlastní obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Delete a product image",
+          "message": "Odstrániť obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Delete a product variant from Squarespace",
+          "message": "Odstrániť variant produktu zo Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Delete a Product Variant",
+          "message": "Odstrániť variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "ID produktu obsahujúceho variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "ID produktu obsahujúceho variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to delete",
+          "message": "ID variantu na odstránenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to delete",
+          "message": "ID variantu na odstránenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Delete a product variant",
+          "message": "Odstrániť variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.desc": {
+          "source": "Fulfill an order in Squarespace with shipment details",
+          "message": "Vybaviť objednávku v Squarespace s podrobnosťami o zásielke"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
+          "source": "Fulfill an Order",
+          "message": "Vybaviť objednávku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.desc": {
+          "source": "The order ID to fulfill",
+          "message": "ID objednávky na vybavenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to fulfill",
+          "message": "ID objednávky na vybavenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.desc": {
+          "source": "The list of shipment tracking details for the fulfillment",
+          "message": "Zoznam podrobností o sledovaní zásielky na vybavenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Zásielky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipment tracking details",
+          "message": "Podrobnosti o sledovaní zásielky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.desc": {
+          "source": "Send customer notification email",
+          "message": "Odoslať zákazníkovi e-mail s oznámením"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.display_name": {
+          "source": "Send Notification",
+          "message": "Odoslať oznámenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.short_desc": {
+          "source": "Send customer notification email",
+          "message": "Odoslať zákazníkovi e-mail s oznámením"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
+          "source": "Fulfill an existing order",
+          "message": "Vybaviť existujúcu objednávku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Spustí sa pri vytvorení alebo aktualizácii objednávky v Squarespace. Na zisťovanie zmien používa dotazovanie."
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Objednávka vytvorená/aktualizovaná"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.desc": {
+          "source": "List transactions in Squarespace with optional filtering",
+          "message": "Zoznam transakcií v Squarespace s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "Zoznam transakcií"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Upravené po"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrovať podľa dátumu úpravy"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Upravené pred"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrovať podľa dátumu úpravy"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "ID transakcie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Filter by transaction ID",
+          "message": "Filtrovať podľa ID transakcie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List all transactions",
+          "message": "Zoznam všetkých transakcií"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.desc": {
+          "source": "List inventory items in Squarespace with optional filtering",
+          "message": "Zoznam položiek inventára v Squarespace s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
+          "source": "List Inventory",
+          "message": "Zoznam zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Upravené po"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrovať podľa dátumu úpravy"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Upravené pred"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrovať podľa dátumu úpravy"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "Filtrovať podľa ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
+          "source": "List inventory items",
+          "message": "Zoznam položiek inventára"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Squarespace with optional filtering",
+          "message": "Zoznam objednávok v Squarespace s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Zoznam objednávok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtrovať podľa ID zákazníka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled",
+          "message": "Zrušené"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Fulfilled",
+          "message": "Vybavené"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending fulfillment",
+          "message": "Čaká na vybavenie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.desc": {
+          "source": "Filter by fulfillment status (`PENDING`, `FULFILLED`, `CANCELED`)",
+          "message": "Filtrovať podľa stavu vybavenia (`PENDING`, `FULFILLED`, `CANCELED`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.display_name": {
+          "source": "Fulfillment Status",
+          "message": "Stav vybavenia"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrovať podľa ID objednávky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.desc": {
+          "source": "Orders modified after this datetime",
+          "message": "Objednávky upravené po tomto dátume a čase"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Upravené po"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Orders modified after this date",
+          "message": "Objednávky upravené po tomto dátume"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.desc": {
+          "source": "Orders modified before this datetime",
+          "message": "Objednávky upravené pred týmto dátumom a časom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Upravené pred"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Orders modified before this date",
+          "message": "Objednávky upravené pred týmto dátumom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "Zoznam všetkých objednávok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.desc": {
+          "source": "List product variants in Squarespace (requires product_id)",
+          "message": "Zoznam variantov produktu v Squarespace (vyžaduje product_id)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
+          "source": "List Product Variants",
+          "message": "Zoznam variantov produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product to list variants for",
+          "message": "Produkt, pre ktorý sa majú zobraziť varianty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "Filtrovať podľa ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
+          "source": "List variants for a product",
+          "message": "Zoznam variantov pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Squarespace with optional filtering",
+          "message": "Zoznam produktov v Squarespace s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Zoznam produktov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Upravené po"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Products modified after this date",
+          "message": "Produkty upravené po tomto dátume"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "Upravené pred"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Products modified before this date",
+          "message": "Produkty upravené pred týmto dátumom"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Filtrovať podľa ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkRJR0lUQUw.desc": {
+          "source": "Digital product",
+          "message": "Digitálny produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "Darčeková karta"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product",
+          "message": "Fyzický produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "Produkt typu služba"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Filter by product type (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)",
+          "message": "Filtrovať podľa typu produktu (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Product Type",
+          "message": "Typ produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Filter by type",
+          "message": "Filtrovať podľa typu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "Zoznam všetkých produktov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Squarespace** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Squarespace** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API daného pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Squarespace",
+          "message": "Vykonať vlastné volanie API do Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Spustí sa pri vytvorení alebo aktualizácii produktu v Squarespace. Na zisťovanie zmien používa dotazovanie."
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Created/Updated",
+          "message": "Produkt vytvorený/aktualizovaný"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a product is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.desc": {
+          "source": "Fires when a transaction is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "Spustí sa pri vytvorení alebo aktualizácii transakcie v Squarespace. Na zisťovanie zmien používa dotazovanie."
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
+          "source": "Transaction Created/Updated",
+          "message": "Transakcia vytvorená/aktualizovaná"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a transaction is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii transakcie"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in Squarespace",
+          "message": "Aktualizovať existujúci produkt v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "Aktualizovať produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description (HTML)",
+          "message": "Popis produktu (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "Popis produktu (HTML)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Určuje, či je produkt viditeľný v obchode"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "Je viditeľný"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "Určuje, či je produkt viditeľný v obchode"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name",
+          "message": "Názov produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Názov produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.desc": {
+          "source": "SEO configuration (`title`, `description`)",
+          "message": "Konfigurácia SEO (`title`, `description`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.display_name": {
+          "source": "SEO Options",
+          "message": "Možnosti SEO"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.short_desc": {
+          "source": "SEO configuration",
+          "message": "Konfigurácia SEO"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to update",
+          "message": "ID produktu na aktualizáciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to update",
+          "message": "ID produktu na aktualizáciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product",
+          "message": "Zoznam značiek pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "Zoznam značiek pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product",
+          "message": "Slug URL pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "Slug URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "Slug URL pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color)",
+          "message": "Zoznam názvov atribútov variantu (napr. Size, Color)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "Atribúty variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "Zoznam názvov atribútov variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Aktualizovať existujúci produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Update a product image alt text in Squarespace",
+          "message": "Aktualizovať alternatívny text obrázka produktu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Update a Product Image",
+          "message": "Aktualizovať obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "The alt text to set for the product image",
+          "message": "Alternatívny text, ktorý sa má nastaviť pre obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "Alternatívny text"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "The alt text for the image",
+          "message": "Alternatívny text pre obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to update",
+          "message": "ID obrázka na aktualizáciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "ID obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "ID produktu, ktorý vlastní obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Update image alt text",
+          "message": "Aktualizovať alternatívny text obrázka"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Update an existing product variant in Squarespace",
+          "message": "Aktualizovať existujúci variant produktu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Update a Product Variant",
+          "message": "Aktualizovať variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "Atribúty variantu (voľné dvojice kľúč-hodnota)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Atribúty"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "Atribúty variantu (dvojice kľúč-hodnota)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "Prepravné rozmery vrátane `weight` a `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "Prepravné rozmery"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "Prepravné rozmery"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "Identifikátor skladovej jednotky (SKU) pre variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "SKU variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "Informácie o zásobách vrátane `quantity` a `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Skladové zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "Informácie o zásobách"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "Cena variantu vrátane `basePrice`, `salePrice` a `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "Ceny"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "Cena variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "ID produktu obsahujúceho variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "ID produktu obsahujúceho variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to update",
+          "message": "ID variantu na aktualizáciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to update",
+          "message": "ID variantu na aktualizáciu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Update an existing product variant",
+          "message": "Aktualizovať existujúci variant produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.desc": {
+          "source": "Adjust inventory stock for a product variant in Squarespace",
+          "message": "Upraviť stav zásob pre variant produktu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
+          "source": "Update Stock Quantities",
+          "message": "Aktualizovať množstvá zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOkRFQ1JFTUVOVA.desc": {
+          "source": "Remove stock",
+          "message": "Odobrať zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOklOQ1JFTUVOVA.desc": {
+          "source": "Add stock",
+          "message": "Pridať zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.desc": {
+          "source": "The operation to perform: INCREMENT to add stock, DECREMENT to remove stock (default: INCREMENT)",
+          "message": "Operácia, ktorá sa má vykonať: INCREMENT na pridanie zásob, DECREMENT na odobratie zásob (predvolené: INCREMENT)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.display_name": {
+          "source": "Operation",
+          "message": "Operácia"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.short_desc": {
+          "source": "INCREMENT or DECREMENT (default: INCREMENT)",
+          "message": "INCREMENT alebo DECREMENT (predvolené: INCREMENT)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity to increment or decrement (always positive; operation controls direction)",
+          "message": "Množstvo na zvýšenie alebo zníženie (vždy kladné; operácia určuje smer)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Množstvo"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity to adjust",
+          "message": "Množstvo na úpravu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the product variant to adjust inventory for",
+          "message": "ID variantu produktu, pre ktorý sa majú upraviť zásoby"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID variantu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to adjust stock for",
+          "message": "ID variantu na úpravu zásob"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
+          "source": "Adjust inventory stock for a variant",
+          "message": "Upraviť stav zásob pre variant"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Upload a product image in Squarespace",
+          "message": "Nahrať obrázok produktu v Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Upload a Product Image",
+          "message": "Nahrať obrázok produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "Alternative text for the image",
+          "message": "Alternatívny text pre obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "Alternatívny text"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "Alternative text for the image",
+          "message": "Alternatívny text pre obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.desc": {
+          "source": "The image file name or URL",
+          "message": "Názov súboru obrázka alebo URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "Názov súboru"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The image file name or URL",
+          "message": "Názov súboru obrázka alebo URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to upload the image for",
+          "message": "ID produktu, pre ktorý sa má nahrať obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID produktu"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to upload the image for",
+          "message": "ID produktu, pre ktorý sa má nahrať obrázok"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Upload an image for a product",
+          "message": "Nahrať obrázok pre produkt"
+        },
+        "app.U3F1YXJlc3BhY2U.desc": {
+          "source": "Squarespace is an e-commerce platform for managing online stores.\n\nThis integration supports orders, products, product variants, product images, inventory, and transactions.",
+          "message": "Squarespace je e-commerce platforma na správu internetových obchodov.\n\nTáto integrácia podporuje objednávky, produkty, varianty produktov, obrázky produktov, inventár a transakcie."
+        },
+        "app.U3F1YXJlc3BhY2U.display_name": {
+          "source": "Squarespace",
+          "message": "Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.short_desc": {
+          "source": "Squarespace Commerce platform",
+          "message": "Platforma Squarespace Commerce"
+        }
+      }
+    }
+  }
+}

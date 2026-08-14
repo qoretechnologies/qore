@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.UmVkaXM.action.Z2V0LWhhc2g.desc": {
+          "source": "Get the values of hash fields from Redis",
+          "message": "Obtener los valores de los campos de un hash de Redis"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.display_name": {
+          "source": "Get Hash Fields",
+          "message": "Obtener campos de hash"
+        },
+        "app.UmVkaXM.action.Z2V0LWhhc2g.short_desc": {
+          "source": "Get hash field values",
+          "message": "Obtener valores de campos de hash"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.desc": {
+          "source": "Get the string value of a key from Redis",
+          "message": "Obtener el valor de cadena de una clave de Redis"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.display_name": {
+          "source": "Get String",
+          "message": "Obtener cadena"
+        },
+        "app.UmVkaXM.action.Z2V0LXN0cmluZw.short_desc": {
+          "source": "Get the string value of a key",
+          "message": "Obtener el valor de cadena de una clave"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.desc": {
+          "source": "Set the value of a hash field in Redis",
+          "message": "Establece el valor de un campo hash en Redis"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.display_name": {
+          "source": "Set Hash Field",
+          "message": "Establecer campo hash"
+        },
+        "app.UmVkaXM.action.c2V0LWhhc2g.short_desc": {
+          "source": "Set a hash field value",
+          "message": "Establecer el valor de un campo hash"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.desc": {
+          "source": "Set the string value of a key in Redis",
+          "message": "Establece el valor de cadena de una clave en Redis"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.display_name": {
+          "source": "Set String",
+          "message": "Establecer cadena"
+        },
+        "app.UmVkaXM.action.c2V0LXN0cmluZw.short_desc": {
+          "source": "Set the string value of a key",
+          "message": "Establecer el valor de cadena de una clave"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.desc": {
+          "source": "Pop elements from a list in Redis",
+          "message": "Extrae elementos de una lista en Redis"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.display_name": {
+          "source": "Pop from List",
+          "message": "Extraer de lista"
+        },
+        "app.UmVkaXM.action.cG9wLWxpc3Q.short_desc": {
+          "source": "Pop elements from a list",
+          "message": "Extraer elementos de una lista"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.desc": {
+          "source": "Publish a message to a Redis pub/sub channel",
+          "message": "Publica un mensaje en un canal pub/sub de Redis"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.display_name": {
+          "source": "Publish Message",
+          "message": "Publicar mensaje"
+        },
+        "app.UmVkaXM.action.cHVibGlzaC1tZXNzYWdl.short_desc": {
+          "source": "Publish a message to a channel",
+          "message": "Publicar un mensaje en un canal"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.desc": {
+          "source": "Push elements to a list in Redis",
+          "message": "Inserta elementos en una lista en Redis"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.display_name": {
+          "source": "Push to List",
+          "message": "Insertar en lista"
+        },
+        "app.UmVkaXM.action.cHVzaC1saXN0.short_desc": {
+          "source": "Push elements to a list",
+          "message": "Insertar elementos en una lista"
+        },
+        "app.UmVkaXM.desc": {
+          "source": "Redis in-memory data structure store, used as a database, cache, message broker, and queue",
+          "message": "Almacén de estructuras de datos en memoria Redis, utilizado como base de datos, caché, intermediario de mensajes y cola"
+        },
+        "app.UmVkaXM.display_name": {
+          "source": "Redis Server",
+          "message": "Servidor Redis"
+        },
+        "app.UmVkaXM.short_desc": {
+          "source": "Redis in-memory data store",
+          "message": "Almacén de datos en memoria Redis"
+        }
+      }
+    }
+  }
+}

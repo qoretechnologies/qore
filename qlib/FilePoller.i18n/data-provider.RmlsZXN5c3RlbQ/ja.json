@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
+          "source": "React to files created in a server directory",
+          "message": "サーバーディレクトリで作成されたファイルに反応します"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
+          "source": "New File Created",
+          "message": "新規ファイル作成"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.desc": {
+          "source": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask",
+          "message": "使用するポーリングマスク。`regex` が `true` の場合は正規表現として扱われ、それ以外の場合は glob マスクとなります"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
+          "source": "Polling Mask",
+          "message": "ポーリングマスク"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
+          "source": "The polling mask to use to match files to poll",
+          "message": "ポーリング対象のファイルに一致させるために使用するポーリングマスク"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "ファイルがポーリングされるまでの最小のファイル経過時間（秒単位）を示す整数。これはアトミックでないファイル転送操作に対処するためのものです。\n\nこのオプションが必要な場合は、ファイルの転送にかかる最長時間よりも大きい値に設定してください"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "最小ポーリング経過時間"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "ポーリング対象ファイルの最小経過時間（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "ソートに使用するデータを示す `name` または `date` のいずれか"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "ソートタイプ"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "ファイルをソートするフィールド"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "降順でソートします。指定されていない場合、`sort_type` が指定されていれば昇順ソートとみなされます"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "降順ソート"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "ファイルを降順でソート"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "ファイルをポーリングする間隔（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "`true` の場合、`mask` はGlobパターンではなく正規表現として扱われます"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "正規表現マッチ"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "trueの場合、'mask' 引数は正規表現として扱われます"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "正規表現オプションのビットフィールド（`1` = 大文字/小文字を無視、`2` = 改行コードを通常の文字として扱う）。`regex` が `true` でない場合は無視されます"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "正規表現オプション"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "正規表現オプションのビットフィールド"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
+          "source": "A file is created in a server directory",
+          "message": "サーバーディレクトリにファイルが作成されます"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "サーバーのファイルシステムへのアクセス"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "サーバーファイルシステム"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "サーバーのファイルシステムへのアクセス"
+        }
+      }
+    }
+  }
+}

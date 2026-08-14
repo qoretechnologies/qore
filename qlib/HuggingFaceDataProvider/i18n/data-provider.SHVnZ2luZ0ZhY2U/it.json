@@ -1,0 +1,1569 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.desc": {
+          "source": "Send a chat completion request to a model hosted on Hugging Face via the Inference API. Compatible with the OpenAI chat completions format.",
+          "message": "Invia una richiesta di completamento chat a un modello ospitato su Hugging Face tramite l'API Inference. Compatibile con il formato di completamento chat di OpenAI."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
+          "source": "Chat Completions",
+          "message": "Completamenti chat"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes new tokens based on their existing frequency in the text so far. Values between `-2.0` and `2.0`; positive values decrease the likelihood of repeated tokens",
+          "message": "Penalizza i nuovi token in base alla loro frequenza corrente nel testo finora. Valori compresi tra `-2.0` e `2.0`; i valori positivi riducono la probabilità di token ripetuti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalità di frequenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize tokens by frequency",
+          "message": "Penalizza i token per frequenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `True`, returns the log probabilities of each output token in the `choices` response",
+          "message": "Indica se restituire le probabilità logaritmiche dei token di output. Se impostato su `True`, restituisce le probabilità logaritmiche di ciascun token di output nella risposta `choices`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "Probabilità logaritmiche"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.short_desc": {
+          "source": "Return log probabilities of output tokens",
+          "message": "Restituisce le probabilità logaritmiche dei token di output"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.desc": {
+          "source": "The model ID to use for inference (e.g. `meta-llama/Llama-3.1-8B-Instruct`)",
+          "message": "L'ID del modello da utilizzare per l'inferenza (es. `meta-llama/Llama-3.1-8B-Instruct`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.short_desc": {
+          "source": "Model ID for inference",
+          "message": "ID del modello per l'inferenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate in the response",
+          "message": "Il numero massimo di token da generare nella risposta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Token massimi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to generate",
+          "message": "Numero massimo di token da generare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Un elenco di messaggi che compongono la conversazione fino a questo momento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages",
+          "message": "Elenco di messaggi di chat"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.desc": {
+          "source": "If specified, the system will attempt to sample deterministically so that repeated requests with the same seed and parameters return the same result",
+          "message": "Se specificato, il sistema tenterà di campionare in modo deterministico in modo che richieste ripetute con lo stesso seed e gli stessi parametri restituiscano lo stesso risultato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.short_desc": {
+          "source": "Random seed for deterministic output",
+          "message": "Seed casuale per output deterministico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the model will stop generating further tokens",
+          "message": "Fino a 4 sequenze in corrispondenza delle quali il modello interromperà la generazione di ulteriori token"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sequenze di arresto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.short_desc": {
+          "source": "Stop sequences",
+          "message": "Sequenze di stop"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes new tokens based on whether they appear in the text so far. Values between `-2.0` and `2.0`; positive values increase the likelihood of new topics",
+          "message": "Penalizza i nuovi token in base alla loro presenza nel testo finora. Valori compresi tra `-2.0` e `2.0`; i valori positivi aumentano la probabilità di nuovi argomenti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalità di presenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize tokens by presence",
+          "message": "Penalizza i token in base alla presenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Specifies the output format. Use `json_object` to force the model to output valid JSON. The model must be instructed via the prompt to produce JSON output",
+          "message": "Specifica il formato di output. Usa `json_object` per forzare il modello a restituire JSON valido. Il modello deve essere istruito tramite il prompt a produrre output JSON"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato di risposta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Output format for the response",
+          "message": "Formato di output per la risposta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `5` specifying the number of most likely tokens to return at each token position, each with an associated log probability. Requires `logprobs` to be set to `True`",
+          "message": "Un numero intero compreso tra `0` e `5` che specifica il numero di token più probabili da restituire per ciascuna posizione del token, ciascuno con una probabilità logaritmica associata. Richiede che `logprobs` sia impostato su `True`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "Migliori probabilità logaritmiche"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return",
+          "message": "Numero di token più probabili da restituire"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling parameter. The model considers tokens with `top_p` probability mass",
+          "message": "Parametro di campionamento nucleus. Il modello prende in considerazione i token con massa di probabilità `top_p`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold",
+          "message": "Soglia di campionamento nucleus"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between `0.0` and `2.0`. Higher values make output more random, lower values make it more deterministic",
+          "message": "Temperatura di campionamento compresa tra `0.0` e `2.0`. Valori più elevati rendono l'output più casuale, valori più bassi lo rendono più deterministico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature",
+          "message": "Temperatura di campionamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {
+          "source": "Send a chat completion request via the Inference API",
+          "message": "Invia una richiesta di completamento chat tramite l'API Inference"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.desc": {
+          "source": "Create a new model repository on Hugging Face Hub",
+          "message": "Crea un nuovo repository di modelli su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
+          "source": "Create Model",
+          "message": "Crea modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "Namespace dell'organizzazione. Se non specificato, il repository verrà creato nel namespace dell'utente autenticato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "Namespace dell'organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "Il nome del repository da creare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "Nome del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "Indica se il repository deve essere privato. Predefinito: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "Indica se il repository è privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
+          "source": "Create a new model repository",
+          "message": "Crea un nuovo repository di modelli"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.desc": {
+          "source": "Create a new dataset repository on Hugging Face Hub",
+          "message": "Crea un nuovo repository di dataset su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
+          "source": "Create Dataset",
+          "message": "Crea dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "Namespace dell'organizzazione. Se non specificato, il repository verrà creato nel namespace dell'utente autenticato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "Namespace dell'organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "Il nome del repository da creare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "Nome del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "Indica se il repository deve essere privato. Predefinito: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "Indica se il repository è privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Create a new dataset repository",
+          "message": "Crea un nuovo repository di dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Create a new Space on Hugging Face Hub",
+          "message": "Crea un nuovo Space su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create Space",
+          "message": "Crea Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "Namespace dell'organizzazione. Se non specificato, il repository verrà creato nel namespace dell'utente autenticato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "Namespace dell'organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "Il nome del repository da creare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "Nome del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDAtbGFyZ2U.display_name": {
+          "source": "A100 Large",
+          "message": "A100 Large"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDB4NA.display_name": {
+          "source": "A100 x4",
+          "message": "A100 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDB4OA.display_name": {
+          "source": "A100 x8",
+          "message": "A100 x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2U.display_name": {
+          "source": "A10G Large",
+          "message": "A10G Large"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2V4Mg.display_name": {
+          "source": "A10G Large x2",
+          "message": "A10G Large x2"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2V4NA.display_name": {
+          "source": "A10G Large x4",
+          "message": "A10G Large x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctc21hbGw.display_name": {
+          "source": "A10G Small",
+          "message": "A10G Small"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS11cGdyYWRl.display_name": {
+          "source": "CPU Upgrade",
+          "message": "CPU Upgrade"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS14bA.display_name": {
+          "source": "CPU XL",
+          "message": "CPU XL"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS1iYXNpYw.display_name": {
+          "source": "CPU Basic",
+          "message": "CPU Basic"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS1wZXJmb3JtYW5jZQ.display_name": {
+          "source": "CPU Performance",
+          "message": "CPU Performance"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDA.display_name": {
+          "source": "H200",
+          "message": "H200"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4Mg.display_name": {
+          "source": "H200 x2",
+          "message": "H200 x2"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4NA.display_name": {
+          "source": "H200 x4",
+          "message": "H200 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4OA.display_name": {
+          "source": "H200 x8",
+          "message": "H200 x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4MQ.display_name": {
+          "source": "L40S x1",
+          "message": "L40S x1"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4NA.display_name": {
+          "source": "L40S x4",
+          "message": "L40S x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4OA.display_name": {
+          "source": "L40S x8",
+          "message": "L40S x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0eDE.display_name": {
+          "source": "L4 x1",
+          "message": "L4 x1"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0eDQ.display_name": {
+          "source": "L4 x4",
+          "message": "L4 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnQ0LW1lZGl1bQ.display_name": {
+          "source": "T4 Medium",
+          "message": "T4 Medium"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnQ0LXNtYWxs.display_name": {
+          "source": "T4 Small",
+          "message": "T4 Small"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnplcm8tYTEwZw.display_name": {
+          "source": "ZeroGPU A10G",
+          "message": "ZeroGPU A10G"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.desc": {
+          "source": "The hardware tier for the Space",
+          "message": "Il livello hardware per lo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.display_name": {
+          "source": "Hardware",
+          "message": "Hardware"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.short_desc": {
+          "source": "Space hardware tier",
+          "message": "Livello hardware dello Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOmRvY2tlcg.display_name": {
+          "source": "Docker",
+          "message": "Docker"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOmdyYWRpbw.display_name": {
+          "source": "Gradio",
+          "message": "Gradio"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOnN0YXRpYw.display_name": {
+          "source": "Static",
+          "message": "Static"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOnN0cmVhbWxpdA.display_name": {
+          "source": "Streamlit",
+          "message": "Streamlit"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.desc": {
+          "source": "The SDK to use for the Space",
+          "message": "L'SDK da utilizzare per lo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.display_name": {
+          "source": "SDK",
+          "message": "SDK"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.short_desc": {
+          "source": "Space SDK",
+          "message": "SDK dello Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "Indica se il repository deve essere privato. Predefinito: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "Indica se il repository è privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new Space",
+          "message": "Crea un nuovo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.desc": {
+          "source": "Retrieve detailed information for a specific model by its repository ID",
+          "message": "Recupera informazioni dettagliate su un modello specifico tramite il relativo ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "Recupera modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format (e.g. `meta-llama/Llama-3.1-8B`)",
+          "message": "L'ID repository del modello nel formato `namespace/name` (es. `meta-llama/Llama-3.1-8B`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "ID repository del modello nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Get details for a specific model",
+          "message": "Ottieni dettagli su un modello specifico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.desc": {
+          "source": "Retrieve detailed information for a specific dataset by its repository ID",
+          "message": "Recupera informazioni dettagliate su un dataset specifico tramite il relativo ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
+          "source": "Get Dataset",
+          "message": "Ottieni dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format (e.g. `stanfordnlp/imdb`)",
+          "message": "L'ID repository del dataset nel formato `namespace/name` (es. `stanfordnlp/imdb`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "ID repository del dataset nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
+          "source": "Get details for a specific dataset",
+          "message": "Ottieni dettagli su un dataset specifico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve detailed information for a specific Space by its repository ID",
+          "message": "Recupera informazioni dettagliate su uno Space specifico tramite il relativo ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get Space",
+          "message": "Ottieni spazio"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format (e.g. `gradio/chatbot`)",
+          "message": "L'ID repository dello Space nel formato `namespace/name` (es. `gradio/chatbot`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "ID repository dello Space nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Get details for a specific Space",
+          "message": "Ottieni dettagli su uno Space specifico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a model repository from Hugging Face Hub",
+          "message": "Elimina un repository di modelli da Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "Elimina modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format to delete",
+          "message": "L'ID repository del modello nel formato `namespace/name` da eliminare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "ID repository del modello nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a model repository",
+          "message": "Elimina un repository di modelli"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.desc": {
+          "source": "Delete a dataset repository from Hugging Face Hub",
+          "message": "Elimina un repository di dataset da Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
+          "source": "Delete Dataset",
+          "message": "Elimina dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format to delete",
+          "message": "L'ID repository del dataset nel formato `namespace/name` da eliminare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "ID repository del dataset nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Delete a dataset repository",
+          "message": "Elimina un repository di dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Delete a Space from Hugging Face Hub",
+          "message": "Elimina uno Space da Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete Space",
+          "message": "Elimina Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format to delete",
+          "message": "L'ID repository dello Space nel formato `namespace/name` da eliminare"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "ID repository dello Space nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a Space",
+          "message": "Elimina uno spazio"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.desc": {
+          "source": "List datasets on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "Elenca i dataset su Hugging Face Hub con ricerca, filtro e ordinamento opzionali"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
+          "source": "List Datasets",
+          "message": "Elenca dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "Filtra i risultati per autore o organizzazione specifici (es. `meta-llama`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "Autore"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "Filtra per autore o organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Direzione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "Un elenco di tag per cui filtrare i risultati (es. `text-generation`, `pytorch`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "Filtra per tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "Indica se recuperare tutti i metadati inclusi data dell'ultima modifica, SHA, file e tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "Includi dati completi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "Recupera tutti i metadati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "Numero massimo di risultati da restituire. Valore predefinito: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "Data creazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmRvd25sb2Fkcw.display_name": {
+          "source": "Downloads",
+          "message": "Download"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "Ultima modifica"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "Mi piace"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "Di tendenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "Proprietà in base a cui ordinare i risultati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "Proprietà da utilizzare per l'ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "Una stringa che sarà contenuta nei modelli, dataset o Space restituiti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Cerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "Filtra per query di ricerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
+          "source": "List Hugging Face datasets",
+          "message": "Elenca i dataset di Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List models on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "Elenca i modelli su Hugging Face Hub con ricerca, filtro e ordinamento opzionali"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Elenca modelli"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.desc": {
+          "source": "Whether to also fetch the model configuration files",
+          "message": "Indica se recuperare anche i file di configurazione del modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.display_name": {
+          "source": "Include Config",
+          "message": "Includi configurazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.short_desc": {
+          "source": "Include model configuration",
+          "message": "Includi configurazione del modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.desc": {
+          "source": "Whether to include model card metadata such as carbon emissions, metrics, and dataset tags",
+          "message": "Indica se includere i metadati della scheda del modello come emissioni di carbonio, metriche e tag del dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.display_name": {
+          "source": "Include Card Data",
+          "message": "Includi dati della scheda"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.short_desc": {
+          "source": "Include model card metadata",
+          "message": "Includi metadati della scheda del modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "Filtra i risultati per autore o organizzazione specifici (es. `meta-llama`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "Autore"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "Filtra per autore o organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Direzione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "Un elenco di tag per cui filtrare i risultati (es. `text-generation`, `pytorch`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "Filtra per tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "Indica se recuperare tutti i metadati inclusi data dell'ultima modifica, SHA, file e tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "Includi dati completi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "Recupera tutti i metadati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "Numero massimo di risultati da restituire. Valore predefinito: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "Data creazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmRvd25sb2Fkcw.display_name": {
+          "source": "Downloads",
+          "message": "Download"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "Ultima modifica"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "Mi piace"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "Di tendenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "Proprietà in base a cui ordinare i risultati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "Proprietà da utilizzare per l'ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "Una stringa che sarà contenuta nei modelli, dataset o Space restituiti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Cerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "Filtra per query di ricerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.desc": {
+          "source": "Filter models by their pipeline task type (e.g. `text-generation`, `text-classification`, `image-classification`)",
+          "message": "Filtra i modelli in base al tipo di attività della pipeline (es. `text-generation`, `text-classification`, `image-classification`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.display_name": {
+          "source": "Pipeline Tag",
+          "message": "Tag pipeline"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.short_desc": {
+          "source": "Filter by ML task type",
+          "message": "Filtra per tipo di attività ML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List Hugging Face models",
+          "message": "Elenca modelli Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List Spaces on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "Elenca gli Space su Hugging Face Hub con ricerca, filtri e ordinamento opzionali"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "Elenca spazi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "Filtra i risultati per autore o organizzazione specifici (es. `meta-llama`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "Autore"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "Filtra per autore o organizzazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Direzione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Direzione di ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "Un elenco di tag per cui filtrare i risultati (es. `text-generation`, `pytorch`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filtro"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "Filtra per tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "Indica se recuperare tutti i metadati inclusi data dell'ultima modifica, SHA, file e tag"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "Includi dati completi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "Recupera tutti i metadati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "Numero massimo di risultati da restituire. Valore predefinito: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "Data creazione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "Ultima modifica"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "Mi piace"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "Di tendenza"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "Proprietà in base a cui ordinare i risultati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "Proprietà da utilizzare per l'ordinamento"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "Una stringa che sarà contenuta nei modelli, dataset o Space restituiti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Cerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "Filtra per query di ricerca"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List Hugging Face Spaces",
+          "message": "Elenca gli Space di Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Hugging Face** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Hugging Face** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita come un hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine su questa app."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Hugging Face",
+          "message": "Esegui una chiamata API personalizzata a Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.desc": {
+          "source": "Update settings for an existing model repository on Hugging Face Hub",
+          "message": "Aggiorna le impostazioni per un repository di modelli esistente su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
+          "source": "Update Model",
+          "message": "Aggiorna modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "Manuale"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "Non Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the repository",
+          "message": "Modalità di gating per il repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the repository",
+          "message": "Modalità di gating per il repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this repository",
+          "message": "Indica se disabilitare la funzionalità delle discussioni su questo repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "Disabilita discussioni"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the repository",
+          "message": "Disabilita le discussioni sul repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format (e.g. `meta-llama/Llama-3.1-8B`)",
+          "message": "L'ID repository del modello nel formato `namespace/name` (es. `meta-llama/Llama-3.1-8B`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "ID repository del modello nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Pubblico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Repository visibility setting",
+          "message": "Impostazione della visibilità del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Visibilità"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Repository visibility",
+          "message": "Visibilità del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
+          "source": "Update model repository settings",
+          "message": "Aggiorna le impostazioni del repository del modello"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.desc": {
+          "source": "Update settings for an existing dataset repository on Hugging Face Hub",
+          "message": "Aggiorna le impostazioni per un repository di dataset esistente su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
+          "source": "Update Dataset",
+          "message": "Aggiorna dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "Manuale"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "Non Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the repository",
+          "message": "Modalità di gating per il repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the repository",
+          "message": "Modalità di gating per il repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this repository",
+          "message": "Indica se disabilitare la funzionalità delle discussioni su questo repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "Disabilita discussioni"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the repository",
+          "message": "Disabilita le discussioni sul repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format (e.g. `stanfordnlp/imdb`)",
+          "message": "L'ID repository del dataset nel formato `namespace/name` (es. `stanfordnlp/imdb`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "ID repository del dataset nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Pubblico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Repository visibility setting",
+          "message": "Impostazione della visibilità del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Visibilità"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Repository visibility",
+          "message": "Visibilità del repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Update dataset repository settings",
+          "message": "Aggiorna le impostazioni del repository del dataset"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Update settings for an existing Space on Hugging Face Hub",
+          "message": "Aggiorna le impostazioni per uno Space esistente su Hugging Face Hub"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update Space",
+          "message": "Aggiorna Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "Manuale"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "Non Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the Space",
+          "message": "Modalità di gating per lo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "Gated"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the Space",
+          "message": "Modalità di gating per lo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this Space",
+          "message": "Indica se disabilitare la funzionalità delle discussioni su questo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "Disabilita discussioni"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the Space",
+          "message": "Disabilita le discussioni sullo Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format (e.g. `gradio/chatbot`)",
+          "message": "L'ID repository dello Space nel formato `namespace/name` (es. `gradio/chatbot`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "ID repository"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "ID repository dello Space nel formato namespace/name"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "Pubblico"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "Privato"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByb3RlY3RlZA.display_name": {
+          "source": "Protected",
+          "message": "Protetto"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Space visibility setting",
+          "message": "Impostazione della visibilità dello Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Visibilità"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Space visibility",
+          "message": "Visibilità dello Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update Space settings",
+          "message": "Aggiorna impostazioni dello Space"
+        },
+        "app.SHVnZ2luZ0ZhY2U.desc": {
+          "source": "Hugging Face Hub and Inference API integration providing:\n- **Models**: List, create, update, and delete ML models on the Hub\n- **Datasets**: Manage datasets for training and evaluation\n- **Spaces**: Deploy and manage interactive ML applications\n- **Inference API**: Chat completions with hosted models",
+          "message": "Integrazione con Hugging Face Hub e Inference API che fornisce:\n- **Modelli**: elenca, crea, aggiorna ed elimina modelli ML sull'Hub\n- **Dataset**: gestisci i dataset per l'addestramento e la valutazione\n- **Space**: distribuisci e gestisci applicazioni ML interattive\n- **Inference API**: completamenti di chat con modelli ospitati"
+        },
+        "app.SHVnZ2luZ0ZhY2U.display_name": {
+          "source": "Hugging Face",
+          "message": "Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.short_desc": {
+          "source": "Hugging Face Hub and Inference API services",
+          "message": "Servizi Hugging Face Hub e Inference API"
+        }
+      }
+    }
+  }
+}

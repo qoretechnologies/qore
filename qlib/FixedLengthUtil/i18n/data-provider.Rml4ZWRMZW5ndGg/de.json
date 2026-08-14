@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "Dateidaten mit fester Länge von einem bestimmten Dateispeicherort lesen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
+          "source": "Read Fixed-Length Data",
+          "message": "Daten mit fester Länge lesen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Das Standarddatumsformat zum Parsen von `date`-Feldern; siehe [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) für weitere Informationen zu dieser Option (z. B.: `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Datumsformat"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Die Standardmaske für das Parsen von Datumswerten bei der Eingabe"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data)",
+          "message": "Zeichenkodierung für die Eingabedatei (und Ausgabedaten)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Eingabe-Zeichencodierung"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Die Zeichencodierung für die Eingabedatei"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Das oder die Zeilenumbruchzeichen; falls nicht angegeben, werden die Zeilenumbruchzeichen automatisch erkannt"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Zeilenumbruchzeichen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Das oder die Zeilen-/Datensatzumbruchzeichen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Wenn `true`, werden leere Zeilen ignoriert"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Leere Zeilen ignorieren"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Wenn true, werden leere Zeilen ignoriert"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Das Standardformat für `int`-, `float`- und `number`-Felder als Zeichenkette, die das Tausendertrennzeichen gefolgt vom Dezimaltrennzeichen angibt (z. B.: `.,` für kontinentaleuropäische Zahlen)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Zahlenformat"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Das Standard-Zahlenformat zum Parsen von int-, float- und number-Feldern"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Der Hash der Datensatzspezifikation mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "Datensatzbeschreibungen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Der Hash der Datensatzspezifikation mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.desc": {
+          "source": "The input stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "Der Eingabestream für Daten mit fester Länge; schließt sich mit \"path\" gegenseitig aus"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "Eingabestream"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for fixed-length data",
+          "message": "Ein Eingabestream-Objekt für Daten mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Der Pfad zu den Daten mit fester Länge; schließt sich mit \"stream\" gegenseitig aus; aufgelöst durch einen Aufruf von [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Location",
+          "message": "Eingabeort"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "Der Speicherort der Eingabedatei"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Die Zeitzonenregion, die beim Parsen von Datumsangaben verwendet werden soll (z. B.: `Europe/Prague`); siehe [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) für gültige Werte"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Zeitzonenregion"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Die beim Parsen von Datumsangaben zu verwendende Zeitzonenregion"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "Dateidaten mit fester Länge von einem bestimmten Dateispeicherort lesen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "Dateidaten mit fester Länge an einen bestimmten Dateispeicherort schreiben"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
+          "source": "Write Fixed-Length Data",
+          "message": "Daten mit fester Länge schreiben"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for `date` value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Die Standardmaske für die Ausgabeformatierung von `date`-Werten; siehe [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) für weitere Informationen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Datumsformat"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Die Standardmaske für die Ausgabeformatierung von Datumswerten"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Die Ausgabezeichenkodierung für die Daten"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Zeichencodierung"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Die Ausgabezeichenkodierung"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Das/die Zeilenende-/Datensatzende-Zeichen; falls nicht vorhanden, wird der aktuelle Plattformstandard verwendet"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Zeilenumbruchzeichen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Das oder die Zeilen-/Datensatzumbruchzeichen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.desc": {
+          "source": "Additional writer file open flags; `O_WRONLY | O_CREAT` is used by default; use `O_EXCL` to ensure not to overwrite the target or `O_TRUNC` to replace any existing file or `O_APPEND` to append to an existing file",
+          "message": "Zusätzliche Datei-Öffnungs-Flags für den Writer; standardmäßig wird `O_WRONLY | O_CREAT` verwendet; verwenden Sie `O_EXCL`, um sicherzustellen, dass das Ziel nicht überschrieben wird, `O_TRUNC`, um eine vorhandene Datei zu ersetzen, oder `O_APPEND`, um an eine vorhandene Datei anzuhängen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.display_name": {
+          "source": "File Flags",
+          "message": "Datei-Flags"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.short_desc": {
+          "source": "Additional writer file open flags",
+          "message": "Zusätzliche Datei-Öffnungs-Flags für den Writer"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Das Standard-Ausgabeformat für `int`-, `float`- und `number`-Felder; es ist eine Zahlenformat-Zeichenkette mit 1 bis 3 Feldern wie folgt: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; Bsp.: `\".,3\"` (= `.` für das Tausendertrennzeichen, `,` für das Dezimaltrennzeichen und 3 Nachkommastellen)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Ausgabe-Zahlenformat"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Das Standard-Ausgabeformat für 'int'-, 'float'- und 'number'-Felder"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Der Hash der Datensatzspezifikation mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "Datensatzbeschreibungen"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Der Hash der Datensatzspezifikation mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "an output stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "Ein Ausgabestream für Daten mit fester Länge; schließt sich mit \"path\" gegenseitig aus"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Ausgabestream"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the fixed-length data",
+          "message": "Ein Ausgabestream-Objekt für die Daten mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9",
+          "message": "Der Pfad zu den Daten mit fester Länge; schließt sich mit \"stream\" gegenseitig aus; der Ausgabespeicherort wird gehandhabt durch einen Aufruf von [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output Path",
+          "message": "Ausgabepfad"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the output file",
+          "message": "Wohin die Ausgabedatei geschrieben werden soll"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.desc": {
+          "source": "Controls whether to replace tabs with spaces, and its value determines how many spaces to output in place of one tab character",
+          "message": "Steuert, ob Tabulatoren durch Leerzeichen ersetzt werden sollen, und der Wert bestimmt, wie viele Leerzeichen anstelle eines Tabulatorzeichens ausgegeben werden"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.display_name": {
+          "source": "Convert Tabs to Spaces",
+          "message": "Tabulatoren in Leerzeichen konvertieren"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.short_desc": {
+          "source": "Convert tabs to spaces automatically",
+          "message": "Tabulatoren automatisch in Leerzeichen konvertieren"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.desc": {
+          "source": "Controls whether to truncate an output field value if it's bigger than its specified `length`; the default is `false`",
+          "message": "Steuert, ob ein Ausgabefeldwert abgeschnitten werden soll, wenn er größer als die angegebene `length` ist; der Standardwert ist `false`"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate Long Fields",
+          "message": "Lange Felder abschneiden"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.short_desc": {
+          "source": "Truncate field values automatically",
+          "message": "Feldwerte automatisch abschneiden"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "Dateidaten mit fester Länge an einen bestimmten Dateispeicherort schreiben"
+        },
+        "app.Rml4ZWRMZW5ndGg.desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "Dateidaten mit fester Länge lesen und schreiben"
+        },
+        "app.Rml4ZWRMZW5ndGg.display_name": {
+          "source": "Fixed-Length Files",
+          "message": "Dateien mit fester Länge"
+        },
+        "app.Rml4ZWRMZW5ndGg.short_desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "Dateidaten mit fester Länge lesen und schreiben"
+        }
+      }
+    }
+  }
+}

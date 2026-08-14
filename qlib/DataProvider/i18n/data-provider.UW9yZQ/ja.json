@@ -3,53 +3,313 @@
   "locales": {
     "ja": {
       "messages": {
-        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
-          "source": "Count Value Ranges",
-          "message": "値の範囲を集計"
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.desc": {
+          "source": "Computes the Pearson correlation coefficient between all pairs of configured numeric fields to measure how strongly they move together. Values range from `-1.0` (perfect inverse relationship) to `1.0` (perfect direct relationship), with `0.0` meaning no linear relationship.\n\nFor example, it can show that temperature and ice cream sales are strongly correlated (`0.92`) while humidity and sales are weakly correlated (`-0.15`).",
+          "message": "設定されたすべての数値フィールドのペア間でピアソンの積率相関係数を計算し、それらがどれほど強く連動しているかを測定します。値の範囲は `-1.0`（完全な負の相関）から `1.0`（完全な正の相関）で、`0.0` は線形関係がないことを意味します。\n\nたとえば、気温とアイスクリームの売上には強い相関があり（`0.92`）、湿度と売上には弱い相関がある（`-0.15`）ことなどを確認できます。"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
-          "source": "Groups values into ranges and counts how many fall in each",
-          "message": "値を範囲ごとにグループ化し、各範囲の件数を数えます"
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
+          "source": "Find Related Fields",
+          "message": "関連フィールドの検出"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.desc": {
+          "source": "A list of numeric field names to compute correlations between; at least 2 fields are required; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "相関を計算する数値フィールド名のリスト。少なくとも2つのフィールドが必要です。ネストされたフィールドのドット記法をサポートします（例: `sensor.temperature`）"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.short_desc": {
+          "source": "Numeric field names (at least 2)",
+          "message": "数値フィールド名（2つ以上）"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing the correlation matrix; the window is cleared after each computation.\n\n**Sizing guidance**: correlation needs enough data for stable results; use at least `30` for basic correlation, `100`+ for reliable results",
+          "message": "相関行列を計算する前に累積するレコード数。ウィンドウは計算ごとにクリアされます。\n\n**サイズ設定のガイダンス**: 相関で安定した結果を得るには十分なデータが必要です。基本的な相関には少なくとも `30`、信頼性の高い結果を得るには `100` 以上を使用してください"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per correlation window",
+          "message": "相関ウィンドウあたりのレコード数"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
+          "source": "Measures how strongly fields move together",
+          "message": "フィールド間の連動の強さを測定します"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.desc": {
+          "source": "Computes time-lagged cross-correlation between two fields to discover whether changes in one field predict changes in another after a delay.\n\nFor example, it can show that a spike in marketing spend correlates with increased revenue 3 periods later (`lag = 3`, `correlation = 0.85`).",
+          "message": "2つのフィールド間のタイムラグを考慮した相互相関を計算し、一方のフィールドの変化が一定の遅延後に他方のフィールドの変化を予測するかどうかを検出します。\n\nたとえば、マーケティング費用の急増が3期後の収益増加と相関していることなどを確認できます（`lag = 3`、`correlation = 0.85`）。"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
+          "source": "Find Delayed Relationships",
+          "message": "遅延関係の検出"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.desc": {
+          "source": "The first numeric field for cross-correlation analysis; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "相互相関分析に使用する最初の数値フィールド。ネストされたフィールドのドット記法をサポートします（例: `sensor.temperature`）"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.display_name": {
+          "source": "First Field",
+          "message": "第1フィールド"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.short_desc": {
+          "source": "First numeric field name",
+          "message": "第1数値フィールド名"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.desc": {
+          "source": "The second numeric field; positive lag means this field is delayed relative to `field_x`; supports dot-notation for nested fields",
+          "message": "2番目の数値フィールド。正のラグは、このフィールドが `field_x` に対して遅延していることを意味します。ネストされたフィールドのドット記法をサポートします"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.display_name": {
+          "source": "Second Field",
+          "message": "第2フィールド"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.short_desc": {
+          "source": "Second numeric field name",
+          "message": "第2数値フィールド名"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.desc": {
+          "source": "The maximum number of time steps to shift one field relative to the other; set to `0` to use `window_size / 4` automatically; default: `0` (auto)",
+          "message": "一方のフィールドを他方に対してシフトするタイムステップの最大数。`0` に設定すると自動的に `window_size / 4` が使用されます。デフォルト: `0`（自動）"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.display_name": {
+          "source": "Maximum Lag",
+          "message": "最大ラグ"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.short_desc": {
+          "source": "Maximum lag to compute (0 = auto)",
+          "message": "計算する最大ラグ（0 = 自動）"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing cross-correlations.\n\n**Sizing guidance**: use at least `50` for basic lag detection, `200`+ for reliable results; the window must be at least 4 times the maximum lag you expect to find",
+          "message": "相互相関を計算する前に累積するレコード数。\n\n**サイズ設定のガイダンス**: 基本的なラグ検出には少なくとも `50`、信頼性の高い結果を得るには `200` 以上を使用してください。ウィンドウは検出対象として想定される最大ラグの少なくとも4倍である必要があります"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per analysis window",
+          "message": "分析ウィンドウあたりのレコード数"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
+          "source": "Discovers if changes in one field predict changes in another",
+          "message": "あるフィールドの変化が別のフィールドの変化を予測するかどうかを検出します"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.desc": {
+          "source": "Detect anomalous values in each configured numeric field using z-score analysis against a sliding window; emits one analytics event per input record indicating whether the value exceeds the configured `threshold`",
+          "message": "スライディングウィンドウに対するZスコア分析を使用して、設定された各数値フィールドの異常値を検出します。入力レコードごとに、値が設定された `threshold` を超えているかどうかを示す分析イベントを1つ出力します"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
+          "source": "Anomaly Detection",
+          "message": "異常検出"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.desc": {
+          "source": "How many standard deviations from the average a value must be to count as anomalous (this is called a *z-score*); for example, a threshold of `3.0` means a value must be more than 3 standard deviations away from the average to be flagged.\n\n**Typical values**: `2.0` (sensitive — flags ~5% of random data), `3.0` (standard — flags ~0.3%), `4.0` (conservative — only extreme outliers); must be greater than `0`; default: `3.0`",
+          "message": "値が異常とみなされるために平均から標準偏差の何倍離れている必要があるか（これは*Zスコア*と呼ばれます）。たとえば、しきい値が `3.0` の場合、フラグが付けられるには値が平均から3標準偏差を超えて離れている必要があります。\n\n**代表的な値**: `2.0`（高感度 — ランダムデータの約5%にフラグ）、`3.0`（標準 — 約0.3%にフラグ）、`4.0`（低感度/保守的 — 極端な外れ値のみ）。`0` より大きい必要があります。デフォルト: `3.0`"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.display_name": {
+          "source": "Anomaly Threshold",
+          "message": "異常しきい値"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.short_desc": {
+          "source": "Z-score threshold for flagging anomalies",
+          "message": "異常のフラグ付けを行うZスコアしきい値"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
+          "source": "Detect anomalous values using z-score analysis per record",
+          "message": "レコードごとのZスコア分析を使用して異常値を検出します"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.desc": {
+          "source": "Group records by one or more field values and compute aggregate functions per group; emits one output record per group on flush with the group field values and computed aggregates.\n\nSupported aggregate functions: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`",
+          "message": "1つ以上のフィールド値でレコードをグループ化し、グループごとに集計関数を計算します。フラッシュ時に、グループフィールド値と計算された集計値を含む出力レコードをグループごとに1つ出力します。\n\nサポートされている集計関数: `count()`、`sum(field)`、`avg(field)`、`min(field)`、`max(field)`、`first(field)`、`last(field)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
+          "source": "Group By and Aggregate",
+          "message": "グループ化と集計"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.desc": {
+          "source": "Comma-separated aggregate expressions in the format `name=op(field)` or `op(field)`.\n\nSupported operations: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\nOutput field name defaults to `op_field` (or `count` for `count()`). Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
+          "message": "`name=op(field)` または `op(field)` の形式のカンマ区切り集計式。\n\nサポートされている演算: `count()`、`sum(field)`、`avg(field)`、`min(field)`、`max(field)`、`first(field)`、`last(field)`。\n\n出力フィールド名のデフォルトは `op_field`（`count()` の場合は `count`）です。例: `total=sum(amount),orders=count(),avg_price=avg(price)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.display_name": {
+          "source": "Aggregate Expressions",
+          "message": "集計式"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.short_desc": {
+          "source": "Aggregate expressions to compute per group",
+          "message": "グループごとに計算する集計式"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.desc": {
+          "source": "A list of field names to group records by; records with the same values for these fields are grouped together; if not provided, all records are aggregated into a single group; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "レコードのグループ化に使用するフィールド名のリスト。これらのフィールドの値が同じレコードがグループ化されます。指定しない場合、すべてのレコードが単一のグループに集約されます。ネストされたフィールドのドット記法をサポートします（例: `address.city`）"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.display_name": {
+          "source": "Group By Fields",
+          "message": "グループ化フィールド"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.short_desc": {
+          "source": "Field names to group records by",
+          "message": "レコードのグループ化に使用するフィールド名"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
+          "source": "Group records by field values and compute aggregates per group",
+          "message": "フィールド値ごとにレコードをグループ化し、グループごとの集計を計算"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.desc": {
+          "source": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) control chart to detect when values drift outside the normal operating range. The EWMA smooths out noise while detecting sustained shifts. Each record is classified as `normal`, `upper_violation`, or `lower_violation`.\n\nFor example, it can detect when a server's average response time gradually drifts upward beyond its normal range.",
+          "message": "指数加重移動平均（EWMA）管理図を使用してプロセスを監視し、値が通常の動作範囲外にドリフトした時期を検出します。EWMAは持続的な変化を検出しながらノイズを平滑化します。各レコードは `normal`、`upper_violation`、または `lower_violation` として分類されます。\n\nたとえば、サーバーの平均応答時間が通常の範囲を超えて徐々に増加していることを検出できます。"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
+          "source": "Monitor Process Stability",
+          "message": "プロセスの安定性を監視"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.desc": {
+          "source": "How quickly the EWMA reacts to changes; higher values (closer to `1.0`) react faster but are more sensitive to noise; lower values produce smoother trends.\n\n**Typical values**: `0.1` (slow, smooth — best for detecting small persistent shifts), `0.2` (standard), `0.4` (responsive — closer to a raw signal); must be between `0` (exclusive) and `1` (inclusive); default: `0.2`",
+          "message": "EWMAが変化に反応する速さ。値が大きいほど（`1.0` に近いほど）反応が速くなりますがノイズの影響を受けやすくなり、値が小さいほど滑らかなトレンドが生成されます。\n\n**代表値**: `0.1`（低速で滑らか — 小さく持続的な変化の検出に最適）、`0.2`（標準）、`0.4`（高感度 — 生信号に近い）。`0`（含まない）から `1`（含む）の間である必要があります。デフォルト: `0.2`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.display_name": {
+          "source": "Smoothing Factor",
+          "message": "平滑化係数"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.short_desc": {
+          "source": "EWMA smoothing parameter (0-1)",
+          "message": "EWMA平滑化パラメーター（0〜1）"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.desc": {
+          "source": "How wide the control limits are as a multiple of the standard deviation; larger values mean fewer false alarms but slower detection of real shifts.\n\n**Typical values**: `2.0` (sensitive — catches small shifts quickly), `3.0` (standard — good balance of sensitivity and false alarms); default: `3.0`",
+          "message": "標準偏差の倍数としての管理限界の幅。値が大きいほど誤検知は少なくなりますが、実際の変化の検出は遅くなります。\n\n**代表値**: `2.0`（高感度 — 小さな変化を迅速に検出）、`3.0`（標準 — 感度と誤検知のバランスが良好）。デフォルト: `3.0`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.display_name": {
+          "source": "Control Limit Width",
+          "message": "管理限界幅"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.short_desc": {
+          "source": "Number of standard deviations for control limits",
+          "message": "管理限界の標準偏差の倍数"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.desc": {
+          "source": "The expected center/target value for the process; when not set, the mean of the sliding window history is used automatically; set to any value (including `0`) to use a fixed center line; default: auto (use window mean)",
+          "message": "プロセスの予想される中心値/目標値。設定されていない場合は、スライディングウィンドウ履歴の平均値が自動的に使用されます。固定の中心線を使用するには任意の値（`0` を含む）に設定します。デフォルト: 自動（ウィンドウ平均を使用）"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.display_name": {
+          "source": "Target Value",
+          "message": "目標値"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
+          "source": "Center line target value (omit for auto from window mean)",
+          "message": "中心線の目標値（ウィンドウ平均からの自動設定の場合は省略）"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
+          "source": "Detects when values drift outside normal operating range",
+          "message": "値が通常の動作範囲外にドリフトした時期を検出"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.desc": {
+          "source": "Filter pipeline records using either a structured `where_cond` expression or a `dpql_where` string; matching records pass through, non-matching records are dropped",
+          "message": "構造化された `where_cond` 式または `dpql_where` 文字列のいずれかを使用してパイプラインレコードをフィルタリングします。一致するレコードは通過し、一致しないレコードは除外されます"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
+          "source": "Filter Records",
+          "message": "レコードのフィルタリング"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.desc": {
+          "source": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder",
+          "message": "レコードをフィルタリングするためのDPQL文字列式。式ビルダーを使用せずに述語を直接テキストとして記述する場合にこのオプションを使用します"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.display_name": {
+          "source": "DPQL Filter",
+          "message": "DPQLフィルター"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.short_desc": {
+          "source": "A DPQL string filter expression",
+          "message": "DPQL文字列フィルター式"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.desc": {
+          "source": "A boolean expression to filter records; matching records pass through, non-matching records are dropped",
+          "message": "レコードをフィルタリングするためのブール式。一致するレコードは通過し、一致しないレコードは除外されます"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.display_name": {
+          "source": "Filter Expression",
+          "message": "フィルター式"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.short_desc": {
+          "source": "A boolean filter expression",
+          "message": "ブールフィルター式"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
+          "source": "Filter records by expression or DPQL string",
+          "message": "式またはDPQL文字列でレコードをフィルタリング"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.desc": {
           "source": "Creates a frequency distribution by dividing the range of values into bins and counting how many values fall in each bin. Supports `uniform` (equal-width) and `quantile` (equal-count) binning.\n\nFor example, for response times it can show that 80% of requests complete in 0-100ms, 15% in 100-200ms, and 5% take over 200ms.",
           "message": "値の範囲をビンに分割し、各ビンに含まれる値の数を数えて度数分布を作成します。`uniform`（等幅）と `quantile`（等頻度）のビン分割をサポートします。\n\nたとえば応答時間について、リクエストの 80% が 0～100ms、15% が 100～200ms で完了し、5% が 200ms を超えることを示せます。"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.display_name": {
-          "source": "Field Names",
-          "message": "フィールド名"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
+          "source": "Count Value Ranges",
+          "message": "値の範囲を集計"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.short_desc": {
-          "source": "Field names to analyze",
-          "message": "分析するフィールド名"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnF1YW50aWxl.display_name": {
+          "source": "Quantile (equal-count bins)",
+          "message": "分位（等頻度ビン）"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.desc": {
-          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
-          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnVuaWZvcm0.display_name": {
+          "source": "Uniform (equal-width bins)",
+          "message": "均等（等幅ビン）"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.display_name": {
-          "source": "Window Size",
-          "message": "ウィンドウサイズ"
-        },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.short_desc": {
-          "source": "Number of records in each analytics window",
-          "message": "各分析ウィンドウに含めるレコード数"
-        },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.desc": {
-          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
-          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
-        },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.display_name": {
-          "source": "Number of Bins",
-          "message": "ビン数"
-        },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.short_desc": {
-          "source": "Number of histogram bins",
-          "message": "ヒストグラムのビン数"
-        },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.desc": {
-          "source": "The number of bins to divide the value range into; more bins show finer detail but need more data to be meaningful; default: `10`",
-          "message": "値の範囲を分割するビンの数。ビンを増やすと詳細になりますが、意味のある結果を得るにはより多くのデータが必要です。デフォルト: `10`"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.desc": {
+          "source": "How to determine bin boundaries: `uniform` (equal-width) or `quantile` (equal-count)",
+          "message": "ビン境界の決定方法: `uniform`（等幅）または `quantile`（等頻度）"
         },
         "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.display_name": {
           "source": "Binning Method",
@@ -59,17 +319,585 @@
           "source": "Method used to determine bin boundaries",
           "message": "ビン境界の決定に使用する方法"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.desc": {
-          "source": "How to determine bin boundaries: `uniform` (equal-width) or `quantile` (equal-count)",
-          "message": "ビン境界の決定方法: `uniform`（等幅）または `quantile`（等頻度）"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnVuaWZvcm0.display_name": {
-          "source": "Uniform (equal-width bins)",
-          "message": "均等（等幅ビン）"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
         },
-        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnF1YW50aWxl.display_name": {
-          "source": "Quantile (equal-count bins)",
-          "message": "分位（等頻度ビン）"
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.desc": {
+          "source": "The number of bins to divide the value range into; more bins show finer detail but need more data to be meaningful; default: `10`",
+          "message": "値の範囲を分割するビンの数。ビンを増やすと詳細になりますが、意味のある結果を得るにはより多くのデータが必要です。デフォルト: `10`"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.display_name": {
+          "source": "Number of Bins",
+          "message": "ビン数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.short_desc": {
+          "source": "Number of histogram bins",
+          "message": "ヒストグラムのビン数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
+          "source": "Groups values into ranges and counts how many fall in each",
+          "message": "値を範囲ごとにグループ化し、各範囲の件数を数えます"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.desc": {
+          "source": "Compute simple moving average (`SMA`) and exponential moving average (`EMA`) for each configured numeric field; emits one analytics event per input record with the current `SMA` and `EMA` values",
+          "message": "設定された数値フィールドごとに単純移動平均（`SMA`）および指数移動平均（`EMA`）を計算します。入力レコードごとに現在の `SMA` および `EMA` 値を含む分析イベントを1つ発行します"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
+          "source": "Moving Average",
+          "message": "移動平均"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.desc": {
+          "source": "Controls how much weight is given to the most recent value vs. historical values when computing the exponential moving average (EMA); higher values make the average respond faster to recent changes but also make it noisier.\n\n**Typical values**: `0.1` (smooth, slow to react), `0.2` (balanced, good default), `0.5` (responsive, tracks changes quickly); must be between `0.0` and `1.0` exclusive; default: `0.2`",
+          "message": "指数移動平均（EMA）を計算する際に、過去の値に対して最新の値にどれだけの重みを付けるかを制御します。値が大きいほど平均は最近の変化に対してより速く反応しますが、ノイズも多くなります。\n\n**代表値**: `0.1`（滑らか、反応は遅い）、`0.2`（バランス型、推奨デフォルト）、`0.5`（高感度、変化を素早く追従）。`0.0` と `1.0` の間（両端を除く）である必要があります。デフォルト: `0.2`"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.display_name": {
+          "source": "EMA Smoothing Factor",
+          "message": "EMA平滑化係数"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.short_desc": {
+          "source": "Smoothing factor for exponential moving average (0-1)",
+          "message": "指数移動平均の平滑化係数（0〜1）"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
+          "source": "Compute simple and exponential moving averages per record",
+          "message": "レコードごとに単純移動平均および指数移動平均を計算"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.desc": {
+          "source": "Add or overwrite fields with constant values in each record passing through the pipeline",
+          "message": "パイプラインを通過する各レコードに定数値でフィールドを追加または上書き"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
+          "source": "Set Fields",
+          "message": "フィールドの設定"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A hash of field names and values to set on each record; existing fields are overwritten, new fields are added",
+          "message": "各レコードに設定するフィールド名と値のハッシュ。既存のフィールドは上書きされ、新しいフィールドは追加されます"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "フィールド"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "A hash of field names and values to set",
+          "message": "設定するフィールド名と値のハッシュ"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
+          "source": "Set fields to constant values in each record",
+          "message": "各レコードのフィールドを定数値に設定"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.desc": {
+          "source": "Detects repeating cyclical patterns in the data using autocorrelation analysis. It automatically identifies the dominant period without requiring the user to specify it upfront.\n\nFor example, it can discover that sales data has a weekly pattern (`period = 7`) with a correlation of `0.85`, or that a temperature sensor shows both daily (`period = 24`) and yearly patterns.",
+          "message": "自己相関分析を使用してデータ内の繰り返される周期的なパターンを検出します。ユーザーが事前に指定することなく、支配的な周期を自動的に特定します。\n\nたとえば、売上データに相関 `0.85` の週間パターン（`period = 7`）があることや、温度センサーが日次（`period = 24`）と年次の両方のパターンを示していることを発見できます。"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
+          "source": "Detect Repeating Patterns",
+          "message": "繰り返しパターンの検出"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.desc": {
+          "source": "The maximum period (in records) to search for; set to `0` to use `window_size / 3` automatically; the window size should be at least 3 times the expected maximum period; default: `0` (auto)",
+          "message": "検索対象の最大周期（レコード数）。`0` に設定すると自動的に `window_size / 3` が使用されます。ウィンドウサイズは予想される最大周期の3倍以上である必要があります。デフォルト: `0`（自動）"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.display_name": {
+          "source": "Maximum Period",
+          "message": "最大周期"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.short_desc": {
+          "source": "Maximum seasonal period to search for",
+          "message": "検索対象の最大季節周期"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.desc": {
+          "source": "The minimum strength of a repeating pattern (measured as autocorrelation, `0`–`1`) for it to be reported; autocorrelation measures how similar a data series is to a shifted copy of itself.\n\n**Typical values**: `0.2` (detect weak/noisy patterns), `0.3` (balanced default), `0.5` (only report strong, clear patterns); default: `0.3`",
+          "message": "報告対象となる繰り返しパターンの最小強度（自己相関 `0`〜`1` として測定）。自己相関は、データ系列がそれ自身をシフトしたコピーとどれだけ類似しているかを測定します。\n\n**代表値**: `0.2`（弱い/ノイズの多いパターンを検出）、`0.3`（バランスの取れたデフォルト）、`0.5`（強力で明確なパターンのみを報告）。デフォルト: `0.3`"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.display_name": {
+          "source": "Minimum Correlation",
+          "message": "最小相関"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.short_desc": {
+          "source": "Minimum autocorrelation to report as significant",
+          "message": "有意として報告する最小自己相関"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
+          "source": "Finds cyclical patterns in data automatically",
+          "message": "データ内の周期的なパターンを自動的に検出"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.desc": {
+          "source": "Perform search and replace on a string field in each record; supports both literal string matching and regular expression patterns",
+          "message": "各レコードの文字列フィールドに対して検索と置換を実行します。リテラル文字列の一致と正規表現パターンの両方をサポートします"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
+          "source": "Search and Replace",
+          "message": "検索と置換"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.desc": {
+          "source": "The name of the record field to apply the search and replace operation on; the field must contain a string value; supports dot-notation for nested fields (e.g. `address.street`)",
+          "message": "検索と置換操作を適用するレコードフィールドの名前。フィールドには文字列値が含まれている必要があります。ネストされたフィールドのドット記法（例: `address.street`）をサポートします"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.display_name": {
+          "source": "Field Name",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.short_desc": {
+          "source": "Field to apply search and replace on",
+          "message": "検索と置換を適用するフィールド"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.desc": {
+          "source": "If `True`, the search pattern is treated as a regular expression; if `False`, it is treated as a literal string",
+          "message": "`True` の場合、検索パターンは正規表現として扱われます。`False` の場合、リテラル文字列として扱われます"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.display_name": {
+          "source": "Use Regex",
+          "message": "正規表現を使用"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.short_desc": {
+          "source": "Use regex matching instead of literal",
+          "message": "リテラルの代わりに正規表現マッチングを使用"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.desc": {
+          "source": "The search string or regular expression pattern to find in the field value; when regex mode is enabled, supports full Qore regular expression syntax",
+          "message": "フィールド値内で検索する文字列または正規表現パターン。正規表現モードが有効な場合、完全なQore正規表現構文をサポートします"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.display_name": {
+          "source": "Search Pattern",
+          "message": "検索パターン"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.short_desc": {
+          "source": "Text or regex pattern to search for",
+          "message": "検索対象のテキストまたは正規表現パターン"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.desc": {
+          "source": "Makes start-of-line `^` or end-of-line `$` match after or before any newline in the subject string",
+          "message": "対象文字列内の改行の直後または直前に行頭 `^` または行末 `$` を一致させます"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.display_name": {
+          "source": "Multiline?",
+          "message": "複数行？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
+          "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
+          "message": "対象文字列内の改行の直後または直前に行頭「^」または行末「$」を一致させます"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
+          "source": "Ignore case when matching",
+          "message": "一致判定時に大文字と小文字を区別しない"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.display_name": {
+          "source": "Ignore Case?",
+          "message": "大文字と小文字を無視？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.short_desc": {
+          "source": "Ignore case when matching",
+          "message": "一致判定時に大文字と小文字を区別しない"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.desc": {
+          "source": "The dot `.` character matches also a newline",
+          "message": "ドット `.` 文字が改行にも一致します"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.display_name": {
+          "source": "Dot Matches Newline?",
+          "message": "ドットを改行に一致？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.short_desc": {
+          "source": "The dot '.' character matches also a newline",
+          "message": "ドット「.」文字が改行にも一致します"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by `#`",
+          "message": "空白文字を無視し、`#` で始まるコメントを有効にします"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.display_name": {
+          "source": "Extended Regex?",
+          "message": "拡張正規表現？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.short_desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by '#'",
+          "message": "空白文字を無視し、「#」で始まるコメントを有効にします"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "最初の1件だけでなく、すべての一致にマッチ"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.display_name": {
+          "source": "Global?",
+          "message": "グローバル？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.short_desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "最初の1件だけでなく、すべての一致にマッチ"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "文字の一致で完全なUnicode文字セットを対象にする"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.display_name": {
+          "source": "Full Unicode?",
+          "message": "完全なUnicode？"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "文字の一致で完全なUnicode文字セットを対象にする"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
+          "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",
+          "message": "正規表現マッチング実行時に適用する正規表現オプション名のリスト（例: `RE_Global`、`RE_Caseless`）"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.display_name": {
+          "source": "Regex Options",
+          "message": "正規表現オプション"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.short_desc": {
+          "source": "Regular expression options for matching",
+          "message": "マッチング用の正規表現オプション"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.desc": {
+          "source": "The replacement string to substitute for matches",
+          "message": "一致した箇所を置換する文字列"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.display_name": {
+          "source": "Replacement String",
+          "message": "置換文字列"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.short_desc": {
+          "source": "Replacement text",
+          "message": "置換テキスト"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
+          "source": "Search and replace text in a record field",
+          "message": "レコードフィールド内のテキストを検索および置換"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.desc": {
+          "source": "Select specific fields from each record and optionally rename them; only the selected fields appear in the output.\n\nUse `name` to keep a field as-is, or `new_name=old_name` to rename it",
+          "message": "各レコードから特定のフィールドを選択し、任意で名前を変更します。選択されたフィールドのみが出力に表示されます。\n\nフィールドをそのまま維持するには `name` を、名前を変更するには `new_name=old_name` を使用してください"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
+          "source": "Select Fields",
+          "message": "フィールドを選択"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field specifications; use `name` to keep a field as-is, or `new_name=old_name` to rename a field (e.g. `name`, `email`, `customer_name=name`)",
+          "message": "フィールド仕様のリスト。フィールドをそのまま維持するには `name` を、名前を変更するには `new_name=old_name` を使用します（例: `name`、`email`、`customer_name=name`）"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Field List",
+          "message": "フィールドリスト"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field specs to select",
+          "message": "選択するフィールド仕様"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
+          "source": "Select and optionally rename fields from records",
+          "message": "レコードからフィールドを選択し、任意で名前を変更"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.desc": {
+          "source": "Analyzes the distribution of numeric values in each window by computing percentiles (median, quartiles, and custom values), interquartile range (`iqr`), skewness (whether the data leans left or right), and kurtosis (whether values cluster tightly or spread out).\n\nFor example, for transaction amounts it can show that 50% are under $100, 90% are under $500, and the spread between the 25th and 75th percentile is $200.",
+          "message": "パーセンタイル（中央値、四分位数、カスタム値）、四分位範囲（`iqr`）、歪度（データが左右どちらに偏っているか）、尖度（値が密集しているか分散しているか）を計算して、各ウィンドウ内の数値の分布を分析します。\n\nたとえば、取引金額について、50%が100ドル未満、90%が500ドル未満、25パーセンタイルと75パーセンタイルの差が200ドルであることを示すことができます。"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
+          "source": "Calculate Data Distribution",
+          "message": "データ分布を計算"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.desc": {
+          "source": "A comma-separated list of percentile values to compute (`0`–`100`); for example, `50` is the median, `25` and `75` are the lower and upper quartiles; default: `\"25,50,75,90,95,99\"`",
+          "message": "計算するパーセンタイル値のカンマ区切りリスト（`0`～`100`）。たとえば `50` は中央値、`25` と `75` は第1四分位数と第3四分位数です。デフォルト: `\"25,50,75,90,95,99\"`"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.display_name": {
+          "source": "Percentile Values",
+          "message": "パーセンタイル値"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.short_desc": {
+          "source": "Comma-separated percentile values to compute",
+          "message": "計算するパーセンタイル値（カンマ区切り）"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
+          "source": "Computes median, quartiles, and spread of values",
+          "message": "値の中央値、四分位数、広がりを計算"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.desc": {
+          "source": "Computes the `rate_of_change` (first derivative), `acceleration` (second derivative), and `percent_change` for each record relative to its sliding window history.\n\nFor example, it can show that revenue is growing at $1,000/period and accelerating (the growth rate is itself increasing).",
+          "message": "スライディングウィンドウの履歴を基準にして、各レコードの `rate_of_change`（1階微分）、`acceleration`（2階微分）、`percent_change` を計算します。\n\nたとえば、収益が期間あたり1,000ドルで成長しており、さらに加速している（成長率自体が増加している）ことを示すことができます。"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
+          "source": "Measure Speed of Change",
+          "message": "変化速度を測定"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.desc": {
+          "source": "When enabled, applies a simple moving average over the window before computing derivatives, reducing noise in the rate of change; disable for raw point-to-point rates; default: `True`",
+          "message": "有効にすると、微分を計算する前にウィンドウ全体に単純移動平均を適用して変化率のノイズを低減します。生のポイント間レートを取得する場合は無効にします。デフォルト: `True`"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.display_name": {
+          "source": "Apply Smoothing",
+          "message": "平滑化を適用"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.short_desc": {
+          "source": "Apply simple moving average smoothing before differentiation",
+          "message": "微分の前に単純移動平均による平滑化を適用"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
+          "source": "Tracks how fast values are changing and accelerating",
+          "message": "値の変化および加速の速度を追跡"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.desc": {
+          "source": "Limit the number of records passing through the pipeline; the first N records pass through and all subsequent records are dropped",
+          "message": "パイプラインを通過するレコード数を制限します。最初のN件のレコードが通過し、それ以降のすべてのレコードは破棄されます"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
+          "source": "Record Limit",
+          "message": "レコード制限"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.desc": {
+          "source": "The maximum number of records to pass through the pipeline; once the limit is reached, all subsequent records are dropped",
+          "message": "パイプラインを通過するレコードの最大数。上限に達すると、それ以降のすべてのレコードは破棄されます"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "レコード制限"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to pass through",
+          "message": "通過するレコードの最大数"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
+          "source": "Limit the number of records passing through",
+          "message": "通過するレコード数を制限"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.desc": {
+          "source": "Remove one or more fields from each record passing through the pipeline; fields not in the removal list are passed through unchanged",
+          "message": "パイプラインを通過する各レコードから1つ以上のフィールドを削除します。削除リストに含まれていないフィールドは変更されずに通過します"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
+          "source": "Remove Fields",
+          "message": "フィールドを削除"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to remove from each record",
+          "message": "各レコードから削除するフィールド名のリスト"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields to Remove",
+          "message": "削除するフィールド"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to remove",
+          "message": "削除するフィールド名"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
+          "source": "Remove specified fields from records",
+          "message": "レコードから指定したフィールドを削除"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.desc": {
+          "source": "Compute running statistics over a sliding window of records for each configured numeric field; emits one analytics event per field when each window is full.\n\nComputed statistics:\n- `count`, `sum`, `avg` (mean)\n- `min_val`, `max_val`\n- `stddev` (standard deviation), `variance`",
+          "message": "設定された各数値フィールドについて、レコードのスライディングウィンドウ全体の実行統計を計算します。各ウィンドウがいっぱいになると、フィールドごとに1つの分析イベントを発行します。\n\n計算される統計:\n- `count`、`sum`、`avg`（平均）\n- `min_val`、`max_val`\n- `stddev`（標準偏差）、`variance`"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
+          "source": "Running Statistics",
+          "message": "実行統計"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
+          "source": "Compute running statistics over windows of numeric records",
+          "message": "数値レコードのウィンドウ全体の実行統計を計算"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.desc": {
+          "source": "Compute linear regression trend analysis (`slope`, `intercept`, `r_squared`, `direction`) over a window of records for each configured numeric field; emits one analytics event per field when each window is full with the trend direction (`rising`, `falling`, or `flat`)",
+          "message": "設定された各数値フィールドについて、レコードのウィンドウ全体の線形回帰トレンド分析（`slope`、`intercept`、`r_squared`、`direction`）を計算します。各ウィンドウがいっぱいになると、トレンドの方向（`rising`、`falling`、または `flat`）を含む分析イベントをフィールドごとに1つ発行します"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
+          "source": "Trend Analysis",
+          "message": "トレンド分析"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.desc": {
+          "source": "The minimum slope magnitude for the trend to be classified as `rising` or `falling`; slopes below this threshold are classified as `flat`.\n\n**Typical values**: `0.001` (sensitive — detects very gradual trends), `0.01` (moderate), `0.1` (only strong trends); use smaller values when your data has a large scale and meaningful trends have small slopes; must be >= `0`; default: `0.001`",
+          "message": "トレンドが `rising` または `falling` に分類されるための最小傾斜の絶対値。このしきい値を下回る傾斜は `flat` に分類されます。\n\n**一般的な値**: `0.001`（高感度 — 非常に緩やかなトレンドを検出）、`0.01`（中程度）、`0.1`（強いトレンドのみ）。データのスケールが大きく、意味のあるトレンドの傾斜が小さい場合は、より小さい値を使用します。`0` 以上である必要があります。デフォルト: `0.001`"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.display_name": {
+          "source": "Direction Threshold",
+          "message": "方向のしきい値"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.short_desc": {
+          "source": "Minimum absolute slope to classify as rising or falling",
+          "message": "上昇または下降として分類する最小傾斜絶対値"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "分析対象のフィールド名の一覧。各フィールドには入力レコード内の数値が含まれている必要があります。ネストされたフィールドにはドット表記（例: `sensor.temperature`）を使用できます。"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "フィールド名"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "分析するフィールド名"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "各分析ウィンドウに蓄積するレコード数。ウィンドウ単位のプロセッサでは、ウィンドウが満杯になるとイベントが送出されます。レコード単位のプロセッサでは、スライディングウィンドウのサイズを制御します。\n\n**サイズ設定の目安**: 迅速な応答が重要なリアルタイムアラートには `20`～`50`、一般的な傾向・統計分析には `100`～`500`、安定した長期統計が必要な高頻度データには `1000` 以上を使用します。検出対象のパターンについて、少なくとも1周期全体を含められるウィンドウサイズが必要です。"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "ウィンドウサイズ"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "各分析ウィンドウに含めるレコード数"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
+          "source": "Detect trends using linear regression over windows of records",
+          "message": "レコードのウィンドウ全体の線形回帰を使用してトレンドを検出"
+        },
+        "app.UW9yZQ.desc": {
+          "source": "Built-in Qore data pipeline processors for filtering, transforming, and manipulating records in data pipelines",
+          "message": "データパイプライン内でレコードのフィルタリング、変換、操作を行う組み込みのQoreデータパイプラインプロセッサ"
+        },
+        "app.UW9yZQ.display_name": {
+          "source": "Qore",
+          "message": "Qore"
+        },
+        "app.UW9yZQ.short_desc": {
+          "source": "Built-in data pipeline processors",
+          "message": "組み込みデータパイプラインプロセッサ"
         }
       }
     }

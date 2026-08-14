@@ -1,0 +1,3261 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in ClickFunnels",
+          "message": "ClickFunnels에서 연락처가 업데이트될 때 실행됩니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "연락처 업데이트됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a contact is updated",
+          "message": "연락처가 업데이트될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in ClickFunnels",
+          "message": "ClickFunnels에서 새 연락처가 생성될 때 실행됩니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "연락처 생성됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "새 연락처가 생성될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.desc": {
+          "source": "Cancel an existing fulfillment in ClickFunnels",
+          "message": "ClickFunnels에서 기존 이행 취소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Cancel a Fulfillment",
+          "message": "이행 취소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to cancel",
+          "message": "취소할 이행의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to cancel",
+          "message": "취소할 이행"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Cancel a fulfillment",
+          "message": "이행 취소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in ClickFunnels",
+          "message": "ClickFunnels에서 새 주문 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "주문 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this order",
+          "message": "이 주문에 대한 연락처의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "연결된 연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the order (e.g., `USD`)",
+          "message": "주문의 통화 코드(예: `USD`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "주문 통화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOm9uZS10aW1lLW9yZGVy.display_name": {
+          "source": "One-Time Order",
+          "message": "일회성 주문"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbi1vcmRlcg.display_name": {
+          "source": "Subscription Order",
+          "message": "구독 주문"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.desc": {
+          "source": "The type of the order to create",
+          "message": "생성할 주문 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.display_name": {
+          "source": "Order Type",
+          "message": "정렬 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.short_desc": {
+          "source": "The type of order",
+          "message": "주문 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.desc": {
+          "source": "The type of the origination channel",
+          "message": "발생 채널의 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.display_name": {
+          "source": "Origination Channel Type",
+          "message": "발생 채널 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.short_desc": {
+          "source": "The origination channel type",
+          "message": "발생 채널 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.desc": {
+          "source": "The ID of the origination channel",
+          "message": "발생 채널의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.display_name": {
+          "source": "Origination Channel ID",
+          "message": "발생 채널 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.short_desc": {
+          "source": "The origination channel",
+          "message": "발생 채널"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.desc": {
+          "source": "Whether this is a live order (`True`) or a test order (`False`)",
+          "message": "실제 주문(`True`)인지 테스트 주문(`False`)인지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.display_name": {
+          "source": "Live Mode",
+          "message": "라이브 모드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.short_desc": {
+          "source": "Whether this is a live order",
+          "message": "실제 주문인지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.desc": {
+          "source": "A list of line items for the order. Each item requires `variant_id`, `products_price_id`, and `quantity`.\n\n**Note**: for one-time orders, line items must reference one-time products. For subscription orders, line items can include both one-time and subscription products",
+          "message": "주문의 품목 목록입니다. 각 항목에는 `variant_id`, `products_price_id`, `quantity`이(가) 필요합니다.\n\n**참고**: 일회성 주문의 경우 품목이 일회성 제품을 참조해야 합니다. 구독 주문의 경우 품목에 일회성 제품과 구독 제품이 모두 포함될 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.display_name": {
+          "source": "Line Items",
+          "message": "품목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.short_desc": {
+          "source": "Order line items",
+          "message": "주문 품목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "새 주문 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in ClickFunnels",
+          "message": "ClickFunnels에서 새 연락처 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "연락처 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "연락처의 사용자 정의 키-값 속성입니다. 키와 값은 모두 문자열이어야 합니다. 특수 문자가 포함된 키는 자동으로 `snake_case`(으)로 변환됩니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "사용자 지정 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "사용자 정의 키-값 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "생성할 연락처의 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "연락처의 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "연락처의 Facebook 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "연락처의 Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "연락처의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "연락처의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "연락처의 Instagram 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "연락처의 Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "연락처의 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "연락처의 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "연락처의 LinkedIn 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "연락처의 LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "연락처의 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "연락처의 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "연락처의 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "연락처의 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "연락처에 적용할 연락처 태그 ID 목록입니다. 유효한 배열을 입력하면 기존 값을 덮어씁니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "적용할 연락처 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "연락처의 표준 시간대(예: `America/New_York`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "연락처의 표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "연락처의 Twitter 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "연락처의 Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "새 연락처 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Create a new contact tag in ClickFunnels",
+          "message": "ClickFunnels에서 새 연락처 태그 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Create a Contact Tag",
+          "message": "연락처 태그 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The color code for the tag",
+          "message": "태그의 색상 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "색상"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "태그 색상"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The name of the contact tag to create",
+          "message": "생성할 연락처 태그의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "태그 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Create a new contact tag",
+          "message": "새 연락처 태그 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Create a new course enrollment in ClickFunnels",
+          "message": "ClickFunnels에서 새 코스 등록 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create an Enrollment",
+          "message": "등록 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.desc": {
+          "source": "The ID of the course",
+          "message": "코스의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "코스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course to enroll in",
+          "message": "등록할 코스"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to enroll",
+          "message": "등록할 연락처의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to enroll",
+          "message": "등록할 연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "등록 일시 중단 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "일시 중단됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "등록 일시 중단 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.desc": {
+          "source": "The reason for suspending the enrollment",
+          "message": "등록 일시 중단 사유"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.display_name": {
+          "source": "Suspension Reason",
+          "message": "일시 중단 사유"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.short_desc": {
+          "source": "Reason for suspension",
+          "message": "일시 중단 사유"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "연락처를 코스에 등록"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Create a new fulfillment in ClickFunnels",
+          "message": "ClickFunnels에서 새 이행 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Create a Fulfillment",
+          "message": "이행 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this fulfillment",
+          "message": "이 이행을 위한 연락처의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.desc": {
+          "source": "A list of invoice line items to fulfill. Each item requires `invoices_line_item_id` and `quantity`",
+          "message": "이행할 인보이스 품목 목록입니다. 각 항목에는 `invoices_line_item_id` 및 `quantity`(이)가 필요합니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.display_name": {
+          "source": "Line Items to Fulfill",
+          "message": "이행할 품목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.short_desc": {
+          "source": "Invoice line items to fulfill",
+          "message": "이행할 인보이스 품목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.desc": {
+          "source": "Whether to ignore out-of-stock inventory checks when creating the fulfillment",
+          "message": "이행 생성 시 재고 부족 검사를 무시할지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.display_name": {
+          "source": "Ignore Out of Stock",
+          "message": "재고 부족 무시"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.short_desc": {
+          "source": "Override inventory checks",
+          "message": "재고 검사 재정의"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The ID of the fulfillment location where items are shipped from",
+          "message": "품목이 배송되는 이행 위치의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "위치 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The fulfillment location",
+          "message": "이행 위치"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment",
+          "message": "이행에 대한 이메일 알림을 고객에게 보낼지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "고객에게 알림"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "이메일 알림 보내기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The shipping provider for this fulfillment",
+          "message": "이 이행의 배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The shipment tracking code",
+          "message": "배송 추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The shipment tracking URL",
+          "message": "배송 추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Create a new fulfillment",
+          "message": "새 이행 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form in ClickFunnels",
+          "message": "ClickFunnels에서 새 양식 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create a Form",
+          "message": "양식 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The name of the form",
+          "message": "양식의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "양식 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The URL to redirect to after form submission",
+          "message": "양식 제출 후 리디렉션할 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "리디렉션 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "리디렉션 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "새 양식 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in ClickFunnels",
+          "message": "ClickFunnels에서 새 제품 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "상품 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "제휴 수수료 적용 대상 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "수수료 지급 가능"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "수수료 지급 가능 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The URL path for the product",
+          "message": "제품의 URL 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "현재 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "제품 URL 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product",
+          "message": "제품의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "제품 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The SEO meta description",
+          "message": "SEO 메타 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEO 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "SEO 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The SEO image URL for the product",
+          "message": "제품의 SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The SEO title for the product",
+          "message": "제품의 SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "제품이 고객 센터에 표시되는지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "고객 센터에 표시"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "고객 센터 표시 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "제품이 스토어에 표시되는지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "스토어에 표시"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "스토어 표시 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "새 제품 생성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.desc": {
+          "source": "Apply a tag to a contact in ClickFunnels",
+          "message": "ClickFunnels의 연락처에 태그 적용"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "연락처에 태그 적용"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to apply the tag to",
+          "message": "태그를 적용할 연락처의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "태그를 지정할 연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to apply to the contact",
+          "message": "연락처에 적용할 태그의 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "적용할 태그"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "연락처에 태그 적용"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 주문 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "주문 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "주문 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to retrieve",
+          "message": "조회할 주문 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "ID로 단일 주문 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 연락처 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "연락처 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "ID로 단일 연락처 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.desc": {
+          "source": "Retrieve a single contact tag by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 연락처 태그 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
+          "source": "Get a Contact Tag",
+          "message": "연락처 태그 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to retrieve",
+          "message": "조회할 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Get a single contact tag by ID",
+          "message": "ID로 단일 연락처 태그 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.desc": {
+          "source": "Retrieve a single course by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 코스 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
+          "source": "Get a Course",
+          "message": "코스 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "코스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course ID to retrieve",
+          "message": "조회할 코스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
+          "source": "Get a single course by ID",
+          "message": "ID로 단일 코스 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.desc": {
+          "source": "Retrieve a single enrollment by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 등록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
+          "source": "Get an Enrollment",
+          "message": "등록 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "등록 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment ID to retrieve",
+          "message": "조회할 등록 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
+          "source": "Get a single enrollment by ID",
+          "message": "ID로 단일 등록 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.desc": {
+          "source": "Retrieve a single fulfillment by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 이행 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
+          "source": "Get a Fulfillment",
+          "message": "이행 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment ID to retrieve",
+          "message": "조회할 이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Get a single fulfillment by ID",
+          "message": "ID로 단일 이행 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.desc": {
+          "source": "Retrieve a single funnel by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 퍼널 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
+          "source": "Get a Funnel",
+          "message": "퍼널 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "퍼널 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel ID to retrieve",
+          "message": "조회할 퍼널 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
+          "source": "Get a single funnel by ID",
+          "message": "ID로 단일 퍼널 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 양식 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get a Form",
+          "message": "양식 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "조회할 양식 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a single form by ID",
+          "message": "ID로 단일 양식 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.desc": {
+          "source": "Retrieve a single form submission by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 양식 제출 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
+          "source": "Get a Form Submission",
+          "message": "양식 제출 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "제출 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "조회할 제출 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
+          "source": "Get a single form submission by ID",
+          "message": "ID로 단일 양식 제출 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from ClickFunnels",
+          "message": "ClickFunnels에서 ID로 단일 제품 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "상품 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "제품 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to retrieve",
+          "message": "조회할 제품 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "ID로 단일 상품 가져오기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from ClickFunnels",
+          "message": "ClickFunnels에서 연락처 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "연락처 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "삭제할 연락처의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "삭제할 연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "연락처 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Delete a contact tag from ClickFunnels",
+          "message": "ClickFunnels에서 연락처 태그 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Delete a Contact Tag",
+          "message": "연락처 태그 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "삭제할 태그의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "삭제할 태그"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Delete a contact tag",
+          "message": "연락처 태그 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Delete a fulfillment from ClickFunnels",
+          "message": "ClickFunnels에서 이행 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Delete a Fulfillment",
+          "message": "이행 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to delete",
+          "message": "삭제할 이행의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to delete",
+          "message": "삭제할 이행"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Delete a fulfillment",
+          "message": "이행 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form from ClickFunnels",
+          "message": "ClickFunnels에서 양식 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete a Form",
+          "message": "양식 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to delete",
+          "message": "삭제할 양식의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to delete",
+          "message": "삭제할 양식"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "양식 삭제"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new course enrollment is created in ClickFunnels",
+          "message": "ClickFunnels에서 새 강좌 등록이 생성될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
+          "source": "Enrollment Created",
+          "message": "등록 생성됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new enrollment is created",
+          "message": "새 등록이 생성될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a form is submitted in ClickFunnels",
+          "message": "ClickFunnels에서 양식이 제출될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Form Submission Created",
+          "message": "양식 제출 생성됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new form submission is created",
+          "message": "새 양식 제출이 생성될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.desc": {
+          "source": "Fires when a new fulfillment is created in ClickFunnels",
+          "message": "ClickFunnels에서 새 이행이 생성될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
+          "source": "Fulfillment Created",
+          "message": "이행 생성됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new fulfillment is created",
+          "message": "새 이행이 생성될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.desc": {
+          "source": "Fires when an order is completed in ClickFunnels",
+          "message": "ClickFunnels에서 주문이 완료될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
+          "source": "Order Completed",
+          "message": "주문 완료됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
+          "source": "Trigger when an order is completed",
+          "message": "주문이 완료될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created in ClickFunnels",
+          "message": "ClickFunnels에서 새 주문이 생성될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Order Created",
+          "message": "주문 생성됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "새 주문이 생성될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is updated in ClickFunnels",
+          "message": "ClickFunnels에서 주문이 업데이트될 때 트리거됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Updated",
+          "message": "주문 업데이트됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is updated",
+          "message": "주문이 업데이트될 때 트리거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.desc": {
+          "source": "List applied tags in ClickFunnels",
+          "message": "ClickFunnels에서 적용된 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
+          "source": "List Applied Tags",
+          "message": "적용된 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "연락처별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag ID",
+          "message": "적용된 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "Filter by applied tag ID",
+          "message": "적용된 태그 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "태그로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
+          "source": "List all applied tags",
+          "message": "적용된 모든 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.desc": {
+          "source": "List contact tags in ClickFunnels",
+          "message": "ClickFunnels에서 연락처 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
+          "source": "List Contact Tags",
+          "message": "연락처 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "이름으로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "태그 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
+          "source": "List all contact tags",
+          "message": "모든 연락처 태그 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in ClickFunnels with optional filtering",
+          "message": "ClickFunnels에서 선택적 필터링을 사용하여 연락처 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "연락처 목록"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "연락처 ID로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "이메일로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "모든 연락처 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses in ClickFunnels",
+          "message": "ClickFunnels에서 강좌 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "강좌 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "코스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course ID",
+          "message": "강좌 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List all courses",
+          "message": "모든 강좌 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments in ClickFunnels",
+          "message": "ClickFunnels에서 강좌 등록 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "등록 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "코스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course",
+          "message": "강좌별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "등록 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "Filter by enrollment ID",
+          "message": "등록 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List all enrollments",
+          "message": "모든 등록 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.desc": {
+          "source": "List form submissions in ClickFunnels",
+          "message": "ClickFunnels에서 양식 제출 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
+          "source": "List Form Submissions",
+          "message": "양식 제출 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form",
+          "message": "양식별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "제출 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "Filter by submission ID",
+          "message": "제출 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "List all form submissions",
+          "message": "모든 양식 제출 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in ClickFunnels",
+          "message": "ClickFunnels에서 양식 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "양식 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "양식 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "모든 양식 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.desc": {
+          "source": "List funnels in ClickFunnels",
+          "message": "ClickFunnels에서 퍼널 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
+          "source": "List Funnels",
+          "message": "퍼널 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "퍼널 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.short_desc": {
+          "source": "Filter by funnel ID",
+          "message": "퍼널 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
+          "source": "List all funnels",
+          "message": "모든 퍼널 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.desc": {
+          "source": "List fulfillments in ClickFunnels",
+          "message": "ClickFunnels에서 이행 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
+          "source": "List Fulfillments",
+          "message": "이행 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "연락처별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "Filter by fulfillment ID",
+          "message": "이행 ID별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
+          "source": "List all fulfillments",
+          "message": "모든 이행 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in ClickFunnels",
+          "message": "ClickFunnels에서 주문 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "주문 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "연락처별 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "주문 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "주문 ID별로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "모든 주문 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in ClickFunnels",
+          "message": "ClickFunnels에서 제품 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "제품 목록"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "페이지네이션 커서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "오름차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "내림차순"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "정렬 순서"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "제품 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "상품 ID로 필터링"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "모든 제품 목록 조회"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ClickFunnels** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **ClickFunnels**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ClickFunnels",
+          "message": "ClickFunnels에 사용자 정의 API 호출 수행"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove an applied tag from a contact in ClickFunnels",
+          "message": "ClickFunnels에서 연락처의 적용된 태그 제거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "연락처에서 태그 제거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.desc": {
+          "source": "Select the contact whose applied tag you want to remove",
+          "message": "적용된 태그를 제거할 연락처를 선택하세요"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to remove a tag from",
+          "message": "태그를 제거할 연락처"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.desc": {
+          "source": "The applied tag to remove from the contact",
+          "message": "연락처에서 제거할 적용된 태그"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag",
+          "message": "적용된 태그"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "The applied tag to remove",
+          "message": "제거할 적용된 태그"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "연락처에서 태그 제거"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in ClickFunnels",
+          "message": "ClickFunnels의 기존 주문 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update an Order",
+          "message": "주문 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The new currency code for the order",
+          "message": "주문의 새 통화 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "주문 통화"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to update",
+          "message": "업데이트할 주문의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "주문 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to update",
+          "message": "업데이트할 주문"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.desc": {
+          "source": "The new status for the order",
+          "message": "주문의 새 상태"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.short_desc": {
+          "source": "The order status",
+          "message": "주문 상태"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "기존 주문 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in ClickFunnels",
+          "message": "ClickFunnels의 기존 연락처 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "연락처 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "업데이트할 연락처의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID to update",
+          "message": "업데이트할 연락처 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "연락처의 사용자 정의 키-값 속성입니다. 키와 값은 모두 문자열이어야 합니다. 특수 문자가 포함된 키는 자동으로 `snake_case`(으)로 변환됩니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "사용자 지정 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "사용자 정의 키-값 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The new email address for the contact",
+          "message": "연락처의 새 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "연락처의 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The new Facebook profile URL for the contact",
+          "message": "연락처의 새 Facebook 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "연락처의 Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The new first name for the contact",
+          "message": "연락처의 새 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "연락처의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The new Instagram profile URL for the contact",
+          "message": "연락처의 새 Instagram 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "연락처의 Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The new last name for the contact",
+          "message": "연락처의 새 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "연락처의 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The new LinkedIn profile URL for the contact",
+          "message": "연락처의 새 LinkedIn 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "연락처의 LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The new phone number for the contact",
+          "message": "연락처의 새 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "연락처의 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The new website URL for the contact",
+          "message": "연락처의 새 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "연락처의 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "연락처에 적용할 연락처 태그 ID 목록입니다. 유효한 배열을 입력하면 기존 값을 덮어씁니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "적용할 연락처 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The new time zone for the contact",
+          "message": "연락처의 새 표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "연락처의 표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The new Twitter profile URL for the contact",
+          "message": "연락처의 새 Twitter 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "연락처의 Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "기존 연락처 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Update an existing contact tag in ClickFunnels",
+          "message": "ClickFunnels의 기존 연락처 태그 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Update a Contact Tag",
+          "message": "연락처 태그 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The new color code for the tag",
+          "message": "태그의 새 색상 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "색상"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "태그 색상"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "태그의 새 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "태그 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "업데이트할 태그의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "업데이트할 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Update a contact tag",
+          "message": "연락처 태그 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Update an existing course enrollment in ClickFunnels",
+          "message": "ClickFunnels의 기존 코스 등록 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Update an Enrollment",
+          "message": "등록 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the enrollment has been completed",
+          "message": "등록 완료 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.short_desc": {
+          "source": "Whether enrollment is completed",
+          "message": "등록 완료 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.desc": {
+          "source": "The unique identifier of the enrollment to update",
+          "message": "업데이트할 등록의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "등록 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment to update",
+          "message": "업데이트할 등록"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "등록 일시 중단 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "일시 중단됨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "등록 일시 중단 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Update a course enrollment",
+          "message": "코스 등록 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Update an existing fulfillment in ClickFunnels",
+          "message": "ClickFunnels의 기존 이행 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Update a Fulfillment",
+          "message": "이행 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to update",
+          "message": "업데이트할 이행의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "이행 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to update",
+          "message": "업데이트할 이행"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment update",
+          "message": "이행 업데이트에 대해 고객에게 이메일 알림을 보낼지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "고객에게 알림"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "이메일 알림 보내기"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The new shipping provider",
+          "message": "새 배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "배송업체"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The new tracking code",
+          "message": "새 추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "추적 코드"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The new tracking URL",
+          "message": "새 추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "추적 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Update a fulfillment",
+          "message": "이행 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.desc": {
+          "source": "Update an existing funnel in ClickFunnels",
+          "message": "ClickFunnels의 기존 퍼널 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
+          "source": "Update a Funnel",
+          "message": "퍼널 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.desc": {
+          "source": "The unique identifier of the funnel to update",
+          "message": "업데이트할 퍼널의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "퍼널 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel to update",
+          "message": "업데이트할 퍼널"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.desc": {
+          "source": "The new name for the funnel",
+          "message": "퍼널의 새 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.short_desc": {
+          "source": "The funnel name",
+          "message": "퍼널 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
+          "source": "Update an existing funnel",
+          "message": "기존 퍼널 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update an existing form in ClickFunnels",
+          "message": "ClickFunnels의 기존 양식 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update a Form",
+          "message": "양식 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "업데이트할 양식의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to update",
+          "message": "업데이트할 양식"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new name for the form",
+          "message": "양식의 새 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "양식 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The new redirect URL",
+          "message": "새 리디렉션 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "리디렉션 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "리디렉션 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update an existing form",
+          "message": "기존 양식 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in ClickFunnels",
+          "message": "ClickFunnels의 기존 제품 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "제품 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "제휴 수수료 적용 대상 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "수수료 지급 가능"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "수수료 지급 가능 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The new URL path for the product",
+          "message": "제품의 새 URL 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "현재 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "제품 URL 경로"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name for the product",
+          "message": "제품의 새 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "제품 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The new SEO description",
+          "message": "새 SEO 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEO 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "SEO 설명"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The new SEO image URL",
+          "message": "새 SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "SEO 이미지 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The new SEO title",
+          "message": "새 SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "SEO 제목"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The unique identifier of the product to update",
+          "message": "업데이트할 제품의 고유 식별자"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "제품 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to update",
+          "message": "업데이트할 제품"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "제품이 고객 센터에 표시되는지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "고객 센터에 표시"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "고객 센터 표시 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "제품이 스토어에 표시되는지 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "스토어에 표시"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "스토어 표시 여부"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "기존 제품 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.desc": {
+          "source": "Create a new contact or update an existing one by email address in ClickFunnels",
+          "message": "ClickFunnels에서 이메일 주소로 새 연락처를 생성하거나 기존 연락처를 업데이트합니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
+          "source": "Upsert a Contact",
+          "message": "연락처 생성 또는 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "연락처의 사용자 정의 키-값 속성입니다. 키와 값은 모두 문자열이어야 합니다. 특수 문자가 포함된 키는 자동으로 `snake_case`(으)로 변환됩니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "사용자 지정 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "사용자 정의 키-값 속성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "생성할 연락처의 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "연락처의 이메일 주소"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "연락처의 Facebook 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "연락처의 Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "연락처의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "연락처의 이름"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "연락처의 Instagram 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "연락처의 Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "연락처의 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "연락처의 성"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "연락처의 LinkedIn 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "연락처의 LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "연락처의 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "연락처의 전화번호"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "워크스페이스 범위 엔드포인트를 위한 ClickFunnels 워크스페이스 ID입니다. 워크스페이스 ID는 ClickFunnels 관리자 패널 URL에서 찾거나 `GET /teams/{team_id}/workspaces` 엔드포인트를 호출하여 확인할 수 있습니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Workspace ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels 워크스페이스 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "연락처의 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "연락처의 웹사이트 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "연락처에 적용할 연락처 태그 ID 목록입니다. 유효한 배열을 입력하면 기존 값을 덮어씁니다"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "적용할 연락처 태그 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "연락처의 표준 시간대(예: `America/New_York`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "연락처의 표준 시간대"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "연락처의 Twitter 프로필 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "연락처의 Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
+          "source": "Create or update a contact by email",
+          "message": "이메일로 연락처 생성 또는 업데이트"
+        },
+        "app.Q2xpY2tGdW5uZWxz.desc": {
+          "source": "ClickFunnels 2.0 is a marketing and sales funnel platform for managing contacts, orders, products, funnels, courses, forms, and fulfillments.\n\nThis integration supports full CRUD operations on core resources, tag management, and event-based triggers.",
+          "message": "ClickFunnels 2.0은 연락처, 주문, 제품, 퍼널, 코스, 양식 및 주문 처리를 관리하기 위한 마케팅 및 영업 퍼널 플랫폼입니다.\n\n이 통합은 핵심 리소스에 대한 전체 CRUD 작업, 태그 관리 및 이벤트 기반 트리거를 지원합니다."
+        },
+        "app.Q2xpY2tGdW5uZWxz.display_name": {
+          "source": "ClickFunnels",
+          "message": "ClickFunnels"
+        },
+        "app.Q2xpY2tGdW5uZWxz.short_desc": {
+          "source": "ClickFunnels 2.0 marketing and sales funnel platform",
+          "message": "ClickFunnels 2.0 마케팅 및 영업 퍼널 플랫폼"
+        }
+      }
+    }
+  }
+}

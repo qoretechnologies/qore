@@ -1,0 +1,1225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Shippo with shipping and billing addresses, and line items. Orders can be used to manage fulfillment workflows.",
+          "message": "配送先住所、請求先住所、品目情報を含む新しい注文をShippoに作成します。注文はフルフィルメントワークフローの管理に使用できます。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "注文を作成"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code for prices",
+          "message": "価格用の3文字のISO通貨コード"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Price currency",
+          "message": "価格の通貨"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "The origin address for the order (optional)",
+          "message": "注文の発送元住所（オプション）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "差出人住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Sender address",
+          "message": "差出人住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Your internal order number or reference",
+          "message": "社内注文番号または参照"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "注文番号"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Your order number",
+          "message": "注文番号"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Order was cancelled",
+          "message": "注文はキャンセルされました"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Order has been delivered",
+          "message": "注文は配達完了しました"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Order has been paid",
+          "message": "注文は支払い済みです"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Order was returned",
+          "message": "注文は返品されました"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Order has been shipped",
+          "message": "注文は発送されました"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "不明なステータス"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "The current status of the order",
+          "message": "注文の現在のステータス"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "注文ステータス"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Order status",
+          "message": "注文ステータス"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "Array of line items in the order",
+          "message": "注文内の品目の配列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order items",
+          "message": "注文品目"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.desc": {
+          "source": "Any notes or special instructions for the order",
+          "message": "注文に関するメモまたは特別な指示"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Order notes",
+          "message": "注文メモ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.desc": {
+          "source": "The shipping cost charged to the customer",
+          "message": "顧客に請求された送料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.display_name": {
+          "source": "Shipping Cost",
+          "message": "配送料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.short_desc": {
+          "source": "Customer shipping cost",
+          "message": "顧客の配送料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.desc": {
+          "source": "Three-letter ISO currency code for shipping cost",
+          "message": "送料の3文字のISO通貨コード"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.display_name": {
+          "source": "Shipping Cost Currency",
+          "message": "送料の通貨"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "The shipping method selected by the customer",
+          "message": "顧客によって選択された配送方法"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "配送方法"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Selected shipping method",
+          "message": "選択された配送方法"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.desc": {
+          "source": "The subtotal price of the order (before shipping and tax)",
+          "message": "注文の小計金額（送料および税金の前）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.display_name": {
+          "source": "Subtotal",
+          "message": "小計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.short_desc": {
+          "source": "Order subtotal",
+          "message": "注文小計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.desc": {
+          "source": "The date/time when the order was placed",
+          "message": "注文が行われた日時"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.display_name": {
+          "source": "Placed At",
+          "message": "注文日時"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.short_desc": {
+          "source": "Order placement date",
+          "message": "注文日"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.desc": {
+          "source": "The total weight of the order",
+          "message": "注文の総重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.short_desc": {
+          "source": "Total weight",
+          "message": "総重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.desc": {
+          "source": "Ounces",
+          "message": "オンス"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.desc": {
+          "source": "Grams",
+          "message": "グラム"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.desc": {
+          "source": "Kilograms",
+          "message": "キログラム"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.desc": {
+          "source": "Pounds",
+          "message": "ポンド"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.desc": {
+          "source": "The unit of measurement for weight (g, oz, lb, kg)",
+          "message": "重量の測定単位（g、oz、lb、kg）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.display_name": {
+          "source": "Weight Unit",
+          "message": "重量単位"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.short_desc": {
+          "source": "Weight unit",
+          "message": "重量単位"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.desc": {
+          "source": "The total price of the order",
+          "message": "注文の合計金額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.display_name": {
+          "source": "Total Price",
+          "message": "合計金額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.short_desc": {
+          "source": "Order total",
+          "message": "注文合計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.desc": {
+          "source": "The total tax amount for the order",
+          "message": "注文の合計税額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.display_name": {
+          "source": "Total Tax",
+          "message": "合計税額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.short_desc": {
+          "source": "Tax amount",
+          "message": "税額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "The destination address for the order",
+          "message": "注文のお届け先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "配送先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Customer shipping address",
+          "message": "顧客の配送先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "新規注文を作成"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.desc": {
+          "source": "Create a shipping label (transaction) using a rate object ID obtained from a shipment. This generates a printable label and tracking number.",
+          "message": "貨物から取得したレートオブジェクトIDを使用して配送ラベル（トランザクション）を作成します。これにより、印刷可能なラベルと追跡番号が生成されます。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
+          "source": "Create Label by Rate",
+          "message": "レート別にラベルを作成"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.desc": {
+          "source": "If `True`, the label will be generated asynchronously. Default is `False`.",
+          "message": "`True` の場合、ラベルは非同期で生成されます。デフォルトは `False` です。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "非同期"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "非同期処理"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF document",
+          "message": "PDFドキュメント"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDY.desc": {
+          "source": "PDF 4x6 inches",
+          "message": "PDF 4x6インチ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDg.desc": {
+          "source": "PDF 4x8 inches",
+          "message": "PDF 4x8インチ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl8yLjN4Ny41.desc": {
+          "source": "PDF 2.3x7.5 inches",
+          "message": "PDF 2.3x7.5インチ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNA.desc": {
+          "source": "PDF A4",
+          "message": "PDF A4"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNQ.desc": {
+          "source": "PDF A5",
+          "message": "PDF A5"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNg.desc": {
+          "source": "PDF A6",
+          "message": "PDF A6"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBOR18yLjN4Ny41.desc": {
+          "source": "PNG 2.3x7.5 inches",
+          "message": "PNG 2.3x7.5インチ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "PNG画像"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlpQTElJ.desc": {
+          "source": "ZPL thermal printer format",
+          "message": "ZPLサーマルプリンター形式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.desc": {
+          "source": "The file format for the shipping label",
+          "message": "配送ラベルのファイル形式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.display_name": {
+          "source": "Label File Type",
+          "message": "ラベルファイル形式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.short_desc": {
+          "source": "Label format",
+          "message": "ラベル形式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "追加情報を保存するための最大100文字の文字列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "カスタムメタデータ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.desc": {
+          "source": "The object ID of the rate to use for creating the label. Get this from a shipment's rates array.",
+          "message": "ラベル作成に使用するレートのオブジェクトID。貨物の rates 配列から取得します。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.display_name": {
+          "source": "Rate ID",
+          "message": "レートID"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.short_desc": {
+          "source": "The rate object ID",
+          "message": "レートオブジェクトID"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
+          "source": "Create a shipping label from a rate",
+          "message": "レートから配送ラベルを作成"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment in Shippo with origin, destination, and parcel details to receive shipping rates from multiple carriers.",
+          "message": "Shippoで差出人、宛先、小包の詳細を指定して新しい貨物を作成し、複数の配送業者から配送料金レートを取得します。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "配送を作成"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.desc": {
+          "source": "Object ID of the customs declaration for international shipments",
+          "message": "国際配送用の税関申告のオブジェクトID"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.display_name": {
+          "source": "Customs Declaration",
+          "message": "税関申告"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.short_desc": {
+          "source": "Customs declaration ID",
+          "message": "税関申告ID"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.desc": {
+          "source": "The destination/recipient address for the shipment",
+          "message": "貨物の宛先／受取人の住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.display_name": {
+          "source": "To Address",
+          "message": "宛先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.short_desc": {
+          "source": "Recipient address",
+          "message": "受取人住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.desc": {
+          "source": "The origin/sender address for the shipment",
+          "message": "貨物の差出人／発送元の住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.display_name": {
+          "source": "From Address",
+          "message": "差出人住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.short_desc": {
+          "source": "Sender address",
+          "message": "差出人住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.desc": {
+          "source": "The return address (defaults to `address_from` if not specified)",
+          "message": "返送先住所（指定されていない場合はデフォルトで `address_from` に設定されます）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.display_name": {
+          "source": "Return Address",
+          "message": "返送先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.short_desc": {
+          "source": "Return address",
+          "message": "返送先住所"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.desc": {
+          "source": "If `True`, rates will be generated asynchronously. Default is `False`.",
+          "message": "`True` の場合、レートは非同期で生成されます。デフォルトは `False` です。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "非同期"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "非同期処理"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.desc": {
+          "source": "Extra shipment options including insurance, signature confirmation, billing, COD, and more",
+          "message": "保険、署名確認、請求、代金引換（COD）などを含む追加の貨物オプション"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.display_name": {
+          "source": "Extra Options",
+          "message": "追加オプション"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.short_desc": {
+          "source": "Additional options",
+          "message": "追加オプション"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "追加情報を保存するための最大100文字の文字列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "カスタムメタデータ"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "The date the shipment will be sent. Defaults to current date.",
+          "message": "貨物が発送される日付。デフォルトは現在の日付です。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "発送日"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "発送予定日"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.desc": {
+          "source": "Array of parcel objects describing the packages to ship",
+          "message": "発送する荷物を記述する小包オブジェクトの配列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.display_name": {
+          "source": "Parcels",
+          "message": "小包"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.short_desc": {
+          "source": "Package details",
+          "message": "荷物の詳細"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment to get rates",
+          "message": "レートを取得するために新しい貨物を作成"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific order including addresses, line items, and fulfillment status.",
+          "message": "住所、明細行アイテム、フルフィルメント状況など、特定の注文に関する詳細情報を取得します。"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "注文を取得"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to retrieve",
+          "message": "取得する注文の一意の識別子"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order object ID",
+          "message": "注文オブジェクトID"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get an order by ID",
+          "message": "IDで注文を取得"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve detailed information about a specific shipment including addresses, parcels, and available rates.",
+          "message": "住所、小包、利用可能なレートなど、特定の貨物に関する詳細情報を取得します。"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "配送の取得"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the shipment to retrieve",
+          "message": "取得する貨物の一意の識別子"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "配送ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment object ID",
+          "message": "貨物オブジェクトID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Get a shipment by ID",
+          "message": "IDで貨物を取得"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.desc": {
+          "source": "Retrieve detailed information about a specific shipping label (transaction) including tracking number, label URL, and status.",
+          "message": "追跡番号、ラベルURL、ステータスを含む、特定の配送ラベル (トランザクション) に関する詳細情報を取得します。"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
+          "source": "Get Shipping Label",
+          "message": "配送ラベルの取得"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The unique identifier of the transaction (shipping label) to retrieve",
+          "message": "取得するトランザクション (配送ラベル) の一意の識別子"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "取引ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction object ID",
+          "message": "トランザクションオブジェクトID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
+          "source": "Get a shipping label by ID",
+          "message": "IDで配送ラベルを取得"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of orders from Shippo with optional filtering by creation date, shop app, or order status.",
+          "message": "Shippoから注文リストを取得します。作成日、ショップアプリ、または注文ステータスによる任意のフィルタリングが可能です。"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "注文の一覧取得"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkFXQUlUUEFZ.desc": {
+          "source": "Awaiting payment",
+          "message": "支払い待ち"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Cancelled",
+          "message": "キャンセル済み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid",
+          "message": "支払い済み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUxMWV9GVUxGSUxMRUQ.desc": {
+          "source": "Partially fulfilled",
+          "message": "一部発送済み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Refunded",
+          "message": "返金済み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Shipped",
+          "message": "発送済み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "不明なステータス"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "Filter orders by their status",
+          "message": "ステータスで注文を絞り込む"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "注文ステータス"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Filter by order status",
+          "message": "注文ステータスで絞り込み"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List and search orders",
+          "message": "注文の一覧表示と検索"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Shippo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Shippo** に対するカスタムHTTP / REST APIコールを実行します。\n\nHTTPメソッド、URIパス (接続のAPIベースURLからの相対パス)、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ提供されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Shippo",
+          "message": "ShippoへのカスタムAPIコールの実行"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.desc": {
+          "source": "Fires when a new order is detected in Shippo via polling. Provides order details including shipping address, line items, and order status.",
+          "message": "ポーリングによりShippoで新しい注文が検出されたときに発火します。配送先住所、品目、注文ステータスなどの注文詳細を提供します。"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
+          "source": "New Order",
+          "message": "新規注文"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "新しい注文が作成されたときにトリガー"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.desc": {
+          "source": "Fires when a new shipping label (transaction) is detected in Shippo via polling. Provides label details including tracking number and label URL.",
+          "message": "ポーリングによりShippoで新しい配送ラベル (トランザクション) が検出されたときに発火します。追跡番号やラベルURLなどのラベル詳細を提供します。"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
+          "source": "New Shipping Label",
+          "message": "新しい配送ラベル"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
+          "source": "Trigger when a new shipping label is created",
+          "message": "新しい配送ラベルが作成されたときにトリガー"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.desc": {
+          "source": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details including dimensions and weight.",
+          "message": "ポーリングによりShippoで新しい荷物が検出されたときに発火します。寸法や重量などの荷物詳細を提供します。"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
+          "source": "New Parcel",
+          "message": "新しい荷物"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
+          "source": "Trigger when a new parcel is created",
+          "message": "新しい荷物が作成されたときにトリガー"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.desc": {
+          "source": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details including addresses, parcels, and available rates.",
+          "message": "ポーリングによりShippoで新しい発送が検出されたときに発火します。住所、荷物、利用可能な料金などの発送詳細を提供します。"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
+          "source": "New Shipment",
+          "message": "新しい発送"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
+          "source": "Trigger when a new shipment is created",
+          "message": "新しい配送が作成されたときにトリガー"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.desc": {
+          "source": "Retrieve a list of shipments from Shippo with optional filtering by creation date.",
+          "message": "Shippoから発送リストを取得します。作成日による任意のフィルタリングが可能です。"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
+          "source": "Search Shipments",
+          "message": "配送を検索"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
+          "source": "List and search shipments",
+          "message": "配送の一覧表示と検索"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.desc": {
+          "source": "Retrieve a list of shipping labels (transactions) from Shippo with optional filtering by creation date, status, or tracking status.",
+          "message": "Shippoから配送ラベル (トランザクション) のリストを取得します。作成日、ステータス、または追跡ステータスによる任意のフィルタリングが可能です。"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
+          "source": "Search Shipping Labels",
+          "message": "配送ラベルの検索"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOkVSUk9S.desc": {
+          "source": "Label creation failed",
+          "message": "ラベルの作成に失敗しました"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlFVRVVFRA.desc": {
+          "source": "Label creation pending",
+          "message": "ラベルの作成待ちです"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Label has been refunded",
+          "message": "ラベルは返金されました"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlNVQ0NFU1M.desc": {
+          "source": "Label created successfully",
+          "message": "ラベルが正常に作成されました"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.desc": {
+          "source": "Filter transactions by their creation status",
+          "message": "作成ステータスでトランザクションをフィルタリング"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.display_name": {
+          "source": "Label Status",
+          "message": "ラベルステータス"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.short_desc": {
+          "source": "Filter by label status",
+          "message": "ラベルステータスでフィルタリング"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Delivered",
+          "message": "配達完了"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkZBSUxVUkU.desc": {
+          "source": "Delivery failed",
+          "message": "配達に失敗しました"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlBSRV9UUkFOU0lU.desc": {
+          "source": "Pre-transit",
+          "message": "輸送前"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Returned",
+          "message": "返送済み"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlRSQU5TSVQ.desc": {
+          "source": "In transit",
+          "message": "輸送中"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown tracking status",
+          "message": "不明な追跡ステータス"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.desc": {
+          "source": "Filter transactions by their tracking status",
+          "message": "追跡ステータスでトランザクションをフィルタリング"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.display_name": {
+          "source": "Tracking Status",
+          "message": "追跡ステータス"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.short_desc": {
+          "source": "Filter by tracking status",
+          "message": "追跡ステータスでフィルタリング"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
+          "source": "List and search shipping labels",
+          "message": "配送ラベルの一覧表示と検索"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.desc": {
+          "source": "Validates a shipping address using Shippo's address validation service. Returns the validated address with any corrections and validation status.",
+          "message": "Shippoの住所検証サービスを使用して配送先住所を検証します。修正内容および検証ステータスを含む検証済み住所を返します。"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
+          "source": "Validate Address",
+          "message": "住所の検証"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO 3166-1 alpha-2 country code (e.g., US, CA, GB)",
+          "message": "2文字のISO 3166-1 alpha-2国コード (例: US, CA, GB)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code",
+          "message": "ISO国コード"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name (optional)",
+          "message": "会社名 (任意)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "会社"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company or organization name",
+          "message": "会社名または組織名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "Name of the city",
+          "message": "市区町村名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "市区町村名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address for shipment notifications",
+          "message": "発送通知用のメールアドレス"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "メール アドレス"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.desc": {
+          "source": "Indicates whether the address is a residential location",
+          "message": "住所が住宅地であるかどうかを示します"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "住宅地"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.short_desc": {
+          "source": "Is residential address",
+          "message": "住宅地住所かどうか"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "First and last name of the person at this address",
+          "message": "この住所の人物の氏名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Full name of the person",
+          "message": "人物のフルネーム"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State, province, or region code (e.g., CA for California)",
+          "message": "州、都道府県、または地域コード (例: カリフォルニア州の場合はCA)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State/Province",
+          "message": "都道府県/州"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "州または都道府県コード"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "住所の1行目"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street Address 1",
+          "message": "町名・番地1"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "Primary street address",
+          "message": "主要な町名・番地"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "町名・番地・アパート／建物名の2行目 (アパート、スイートなど)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street Address 2",
+          "message": "町名・番地2"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Secondary street address",
+          "message": "追加の町名・番地"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.desc": {
+          "source": "Third line of the street address (optional)",
+          "message": "町名・番地の3行目 (任意)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.display_name": {
+          "source": "Street Address 3",
+          "message": "町名・番地3"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.short_desc": {
+          "source": "Additional street address",
+          "message": "追加の町名・番地"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number including country code",
+          "message": "国コードを含む電話番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP or postal code",
+          "message": "郵便番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP/Postal Code",
+          "message": "郵便番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "Postal code",
+          "message": "郵便番号"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
+          "source": "Validate a shipping address",
+          "message": "配送先住所の検証"
+        },
+        "app.U2hpcHBv.desc": {
+          "source": "Shippo is a multi-carrier shipping API and web application that simplifies the shipping process for e-commerce businesses. This integration enables creating shipments, generating shipping labels, managing orders, and tracking packages.\n\n**Features:**\n- Create shipments and get shipping rates from multiple carriers\n- Generate shipping labels for USPS, UPS, FedEx, DHL, and more\n- Track packages with real-time tracking updates\n- Manage orders and their fulfillment\n- Polling triggers for new parcels, shipments, and labels",
+          "message": "Shippoは、Eコマースビジネスの発送プロセスを簡素化するマルチキャリア対応の発送APIおよびWebアプリケーションです。この連携により、発送の作成、配送ラベルの生成、注文の管理、荷物の追跡が可能になります。\n\n**機能:**\n- 発送の作成および複数キャリアからの配送料金取得\n- USPS、UPS、FedEx、DHLなどの配送ラベル生成\n- リアルタイムの追跡更新による荷物追跡\n- 注文およびそのフルフィルメントの管理\n- 新しい荷物、発送、ラベルを検知するポーリングトリガー"
+        },
+        "app.U2hpcHBv.display_name": {
+          "source": "Shippo",
+          "message": "Shippo"
+        },
+        "app.U2hpcHBv.short_desc": {
+          "source": "Shippo shipping platform",
+          "message": "Shippo配送プラットフォーム"
+        }
+      }
+    }
+  }
+}

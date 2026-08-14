@@ -1,0 +1,3045 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Conditionally update a FHIR `Observation` resource by search criteria.",
+          "message": "Умовно оновити ресурс FHIR `Observation` за критеріями пошуку."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Conditional Update Observation",
+          "message": "Умовне оновлення Observation"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Параметри пошуку FHIR, що використовуються в URL-адресі запиту умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Параметри пошуку для умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Observation` для умовного оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Observation`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Conditionally update a FHIR Observation resource",
+          "message": "Умовно оновити ресурс FHIR Observation"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Conditionally update a FHIR `Bundle` resource by search criteria.",
+          "message": "Умовно оновити ресурс FHIR `Bundle` за критеріями пошуку."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Conditional Update Bundle",
+          "message": "Умовне оновлення Bundle"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Параметри пошуку FHIR, що використовуються в URL-адресі запиту умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Параметри пошуку для умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Bundle` для умовного оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Bundle`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Conditionally update a FHIR Bundle resource",
+          "message": "Умовно оновити ресурс FHIR Bundle"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Conditionally update a FHIR `Patient` resource by search criteria.",
+          "message": "Умовно оновити ресурс FHIR `Patient` за критеріями пошуку."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Conditional Update Patient",
+          "message": "Умовне оновлення Patient"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Параметри пошуку FHIR, що використовуються в URL-адресі запиту умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Параметри пошуку для умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Patient` для умовного оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Patient`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Conditionally update a FHIR Patient resource",
+          "message": "Умовно оновити ресурс FHIR Patient"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Conditionally update a FHIR resource by type and search parameters.",
+          "message": "Умовно оновити ресурс FHIR за типом та параметрами пошуку."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Conditional Update Resource",
+          "message": "Умовне оновлення ресурсу"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Параметри пошуку FHIR, що використовуються в URL-адресі запиту умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Параметри пошуку для умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` matching `resource_type`.",
+          "message": "Тіло ресурсу FHIR у вигляді JSON-сумісного хешу. Хеш повинен містити `resourceType`, що відповідає `resource_type`."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update conditionally",
+          "message": "Тип ресурсу FHIR для умовного оновлення"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Conditionally update a FHIR resource",
+          "message": "Умовно оновити ресурс FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Create a FHIR `Observation` resource with resource-specific action metadata.",
+          "message": "Створити ресурс FHIR `Observation` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Create Observation",
+          "message": "Створити Observation"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Пошуковий вираз умовного створення FHIR, надісланий у заголовку `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Критерії умовного створення"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to create. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Observation` для створення. Хеш повинен містити `resourceType` з фіксованим значенням `Observation`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Create a FHIR Observation resource",
+          "message": "Створити ресурс FHIR Observation"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.desc": {
+          "source": "Create a FHIR `Bundle` resource with resource-specific action metadata.",
+          "message": "Створити ресурс FHIR `Bundle` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Create Bundle",
+          "message": "Створити Bundle"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Пошуковий вираз умовного створення FHIR, надісланий у заголовку `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Критерії умовного створення"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to create. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Bundle` для створення. Хеш повинен містити `resourceType` з фіксованим значенням `Bundle`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Create a FHIR Bundle resource",
+          "message": "Створити ресурс FHIR Bundle"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.desc": {
+          "source": "Create a FHIR `Patient` resource with resource-specific action metadata.",
+          "message": "Створити ресурс FHIR `Patient` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.display_name": {
+          "source": "Create Patient",
+          "message": "Створити Patient"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Пошуковий вираз умовного створення FHIR, надісланий у заголовку `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Критерії умовного створення"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to create. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Patient` для створення. Хеш повинен містити `resourceType` з фіксованим значенням `Patient`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Create a FHIR Patient resource",
+          "message": "Створити ресурс FHIR Patient"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.desc": {
+          "source": "Create a FHIR resource with an optional `If-None-Exist` conditional create header for idempotent writes.",
+          "message": "Створити ресурс FHIR з необов'язковим заголовком умовного створення `If-None-Exist` для ідемпотентного запису."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
+          "source": "Create Resource",
+          "message": "Створити ресурс"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Пошуковий вираз умовного створення FHIR, надісланий у заголовку `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Критерії умовного створення"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`",
+          "message": "Тіло ресурсу FHIR у вигляді JSON-сумісного хешу. Хеш повинен містити `resourceType`.\n\n**Приклад**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to create",
+          "message": "Тип ресурсу FHIR для створення"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
+          "source": "Create a FHIR resource",
+          "message": "Створити ресурс FHIR"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.desc": {
+          "source": "Read the server `CapabilityStatement` from the FHIR `metadata` endpoint.",
+          "message": "Прочитати `CapabilityStatement` сервера з кінцевої точки FHIR `metadata`."
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
+          "source": "Get Capability Statement",
+          "message": "Отримати Capability Statement"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
+          "source": "Read FHIR server metadata",
+          "message": "Прочитати метадані сервера FHIR"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.desc": {
+          "source": "Read the SMART on FHIR discovery document from `.well-known/smart-configuration`.",
+          "message": "Прочитати документ виявлення SMART on FHIR з `.well-known/smart-configuration`."
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
+          "source": "Get SMART Configuration",
+          "message": "Отримати конфігурацію SMART"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
+          "source": "Read SMART on FHIR discovery metadata",
+          "message": "Прочитати метадані виявлення SMART on FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Delete a FHIR `Observation` resource by logical `id`.",
+          "message": "Видалити ресурс FHIR `Observation` за логічним `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Delete Observation",
+          "message": "Видалити Observation"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Delete a FHIR Observation resource",
+          "message": "Видалити ресурс FHIR Observation"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.desc": {
+          "source": "Delete a FHIR `Bundle` resource by logical `id`.",
+          "message": "Видалити ресурс FHIR `Bundle` за логічним `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.display_name": {
+          "source": "Delete Bundle",
+          "message": "Видалити Bundle"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Delete a FHIR Bundle resource",
+          "message": "Видалити ресурс FHIR Bundle"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.desc": {
+          "source": "Delete a FHIR `Patient` resource by logical `id`.",
+          "message": "Видалити ресурс FHIR `Patient` за логічним `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.display_name": {
+          "source": "Delete Patient",
+          "message": "Видалити Patient"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.short_desc": {
+          "source": "Delete a FHIR Patient resource",
+          "message": "Видалити ресурс FHIR Patient"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.desc": {
+          "source": "Delete a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Видалити ресурс FHIR за типом та ID. Укажіть `etag`, щоб надіслати заголовок `If-Match` для оптимістичного керування паралелізмом."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
+          "source": "Delete Resource",
+          "message": "Видалити ресурс"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to delete",
+          "message": "Тип ресурсу FHIR для видалення"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
+          "source": "Delete a FHIR resource",
+          "message": "Видалити ресурс FHIR"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.desc": {
+          "source": "Expand a FHIR ValueSet by delegating to a terminology server. The `path` value is a relative ValueSet path such as `ValueSet/example`.",
+          "message": "Розширити FHIR ValueSet шляхом делегування серверу термінології. Значення `path` є відносним шляхом до ValueSet, таким як `ValueSet/example`."
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.display_name": {
+          "source": "Expand ValueSet",
+          "message": "Розширити ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ValueSet endpoint",
+          "message": "Відносний шлях FHIR до кінцевої точки ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.short_desc": {
+          "source": "ValueSet path",
+          "message": "Шлях до ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.desc": {
+          "source": "Optional FHIR `$expand` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"filter\": \"smi\"}`",
+          "message": "Необов'язкові параметри операції FHIR `$expand` у вигляді параметрів запиту. Ключі — це назви параметрів операції, прийняті сервером.\n\n**Приклад**: `{\"filter\": \"smi\"}`"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Параметри"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Параметри операції"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.short_desc": {
+          "source": "Call a ValueSet $expand operation",
+          "message": "Викликати операцію ValueSet $expand"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.desc": {
+          "source": "Look up code display, designation, and property metadata by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem path such as `CodeSystem/example`.",
+          "message": "Пошук відображення коду, позначення та метаданих властивостей шляхом делегування кінцевій точці термінології FHIR. Значення `path` є відносним шляхом до CodeSystem, таким як `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
+          "source": "Lookup Code",
+          "message": "Пошук коду"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem endpoint",
+          "message": "Відносний шлях FHIR до кінцевої точки CodeSystem"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "CodeSystem path",
+          "message": "Шлях до CodeSystem"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$lookup` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`",
+          "message": "Параметри операції FHIR `$lookup` у вигляді параметрів запиту. Ключі — це назви параметрів операції, прийняті сервером.\n\n**Приклад**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Параметри"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Параметри операції"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
+          "source": "Call a terminology $lookup operation",
+          "message": "Викликати операцію термінології $lookup"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FHIR R4** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати власний виклик HTTP / REST API до **FHIR R4**, використовуючи автентифікацію налаштованого з'єднання.\n\nУкажіть метод HTTP, шлях URI (відносно базового URL API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як стандартні дії в цьому додатку."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FHIR R4",
+          "message": "Зробити власний виклик API до FHIR R4"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.desc": {
+          "source": "Search FHIR `Observation` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Пошук ресурсів FHIR `Observation`. Використовуйте `params` для параметрів пошуку FHIR, які підтримуються сервером."
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.display_name": {
+          "source": "Search Observation",
+          "message": "Пошук Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Search FHIR Observation resources",
+          "message": "Пошук ресурсів FHIR Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.desc": {
+          "source": "Search FHIR `Bundle` resources and follow Bundle `next` pagination links.",
+          "message": "Пошук ресурсів FHIR `Bundle` та перехід за посиланнями пагінації Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
+          "source": "Search All Bundle",
+          "message": "Пошук усіх Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Максимальна кількість сторінок Bundle для отримання шляхом переходу за посиланнями пагінації `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Максимальна кількість сторінок"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Максимальна кількість сторінок Bundle для отримання"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
+          "source": "Search all FHIR Bundle resource pages",
+          "message": "Пошук по всіх сторінках ресурсів FHIR Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Search FHIR `Observation` resources and follow Bundle `next` pagination links.",
+          "message": "Пошук ресурсів FHIR `Observation` та перехід за посиланнями пагінації Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Search All Observation",
+          "message": "Пошук усіх Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Максимальна кількість сторінок Bundle для отримання шляхом переходу за посиланнями пагінації `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Максимальна кількість сторінок"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Максимальна кількість сторінок Bundle для отримання"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Search all FHIR Observation resource pages",
+          "message": "Пошук по всіх сторінках ресурсів FHIR Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.desc": {
+          "source": "Search FHIR `Patient` resources and follow Bundle `next` pagination links.",
+          "message": "Пошук ресурсів FHIR `Patient` та перехід за посиланнями пагінації Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
+          "source": "Search All Patient",
+          "message": "Пошук усіх Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Максимальна кількість сторінок Bundle для отримання шляхом переходу за посиланнями пагінації `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Максимальна кількість сторінок"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Максимальна кількість сторінок Bundle для отримання"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
+          "source": "Search all FHIR Patient resource pages",
+          "message": "Пошук по всіх сторінках ресурсів FHIR Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.desc": {
+          "source": "Search a FHIR resource type and follow Bundle `next` pagination links. The `params` hash remains available for advanced search parameters.",
+          "message": "Пошук за типом ресурсу FHIR та перехід за посиланнями пагінації Bundle `next`. Хеш `params` залишається доступним для розширених параметрів пошуку."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
+          "source": "Search All Resources",
+          "message": "Пошук усіх ресурсів"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Максимальна кількість сторінок Bundle для отримання шляхом переходу за посиланнями пагінації `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Максимальна кількість сторінок"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Максимальна кількість сторінок Bundle для отримання"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Тип ресурсу FHIR для пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
+          "source": "Search FHIR resources and follow pagination",
+          "message": "Пошук ресурсів FHIR та перехід за пагінацією"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.desc": {
+          "source": "Search FHIR `Bundle` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Пошук ресурсів FHIR `Bundle`. Використовуйте `params` для параметрів пошуку FHIR, які підтримуються сервером."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.display_name": {
+          "source": "Search Bundle",
+          "message": "Пошук Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.short_desc": {
+          "source": "Search FHIR Bundle resources",
+          "message": "Пошук ресурсів FHIR Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.desc": {
+          "source": "Search FHIR `Patient` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Пошук ресурсів FHIR `Patient`. Використовуйте `params` для параметрів пошуку FHIR, які підтримуються сервером."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.display_name": {
+          "source": "Search Patient",
+          "message": "Пошук Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.short_desc": {
+          "source": "Search FHIR Patient resources",
+          "message": "Пошук ресурсів FHIR Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.desc": {
+          "source": "Search a FHIR resource type. The `params` hash accepts FHIR search parameter names, including modifiers, chained parameters, `_include`, and `_revinclude`.",
+          "message": "Пошук типу ресурсу FHIR. Хеш `params` приймає назви параметрів пошуку FHIR, включаючи модифікатори, зчеплені параметри, `_include` та `_revinclude`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
+          "source": "Search Resources",
+          "message": "Пошук ресурсів"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку розміру сторінки FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Кількість"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Параметр пошуку FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку повного вмісту FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Параметр пошуку FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_include`; використовуйте список для повторюваних значень включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Параметр пошуку FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Пошук за ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Параметр пошуку FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Останнє оновлення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Параметр пошуку FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Параметр пошуку FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Безпека"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Параметр пошуку FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Параметри пошуку FHIR у вигляді хешу. Ключами є назви параметрів FHIR, такі як `family`, `_include` або `_revinclude`; значення списку надсилаються як повторювані параметри запиту.\n\n**Приклад**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Параметри пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Параметри пошуку FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Параметр пошуку FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_revinclude`; використовуйте список для повторюваних значень зворотного включення"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Параметр пошуку FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Тип ресурсу FHIR для пошуку"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Зручне поле, зіставлене з параметром пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Параметр пошуку FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Зручне поле, зіставлене з параметром повнотекстового пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Параметр пошуку FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
+          "source": "Search FHIR resources with query parameters",
+          "message": "Пошук ресурсів FHIR за допомогою параметрів запиту"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.desc": {
+          "source": "Submit a FHIR `Bundle` with `type` set to `transaction` or `batch` to the FHIR service base. Use this action when related resource writes must be processed together by the server.",
+          "message": "Надіслати FHIR `Bundle` із `type`, встановленим у `transaction` або `batch`, до базової адреси служби FHIR. Використовуйте цю дію, коли пов'язані записи ресурсів мають оброблятися сервером разом."
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
+          "source": "Submit Bundle",
+          "message": "Надіслати Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.desc": {
+          "source": "FHIR `Bundle` resource with `type` set to `transaction` or `batch`. The Bundle is POSTed to the FHIR service base for atomic transaction writes or batch execution.\n\n**Example**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`",
+          "message": "Ресурс FHIR `Bundle` із `type`, встановленим у `transaction` або `batch`. Ресурс Bundle надсилається методом POST до базової адреси служби FHIR для атомарних транзакційних записів або пакетного виконання.\n\n**Приклад**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.display_name": {
+          "source": "Bundle",
+          "message": "Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.short_desc": {
+          "source": "FHIR transaction or batch Bundle",
+          "message": "Транзакційний або пакетний Bundle FHIR"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
+          "source": "Submit a FHIR transaction or batch Bundle",
+          "message": "Надіслати транзакційний або пакетний Bundle FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.desc": {
+          "source": "Patch a FHIR `Bundle` resource by logical `id`.",
+          "message": "Застосувати патч до ресурсу FHIR `Bundle` за логічним `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.display_name": {
+          "source": "Patch Bundle",
+          "message": "Патч Bundle"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Тип вмісту документа патча; за замовчуванням `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Тип вмісту документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Тіло документа патча FHIR. Використовуйте `content_type`, щоб вибрати кодування JSON Patch, XML Patch або FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Патч"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Тіло документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.short_desc": {
+          "source": "Patch a FHIR Bundle resource",
+          "message": "Застосувати патч до ресурсу FHIR Bundle"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.desc": {
+          "source": "Patch a FHIR `Observation` resource by logical `id`.",
+          "message": "Застосувати патч до ресурсу FHIR `Observation` за логічним `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Patch Observation",
+          "message": "Патч Observation"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Тип вмісту документа патча; за замовчуванням `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Тип вмісту документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Тіло документа патча FHIR. Використовуйте `content_type`, щоб вибрати кодування JSON Patch, XML Patch або FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Патч"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Тіло документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Patch a FHIR Observation resource",
+          "message": "Застосувати патч до ресурсу FHIR Observation"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.desc": {
+          "source": "Patch a FHIR `Patient` resource by logical `id`.",
+          "message": "Застосувати патч до ресурсу FHIR `Patient` за логічним `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.display_name": {
+          "source": "Patch Patient",
+          "message": "Патч Patient"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Тип вмісту документа патча; за замовчуванням `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Тип вмісту документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Тіло документа патча FHIR. Використовуйте `content_type`, щоб вибрати кодування JSON Patch, XML Patch або FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Патч"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Тіло документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.short_desc": {
+          "source": "Patch a FHIR Patient resource",
+          "message": "Застосувати патч до ресурсу FHIR Patient"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.desc": {
+          "source": "Patch a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Застосувати патч до ресурсу FHIR за типом та ID. Укажіть `etag`, щоб надіслати заголовок `If-Match` для оптимістичної паралельності."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
+          "source": "Patch Resource",
+          "message": "Патч ресурсу"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Тип вмісту документа патча; за замовчуванням `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Тип вмісту документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Тіло документа патча FHIR. Використовуйте `content_type`, щоб вибрати кодування JSON Patch, XML Patch або FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Патч"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Тіло документа патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to patch",
+          "message": "Тип ресурсу FHIR для застосування патча"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
+          "source": "Patch a FHIR resource",
+          "message": "Застосувати патч до ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.desc": {
+          "source": "Read one FHIR `Bundle` resource instance using its logical `id`.",
+          "message": "Прочитати один екземпляр ресурсу FHIR `Bundle`, використовуючи його логічний `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.display_name": {
+          "source": "Read Bundle",
+          "message": "Читати Bundle"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.short_desc": {
+          "source": "Read a FHIR Bundle resource by ID",
+          "message": "Прочитати ресурс FHIR Bundle за ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Read one FHIR `Observation` resource instance using its logical `id`.",
+          "message": "Прочитати один екземпляр ресурсу FHIR `Observation`, використовуючи його логічний `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Read Observation",
+          "message": "Читати Observation"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Read a FHIR Observation resource by ID",
+          "message": "Прочитати ресурс FHIR Observation за ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.desc": {
+          "source": "Read one FHIR `Patient` resource instance using its logical `id`.",
+          "message": "Прочитати один екземпляр ресурсу FHIR `Patient`, використовуючи його логічний `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.display_name": {
+          "source": "Read Patient",
+          "message": "Читати Patient"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.short_desc": {
+          "source": "Read a FHIR Patient resource by ID",
+          "message": "Прочитати ресурс FHIR Patient за ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read one FHIR resource instance using its `resource_type` and logical `id`.",
+          "message": "Прочитати один екземпляр ресурсу FHIR, використовуючи його `resource_type` та логічний `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "Читати ресурс"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type, for example `Patient` or `Observation`",
+          "message": "Тип ресурсу FHIR, наприклад `Patient` або `Observation`"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read a FHIR resource by type and ID",
+          "message": "Прочитати ресурс FHIR за типом та ID"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.desc": {
+          "source": "Translate a code through a FHIR ConceptMap by delegating to a terminology endpoint. The `path` value is a relative ConceptMap path such as `ConceptMap/example`.",
+          "message": "Перекласти код через FHIR ConceptMap шляхом делегування кінцевій точці термінології. Значення `path` — це відносний шлях ConceptMap, такий як `ConceptMap/example`."
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
+          "source": "Translate Code",
+          "message": "Перекласти код"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ConceptMap endpoint",
+          "message": "Відносний шлях FHIR до кінцевої точки ConceptMap"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "ConceptMap path",
+          "message": "Шлях ConceptMap"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$translate` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`",
+          "message": "Параметри операції FHIR `$translate` як параметри запиту. Ключі — це назви параметрів операції, які приймає сервер.\n\n**Приклад**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Параметри"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Параметри операції"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {
+          "source": "Call a terminology $translate operation",
+          "message": "Викликати операцію термінології $translate"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Update a FHIR `Observation` resource by logical `id` with resource-specific action metadata.",
+          "message": "Оновити ресурс FHIR `Observation` за логічним `id` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Update Observation",
+          "message": "Оновити Observation"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Observation` для оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Observation`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Update a FHIR Observation resource",
+          "message": "Оновити ресурс FHIR Observation"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Update a FHIR `Bundle` resource by logical `id` with resource-specific action metadata.",
+          "message": "Оновити ресурс FHIR `Bundle` за логічним `id` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Update Bundle",
+          "message": "Оновити Bundle"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Bundle` для оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Bundle`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Update a FHIR Bundle resource",
+          "message": "Оновити ресурс FHIR Bundle"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Update a FHIR `Patient` resource by logical `id` with resource-specific action metadata.",
+          "message": "Оновити ресурс FHIR `Patient` за логічним `id` з метаданими дій, специфічними для ресурсу."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Update Patient",
+          "message": "Оновити Patient"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Patient` для оновлення. Хеш повинен містити `resourceType` із фіксованим значенням `Patient`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Update a FHIR Patient resource",
+          "message": "Оновити ресурс FHIR Patient"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Update a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Оновити ресурс FHIR за типом та ID. Укажіть `etag`, щоб надіслати заголовок `If-Match` для оптимістичної паралельності."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Update Resource",
+          "message": "Оновити ресурс"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Значення ETag, надіслане в заголовку `If-Match` для оптимістичного керування паралелізмом"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "ETag версії FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Логічний ID екземпляра ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` and should include the logical `id` being updated.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`",
+          "message": "Тіло ресурсу FHIR у вигляді JSON-сумісного хешу. Хеш повинен містити `resourceType` та має містити логічний `id`, який оновлюється.\n\n**Приклад**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update",
+          "message": "Тип ресурсу FHIR для оновлення"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Update a FHIR resource",
+          "message": "Оновити ресурс FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.desc": {
+          "source": "Validate a code by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem or ValueSet path such as `CodeSystem/example`.",
+          "message": "Перевірити код шляхом делегування до кінцевої точки термінології FHIR. Значення `path` є відносним шляхом до CodeSystem або ValueSet, наприклад `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
+          "source": "Validate Code",
+          "message": "Перевірити код"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem or ValueSet endpoint",
+          "message": "Відносний шлях FHIR до кінцевої точки CodeSystem або ValueSet"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Шлях"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.short_desc": {
+          "source": "CodeSystem or ValueSet path",
+          "message": "Шлях CodeSystem або ValueSet"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR `$validate-code` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"code\": \"abc\"}`",
+          "message": "Параметри операції FHIR `$validate-code` як параметри запиту. Ключі є назвами параметрів операції, які приймаються сервером.\n\n**Приклад**: `{\"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Параметри"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Параметри операції"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
+          "source": "Call a terminology $validate-code operation",
+          "message": "Викликати операцію термінології $validate-code"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.desc": {
+          "source": "Validate a FHIR `Bundle` resource by delegating to the server's `$validate` operation.",
+          "message": "Перевірити ресурс FHIR `Bundle`, делегуючи операції сервера `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.display_name": {
+          "source": "Validate Bundle",
+          "message": "Перевірити Bundle"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Необов'язковий логічний ID FHIR для перевірки на рівні екземпляра"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to validate. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Bundle` для перевірки. Хеш повинен містити `resourceType` із фіксованим значенням `Bundle`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.short_desc": {
+          "source": "Validate a FHIR Bundle resource",
+          "message": "Перевірити ресурс FHIR Bundle"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.desc": {
+          "source": "Validate a FHIR `Observation` resource by delegating to the server's `$validate` operation.",
+          "message": "Перевірити ресурс FHIR `Observation`, делегуючи операції сервера `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Validate Observation",
+          "message": "Перевірити Observation"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Необов'язковий логічний ID FHIR для перевірки на рівні екземпляра"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to validate. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Observation` для перевірки. Хеш повинен містити `resourceType` із фіксованим значенням `Observation`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Validate a FHIR Observation resource",
+          "message": "Перевірити ресурс FHIR Observation"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.desc": {
+          "source": "Validate a FHIR `Patient` resource by delegating to the server's `$validate` operation.",
+          "message": "Перевірити ресурс FHIR `Patient`, делегуючи операції сервера `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.display_name": {
+          "source": "Validate Patient",
+          "message": "Перевірити Patient"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Необов'язковий логічний ID FHIR для перевірки на рівні екземпляра"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to validate. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Тіло ресурсу FHIR `Patient` для перевірки. Хеш повинен містити `resourceType` із фіксованим значенням `Patient`.\n\n**Приклад**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.short_desc": {
+          "source": "Validate a FHIR Patient resource",
+          "message": "Перевірити ресурс FHIR Patient"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.desc": {
+          "source": "Validate a FHIR resource by delegating to the server's `$validate` operation. Use `resource_type` and `id` for type-level or instance-level validation.",
+          "message": "Перевірити ресурс FHIR, делегуючи операції сервера `$validate`. Використовуйте `resource_type` та `id` для перевірки на рівні типу або екземпляра."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
+          "source": "Validate Resource",
+          "message": "Перевірити ресурс"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Необов'язковий логічний ID FHIR для перевірки на рівні екземпляра"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Логічний ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body to validate. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`",
+          "message": "Тіло ресурсу FHIR для перевірки. Хеш повинен містити `resourceType`.\n\n**Приклад**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Ресурс"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Тіло ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "Optional FHIR resource type for type-level or instance-level validation",
+          "message": "Необов'язковий тип ресурсу FHIR для перевірки на рівні типу або екземпляра"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Тип ресурсу"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Тип ресурсу FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
+          "source": "Call the FHIR $validate operation",
+          "message": "Викликати операцію FHIR $validate"
+        },
+        "app.RkhJUg.desc": {
+          "source": "Connect to HL7 FHIR R4 JSON servers for healthcare interoperability.\n\nSupported operations:\n- **Metadata**: read `CapabilityStatement` and SMART configuration\n- **Resources**: read, search, paginated search, create, submit transaction/batch Bundles, update, conditional update, patch, delete, and validate resources advertised by the server `CapabilityStatement`\n- **Generated R4 resources**: use typed actions for supported `Patient`, `Observation`, and `Bundle` resources\n- **Terminology**: delegate `$validate-code`, `$lookup`, `$translate`, and `$expand` operations to a FHIR server\n\n**Note**: Generic actions validate resource names against the generated R4 catalog and the server `CapabilityStatement`. Structured metadata is included for `Patient`, `Observation`, and `Bundle`.",
+          "message": "Підключення до серверів HL7 FHIR R4 JSON для взаємодії в галузі охорони здоров'я.\n\nПідтримувані операції:\n- **Метадані**: читання `CapabilityStatement` та конфігурації SMART\n- **Ресурси**: читання, пошук, пагінований пошук, створення, надсилання пакета transaction/batch Bundles, оновлення, умовне оновлення, виправлення (patch), видалення та перевірка ресурсів, які оголошені сервером `CapabilityStatement`\n- **Згенеровані ресурси R4**: використання типізованих дій для підтримуваних ресурсів `Patient`, `Observation` та `Bundle`\n- **Термінологія**: делегування операцій `$validate-code`, `$lookup`, `$translate` та `$expand` серверу FHIR\n\n**Примітка**: Загальні дії перевіряють назви ресурсів за згенерованим каталогом R4 та сервером `CapabilityStatement`. Структуровані метадані включено для `Patient`, `Observation` та `Bundle`."
+        },
+        "app.RkhJUg.display_name": {
+          "source": "FHIR R4",
+          "message": "FHIR R4"
+        },
+        "app.RkhJUg.short_desc": {
+          "source": "FHIR R4 JSON server integration",
+          "message": "Інтеграція з сервером FHIR R4 JSON"
+        }
+      }
+    }
+  }
+}

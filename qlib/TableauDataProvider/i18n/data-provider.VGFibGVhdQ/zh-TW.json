@@ -1,0 +1,1465 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project in Tableau",
+          "message": "在 Tableau 中建立新專案"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create a Project",
+          "message": "建立專案"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "由擁有者管理"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "鎖定至專案"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "鎖定至專案（不含巢狀）"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "專案的內容權限模式"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "內容權限"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "內容權限模式"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the project",
+          "message": "專案說明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "專案說明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project to create",
+          "message": "要建立的專案名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "專案名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The ID of the parent project, if creating a nested project",
+          "message": "父專案的 ID（若建立巢狀專案）"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "父專案 ID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The parent project ID",
+          "message": "父專案 ID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project",
+          "message": "建立新專案"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.desc": {
+          "source": "Create a new user in Tableau",
+          "message": "在 Tableau 中建立新使用者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.display_name": {
+          "source": "Create a User",
+          "message": "建立使用者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "OpenID Connect 驗證"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "SAML 驗證"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "使用伺服器預設驗證"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "包含多重要素驗證的 Tableau ID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The authentication setting for the user",
+          "message": "使用者的驗證設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "驗證設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "驗證設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.desc": {
+          "source": "The username for the new user",
+          "message": "新使用者的使用者名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.display_name": {
+          "source": "Username",
+          "message": "使用者名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.short_desc": {
+          "source": "The username",
+          "message": "使用者名稱"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "建立者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer（可發布）"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "未授權"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "檢視者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The site role for the user",
+          "message": "使用者的站台角色"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "站台角色"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The site role for the user",
+          "message": "使用者的站台角色"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.short_desc": {
+          "source": "Create a new user",
+          "message": "建立新使用者"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.desc": {
+          "source": "Add a tag to a datasource in Tableau",
+          "message": "在 Tableau 中為資料來源新增標籤"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.display_name": {
+          "source": "Add Tag to Datasource",
+          "message": "為資料來源新增標籤"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to add a tag to",
+          "message": "要新增標籤的資料來源唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to tag",
+          "message": "要標記的資料來源"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to add to the datasource",
+          "message": "要新增至資料來源的標籤名稱"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "標籤名稱"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to add",
+          "message": "要新增的標籤"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.short_desc": {
+          "source": "Add a tag to a datasource",
+          "message": "為資料來源新增標籤"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.desc": {
+          "source": "Retrieve a single datasource by ID from Tableau",
+          "message": "透過 ID 從 Tableau 擷取單一資料來源"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.display_name": {
+          "source": "Get a Datasource",
+          "message": "取得資料來源"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.short_desc": {
+          "source": "Get a single datasource by ID",
+          "message": "透過 ID 取得單一資料來源"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Retrieve a single extract refresh task by ID from Tableau",
+          "message": "透過 ID 從 Tableau 擷取單一擷取重新整理工作"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Get an Extract Refresh Task",
+          "message": "取得擷取重新整理工作"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "任務 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Get a single extract refresh task by ID",
+          "message": "透過 ID 取得單一擷取重新整理工作"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.desc": {
+          "source": "Retrieve a single project by ID from Tableau",
+          "message": "透過 ID 從 Tableau 擷取單一專案"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.display_name": {
+          "source": "Get a Project",
+          "message": "取得專案"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.short_desc": {
+          "source": "Get a single project by ID",
+          "message": "依 ID 取得單筆專案"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single user by ID from Tableau",
+          "message": "透過 ID 從 Tableau 擷取單一使用者"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "取得使用者"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "依 ID 取得單一使用者"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.desc": {
+          "source": "Download the datasource file content from Tableau",
+          "message": "從 Tableau 下載資料來源檔案內容"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.display_name": {
+          "source": "Download a Datasource",
+          "message": "下載資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to download",
+          "message": "要下載的資料來源唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to download",
+          "message": "要下載的資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.short_desc": {
+          "source": "Download a datasource file",
+          "message": "下載資料來源檔案"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.desc": {
+          "source": "Fires when a datasource is updated in Tableau. Uses webhooks to detect events.",
+          "message": "當 Tableau 中的資料來源更新時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.display_name": {
+          "source": "Datasource Updated",
+          "message": "資料來源已更新"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a datasource is updated",
+          "message": "在資料來源更新時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new datasource is created in Tableau. Uses webhooks to detect events.",
+          "message": "當 Tableau 中建立新資料來源時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.display_name": {
+          "source": "Datasource Created",
+          "message": "已建立資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a datasource is created",
+          "message": "在建立資料來源時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.desc": {
+          "source": "Fires when a datasource is deleted in Tableau. Uses webhooks to detect events.",
+          "message": "在 Tableau 中刪除資料來源時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.display_name": {
+          "source": "Datasource Deleted",
+          "message": "已刪除資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when a datasource is deleted",
+          "message": "在刪除資料來源時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.desc": {
+          "source": "Fires when a datasource extract refresh fails in Tableau. Uses webhooks to detect events.",
+          "message": "在 Tableau 中資料來源擷取重新整理失敗時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.display_name": {
+          "source": "Datasource Refresh Failed",
+          "message": "資料來源重新整理失敗"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.short_desc": {
+          "source": "Trigger when a datasource refresh fails",
+          "message": "在資料來源重新整理失敗時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.desc": {
+          "source": "Fires when a datasource extract refresh starts in Tableau. Uses webhooks to detect events.",
+          "message": "在 Tableau 中資料來源擷取重新整理開始時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.display_name": {
+          "source": "Datasource Refresh Started",
+          "message": "資料來源重新整理已開始"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.short_desc": {
+          "source": "Trigger when a datasource refresh starts",
+          "message": "在資料來源重新整理開始時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.desc": {
+          "source": "Fires when a datasource extract refresh succeeds in Tableau. Uses webhooks to detect events.",
+          "message": "在 Tableau 中資料來源擷取重新整理成功時觸發。使用 Webhook 偵測事件。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.display_name": {
+          "source": "Datasource Refresh Succeeded",
+          "message": "資料來源重新整理成功"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.short_desc": {
+          "source": "Trigger when a datasource refresh succeeds",
+          "message": "在資料來源重新整理成功時觸發"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Delete a datasource from Tableau",
+          "message": "從 Tableau 中刪除資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete a Datasource",
+          "message": "刪除資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to delete",
+          "message": "要刪除之資料來源的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to delete",
+          "message": "要刪除的資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Delete a datasource",
+          "message": "刪除資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Delete an extract refresh task from Tableau",
+          "message": "從 Tableau 中刪除擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Delete an Extract Refresh Task",
+          "message": "刪除擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.desc": {
+          "source": "The unique identifier of the extract refresh task to delete",
+          "message": "要刪除之擷取重新整理任務的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The extract refresh task to delete",
+          "message": "要刪除的擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Delete an extract refresh task",
+          "message": "刪除擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.desc": {
+          "source": "Delete a project from Tableau",
+          "message": "從 Tableau 中刪除專案"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.display_name": {
+          "source": "Delete a Project",
+          "message": "刪除專案"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to delete",
+          "message": "要刪除專案的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to delete",
+          "message": "要刪除的專案"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
+          "source": "Delete a project",
+          "message": "刪除專案"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.desc": {
+          "source": "Remove a tag from a datasource in Tableau",
+          "message": "從 Tableau 中的資料來源移除標籤"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete Tag from Datasource",
+          "message": "從資料來源刪除標籤"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to remove a tag from",
+          "message": "要從中移除標籤之資料來源的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to remove the tag from",
+          "message": "要從中移除標籤的資料來源"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to remove from the datasource",
+          "message": "要從資料來源中移除的標籤名稱"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "標籤名稱"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to remove",
+          "message": "要移除的標籤"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Remove a tag from a datasource",
+          "message": "從資料來源移除標籤"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.desc": {
+          "source": "Delete a user from Tableau",
+          "message": "從 Tableau 中刪除使用者"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.display_name": {
+          "source": "Delete a User",
+          "message": "刪除使用者"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to delete",
+          "message": "要刪除之使用者的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user to delete",
+          "message": "要刪除的使用者"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.short_desc": {
+          "source": "Delete a user",
+          "message": "刪除使用者"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.desc": {
+          "source": "List extract refresh tasks in Tableau with optional filtering",
+          "message": "列出 Tableau 中的擷取重新整理任務，並可選擇性篩選"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.display_name": {
+          "source": "List Extract Refresh Tasks",
+          "message": "列出擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.desc": {
+          "source": "Filter by task ID for single record lookup",
+          "message": "依任務 ID 篩選以查詢單一記錄"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "任務 ID"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "依任務 ID 篩選"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.short_desc": {
+          "source": "List extract refresh tasks",
+          "message": "列出擷取重新整理任務"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tableau** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Tableau** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式返回。\n\n對於尚未在此應用程式中作為一級動作公開的端點，請使用此動作。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tableau",
+          "message": "對 Tableau 發出自訂 API 呼叫"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.desc": {
+          "source": "Search for datasources in Tableau with optional filtering",
+          "message": "在 Tableau 中搜尋資料來源，並可選擇性篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.display_name": {
+          "source": "Search Datasources",
+          "message": "搜尋資料來源"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "Filter by datasource ID for single record lookup",
+          "message": "依資料來源 ID 篩選以查詢單一記錄"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "Filter by datasource ID",
+          "message": "依資料來源 ID 篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.desc": {
+          "source": "Filter datasources by name",
+          "message": "依名稱篩選資料來源"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "依名稱篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.short_desc": {
+          "source": "Search for datasources",
+          "message": "搜尋資料來源"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects in Tableau with optional filtering",
+          "message": "在 Tableau 中搜尋專案，並可選擇性篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "搜尋專案"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.desc": {
+          "source": "Filter projects by name",
+          "message": "依名稱篩選專案"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "依名稱篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.desc": {
+          "source": "Filter by project ID for single record lookup",
+          "message": "依專案 ID 篩選以查詢單一記錄"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "Filter by project ID",
+          "message": "依專案 ID 篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects",
+          "message": "搜尋專案"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.desc": {
+          "source": "Search for users in Tableau with optional filtering",
+          "message": "在 Tableau 中搜尋使用者，並可選擇性篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.display_name": {
+          "source": "Search Users",
+          "message": "搜尋使用者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.desc": {
+          "source": "Filter users by name",
+          "message": "依名稱篩選使用者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "依名稱篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "建立者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer（可發布）"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "未授權"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "檢視者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.desc": {
+          "source": "Filter users by site role",
+          "message": "依站台角色篩選使用者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "站台角色"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "Filter by site role",
+          "message": "依站台角色篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by user ID for single record lookup",
+          "message": "依使用者 ID 篩選以查詢單一記錄"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "依使用者 ID 篩選"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.short_desc": {
+          "source": "Search for users",
+          "message": "搜尋使用者"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.desc": {
+          "source": "Fires when new datasources are detected in Tableau. Uses polling to detect new records.",
+          "message": "在 Tableau 中偵測到新資料來源時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.display_name": {
+          "source": "New Datasource",
+          "message": "新資料來源"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.short_desc": {
+          "source": "Trigger when a new datasource appears",
+          "message": "在出現新資料來源時觸發"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.desc": {
+          "source": "Fires when new projects are detected in Tableau. Uses polling to detect new records.",
+          "message": "在 Tableau 中偵測到新專案時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.display_name": {
+          "source": "New Project",
+          "message": "新專案"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.short_desc": {
+          "source": "Trigger when a new project appears",
+          "message": "在出現新專案時觸發"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Update an existing datasource in Tableau",
+          "message": "更新 Tableau 中的現有資料來源"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Update a Datasource",
+          "message": "更新資料來源"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.desc": {
+          "source": "A note about the datasource certification",
+          "message": "關於資料來源認證的附註"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.display_name": {
+          "source": "Certification Note",
+          "message": "認證附註"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.short_desc": {
+          "source": "The certification note",
+          "message": "認證附註"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to update",
+          "message": "要更新的資料來源唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID to update",
+          "message": "要更新的資料來源 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.desc": {
+          "source": "Whether the datasource is certified",
+          "message": "資料來源是否已認證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.display_name": {
+          "source": "Is Certified",
+          "message": "已認證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.short_desc": {
+          "source": "Whether the datasource is certified",
+          "message": "資料來源是否已認證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.desc": {
+          "source": "The new name of the datasource",
+          "message": "資料來源的新名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.short_desc": {
+          "source": "The new datasource name",
+          "message": "新資料來源名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.desc": {
+          "source": "The ID of the project to move the datasource to",
+          "message": "要將資料來源移至的專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to move the datasource to",
+          "message": "要將資料來源移至的專案"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Update an existing datasource",
+          "message": "更新現有資料來源"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.desc": {
+          "source": "Update an existing project in Tableau",
+          "message": "更新 Tableau 中的現有專案"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.display_name": {
+          "source": "Update a Project",
+          "message": "更新專案"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "由擁有者管理"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "鎖定至專案"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "鎖定至專案（不含巢狀）"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "專案的內容權限模式"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "內容權限"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "內容權限模式"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the project",
+          "message": "專案的新描述"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new project description",
+          "message": "新專案描述"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the project",
+          "message": "專案的新名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The new project name",
+          "message": "新專案名稱"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The new parent project ID for moving the project",
+          "message": "用於移動專案的新父專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "父專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The new parent project ID",
+          "message": "新父專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to update",
+          "message": "要更新的專案唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID to update",
+          "message": "要更新的專案 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.short_desc": {
+          "source": "Update an existing project",
+          "message": "更新現有專案"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.desc": {
+          "source": "Update an existing user in Tableau",
+          "message": "更新 Tableau 中的現有使用者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.display_name": {
+          "source": "Update a User",
+          "message": "更新使用者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "OpenID Connect 驗證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "SAML 驗證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "使用伺服器預設驗證"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "包含多重要素驗證的 Tableau ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The new authentication setting for the user",
+          "message": "使用者的全新驗證設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "驗證設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "驗證設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.desc": {
+          "source": "The new email address of the user",
+          "message": "使用者的全新電子郵件地址"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.short_desc": {
+          "source": "The user's email address",
+          "message": "使用者的電子郵件地址"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.desc": {
+          "source": "The new full name of the user",
+          "message": "使用者的全新全名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.display_name": {
+          "source": "Full Name",
+          "message": "全名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.short_desc": {
+          "source": "The user's full name",
+          "message": "使用者的全名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "建立者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer（可發布）"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "未授權"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "檢視者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The new site role for the user",
+          "message": "使用者的全新網站角色"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "站台角色"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The user's site role",
+          "message": "使用者的網站角色"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to update",
+          "message": "要更新之使用者的唯一識別碼"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID to update",
+          "message": "要更新的使用者 ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.short_desc": {
+          "source": "Update an existing user",
+          "message": "更新現有使用者"
+        },
+        "app.VGFibGVhdQ.desc": {
+          "source": "Tableau is a visual analytics and business intelligence platform for data exploration and dashboard creation.\n\nThis integration supports datasources, projects, users, extract refresh tasks, and event triggers.",
+          "message": "Tableau 是一個用於資料探索和儀表板建立的視覺化分析與商業智慧平台。\n\n此整合支援資料來源、專案、使用者、擷取重新整理任務和事件觸發器。"
+        },
+        "app.VGFibGVhdQ.display_name": {
+          "source": "Tableau",
+          "message": "Tableau"
+        },
+        "app.VGFibGVhdQ.short_desc": {
+          "source": "Tableau analytics and data visualization platform",
+          "message": "Tableau 分析與資料視覺化平台"
+        }
+      }
+    }
+  }
+}

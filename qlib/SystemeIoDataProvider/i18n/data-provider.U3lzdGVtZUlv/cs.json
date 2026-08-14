@@ -1,0 +1,1417 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Cancel a subscription in Systeme.io",
+          "message": "Zrušit předplatné v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Cancel Subscription",
+          "message": "Zrušit předplatné"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.desc": {
+          "source": "The unique identifier of the subscription to cancel",
+          "message": "Jedinečný identifikátor předplatného, které má být zrušeno"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID to cancel",
+          "message": "ID předplatného ke zrušení"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Cancel a subscription",
+          "message": "Zrušit předplatné"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Add a contact as a member of a community in Systeme.io",
+          "message": "Přidat kontakt jako člena komunity v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Create Membership",
+          "message": "Vytvořit členství"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.desc": {
+          "source": "The unique identifier of the community to add the contact to",
+          "message": "Jedinečný identifikátor komunity, do které má být kontakt přidán"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID komunity"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.short_desc": {
+          "source": "The community to join",
+          "message": "Komunita, ke které se má připojit"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to add as a member",
+          "message": "Jedinečný identifikátor kontaktu, který má být přidán jako člen"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to add",
+          "message": "Kontakt k přidání"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Add a contact to a community",
+          "message": "Přidat kontakt do komunity"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Systeme.io",
+          "message": "Vytvořit nový kontakt v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "E-mailová adresa vytvářeného kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "Seznam hodnot vlastních polí, které se mají u kontaktu nastavit. Každá položka by měla být hash s vlastnostmi `slug` a `value`.\n\n**Příklad:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastních polí"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "Jazykové a místní nastavení (locale) kontaktu (např. `en` pro angličtinu, `fr` pro francouzštinu)"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Národní prostředí"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "Jazykové a místní nastavení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Příjmení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonní číslo"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Create a new custom contact field in Systeme.io",
+          "message": "Vytvořit nové vlastní pole kontaktu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Create Contact Field",
+          "message": "Vytvořit pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The display name of the custom contact field to create",
+          "message": "Zobrazovaný název vytvářeného vlastního pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "Field display name",
+          "message": "Zobrazovaný název pole"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier for the custom contact field",
+          "message": "Jedinečný identifikátor (slug) pro vlastní pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug identifier",
+          "message": "Identifikátor (slug) pole"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Create a custom contact field",
+          "message": "Vytvořit vlastní pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Enroll a contact in a course in Systeme.io",
+          "message": "Zapsat kontakt do kurzu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create Enrollment",
+          "message": "Vytvořit zápis"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.desc": {
+          "source": "The unique identifier of the course to enroll the contact in",
+          "message": "Jedinečný identifikátor kurzu, do kterého má být kontakt zapsán"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.display_name": {
+          "source": "Course ID",
+          "message": "ID kurzu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.short_desc": {
+          "source": "The course to enroll in",
+          "message": "Kurz k zápisu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to enroll",
+          "message": "Jedinečný identifikátor kontaktu, který má být zapsán"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to enroll",
+          "message": "Kontakt k zápisu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmRyaXBwaW5nX2NvbnRlbnQ.display_name": {
+          "source": "Dripping Content",
+          "message": "Postupné uvolňování obsahu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmZ1bGxfYWNjZXNz.display_name": {
+          "source": "Full Access",
+          "message": "Plný přístup"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOnBhcnRpYWxfYWNjZXNz.display_name": {
+          "source": "Partial Access",
+          "message": "Částečný přístup"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.desc": {
+          "source": "The type of access to grant the contact",
+          "message": "Typ přístupu, který má být kontaktu udělen"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.display_name": {
+          "source": "Access Type",
+          "message": "Typ přístupu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.short_desc": {
+          "source": "Type of course access",
+          "message": "Typ přístupu ke kurzu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.desc": {
+          "source": "List of module IDs to grant access to. Required when `accessType` is `partial_access`",
+          "message": "Seznam ID modulů, ke kterým má být udělen přístup. Vyžadováno, když je `accessType` nastaveno na `partial_access`"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.display_name": {
+          "source": "Modules",
+          "message": "Moduly"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.short_desc": {
+          "source": "Module IDs for partial access",
+          "message": "ID modulů pro částečný přístup"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "Zapsat kontakt do kurzu"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Systeme.io",
+          "message": "Vytvořit nový štítek v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create Tag",
+          "message": "Vytvořit štítek"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "Název vytvářeného štítku"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Název štítku"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Vytvořit nový štítek"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.desc": {
+          "source": "Assign a tag to a contact in Systeme.io",
+          "message": "Přiřadit štítek ke kontaktu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Assign Tag to Contact",
+          "message": "Přiřadit štítek ke kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to assign the tag to",
+          "message": "Jedinečný identifikátor kontaktu, kterému má být štítek přiřazen"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to assign to the contact",
+          "message": "Jedinečný identifikátor štítku, který má být kontaktu přiřazen"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to assign",
+          "message": "ID štítku k přiřazení"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Assign a tag to a contact",
+          "message": "Přiřadit štítek ke kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "Načíst jeden kontakt podle jeho ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získat kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Získat jeden kontakt podle ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Retrieve a single custom contact field by its slug",
+          "message": "Získat jedno vlastní pole kontaktu podle jeho identifikátoru slug"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Get Contact Field",
+          "message": "Získat pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "The contact field slug",
+          "message": "Slug pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Get a single contact field by slug",
+          "message": "Získat jedno pole kontaktu podle slugu"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by its ID",
+          "message": "Načíst jeden štítek podle jeho ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Získat štítek"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Získat jeden štítek podle ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Remove a contact's membership from a community in Systeme.io",
+          "message": "Odebrat členství kontaktu v komunitě v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Delete Membership",
+          "message": "Smazat členství"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.desc": {
+          "source": "The unique identifier of the membership to delete",
+          "message": "Jedinečný identifikátor členství ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "ID členství"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.short_desc": {
+          "source": "The membership ID to delete",
+          "message": "ID členství ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Remove a community membership",
+          "message": "Odebrat členství v komunitě"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Systeme.io",
+          "message": "Smazat kontakt ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Smazat kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "Jedinečný identifikátor kontaktu, který se má odstranit"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "ID kontaktu ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Delete a custom contact field from Systeme.io",
+          "message": "Smazat vlastní pole kontaktu ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Delete Contact Field",
+          "message": "Smazat pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to delete",
+          "message": "Jedinečný identifikátor (slug) vlastního pole kontaktu ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to delete",
+          "message": "Slug pole ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Delete a custom contact field",
+          "message": "Smazat vlastní pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Remove a contact's enrollment from a course in Systeme.io",
+          "message": "Odebrat zápis kontaktu do kurzu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Delete Enrollment",
+          "message": "Smazat zápis"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the enrollment to delete",
+          "message": "Jedinečný identifikátor zápisu ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "ID zápisu"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.short_desc": {
+          "source": "The enrollment ID to delete",
+          "message": "ID zápisu ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Remove a course enrollment",
+          "message": "Odebrat zápis do kurzu"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Systeme.io",
+          "message": "Smazat štítek ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "Smazat štítek"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "Jedinečný identifikátor štítku, který se má odstranit"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to delete",
+          "message": "ID štítku ke smazání"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "Smazat štítek"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.desc": {
+          "source": "List tags from Systeme.io with cursor-based pagination",
+          "message": "Vypsat štítky ze Systeme.io pomocí kurzorového stránkování"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Seznam štítků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.short_desc": {
+          "source": "Get a specific tag",
+          "message": "Získat konkrétní štítek"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags with pagination",
+          "message": "Vypsat štítky se stránkováním"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities from Systeme.io",
+          "message": "Vypsat komunity ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "Vypsat komunity"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID komunity"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "Získat konkrétní komunitu"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities",
+          "message": "Vypsat komunity"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.desc": {
+          "source": "List custom contact fields from Systeme.io",
+          "message": "Vypsat vlastní pole kontaktů ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
+          "source": "List Contact Fields",
+          "message": "Vypsat pole kontaktů"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.short_desc": {
+          "source": "Get a specific field by slug",
+          "message": "Získat konkrétní pole podle slugu"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
+          "source": "List custom contact fields",
+          "message": "Vypsat vlastní pole kontaktů"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Systeme.io with cursor-based pagination",
+          "message": "Vypsat kontakty ze Systeme.io pomocí kurzorového stránkování"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Seznam kontaktů"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "Získat konkrétní kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts with pagination",
+          "message": "Vypsat kontakty se stránkováním"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses from Systeme.io",
+          "message": "Vypsat kurzy ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "Zobrazit kurzy"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.display_name": {
+          "source": "Course ID",
+          "message": "ID kurzu"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.short_desc": {
+          "source": "Get a specific course",
+          "message": "Získat konkrétní kurz"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List courses",
+          "message": "Vypsat kurzy"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments from Systeme.io",
+          "message": "Vypsat zápisy do kurzů ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "Zobrazit zápisy"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "ID zápisu"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific enrollment",
+          "message": "Získat konkrétní zápis"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List course enrollments",
+          "message": "Vypsat zápisy do kurzů"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.desc": {
+          "source": "List community memberships from Systeme.io",
+          "message": "Vypsat členství v komunitách ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "Členství v seznamech"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "ID členství"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.short_desc": {
+          "source": "Get a specific membership",
+          "message": "Získat konkrétní členství"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
+          "source": "List community memberships",
+          "message": "Vypsat členství v komunitách"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "List subscriptions from Systeme.io",
+          "message": "Vypsat předplatná ze Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "Vypsat předplatná"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID předplatného"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Get a specific subscription",
+          "message": "Získat konkrétní předplatné"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Pořadí"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Pořadí řazení"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List subscriptions",
+          "message": "Vypsat předplatná"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Systeme.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provede vlastní volání HTTP / REST API do **Systeme.io** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď se vrací jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci zatím nejsou k dispozici jako samostatné akce."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Systeme.io",
+          "message": "Provést vlastní volání API do Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Systeme.io",
+          "message": "Spustí se při vytvoření nového kontaktu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nový kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Spustit při vytvoření nového kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.desc": {
+          "source": "Fires when a new tag is created in Systeme.io",
+          "message": "Spustí se při vytvoření nového štítku v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
+          "source": "New Tag",
+          "message": "Nový štítek"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {
+          "source": "Trigger when a new tag is created",
+          "message": "Spustit při vytvoření nového štítku"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Remove a tag from a contact in Systeme.io",
+          "message": "Odebrat štítek z kontaktu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Odebrat štítek z kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to remove the tag from",
+          "message": "Jedinečný identifikátor kontaktu, ze kterého má být štítek odebrán"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to remove from the contact",
+          "message": "Jedinečný identifikátor štítku, který má být z kontaktu odebrán"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to remove",
+          "message": "ID štítku k odebrání"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Odebrat štítek z kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Systeme.io using merge-patch",
+          "message": "Aktualizovat existující kontakt v Systeme.io pomocí merge-patch"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "E-mailová adresa vytvářeného kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "Seznam hodnot vlastních polí, které se mají u kontaktu nastavit. Každá položka by měla být hash s vlastnostmi `slug` a `value`.\n\n**Příklad:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Hodnoty vlastních polí"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "Jedinečný identifikátor kontaktu, který se má aktualizovat"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "ID kontaktu, který se má aktualizovat"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "Jazykové a místní nastavení (locale) kontaktu (např. `en` pro angličtinu, `fr` pro francouzštinu)"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Národní prostředí"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "Jazykové a místní nastavení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Příjmení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonní číslo"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Update an existing custom contact field in Systeme.io",
+          "message": "Aktualizovat existující vlastní pole kontaktu v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Update Contact Field",
+          "message": "Aktualizovat pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the custom contact field",
+          "message": "Nový zobrazovaný název pro vlastní pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "New field display name",
+          "message": "Nový zobrazovaný název pole"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to update",
+          "message": "Jedinečný identifikátor (slug) vlastního pole kontaktu k aktualizaci"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to update",
+          "message": "Slug pole k aktualizaci"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Update a custom contact field",
+          "message": "Aktualizovat vlastní pole kontaktu"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Systeme.io",
+          "message": "Aktualizovat existující štítek v Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update Tag",
+          "message": "Aktualizovat štítek"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "Jedinečný identifikátor štítku, který se má aktualizovat"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítku"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to update",
+          "message": "ID štítku, který se má aktualizovat"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "Nový název pro štítek"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "New tag name",
+          "message": "Nový název štítku"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Aktualizovat existující štítek"
+        },
+        "app.U3lzdGVtZUlv.desc": {
+          "source": "Systeme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing online courses and communities, and handling affiliate programs.\n\nThis integration supports managing contacts, tags, custom fields, course enrollments, community memberships, and subscriptions.",
+          "message": "Systeme.io je online marketingová platforma „vše v jednom“ pro vytváření prodejních trychtýřů, provozování e-mailových kampaní, správu online kurzů a komunit a správu partnerských programů.\n\nTato integrace podporuje správu kontaktů, štítků, vlastních polí, zápisů do kurzů, členství v komunitách a předplatných."
+        },
+        "app.U3lzdGVtZUlv.display_name": {
+          "source": "Systeme.io",
+          "message": "Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.short_desc": {
+          "source": "Systeme.io all-in-one marketing platform",
+          "message": "Marketingová platforma Systeme.io vše v jednom"
+        }
+      }
+    }
+  }
+}

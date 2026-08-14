@@ -1,0 +1,1341 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads several images and publishes them as one post that readers swipe through.\n\nLinkedIn requires between 2 and 20 images; the images appear in the order given. Alt texts are matched to the images **by position**.",
+          "message": "Lädt mehrere Bilder hoch und veröffentlicht sie als einen Beitrag, durch den Leser wischen können.\n\nLinkedIn erfordert zwischen 2 und 20 Bilder; die Bilder erscheinen in der angegebenen Reihenfolge. Alt-Texte werden den Bildern **nach Position** zugeordnet."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Multi-Image Post",
+          "message": "Beitrag mit mehreren Bildern erstellen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "Der Text des Beitrags.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation – der Anzeigetext muss genau mit dem Namen der Entität übereinstimmen, einschließlich Groß-/Kleinschreibung, sonst bleibt er einfacher Text – und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.desc": {
+          "source": "Alternative text describing each image, used by screen readers and matched to `images` **by position**; a shorter list leaves the remaining images without alt text",
+          "message": "Alternativtext, der jedes Bild beschreibt, von Screenreadern verwendet wird und `images` **nach Position** zugeordnet wird; eine kürzere Liste belässt die restlichen Bilder ohne Alt-Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.display_name": {
+          "source": "Alt Texts",
+          "message": "Alt-Texte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.short_desc": {
+          "source": "Alternative text for each image, matched by position",
+          "message": "Alternativtext für jedes Bild, nach Position zugeordnet"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.desc": {
+          "source": "The images to post, in the order they should appear; LinkedIn requires between 2 and 20 of them",
+          "message": "Die zu veröffentlichenden Bilder in der Reihenfolge, in der sie erscheinen sollen; LinkedIn erfordert zwischen 2 und 20 davon"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "Bilder"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.short_desc": {
+          "source": "The images to post, in the order they should appear",
+          "message": "Die zu veröffentlichenden Bilder in der Reihenfolge, in der sie erscheinen sollen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with several images",
+          "message": "Einen Beitrag mit mehreren Bildern veröffentlichen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.desc": {
+          "source": "Publishes a post that links to an article, shown as a card under the post's text.\n\nLinkedIn does **not** scrape the URL, so the title, description and thumbnail have to be supplied here or the card appears bare. Upload a thumbnail with the **Upload Image** action first and pass the image URN it returns.",
+          "message": "Veröffentlicht einen Beitrag mit Link zu einem Artikel, der als Vorschaukarte unter dem Text des Beitrags angezeigt wird.\n\nLinkedIn ruft die URL **nicht** automatisch ab, daher müssen Titel, Beschreibung und Miniaturbild hier angegeben werden, da die Karte sonst leer dargestellt wird. Laden Sie zuerst ein Miniaturbild mit der Aktion **Upload Image** hoch und übergeben Sie die zurückgegebene Bild-URN."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
+          "source": "Create Article Post",
+          "message": "Artikelbeitrag erstellen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "Der Text des Beitrags.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation – der Anzeigetext muss genau mit dem Namen der Entität übereinstimmen, einschließlich Groß-/Kleinschreibung, sonst bleibt er einfacher Text – und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.desc": {
+          "source": "An uploaded image URN (`urn:li:image:...`) to show as the article's thumbnail; upload one with the **Upload Image** action first.  LinkedIn does not scrape the URL for an image",
+          "message": "Die URN eines hochgeladenen Bildes (`urn:li:image:...`), die als Miniaturbild des Artikels angezeigt werden soll; laden Sie zuerst eines mit der Aktion **Upload Image** hoch. LinkedIn ruft die URL nicht automatisch nach einem Bild ab"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.display_name": {
+          "source": "Thumbnail Image URN",
+          "message": "Miniaturbild-URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.short_desc": {
+          "source": "An uploaded image URN to show as the article's thumbnail",
+          "message": "Die URN eines hochgeladenen Bildes, die als Miniaturbild des Artikels angezeigt werden soll"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.desc": {
+          "source": "The title shown on the article card.\n\nLinkedIn does **not** scrape the URL for a title, so an article posted without one shows a card with no heading.",
+          "message": "Der auf der Artikelkarte angezeigte Titel.\n\nLinkedIn ruft die URL **nicht** automatisch nach einem Titel ab, sodass ein ohne Titel veröffentlichter Artikel eine Karte ohne Überschrift anzeigt."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.display_name": {
+          "source": "Article Title",
+          "message": "Artikeltitel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.short_desc": {
+          "source": "The title shown on the article card",
+          "message": "Der auf der Artikelkarte angezeigte Titel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.desc": {
+          "source": "The URL the article links to",
+          "message": "Die URL, auf die der Artikel verlinkt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.display_name": {
+          "source": "Article URL",
+          "message": "Artikel-URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.short_desc": {
+          "source": "The URL the article links to",
+          "message": "Die URL, auf die der Artikel verlinkt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.desc": {
+          "source": "The description shown on the article card; LinkedIn does not scrape the URL for one",
+          "message": "Die auf der Artikelkarte angezeigte Beschreibung; LinkedIn ruft die URL nicht automatisch danach ab"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Article Description",
+          "message": "Artikelbeschreibung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "The description shown on the article card",
+          "message": "Die auf der Artikelkarte angezeigte Beschreibung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
+          "source": "Publish a post linking to an article",
+          "message": "Einen Beitrag veröffentlichen, der auf einen Artikel verlinkt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads an image and publishes it as a post by the signed-in member.\n\nLinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is what screen readers announce, and LinkedIn shows it when the image cannot be loaded.",
+          "message": "Lädt ein Bild hoch und veröffentlicht es als Beitrag des angemeldeten Mitglieds.\n\nLinkedIn akzeptiert JPG, PNG und GIF. Die Angabe von Alt-Text lohnt sich: Er wird von Screenreadern vorgelesen und von LinkedIn angezeigt, wenn das Bild nicht geladen werden kann."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Image Post",
+          "message": "Bildbeitrag erstellen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "Der Text des Beitrags.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation – der Anzeigetext muss genau mit dem Namen der Entität übereinstimmen, einschließlich Groß-/Kleinschreibung, sonst bleibt er einfacher Text – und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.desc": {
+          "source": "The alternative text describing the image, used by screen readers; up to 4,086 characters, and best kept under 120",
+          "message": "Der Alternativtext, der das Bild beschreibt und von Screenreadern verwendet wird; bis zu 4.086 Zeichen, idealerweise unter 120"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.display_name": {
+          "source": "Alt Text",
+          "message": "Alt-Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.short_desc": {
+          "source": "The alternative text describing the image",
+          "message": "Der Alternativtext, der das Bild beschreibt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.desc": {
+          "source": "The image to post; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "Das zu veröffentlichende Bild; LinkedIn akzeptiert JPG, PNG und GIF mit weniger als 36.152.320 Pixeln"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "Bild"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.short_desc": {
+          "source": "The image to post",
+          "message": "Das zu veröffentlichende Bild"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the image",
+          "message": "Der mit dem Bild angezeigte Titel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Image Title",
+          "message": "Bildtitel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the image",
+          "message": "Der mit dem Bild angezeigte Titel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with an image",
+          "message": "Einen Beitrag mit einem Bild veröffentlichen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.desc": {
+          "source": "Publishes a text-only post as the signed-in member.\n\nReturns the post's URN and the URL a browser can open it at.",
+          "message": "Veröffentlicht einen reinen Textbeitrag als das angemeldete Mitglied.\n\nGibt die URN des Beitrags und die URL zurück, unter der ein Browser ihn öffnen kann."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
+          "source": "Create Text Post",
+          "message": "Textbeitrag erstellen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "Der Text des Beitrags.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation – der Anzeigetext muss genau mit dem Namen der Entität übereinstimmen, einschließlich Groß-/Kleinschreibung, sonst bleibt er einfacher Text – und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
+          "source": "Publish a text post",
+          "message": "Einen Textbeitrag veröffentlichen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.desc": {
+          "source": "Uploads a video and publishes it as a post by the signed-in member.\n\nLinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 minutes long. The upload is sent in parts, so a large video does not have to start again from the beginning if one part fails.\n\nLinkedIn processes a video after it is uploaded, so the post may take a short while to become visible even though this action has already returned its URN.",
+          "message": "Lädt ein Video hoch und veröffentlicht es als Beitrag des angemeldeten Mitglieds.\n\nLinkedIn akzeptiert MP4 zwischen 75 KB und 500 MB sowie zwischen 3 Sekunden und 30 Minuten Länge. Der Upload erfolgt in Teilen, sodass ein großes Video bei einem Fehler eines Teils nicht wieder von vorne beginnen muss.\n\nLinkedIn verarbeitet ein Video nach dem Hochladen, daher kann es einen kurzen Moment dauern, bis der Beitrag sichtbar wird, auch wenn diese Aktion die URN bereits zurückgegeben hat."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
+          "source": "Create Video Post",
+          "message": "Video-Beitrag erstellen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "Der Text des Beitrags.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation – der Anzeigetext muss genau mit dem Namen der Entität übereinstimmen, einschließlich Groß-/Kleinschreibung, sonst bleibt er einfacher Text – und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the video",
+          "message": "Der mit dem Video angezeigte Titel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Video Title",
+          "message": "Videotitel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the video",
+          "message": "Der mit dem Video angezeigte Titel"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.desc": {
+          "source": "The video to post; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "Das zu postende Video; LinkedIn akzeptiert MP4 zwischen 75 KB und 500 MB sowie zwischen 3 Sekunden und 30 Minuten Länge"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "Video"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.short_desc": {
+          "source": "The video to post",
+          "message": "Das zu postende Video"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
+          "source": "Publish a post with a video",
+          "message": "Einen Beitrag mit einem Video veröffentlichen"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieves the signed-in member's profile: name, email address, profile picture and locale.\n\nThe `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn APIs take wherever a member has to be named.",
+          "message": "Ruft das Profil des angemeldeten Mitglieds ab: Name, E-Mail-Adresse, Profilbild und Gebietsschema.\n\nDas Feld `urn` ist die `urn:li:person:{id}`-URN des Mitglieds, die von LinkedIn-APIs überall dort erwartet wird, wo ein Mitglied angegeben werden muss."
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "Aktuellen Benutzer abrufen"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the signed-in member's profile",
+          "message": "Profil des angemeldeten Mitglieds abrufen"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves a post by its URN, with its text, visibility, attached content and timestamps.\n\n**Requires the `r_member_social` permission**, which LinkedIn grants only to approved applications; add it to the connection's scopes once the application has been approved for it, otherwise this action fails with HTTP 403.\n\nTimestamps are returned as dates: LinkedIn reports them as milliseconds since the epoch and they are converted here.",
+          "message": "Ruft einen Beitrag anhand seiner URN mit Text, Sichtbarkeit, angehängten Inhalten und Zeitstempeln ab.\n\n**Erfordert die Berechtigung `r_member_social`**, die LinkedIn nur für genehmigte Anwendungen gewährt; fügen Sie diese zu den Bereichen der Verbindung hinzu, sobald die Anwendung dafür genehmigt wurde, da diese Aktion andernfalls mit HTTP 403 fehlschlägt.\n\nZeitstempel werden als Datumsangaben zurückgegeben: LinkedIn meldet sie als Millisekunden seit der Epoche und sie werden hier konvertiert."
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "Beitrag abrufen"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "Die URN des abzurufenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "Beitrags-URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "Die URN des abzurufenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be `DRAFT` or `PROCESSING` rather than published",
+          "message": "Die neueste Version, die möglicherweise `DRAFT` oder `PROCESSING` statt veröffentlicht ist"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and processing posts",
+          "message": "Die neueste Version, einschließlich Entwürfen und Beiträgen in Verarbeitung"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Die veröffentlichte Version, die für ein allgemeines Publikum sichtbar ist"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "Leser"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Die veröffentlichte Version, die für ein allgemeines Publikum sichtbar ist"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader.  `AUTHOR` returns the latest version, which may still be a draft or processing; `READER` returns the published version visible to a general audience",
+          "message": "Gibt an, ob der Beitrag als Autor oder als Leser gelesen werden soll. `AUTHOR` gibt die neueste Version zurück, bei der es sich noch um einen Entwurf oder eine Verarbeitung handeln kann; `READER` gibt die für ein allgemeines Publikum sichtbare veröffentlichte Version zurück"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "Ansichtskontext"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "Gibt an, ob der Beitrag als Autor oder als Leser gelesen werden soll"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a post by its URN",
+          "message": "Einen Beitrag anhand seiner URN abrufen"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Deletes a post.\n\nDeletion is idempotent: deleting a post that is already gone succeeds rather than failing.",
+          "message": "Löscht einen Beitrag.\n\nDas Löschen ist idempotent: Das Löschen eines Beitrags, der bereits entfernt wurde, ist erfolgreich und schlägt nicht fehl."
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete Post",
+          "message": "Beitrag löschen"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to delete",
+          "message": "Die URN des zu löschenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "Beitrags-URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to delete",
+          "message": "Die URN des zu löschenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a post",
+          "message": "Einen Beitrag löschen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **LinkedIn** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn",
+          "message": "Einen benutzerdefinierten API-Aufruf an LinkedIn durchführen"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.desc": {
+          "source": "Reshares an existing post as the signed-in member, optionally with commentary of your own above it.\n\nAny post the member can see may be reshared, including an organization's.",
+          "message": "Teilt einen vorhandenen Beitrag als angemeldetes Mitglied erneut, optional mit einem eigenen Kommentar darüber.\n\nJeder Beitrag, den das Mitglied sehen kann, kann erneut geteilt werden, einschließlich der Beiträge von Organisationen."
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
+          "source": "Reshare Post",
+          "message": "Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The text to add above the reshared post; a reshare may carry no text of its own.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "Der Text, der über dem erneut geteilten Beitrag hinzugefügt werden soll; ein geteilter Beitrag darf auch keinen eigenen Text enthalten.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "Der Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "Erneutes Teilen deaktivieren"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "Verhindern, dass andere den Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "Der Beitrag wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "Haupt-Feed"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "Wird im Haupt-Feed von LinkedIn verteilt"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "Der Beitrag wird in keinem Feed verteilt; er ist nur über seine URN erreichbar"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "Keine"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "Wird in keinem Feed verteilt"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "Wo der Beitrag verteilt wird. `NONE` erstellt einen Beitrag, der nur über seine URN erreichbar ist und in keinem Feed erscheint"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "Feed-Verteilung"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "Wo der Beitrag verteilt wird"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.desc": {
+          "source": "The URN of the post to reshare, e.g. `urn:li:share:6957408550713184256`",
+          "message": "Die URN des erneut zu teilenden Beitrags, z. B. `urn:li:share:6957408550713184256`"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "Beitrags-URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to reshare",
+          "message": "Die URN des erneut zu teilenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "Nur für die Kontakte des authentifizierten Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "Nur Kontakte"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "Nur für die Kontakte des Mitglieds sichtbar"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "Öffentlich"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "Für jeden auf und außerhalb von LinkedIn sichtbar"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "Sichtbarkeit"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "Wer den Beitrag sehen kann"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
+          "source": "Reshare an existing post",
+          "message": "Einen vorhandenen Beitrag erneut teilen"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Replaces the text of a post that has already been published.\n\nLinkedIn marks an edited post as edited; the attached content of a post cannot be changed after publication, only its text.",
+          "message": "Ersetzt den Text eines bereits veröffentlichten Beitrags.\n\nLinkedIn markiert einen bearbeiteten Beitrag als bearbeitet; der angehängte Inhalt eines Beitrags kann nach der Veröffentlichung nicht mehr geändert werden, sondern nur der Text."
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update Post",
+          "message": "Beitrag aktualisieren"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's new text, replacing the existing text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "Der neue Text des Beitrags, der den vorhandenen Text ersetzt.\n\nErwähnungen und Hashtags werden **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation und `#coding` ist ein Hashtag."
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's new text",
+          "message": "Der neue Text des Beitrags"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to update",
+          "message": "Die URN des zu aktualisierenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "Beitrags-URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to update",
+          "message": "Die URN des zu aktualisierenden Beitrags"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Change the text of a published post",
+          "message": "Text eines veröffentlichten Beitrags ändern"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.desc": {
+          "source": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\nUse this when the same image is needed in more than one post, or as an article post's thumbnail. An uploaded image can be reused across posts and ad formats without uploading it again.",
+          "message": "Lädt ein Bild auf LinkedIn hoch und gibt dessen URN zurück, ohne es zu posten.\n\nVerwenden Sie dies, wenn dasselbe Bild in mehreren Beiträgen oder als Miniaturbild eines Artikelbeitrags benötigt wird. Ein hochgeladenes Bild kann für mehrere Beiträge und Anzeigenformate wiederverwendet werden, ohne es erneut hochzuladen."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
+          "source": "Upload Image",
+          "message": "Bild hochladen"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.desc": {
+          "source": "The image to upload; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "Das hochzuladende Bild; LinkedIn akzeptiert JPG, PNG und GIF mit weniger als 36.152.320 Pixeln"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "Bild"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.short_desc": {
+          "source": "The image to upload",
+          "message": "Das hochzuladende Bild"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "Die URN der Entität, die Eigentümer des Assets sein wird. Standardmäßig das authentifizierte Mitglied (`urn:li:person:...`); eine Organisations-URN (`urn:li:organization:...`) erfordert eine Administrator- oder Content-Admin-Rolle auf dieser Seite sowie den Bereich `w_organization_social`"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "Eigentümer-URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "Die URN der Entität, die Eigentümer des Assets sein wird"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
+          "source": "Upload an image and get its URN",
+          "message": "Ein Bild hochladen und dessen URN abrufen"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.desc": {
+          "source": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\nThe upload is sent in parts, so a large video does not have to start again from the beginning if one part fails. LinkedIn processes the video afterwards; it can be attached to a post before processing finishes.",
+          "message": "Lädt ein Video auf LinkedIn hoch und gibt dessen URN zurück, ohne es zu posten.\n\nDer Upload erfolgt in Teilen, sodass ein großes Video bei einem Fehler eines Teils nicht wieder von vorne beginnen muss. LinkedIn verarbeitet das Video anschließend; es kann an einen Beitrag angehängt werden, bevor die Verarbeitung abgeschlossen ist."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
+          "source": "Upload Video",
+          "message": "Video hochladen"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "Die URN der Entität, die Eigentümer des Assets sein wird. Standardmäßig das authentifizierte Mitglied (`urn:li:person:...`); eine Organisations-URN (`urn:li:organization:...`) erfordert eine Administrator- oder Content-Admin-Rolle auf dieser Seite sowie den Bereich `w_organization_social`"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "Eigentümer-URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "Die URN der Entität, die Eigentümer des Assets sein wird"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.desc": {
+          "source": "The video to upload; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "Das hochzuladende Video; LinkedIn akzeptiert MP4 zwischen 75 KB und 500 MB sowie zwischen 3 Sekunden und 30 Minuten Länge"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "Video"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.short_desc": {
+          "source": "The video to upload",
+          "message": "Das hochzuladende Video"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {
+          "source": "Upload a video and get its URN",
+          "message": "Ein Video hochladen und dessen URN abrufen"
+        },
+        "app.TGlua2VkSW4.desc": {
+          "source": "Provides access to [LinkedIn](https://www.linkedin.com) for publishing and managing content as the signed-in member, through the [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) and [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) APIs.\n\n**Common use cases**:\n- **Publishing**: post text, an article link, an image, a video, or a set of images, and reshare someone else's post with your own commentary\n- **Content management**: edit the text of a post you published, or delete it\n- **Media**: upload an image or a video once and reuse its URN across several posts\n\nMentions and hashtags are written **inline** in the post text: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.\n\nAuthentication is OAuth2 with a LinkedIn developer application carrying the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products. Reading posts back (the **Get Post** action) additionally needs the `r_member_social` permission, which LinkedIn grants only to approved applications; add it to the connection's scopes once it has been approved.\n\nTo work with an organization's page content — its posts, comments, reactions, followers and analytics — use the **LinkedIn Organizations** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "Bietet Zugriff auf [LinkedIn](https://www.linkedin.com) zum Veröffentlichen und Verwalten von Inhalten als angemeldetes Mitglied über die [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)-, [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api)- und [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api)-APIs.\n\n**Häufige Anwendungsfälle**:\n- **Veröffentlichen**: Text, Artikellink, Bild, Video oder eine Reihe von Bildern posten und den Beitrag einer anderen Person mit eigenem Kommentar erneut teilen\n- **Content-Management**: Text eines veröffentlichten Beitrags bearbeiten oder den Beitrag löschen\n- **Medien**: Bild oder Video einmal hochladen und dessen URN für mehrere Beiträge wiederverwenden\n\nErwähnungen und Hashtags werden im Beitragstext **inline** geschrieben: `@[Qore Technologies](urn:li:organization:2414183)` erwähnt eine Organisation und `#coding` ist ein Hashtag.\n\nDie Authentifizierung erfolgt über OAuth2 mit einer LinkedIn-Entwickleranwendung, die die Produkte **Sign In with LinkedIn using OpenID Connect** und **Share on LinkedIn** enthält. Das Zurücklesen von Beiträgen (die Aktion **Get Post**) erfordert zusätzlich die Berechtigung `r_member_social`, die LinkedIn nur für genehmigte Anwendungen gewährt; fügen Sie diese zu den Bereichen der Verbindung hinzu, sobald sie genehmigt wurde.\n\nUm mit den Seiteninhalten einer Organisation zu arbeiten – ihren Beiträgen, Kommentaren, Reaktionen, Followern und Analysen – verwenden Sie stattdessen die Anwendung **LinkedIn Organizations**.\n\nLinkedIn ist eine Marke der LinkedIn Corporation"
+        },
+        "app.TGlua2VkSW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.TGlua2VkSW4.short_desc": {
+          "source": "Publish and manage content on LinkedIn as the signed-in member",
+          "message": "Inhalte auf LinkedIn als angemeldetes Mitglied veröffentlichen und verwalten"
+        }
+      }
+    }
+  }
+}

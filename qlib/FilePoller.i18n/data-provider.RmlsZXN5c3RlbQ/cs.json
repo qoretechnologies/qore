@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.desc": {
+          "source": "React to files created in a server directory",
+          "message": "Reagovat na soubory vytvořené v adresáři serveru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.display_name": {
+          "source": "New File Created",
+          "message": "Vytvořen nový soubor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.desc": {
+          "source": "The polling mask to use; will be treated as a regex if `regex` is `true`, otherwise the value is a glob mask",
+          "message": "Maska pro dotazování; bude považována za regulární výraz, pokud je `regex` nastaveno na `true`, jinak je hodnota maskou typu glob"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.display_name": {
+          "source": "Polling Mask",
+          "message": "Maska pro dotazování"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
+          "source": "The polling mask to use to match files to poll",
+          "message": "Maska pro dotazování sloužící ke shodě souborů určených k dotazování"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "Celé číslo určující minimální stáří souboru v sekundách před jeho sledováním; slouží k obcházení neatomických operací přenosu souborů.\n\nPokud je tato možnost nutná, nastavte ji na hodnotu vyšší než nejdelší předpokládaná doba přenosu souboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "Minimální stáří pro sledování"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "Minimální stáří sledovaných souborů v sekundách"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "Buď `name`, nebo `date` pro data použitá k řazení"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "Typ řazení"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "Pole, podle kterého se mají soubory řadit"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "Řadit sestupně; pokud není zadáno a je zadán `sort_type`, předpokládá se vzestupné řazení"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "Řadit sestupně"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "Řadit soubory v sestupném pořadí"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "Interval v sekundách mezi kontrolovaným sledováním souborů"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "Interval sledování v sekundách"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "Pokud je `true`, je `mask` považován za regulární výraz namísto vzoru glob"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "Shoda regulárního výrazu"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "Pokud je true, je argument 'mask' považován za regulární výraz"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "Bitové pole možností regulárního výrazu (`1` = ignorovat velikost písmen, `2` = považovat EOL za běžný znak); ignoruje se, pokud `regex` není `true`"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "Možnosti regulárního výrazu"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "Bitové pole možností regulárního výrazu"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.short_desc": {
+          "source": "A file is created in a server directory",
+          "message": "V adresáři serveru je vytvořen soubor"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "Přístup k souborovému systému serveru"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "Souborový systém serveru"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "Přístup k souborovému systému serveru"
+        }
+      }
+    }
+  }
+}

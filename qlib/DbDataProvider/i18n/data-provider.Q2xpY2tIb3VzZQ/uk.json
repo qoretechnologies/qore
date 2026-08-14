@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.Q2xpY2tIb3VzZQ.desc": {
+          "source": "Create and manage connections to a ClickHouse analytics database",
+          "message": "Створення та керування підключеннями до аналітичної бази даних ClickHouse"
+        },
+        "app.Q2xpY2tIb3VzZQ.display_name": {
+          "source": "ClickHouse",
+          "message": "ClickHouse"
+        },
+        "app.Q2xpY2tIb3VzZQ.short_desc": {
+          "source": "ClickHouse analytics database",
+          "message": "Аналітична база даних ClickHouse"
+        }
+      }
+    }
+  }
+}

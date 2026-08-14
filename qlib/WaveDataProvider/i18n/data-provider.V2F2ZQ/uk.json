@@ -1,0 +1,1717 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new chart of accounts entry in a Wave business",
+          "message": "Створити новий запис плану рахунків у бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create Account",
+          "message": "Створити обліковий запис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the account",
+          "message": "Код валюти для рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "The account currency",
+          "message": "Валюта рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the account in",
+          "message": "Бізнес, у якому створюється рахунок"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the account in",
+          "message": "Бізнес, у якому створюється рахунок"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the account",
+          "message": "Опис рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The account description",
+          "message": "Опис рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "Назва облікового запису"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "The account name",
+          "message": "Назва акаунта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.desc": {
+          "source": "The subtype of the account",
+          "message": "Підтип рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.display_name": {
+          "source": "Subtype",
+          "message": "Підтип"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.c3VidHlwZQ.short_desc": {
+          "source": "The account subtype",
+          "message": "Підтип рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.desc": {
+          "source": "Asset account",
+          "message": "Рахунок активів"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkFTU0VU.display_name": {
+          "source": "Asset",
+          "message": "Асет"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.desc": {
+          "source": "Equity account",
+          "message": "Рахунок капіталу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVRVUlUWQ.display_name": {
+          "source": "Equity",
+          "message": "Капітал"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.desc": {
+          "source": "Expense account",
+          "message": "Рахунок витрат"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkVYUEVOU0U.display_name": {
+          "source": "Expense",
+          "message": "Витрати"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.desc": {
+          "source": "Income account",
+          "message": "Рахунок доходів"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOklOQ09NRQ.display_name": {
+          "source": "Income",
+          "message": "Дохід"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.desc": {
+          "source": "Liability account",
+          "message": "Рахунок зобов'язань"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkxJQUJJTElUWQ.display_name": {
+          "source": "Liability",
+          "message": "Зобов'язання"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.desc": {
+          "source": "The type of account",
+          "message": "Тип рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.option.dHlwZQ.short_desc": {
+          "source": "The account type",
+          "message": "Тип рахунку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account in Wave",
+          "message": "Створити новий рахунок у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in a Wave business with name, email, and contact details",
+          "message": "Створити нового клієнта в бізнесі Wave з іменем, електронною поштою та контактними даними"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Створити клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the customer in",
+          "message": "Бізнес, у якому створюється клієнт"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the customer in",
+          "message": "Бізнес, у якому створюється клієнт"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The email address of the customer",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The customer email",
+          "message": "Електронна пошта клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the customer contact",
+          "message": "Ім'я контактної особи клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The customer first name",
+          "message": "Ім'я клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "Internal notes about the customer (not visible to the customer)",
+          "message": "Внутрішні примітки про клієнта (невидимі для клієнта)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Внутрішні примітки"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "Internal notes about the customer",
+          "message": "Внутрішні примітки про клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the customer contact",
+          "message": "Прізвище контактної особи клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The customer last name",
+          "message": "Прізвище клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The name of the customer",
+          "message": "Назва клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The customer name",
+          "message": "Назва клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The phone number of the customer",
+          "message": "Номер телефону клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The customer phone number",
+          "message": "Номер телефону клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL of the customer",
+          "message": "URL-адреса вебсайту клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The customer website",
+          "message": "Вебсайт клієнта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer in Wave",
+          "message": "Створити нового клієнта у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.desc": {
+          "source": "Create a new income or expense entry in a Wave business",
+          "message": "Створити новий запис доходів або витрат у бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.display_name": {
+          "source": "Create Income/Expense",
+          "message": "Створити дохід/витрату"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the income/expense entry in",
+          "message": "Бізнес, у якому створюється запис доходів/витрат"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the entry in",
+          "message": "Бізнес, у якому створюється запис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.desc": {
+          "source": "The date of the income or expense entry",
+          "message": "Дата запису доходів або витрат"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "Дата транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the income or expense entry",
+          "message": "Опис запису доходів або витрат"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "Опис транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "Унікальний зовнішній ідентифікатор транзакції (для ідемпотентності)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "Зовнішній ID транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.desc": {
+          "source": "Expense entry",
+          "message": "Запис витрат"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmV4cGVuc2U.display_name": {
+          "source": "Expense",
+          "message": "Витрати"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.desc": {
+          "source": "Income entry",
+          "message": "Запис доходів"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.allowed-value.c3RyaW5nOmluY29tZQ.display_name": {
+          "source": "Income",
+          "message": "Дохід"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.desc": {
+          "source": "The type of the entry: income or expense",
+          "message": "Тип запису: дохід або витрата"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.option.dHlwZQ.short_desc": {
+          "source": "The entry type",
+          "message": "Тип запису"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWluY29tZS1leHBlbnNl.short_desc": {
+          "source": "Create an income or expense entry in Wave",
+          "message": "Створити запис доходів або витрат у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice for a customer in a Wave business",
+          "message": "Створити новий рахунок-фактуру для клієнта в бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Створити рахунок-фактуру"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the invoice",
+          "message": "Код валюти для рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.short_desc": {
+          "source": "The invoice currency",
+          "message": "Валюта рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.desc": {
+          "source": "The customer to create the invoice for",
+          "message": "Клієнт, для якого створюється рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer to invoice",
+          "message": "Клієнт для виставлення рахунка"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the invoice in",
+          "message": "Бізнес, у якому створюється рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the invoice in",
+          "message": "Бізнес, у якому створюється рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.desc": {
+          "source": "The payment due date of the invoice (YYYY-MM-DD format)",
+          "message": "Термін оплати рахунка-фактури (у форматі РРРР-ММ-ДД)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "The due date",
+          "message": "Термін оплати"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.desc": {
+          "source": "The footer text on the invoice",
+          "message": "Текст нижнього колонтитула рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.display_name": {
+          "source": "Footer",
+          "message": "Нижній колонтитул"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.Zm9vdGVy.short_desc": {
+          "source": "The invoice footer",
+          "message": "Нижній колонтитул рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.desc": {
+          "source": "The date of the invoice (YYYY-MM-DD format)",
+          "message": "Дата рахунка-фактури (у форматі РРРР-ММ-ДД)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.display_name": {
+          "source": "Invoice Date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZURhdGU.short_desc": {
+          "source": "The invoice date",
+          "message": "Дата рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.desc": {
+          "source": "A memo/note on the invoice",
+          "message": "Примітка/нотатка в рахунку-фактурі"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.display_name": {
+          "source": "Memo",
+          "message": "Примітка"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.bWVtbw.short_desc": {
+          "source": "The invoice memo",
+          "message": "Примітка до рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoice",
+          "message": "Чернетка рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Чернетка"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoice",
+          "message": "Збережений рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "Збережено"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.desc": {
+          "source": "The initial status of the invoice",
+          "message": "Початковий статус рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3RhdHVz.short_desc": {
+          "source": "The invoice status",
+          "message": "Статус рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.desc": {
+          "source": "The subheading of the invoice",
+          "message": "Підзаголовок рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.display_name": {
+          "source": "Subhead",
+          "message": "Підзаголовок"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.c3ViaGVhZA.short_desc": {
+          "source": "The invoice subhead",
+          "message": "Підзаголовок рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.desc": {
+          "source": "The purchase order number associated with the invoice",
+          "message": "Номер замовлення на купівлю, пов'язаний із рахунком-фактурою"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.display_name": {
+          "source": "PO Number",
+          "message": "Номер замовлення на купівлю (PO)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.cG9OdW1iZXI.short_desc": {
+          "source": "The purchase order number",
+          "message": "Номер замовлення на купівлю"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.desc": {
+          "source": "The title of the invoice",
+          "message": "Заголовок рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "The invoice title",
+          "message": "Заголовок рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice in Wave",
+          "message": "Створити новий рахунок-фактуру у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product or service in a Wave business",
+          "message": "Створити новий товар або послугу в бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "Створити товар"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the product in",
+          "message": "Бізнес, у якому створюється товар"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the product in",
+          "message": "Бізнес, у якому створюється товар"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the product or service",
+          "message": "Опис товару або послуги"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description",
+          "message": "Опис товару"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product or service",
+          "message": "Назва товару або послуги"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Назва продукту"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The unit price of the product or service",
+          "message": "Ціна за одиницю товару або послуги"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Ціна за одиницю"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The unit price",
+          "message": "Ціна за одиницю"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product in Wave",
+          "message": "Створити новий товар у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.desc": {
+          "source": "Create a new sales tax rate in a Wave business",
+          "message": "Створити нову ставку податку з продажу в бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.display_name": {
+          "source": "Create Sales Tax",
+          "message": "Створити податок з продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.desc": {
+          "source": "The abbreviation for the sales tax",
+          "message": "Абревіатура для податку з продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.display_name": {
+          "source": "Abbreviation",
+          "message": "Абревіатура"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YWJicmV2aWF0aW9u.short_desc": {
+          "source": "The tax abbreviation",
+          "message": "Абревіатура податку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the sales tax in",
+          "message": "Бізнес, у якому створюється податок із продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the sales tax in",
+          "message": "Бізнес, у якому створюється податок із продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the sales tax",
+          "message": "Опис податку з продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The tax description",
+          "message": "Опис податку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.desc": {
+          "source": "Whether the tax is a compound tax (calculated on top of other taxes)",
+          "message": "Чи є податок складним (розраховується поверх інших податків)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.display_name": {
+          "source": "Is Compound",
+          "message": "Складний податок"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNDb21wb3VuZA.short_desc": {
+          "source": "Whether the tax is compound",
+          "message": "Чи є податок складним"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.desc": {
+          "source": "Whether the tax is recoverable (can be claimed back)",
+          "message": "Чи є податок відшкодовуваним (може бути повернений)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.display_name": {
+          "source": "Is Recoverable",
+          "message": "Відшкодовуваний"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.aXNSZWNvdmVyYWJsZQ.short_desc": {
+          "source": "Whether the tax is recoverable",
+          "message": "Чи є податок відшкодовуваним"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.desc": {
+          "source": "The name of the sales tax",
+          "message": "Назва податку з продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.bmFtZQ.short_desc": {
+          "source": "The sales tax name",
+          "message": "Назва податку з продажу"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.desc": {
+          "source": "The tax rate as a percentage",
+          "message": "Ставка податку у відсотках"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Тариф"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.cmF0ZQ.short_desc": {
+          "source": "The tax rate",
+          "message": "Ставка податку"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.desc": {
+          "source": "The tax registration number",
+          "message": "Реєстраційний номер платника податків"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.display_name": {
+          "source": "Tax Number",
+          "message": "Податковий номер"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.option.dGF4TnVtYmVy.short_desc": {
+          "source": "The tax number",
+          "message": "Податковий номер"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXNhbGVzLXRheA.short_desc": {
+          "source": "Create a new sales tax in Wave",
+          "message": "Створити новий податок із продажу у Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.desc": {
+          "source": "Create a new money transaction in a Wave business",
+          "message": "Створити нову фінансову транзакцію в бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "Створити транзакцію"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to create the transaction in",
+          "message": "Бізнес, у якому створюється транзакція"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to create the transaction in",
+          "message": "Бізнес, у якому створюється транзакція"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.desc": {
+          "source": "The date of the transaction (YYYY-MM-DD format)",
+          "message": "Дата транзакції (у форматі РРРР-ММ-ДД)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Дата"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGF0ZQ.short_desc": {
+          "source": "The transaction date",
+          "message": "Дата транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the transaction",
+          "message": "Опис транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The transaction description",
+          "message": "Опис транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "A unique external identifier for the transaction (for idempotency)",
+          "message": "Унікальний зовнішній ідентифікатор транзакції (для ідемпотентності)"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "The external transaction ID",
+          "message": "Зовнішній ID транзакції"
+        },
+        "app.V2F2ZQ.action.Y3JlYXRlLXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a new transaction in Wave",
+          "message": "Створити нову транзакцію у Wave"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.desc": {
+          "source": "Approve a draft or saved invoice in Wave, making it ready to send",
+          "message": "Затвердити чернетку або збережений рахунок-фактуру у Wave, підготувавши його до відправлення"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.display_name": {
+          "source": "Approve Invoice",
+          "message": "Затвердити рахунок-фактуру"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to approve",
+          "message": "Рахунок-фактура для затвердження"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to approve",
+          "message": "Рахунок-фактура для затвердження"
+        },
+        "app.V2F2ZQ.action.YXBwcm92ZS1pbnZvaWNl.short_desc": {
+          "source": "Approve an invoice by ID",
+          "message": "Затвердити рахунок-фактуру за ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a specific customer by their ID",
+          "message": "Отримати конкретного клієнта за його ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Отримати клієнта"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "Бізнес, до якого належить клієнт"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "Бізнес, до якого належить клієнт"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to retrieve",
+          "message": "Клієнт для отримання"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to retrieve",
+          "message": "Клієнт для отримання"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a specific customer from Wave",
+          "message": "Отримати конкретного клієнта з Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.desc": {
+          "source": "Retrieve a specific customer by their email address",
+          "message": "Отримати конкретного клієнта за його адресою електронної пошти"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.display_name": {
+          "source": "Get Customer by Email",
+          "message": "Отримати клієнта за електронною поштою"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the customer belongs to",
+          "message": "Бізнес, до якого належить клієнт"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the customer belongs to",
+          "message": "Бізнес, до якого належить клієнт"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.desc": {
+          "source": "The email address of the customer to retrieve",
+          "message": "Адреса електронної пошти клієнта для отримання"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.option.ZW1haWw.short_desc": {
+          "source": "The customer email to search for",
+          "message": "Електронна пошта клієнта для пошуку"
+        },
+        "app.V2F2ZQ.action.Z2V0LWN1c3RvbWVyLWJ5LWVtYWls.short_desc": {
+          "source": "Get a specific customer by email from Wave",
+          "message": "Отримати конкретного клієнта за електронною поштою з Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a specific invoice by its ID",
+          "message": "Отримати конкретний рахунок-фактуру за його ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Отримати рахунок-фактуру"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the invoice belongs to",
+          "message": "Бізнес, до якого належить рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the invoice belongs to",
+          "message": "Бізнес, до якого належить рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.desc": {
+          "source": "The invoice to retrieve",
+          "message": "Рахунок-фактура для отримання"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "Рахунок-фактура для отримання"
+        },
+        "app.V2F2ZQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a specific invoice from Wave",
+          "message": "Отримати конкретний рахунок-фактуру з Wave"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a specific product by its ID",
+          "message": "Отримати конкретний продукт за його ID"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "Отримати товар"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business the product belongs to",
+          "message": "Бізнес, до якого належить продукт"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business the product belongs to",
+          "message": "Бізнес, до якого належить продукт"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to retrieve",
+          "message": "Товар, який потрібно отримати"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "Товар"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to retrieve",
+          "message": "Товар, який потрібно отримати"
+        },
+        "app.V2F2ZQ.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a specific product from Wave",
+          "message": "Отримати конкретний продукт з Wave"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete an existing customer from a Wave business",
+          "message": "Видалити наявного клієнта з бізнесу Wave"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "Видалити клієнта"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to delete",
+          "message": "Клієнт для видалення"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Клієнт для видалення"
+        },
+        "app.V2F2ZQ.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer in Wave",
+          "message": "Видалити клієнта у Wave"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.desc": {
+          "source": "Execute an arbitrary GraphQL query or mutation against the Wave API",
+          "message": "Виконати довільний запит GraphQL або мутацію в Wave API"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.display_name": {
+          "source": "Execute GraphQL",
+          "message": "Виконати GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.desc": {
+          "source": "The GraphQL query or mutation string to execute",
+          "message": "Рядок запиту або мутації GraphQL для виконання"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.cXVlcnk.short_desc": {
+          "source": "The GraphQL query",
+          "message": "Запит GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.desc": {
+          "source": "Optional variables to pass to the GraphQL query",
+          "message": "Необов’язкові змінні для передачі в запит GraphQL"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.display_name": {
+          "source": "Variables",
+          "message": "Змінні"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.option.dmFyaWFibGVz.short_desc": {
+          "source": "The query variables",
+          "message": "Змінні запиту"
+        },
+        "app.V2F2ZQ.action.ZXhlY3V0ZS1ncmFwaHFs.short_desc": {
+          "source": "Execute an arbitrary GraphQL query",
+          "message": "Виконати довільний запит GraphQL"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in Wave. Uses webhooks for real-time notifications.",
+          "message": "Спрацьовує під час створення нового рахунка-фактури у Wave. Використовує вебхуки для сповіщень у реальному часі."
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "Invoice Created",
+          "message": "Рахунок-фактуру створено"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.desc": {
+          "source": "Only trigger for invoices in this business (optional)",
+          "message": "Спрацьовувати лише для рахунків-фактур у цьому бізнесі (необов’язково)"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "Filter to invoices from a specific business",
+          "message": "Фільтрувати рахунки-фактури за конкретним бізнесом"
+        },
+        "app.V2F2ZQ.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Запускати, коли створюється новий рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Wave** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Wave**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API підключення), необов’язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.V2F2ZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Wave",
+          "message": "Виконати довільний виклик API до Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search for chart of accounts entries in a Wave business",
+          "message": "Пошук записів плану рахунків у бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "Пошук акаунтів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search accounts in",
+          "message": "Бізнес для пошуку рахунків"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search accounts in",
+          "message": "Бізнес для пошуку рахунків"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search for accounts in Wave",
+          "message": "Пошук рахунків у Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Search for customers in a Wave business with optional filters",
+          "message": "Пошук клієнтів у бізнесі Wave з необов'язковими фільтрами"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "Пошук клієнтів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search customers in",
+          "message": "Бізнес для пошуку клієнтів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search customers in",
+          "message": "Бізнес для пошуку клієнтів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "Search for customers in Wave",
+          "message": "Пошук клієнтів у Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in a Wave business with optional status filter",
+          "message": "Пошук рахунків-фактур у бізнесі Wave з необов'язковим фільтром за статусом"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Пошук рахунків-фактур"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search invoices in",
+          "message": "Бізнес для пошуку рахунків-фактур"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search invoices in",
+          "message": "Бізнес для пошуку рахунків-фактур"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.desc": {
+          "source": "Overdue invoices",
+          "message": "Прострочені рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOk9WRVJEVUU.display_name": {
+          "source": "Overdue",
+          "message": "Прострочено"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft invoices",
+          "message": "Чернетки рахунків-фактур"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "Draft",
+          "message": "Чернетка"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid invoices",
+          "message": "Оплачені рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.display_name": {
+          "source": "Paid",
+          "message": "Оплачено"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.desc": {
+          "source": "Partially paid invoices",
+          "message": "Частково сплачені рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUw.display_name": {
+          "source": "Partial",
+          "message": "Частково"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.desc": {
+          "source": "Saved invoices",
+          "message": "Збережені рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNBVkVE.display_name": {
+          "source": "Saved",
+          "message": "Збережено"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.desc": {
+          "source": "Sent invoices",
+          "message": "Надіслані рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlNFTlQ.display_name": {
+          "source": "Sent",
+          "message": "Надіслано"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Несплачені рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlVOUEFJRA.display_name": {
+          "source": "Unpaid",
+          "message": "Неоплачено"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.desc": {
+          "source": "Viewed invoices",
+          "message": "Переглянуті рахунки-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOlZJRVdFRA.display_name": {
+          "source": "Viewed",
+          "message": "Переглянуто"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Фільтрувати рахунки-фактури за статусом"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Фільтрувати за статусом рахунка-фактури"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Wave",
+          "message": "Пошук рахунків-фактур у Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Search for products in a Wave business",
+          "message": "Пошук товарів у бізнесі Wave"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "Пошук товарів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.desc": {
+          "source": "The business to search products in",
+          "message": "Бізнес, у якому слід шукати товари"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.display_name": {
+          "source": "Business",
+          "message": "Бізнес"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.YnVzaW5lc3NJZA.short_desc": {
+          "source": "The business to search products in",
+          "message": "Бізнес, у якому слід шукати товари"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.V2F2ZQ.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "Search for products in Wave",
+          "message": "Пошук товарів у Wave"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Send an approved invoice to the customer via email",
+          "message": "Надіслати схвалений рахунок-фактуру клієнту електронною поштою"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "Надіслати рахунок-фактуру"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.desc": {
+          "source": "The invoice to send",
+          "message": "Рахунок-фактура для надсилання"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.display_name": {
+          "source": "Invoice",
+          "message": "Рахунок-фактура"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZUlk.short_desc": {
+          "source": "The invoice to send",
+          "message": "Рахунок-фактура для надсилання"
+        },
+        "app.V2F2ZQ.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send an invoice in Wave",
+          "message": "Надіслати рахунок-фактуру у Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the properties of an existing customer in Wave",
+          "message": "Оновити властивості наявного клієнта у Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Оновити клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The new email address of the customer",
+          "message": "Нова адреса електронної пошти клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "The new email",
+          "message": "Нова електронна пошта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.desc": {
+          "source": "The new first name of the customer contact",
+          "message": "Нове ім'я контактної особи клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "The new first name",
+          "message": "Нове ім'я"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.desc": {
+          "source": "The new internal notes about the customer",
+          "message": "Нові внутрішні примітки про клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.display_name": {
+          "source": "Internal Notes",
+          "message": "Внутрішні примітки"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aW50ZXJuYWxOb3Rlcw.short_desc": {
+          "source": "The new internal notes",
+          "message": "Нові внутрішні примітки"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The customer to update",
+          "message": "Клієнт для оновлення"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Клієнт для оновлення"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.desc": {
+          "source": "The new last name of the customer contact",
+          "message": "Нове прізвище контактної особи клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdE5hbWU.short_desc": {
+          "source": "The new last name",
+          "message": "Нове прізвище"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The new name of the customer",
+          "message": "Нове ім'я або назва клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "The new customer name",
+          "message": "Нове ім'я/назва клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The new phone number of the customer",
+          "message": "Новий номер телефону клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "The new phone number",
+          "message": "Новий номер телефону"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.desc": {
+          "source": "The new website URL of the customer",
+          "message": "Нова URL-адреса вебсайту клієнта"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The new website",
+          "message": "Новий вебсайт"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer in Wave",
+          "message": "Оновити наявного клієнта у Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update the properties of an existing product in Wave",
+          "message": "Оновити властивості наявного товару у Wave"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "Оновити продукт"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the product",
+          "message": "Новий опис товару"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new product description",
+          "message": "Новий опис товару"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.desc": {
+          "source": "The product to update",
+          "message": "Товар для оновлення"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "Товар"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "The product to update",
+          "message": "Товар для оновлення"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the product",
+          "message": "Нова назва товару"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The new product name",
+          "message": "Нова назва товару"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.desc": {
+          "source": "The new unit price of the product",
+          "message": "Нова ціна за одиницю товару"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.display_name": {
+          "source": "Unit Price",
+          "message": "Ціна за одиницю"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.option.dW5pdFByaWNl.short_desc": {
+          "source": "The new unit price",
+          "message": "Нова ціна за одиницю"
+        },
+        "app.V2F2ZQ.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product in Wave",
+          "message": "Оновити наявний товар у Wave"
+        },
+        "app.V2F2ZQ.desc": {
+          "source": "Wave is a free accounting, invoicing, and receipt scanning software for small businesses. This integration enables managing customers, invoices, products, accounts, and transactions through Wave's GraphQL API.",
+          "message": "Wave — це безкоштовне програмне забезпечення для бухгалтерського обліку, виставлення рахунків і сканування чеків для малого бізнесу. Ця інтеграція дозволяє керувати клієнтами, рахунками-фактурами, товарами, рахунками та транзакціями через GraphQL API Wave."
+        },
+        "app.V2F2ZQ.display_name": {
+          "source": "Wave",
+          "message": "Wave"
+        },
+        "app.V2F2ZQ.short_desc": {
+          "source": "Wave accounting and invoicing",
+          "message": "Бухгалтерський облік і виставлення рахунків Wave"
+        }
+      }
+    }
+  }
+}

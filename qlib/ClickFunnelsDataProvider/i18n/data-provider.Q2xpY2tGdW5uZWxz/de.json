@@ -1,0 +1,3261 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in ClickFunnels",
+          "message": "Wird ausgelöst, wenn ein Kontakt in ClickFunnels aktualisiert wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Kontakt aktualisiert"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a contact is updated",
+          "message": "Auslösen, wenn ein Kontakt aktualisiert wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in ClickFunnels",
+          "message": "Wird ausgelöst, wenn ein neuer Kontakt in ClickFunnels erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "Kontakt erstellt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Auslösen, wenn ein neuer Kontakt erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.desc": {
+          "source": "Cancel an existing fulfillment in ClickFunnels",
+          "message": "Ein bestehendes Fulfillment in ClickFunnels stornieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Cancel a Fulfillment",
+          "message": "Fulfillment stornieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to cancel",
+          "message": "Die eindeutige Kennung des zu stornierenden Fulfillments"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "Fulfillment-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to cancel",
+          "message": "Das zu stornierende Fulfillment"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Cancel a fulfillment",
+          "message": "Ein Fulfillment stornieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in ClickFunnels",
+          "message": "Eine neue Bestellung in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Bestellung erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this order",
+          "message": "Die ID des Kontakts für diese Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Der zugehörige Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the order (e.g., `USD`)",
+          "message": "Der Währungscode für die Bestellung (z. B. `USD`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "Die Bestellwährung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOm9uZS10aW1lLW9yZGVy.display_name": {
+          "source": "One-Time Order",
+          "message": "Einmalige Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbi1vcmRlcg.display_name": {
+          "source": "Subscription Order",
+          "message": "Abonnementbestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.desc": {
+          "source": "The type of the order to create",
+          "message": "Der Typ der zu erstellenden Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.display_name": {
+          "source": "Order Type",
+          "message": "Auftragstyp"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.short_desc": {
+          "source": "The type of order",
+          "message": "Der Bestelltyp"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.desc": {
+          "source": "The type of the origination channel",
+          "message": "Der Typ des Ursprungskanals"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.display_name": {
+          "source": "Origination Channel Type",
+          "message": "Ursprungskanal-Typ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.short_desc": {
+          "source": "The origination channel type",
+          "message": "Der Ursprungskanal-Typ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.desc": {
+          "source": "The ID of the origination channel",
+          "message": "Die ID des Ursprungskanals"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.display_name": {
+          "source": "Origination Channel ID",
+          "message": "Ursprungskanal-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.short_desc": {
+          "source": "The origination channel",
+          "message": "Der Ursprungskanal"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.desc": {
+          "source": "Whether this is a live order (`True`) or a test order (`False`)",
+          "message": "Gibt an, ob dies eine Live-Bestellung (`True`) oder eine Testbestellung (`False`) ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.display_name": {
+          "source": "Live Mode",
+          "message": "Live-Modus"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.short_desc": {
+          "source": "Whether this is a live order",
+          "message": "Gibt an, ob dies eine Live-Bestellung ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.desc": {
+          "source": "A list of line items for the order. Each item requires `variant_id`, `products_price_id`, and `quantity`.\n\n**Note**: for one-time orders, line items must reference one-time products. For subscription orders, line items can include both one-time and subscription products",
+          "message": "Eine Liste von Einzelposten für die Bestellung. Jeder Posten erfordert `variant_id`, `products_price_id` und `quantity`.\n\n**Hinweis**: Bei einmaligen Bestellungen müssen Einzelposten auf Einmalprodukte verweisen. Bei Abonnementbestellungen können Einzelposten sowohl Einmal- als auch Abonnementprodukte enthalten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.short_desc": {
+          "source": "Order line items",
+          "message": "Bestell-Einzelposten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Neue Bestellung erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in ClickFunnels",
+          "message": "Einen neuen Kontakt in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Kontakt erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Benutzerdefinierte Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "Die E-Mail-Adresse des zu erstellenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "Die E-Mail-Adresse des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "Die Facebook-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "Die Facebook-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Der Vorname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "Der Vorname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "Die Instagram-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "Die Instagram-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Der Nachname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "Der Nachname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "Die LinkedIn-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "Die LinkedIn-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "Die Telefonnummer des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "Die Telefonnummer des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "Die Website-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "Website-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "Die Website-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "Eine Liste von Kontakt-Tag-IDs, die auf den Kontakt angewendet werden sollen. Jedes gültige Array überschreibt bestehende Werte"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "Anzuwendende Kontakt-Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "Die Zeitzone des Kontakts (z. B. `America/New_York`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "Die Zeitzone des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "Die Twitter-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "Die Twitter-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Neuen Kontakt erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Create a new contact tag in ClickFunnels",
+          "message": "Einen neuen Kontakt-Tag in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Create a Contact Tag",
+          "message": "Kontakt-Tag erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The color code for the tag",
+          "message": "Der Farbcode für den Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Farbe"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "Die Tag-Farbe"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The name of the contact tag to create",
+          "message": "Der Name des zu erstellenden Kontakt-Tags"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "Der Tag-Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Create a new contact tag",
+          "message": "Einen neuen Kontakt-Tag erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Create a new course enrollment in ClickFunnels",
+          "message": "Eine neue Kurseinschreibung in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create an Enrollment",
+          "message": "Einschreibung erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.desc": {
+          "source": "The ID of the course",
+          "message": "Die ID des Kurses"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "Kurs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course to enroll in",
+          "message": "Der Kurs, für den eingeschrieben werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to enroll",
+          "message": "Die ID des einzuschreibenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to enroll",
+          "message": "Der einzuschreibende Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "Gibt an, ob die Einschreibung ausgesetzt werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "Ausgesetzt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "Gibt an, ob die Einschreibung ausgesetzt ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.desc": {
+          "source": "The reason for suspending the enrollment",
+          "message": "Der Grund für das Aussetzen der Einschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.display_name": {
+          "source": "Suspension Reason",
+          "message": "Grund für die Aussetzung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.short_desc": {
+          "source": "Reason for suspension",
+          "message": "Grund für die Aussetzung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "Einen Kontakt in einen Kurs einschreiben"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Create a new fulfillment in ClickFunnels",
+          "message": "Ein neues Fulfillment in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Create a Fulfillment",
+          "message": "Fulfillment erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this fulfillment",
+          "message": "Die ID des Kontakts für dieses Fulfillment"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Der Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.desc": {
+          "source": "A list of invoice line items to fulfill. Each item requires `invoices_line_item_id` and `quantity`",
+          "message": "Eine Liste der auszuführenden Rechnungspositionen. Jede Position erfordert `invoices_line_item_id` und `quantity`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.display_name": {
+          "source": "Line Items to Fulfill",
+          "message": "Auszuführende Rechnungspositionen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.short_desc": {
+          "source": "Invoice line items to fulfill",
+          "message": "Auszuführende Rechnungspositionen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.desc": {
+          "source": "Whether to ignore out-of-stock inventory checks when creating the fulfillment",
+          "message": "Gibt an, ob Bestandsprüfungen bei fehlendem Lagerbestand beim Erstellen des Fulfillments ignoriert werden sollen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.display_name": {
+          "source": "Ignore Out of Stock",
+          "message": "Nicht vorrätig ignorieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.short_desc": {
+          "source": "Override inventory checks",
+          "message": "Bestandsprüfungen überschreiben"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The ID of the fulfillment location where items are shipped from",
+          "message": "Die ID des Fulfillment-Standorts, von dem aus die Artikel versendet werden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The fulfillment location",
+          "message": "Der Fulfillment-Standort"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment",
+          "message": "Gibt an, ob eine E-Mail-Benachrichtigung über das Fulfillment an den Kunden gesendet werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "Kunden benachrichtigen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "E-Mail-Benachrichtigung senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The shipping provider for this fulfillment",
+          "message": "Der Versandanbieter für dieses Fulfillment"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "Versandanbieter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "Der Versandanbieter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The shipment tracking code",
+          "message": "Der Sendungsverfolgungscode"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Tracking-Code"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "Der Tracking-Code"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The shipment tracking URL",
+          "message": "Die URL zur Sendungsverfolgung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "Tracking-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "Die Tracking-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Create a new fulfillment",
+          "message": "Ein neues Fulfillment erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form in ClickFunnels",
+          "message": "Ein neues Formular in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create a Form",
+          "message": "Formular erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The name of the form",
+          "message": "Der Name des Formulars"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "Der Formularname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The URL to redirect to after form submission",
+          "message": "Die URL, zu der nach dem Absenden des Formulars weitergeleitet werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "Weiterleitungs-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "Die Weiterleitungs-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "Ein neues Formular erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in ClickFunnels",
+          "message": "Ein neues Produkt in ClickFunnels erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "Produkt erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "Gibt an, ob für Affiliate-Provisionen berechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "Provisionsberechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "Gibt an, ob provisionsberechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The URL path for the product",
+          "message": "Der URL-Pfad für das Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "Aktueller Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "Der Produkt-URL-Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product",
+          "message": "Der Name des Produkts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Der Produktname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The SEO meta description",
+          "message": "Die SEO-Meta-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEO-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "Die SEO-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The SEO image URL for the product",
+          "message": "Die SEO-Bild-URL für das Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO-Bild-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "Die SEO-Bild-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The SEO title for the product",
+          "message": "Der SEO-Titel für das Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEO-Titel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "Der SEO-Titel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "Gibt an, ob das Produkt im Kundencenter sichtbar ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "Im Kundencenter sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "Ob im Kundencenter sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "Gibt an, ob das Produkt im Store sichtbar ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "Im Store sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "Ob im Store sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "Ein neues Produkt erstellen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.desc": {
+          "source": "Apply a tag to a contact in ClickFunnels",
+          "message": "Einen Tag auf einen Kontakt in ClickFunnels anwenden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "Tag auf Kontakt anwenden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to apply the tag to",
+          "message": "Die ID des Kontakts, auf den der Tag angewendet werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "Der zu taggende Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to apply to the contact",
+          "message": "Die ID des Tags, der auf den Kontakt angewendet werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "Der anzuwendende Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "Einen Tag auf einen Kontakt anwenden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from ClickFunnels",
+          "message": "Eine einzelne Bestellung anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Bestellung abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to retrieve",
+          "message": "Die abzurufende Bestellungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Einzelne Bestellung nach ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from ClickFunnels",
+          "message": "Einen einzelnen Kontakt anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Einen Kontakt abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "Die Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Einen einzelnen Kontakt anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.desc": {
+          "source": "Retrieve a single contact tag by ID from ClickFunnels",
+          "message": "Einen einzelnen Kontakt-Tag anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
+          "source": "Get a Contact Tag",
+          "message": "Kontakt-Tag abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to retrieve",
+          "message": "Die abzurufende Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Get a single contact tag by ID",
+          "message": "Einzelnen Kontakt-Tag anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.desc": {
+          "source": "Retrieve a single course by ID from ClickFunnels",
+          "message": "Einen einzelnen Kurs anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
+          "source": "Get a Course",
+          "message": "Kurs abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "Kurs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course ID to retrieve",
+          "message": "Die abzurufende Kurs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
+          "source": "Get a single course by ID",
+          "message": "Einzelnen Kurs anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.desc": {
+          "source": "Retrieve a single enrollment by ID from ClickFunnels",
+          "message": "Eine einzelne Einschreibung anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
+          "source": "Get an Enrollment",
+          "message": "Einschreibung abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "Einschreibungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment ID to retrieve",
+          "message": "Die abzurufende Einschreibungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
+          "source": "Get a single enrollment by ID",
+          "message": "Einzelne Einschreibung anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.desc": {
+          "source": "Retrieve a single fulfillment by ID from ClickFunnels",
+          "message": "Eine einzelne Ausführung (Fulfillment) anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
+          "source": "Get a Fulfillment",
+          "message": "Ausführung (Fulfillment) abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "Fulfillment-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment ID to retrieve",
+          "message": "Die abzurufende Ausführungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Get a single fulfillment by ID",
+          "message": "Einzelne Ausführung (Fulfillment) anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.desc": {
+          "source": "Retrieve a single funnel by ID from ClickFunnels",
+          "message": "Einen einzelnen Funnel anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
+          "source": "Get a Funnel",
+          "message": "Funnel abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "Funnel-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel ID to retrieve",
+          "message": "Die abzurufende Funnel-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
+          "source": "Get a single funnel by ID",
+          "message": "Einzelnen Funnel anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by ID from ClickFunnels",
+          "message": "Ein einzelnes Formular anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get a Form",
+          "message": "Formular abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "Die abzurufende Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a single form by ID",
+          "message": "Einzelnes Formular anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.desc": {
+          "source": "Retrieve a single form submission by ID from ClickFunnels",
+          "message": "Eine einzelne Formularübermittlung anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
+          "source": "Get a Form Submission",
+          "message": "Formularübermittlung abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "Übermittlungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "Die abzurufende Übermittlungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
+          "source": "Get a single form submission by ID",
+          "message": "Einzelne Formularübermittlung anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from ClickFunnels",
+          "message": "Ein einzelnes Produkt anhand der ID aus ClickFunnels abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Produkt abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "Produkt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to retrieve",
+          "message": "Die abzurufende Produkt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Einzelnes Produkt anhand der ID abrufen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from ClickFunnels",
+          "message": "Einen Kontakt aus ClickFunnels löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Kontakt löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Der zu löschende Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Einen Kontakt löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Delete a contact tag from ClickFunnels",
+          "message": "Einen Kontakt-Tag aus ClickFunnels löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Delete a Contact Tag",
+          "message": "Kontakt-Tag löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Tags"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "Der zu löschende Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Delete a contact tag",
+          "message": "Einen Kontakt-Tag löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Delete a fulfillment from ClickFunnels",
+          "message": "Ein Fulfillment aus ClickFunnels löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Delete a Fulfillment",
+          "message": "Ein Fulfillment löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Fulfillments"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "Fulfillment-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to delete",
+          "message": "Das zu löschende Fulfillment"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Delete a fulfillment",
+          "message": "Ein Fulfillment löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form from ClickFunnels",
+          "message": "Ein Formular aus ClickFunnels löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete a Form",
+          "message": "Ein Formular löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Formulars"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to delete",
+          "message": "Das zu löschende Formular"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "Ein Formular löschen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new course enrollment is created in ClickFunnels",
+          "message": "Wird ausgelöst, wenn eine neue Kurseinschreibung in ClickFunnels erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
+          "source": "Enrollment Created",
+          "message": "Einschreibung erstellt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new enrollment is created",
+          "message": "Auslösen, wenn eine neue Einschreibung erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a form is submitted in ClickFunnels",
+          "message": "Wird ausgelöst, wenn ein Formular in ClickFunnels übermittelt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Form Submission Created",
+          "message": "Formularübermittlung erstellt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new form submission is created",
+          "message": "Auslösen, wenn eine neue Formularübermittlung erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.desc": {
+          "source": "Fires when a new fulfillment is created in ClickFunnels",
+          "message": "Wird ausgelöst, wenn ein neues Fulfillment in ClickFunnels erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
+          "source": "Fulfillment Created",
+          "message": "Fulfillment erstellt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new fulfillment is created",
+          "message": "Auslösen, wenn ein neues Fulfillment erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.desc": {
+          "source": "Fires when an order is completed in ClickFunnels",
+          "message": "Wird ausgelöst, wenn eine Bestellung in ClickFunnels abgeschlossen wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
+          "source": "Order Completed",
+          "message": "Bestellung abgeschlossen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
+          "source": "Trigger when an order is completed",
+          "message": "Auslösen, wenn eine Bestellung abgeschlossen wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created in ClickFunnels",
+          "message": "Wird ausgelöst, wenn eine neue Bestellung in ClickFunnels erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Order Created",
+          "message": "Bestellung erstellt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "Auslösen, wenn eine neue Bestellung erstellt wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is updated in ClickFunnels",
+          "message": "Wird ausgelöst, wenn eine Bestellung in ClickFunnels aktualisiert wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Updated",
+          "message": "Bestellung aktualisiert"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is updated",
+          "message": "Auslösen, wenn eine Bestellung aktualisiert wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.desc": {
+          "source": "List applied tags in ClickFunnels",
+          "message": "Angewendete Tags in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
+          "source": "List Applied Tags",
+          "message": "Angewendete Tags auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Nach Kontakt filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag ID",
+          "message": "ID des angewendeten Tags"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "Filter by applied tag ID",
+          "message": "Nach ID des angewendeten Tags filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "Nach Tag filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
+          "source": "List all applied tags",
+          "message": "Alle angewendeten Tags auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.desc": {
+          "source": "List contact tags in ClickFunnels",
+          "message": "Kontakt-Tags in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
+          "source": "List Contact Tags",
+          "message": "Kontakt-Tags auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Nach Name filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Nach Tag-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
+          "source": "List all contact tags",
+          "message": "Alle Kontakt-Tags auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in ClickFunnels with optional filtering",
+          "message": "Kontakte in ClickFunnels mit optionaler Filterung auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Kontakte auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Nach Kontakt-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Nach E-Mail filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Alle Kontakte auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses in ClickFunnels",
+          "message": "Kurse in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "Kurse auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "Kurs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course ID",
+          "message": "Nach Kurs-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List all courses",
+          "message": "Alle Kurse auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments in ClickFunnels",
+          "message": "Kurseinschreibungen in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "Einschreibungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "Kurs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course",
+          "message": "Nach Kurs filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "Einschreibungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "Filter by enrollment ID",
+          "message": "Nach Einschreibungs-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List all enrollments",
+          "message": "Alle Einschreibungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.desc": {
+          "source": "List form submissions in ClickFunnels",
+          "message": "Formularübermittlungen in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
+          "source": "List Form Submissions",
+          "message": "Formularübermittlungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form",
+          "message": "Nach Formular filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "Übermittlungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "Filter by submission ID",
+          "message": "Nach Übermittlungs-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "List all form submissions",
+          "message": "Alle Formularübermittlungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in ClickFunnels",
+          "message": "Formulare in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "Formulare auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "Nach Formular-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "Alle Formulare auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.desc": {
+          "source": "List funnels in ClickFunnels",
+          "message": "Funnels in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
+          "source": "List Funnels",
+          "message": "Funnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "Funnel-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.short_desc": {
+          "source": "Filter by funnel ID",
+          "message": "Nach Funnel-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
+          "source": "List all funnels",
+          "message": "Alle Funnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.desc": {
+          "source": "List fulfillments in ClickFunnels",
+          "message": "Fulfillments in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
+          "source": "List Fulfillments",
+          "message": "Fulfillments auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Nach Kontakt filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "Fulfillment-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "Filter by fulfillment ID",
+          "message": "Nach Fulfillment-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
+          "source": "List all fulfillments",
+          "message": "Alle Fulfillments auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in ClickFunnels",
+          "message": "Bestellungen in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Bestellungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Nach Kontakt filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Nach Bestell-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "Alle Bestellungen auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in ClickFunnels",
+          "message": "Produkte in ClickFunnels auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Produkte auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "After-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Paginierungs-Cursor"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "Produkt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Nach Produkt-ID filtern"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "Alle Produkte auflisten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ClickFunnels** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **ClickFunnels** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ClickFunnels",
+          "message": "Benutzerdefinierten API-Aufruf an ClickFunnels durchführen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove an applied tag from a contact in ClickFunnels",
+          "message": "Einen zugewiesenen Tag von einem Kontakt in ClickFunnels entfernen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Tag von Kontakt entfernen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.desc": {
+          "source": "Select the contact whose applied tag you want to remove",
+          "message": "Wählen Sie den Kontakt aus, dessen zugewiesener Tag entfernt werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to remove a tag from",
+          "message": "Der Kontakt, von dem ein Tag entfernt werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.desc": {
+          "source": "The applied tag to remove from the contact",
+          "message": "Der zugewiesene Tag, der vom Kontakt entfernt werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag",
+          "message": "Zugewiesener Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "The applied tag to remove",
+          "message": "Der zu entfernende zugewiesene Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Einen Tag von einem Kontakt entfernen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in ClickFunnels",
+          "message": "Eine bestehende Bestellung in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update an Order",
+          "message": "Bestellung aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The new currency code for the order",
+          "message": "Der neue Währungscode für die Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "Die Bestellwährung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to update",
+          "message": "Die eindeutige Kennung der zu aktualisierenden Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to update",
+          "message": "Die zu aktualisierende Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.desc": {
+          "source": "The new status for the order",
+          "message": "Der neue Status für die Bestellung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.short_desc": {
+          "source": "The order status",
+          "message": "Der Bestellstatus"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "Eine bestehende Bestellung aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in ClickFunnels",
+          "message": "Einen bestehenden Kontakt in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Kontakt aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "Kontakt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID to update",
+          "message": "Die ID des zu aktualisierenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Benutzerdefinierte Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The new email address for the contact",
+          "message": "Die neue E-Mail-Adresse für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "Die E-Mail-Adresse des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The new Facebook profile URL for the contact",
+          "message": "Die neue Facebook-Profil-URL für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "Die Facebook-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The new first name for the contact",
+          "message": "Der neue Vorname für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "Der Vorname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The new Instagram profile URL for the contact",
+          "message": "Die neue Instagram-Profil-URL für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "Die Instagram-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The new last name for the contact",
+          "message": "Der neue Nachname für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "Der Nachname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The new LinkedIn profile URL for the contact",
+          "message": "Die neue LinkedIn-Profil-URL für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "Die LinkedIn-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The new phone number for the contact",
+          "message": "Die neue Telefonnummer für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "Die Telefonnummer des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The new website URL for the contact",
+          "message": "Die neue Website-URL für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "Website-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "Die Website-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "Eine Liste von Kontakt-Tag-IDs, die auf den Kontakt angewendet werden sollen. Jedes gültige Array überschreibt bestehende Werte"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "Anzuwendende Kontakt-Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The new time zone for the contact",
+          "message": "Die neue Zeitzone für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "Die Zeitzone des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The new Twitter profile URL for the contact",
+          "message": "Die neue Twitter-Profil-URL für den Kontakt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "Die Twitter-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Einen bestehenden Kontakt aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Update an existing contact tag in ClickFunnels",
+          "message": "Einen bestehenden Kontakt-Tag in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Update a Contact Tag",
+          "message": "Einen Kontakt-Tag aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The new color code for the tag",
+          "message": "Der neue Farbcode für den Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "Farbe"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "Die Tag-Farbe"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "Der neue Name für den Tag"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "Der Tag-Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Tags"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "Die ID des zu aktualisierenden Tags"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Update a contact tag",
+          "message": "Einen Kontakt-Tag aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Update an existing course enrollment in ClickFunnels",
+          "message": "Eine bestehende Kurseinschreibung in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Update an Enrollment",
+          "message": "Eine Einschreibung aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the enrollment has been completed",
+          "message": "Gibt an, ob die Einschreibung abgeschlossen wurde"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Abgeschlossen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.short_desc": {
+          "source": "Whether enrollment is completed",
+          "message": "Gibt an, ob die Einschreibung abgeschlossen ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.desc": {
+          "source": "The unique identifier of the enrollment to update",
+          "message": "Die eindeutige Kennung der zu aktualisierenden Einschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "Einschreibungs-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment to update",
+          "message": "Die zu aktualisierende Einschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "Gibt an, ob die Einschreibung ausgesetzt werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "Ausgesetzt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "Gibt an, ob die Einschreibung ausgesetzt ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Update a course enrollment",
+          "message": "Eine Kurseinschreibung aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Update an existing fulfillment in ClickFunnels",
+          "message": "Eine bestehende Fulfillment-Bestellung in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Update a Fulfillment",
+          "message": "Ein Fulfillment aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Fulfillments"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "Fulfillment-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to update",
+          "message": "Das zu aktualisierende Fulfillment"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment update",
+          "message": "Gibt an, ob eine E-Mail-Benachrichtigung über die Fulfillment-Aktualisierung an den Kunden gesendet werden soll"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "Kunden benachrichtigen"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "E-Mail-Benachrichtigung senden"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The new shipping provider",
+          "message": "Der neue Versandanbieter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "Versandanbieter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "Der Versandanbieter"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The new tracking code",
+          "message": "Der neue Tracking-Code"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Tracking-Code"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "Der Tracking-Code"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The new tracking URL",
+          "message": "Die neue Tracking-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "Tracking-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "Die Tracking-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Update a fulfillment",
+          "message": "Ein Fulfillment aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.desc": {
+          "source": "Update an existing funnel in ClickFunnels",
+          "message": "Einen bestehenden Funnel in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
+          "source": "Update a Funnel",
+          "message": "Einen Funnel aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.desc": {
+          "source": "The unique identifier of the funnel to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Funnels"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "Funnel-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel to update",
+          "message": "Der zu aktualisierende Funnel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.desc": {
+          "source": "The new name for the funnel",
+          "message": "Der neue Name für den Funnel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.short_desc": {
+          "source": "The funnel name",
+          "message": "Der Funnel-Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
+          "source": "Update an existing funnel",
+          "message": "Einen bestehenden Funnel aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update an existing form in ClickFunnels",
+          "message": "Ein bestehendes Formular in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update a Form",
+          "message": "Ein Formular aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Formulars"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "Formular-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to update",
+          "message": "Das zu aktualisierende Formular"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new name for the form",
+          "message": "Der neue Name für das Formular"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "Der Formularname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The new redirect URL",
+          "message": "Die neue Weiterleitungs-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "Weiterleitungs-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "Die Weiterleitungs-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update an existing form",
+          "message": "Ein bestehendes Formular aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in ClickFunnels",
+          "message": "Ein bestehendes Produkt in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "Ein Produkt aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "Gibt an, ob für Affiliate-Provisionen berechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "Provisionsberechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "Gibt an, ob provisionsberechtigt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The new URL path for the product",
+          "message": "Der neue URL-Pfad für das Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "Aktueller Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "Der Produkt-URL-Pfad"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name for the product",
+          "message": "Der neue Name für das Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "Der Produktname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The new SEO description",
+          "message": "Die neue SEO-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEO-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "Die SEO-Beschreibung"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The new SEO image URL",
+          "message": "Die neue SEO-Bild-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO-Bild-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "Die SEO-Bild-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The new SEO title",
+          "message": "Der neue SEO-Titel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEO-Titel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "Der SEO-Titel"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The unique identifier of the product to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Produkts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "Produkt-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to update",
+          "message": "Das zu aktualisierende Produkt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "Gibt an, ob das Produkt im Kundencenter sichtbar ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "Im Kundencenter sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "Ob im Kundencenter sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "Gibt an, ob das Produkt im Store sichtbar ist"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "Im Store sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "Ob im Store sichtbar"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "Ein vorhandenes Produkt aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.desc": {
+          "source": "Create a new contact or update an existing one by email address in ClickFunnels",
+          "message": "Einen neuen Kontakt erstellen oder einen bestehenden anhand der E-Mail-Adresse in ClickFunnels aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
+          "source": "Upsert a Contact",
+          "message": "Kontakt erstellen oder aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute für den Kontakt. Sowohl Schlüssel als auch Werte müssen Zeichenfolgen sein. Schlüssel mit Sonderzeichen werden automatisch in `snake_case` umgewandelt"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Benutzerdefinierte Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "Benutzerdefinierte Schlüssel-Wert-Attribute"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "Die E-Mail-Adresse des zu erstellenden Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-Mail-Adresse"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "Die E-Mail-Adresse des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "Die Facebook-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "Die Facebook-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "Der Vorname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "Der Vorname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "Die Instagram-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "Die Instagram-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "Der Nachname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "Der Nachname des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "Die LinkedIn-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "Die LinkedIn-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "Die Telefonnummer des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "Die Telefonnummer des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "Die ClickFunnels-Workspace-ID für Endpunkte auf Workspace-Ebene. Sie finden die Workspace-ID in der URL des ClickFunnels-Admin-Panels oder durch Aufrufen des Endpunkts `GET /teams/{team_id}/workspaces`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "Arbeitsbereich-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnels-Workspace-ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "Die Website-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "Website-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "Die Website-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "Eine Liste von Kontakt-Tag-IDs, die auf den Kontakt angewendet werden sollen. Jedes gültige Array überschreibt bestehende Werte"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "Anzuwendende Kontakt-Tag-IDs"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "Die Zeitzone des Kontakts (z. B. `America/New_York`)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "Die Zeitzone des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "Die Twitter-Profil-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter-URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "Die Twitter-URL des Kontakts"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
+          "source": "Create or update a contact by email",
+          "message": "Einen Kontakt per E-Mail erstellen oder aktualisieren"
+        },
+        "app.Q2xpY2tGdW5uZWxz.desc": {
+          "source": "ClickFunnels 2.0 is a marketing and sales funnel platform for managing contacts, orders, products, funnels, courses, forms, and fulfillments.\n\nThis integration supports full CRUD operations on core resources, tag management, and event-based triggers.",
+          "message": "ClickFunnels 2.0 ist eine Marketing- und Sales-Funnel-Plattform zur Verwaltung von Kontakten, Bestellungen, Produkten, Funnels, Kursen, Formularen und Abwicklungen.\n\nDiese Integration unterstützt vollständige CRUD-Operationen für Kernressourcen, Tag-Verwaltung und ereignisbasierte Trigger."
+        },
+        "app.Q2xpY2tGdW5uZWxz.display_name": {
+          "source": "ClickFunnels",
+          "message": "ClickFunnels"
+        },
+        "app.Q2xpY2tGdW5uZWxz.short_desc": {
+          "source": "ClickFunnels 2.0 marketing and sales funnel platform",
+          "message": "ClickFunnels 2.0 Marketing- und Sales-Funnel-Plattform"
+        }
+      }
+    }
+  }
+}

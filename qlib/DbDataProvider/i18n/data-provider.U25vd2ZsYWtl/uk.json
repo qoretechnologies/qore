@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Створення та керування підключеннями до хмарного сховища даних Snowflake"
+        },
+        "app.U25vd2ZsYWtl.display_name": {
+          "source": "Snowflake",
+          "message": "Snowflake"
+        },
+        "app.U25vd2ZsYWtl.short_desc": {
+          "source": "Snowflake cloud data warehouse",
+          "message": "Хмарне сховище даних Snowflake"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2033 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return request for an order",
+          "message": "Crear una nueva solicitud de devolución para un pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "Crear devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID from the e-commerce platform (used as `order.external_id` in the API request)",
+          "message": "ID del pedido de la plataforma de comercio electrónico (usado como `order.external_id` en la solicitud de la API)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "ID de pedido externo"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "Order ID from e-commerce platform",
+          "message": "ID de pedido de la plataforma de comercio electrónico"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.desc": {
+          "source": "List of items to return with quantities, reasons, and resolutions",
+          "message": "Lista de artículos a devolver con cantidades, motivos y resoluciones"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.display_name": {
+          "source": "Return Items",
+          "message": "Artículos a devolver"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.short_desc": {
+          "source": "Items to return",
+          "message": "Artículos a devolver"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return request",
+          "message": "Crear una nueva solicitud de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.desc": {
+          "source": "Create a new package tracking by providing a tracking number and optional courier code",
+          "message": "Crear un nuevo seguimiento de paquete proporcionando un número de seguimiento y un código de mensajería opcional"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
+          "source": "Create Tracking",
+          "message": "Crear seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.desc": {
+          "source": "Identifier for the courier connection to use for this tracking",
+          "message": "Identificador de la conexión de mensajería que se usará para este seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.display_name": {
+          "source": "Courier Connection ID",
+          "message": "ID de conexión de mensajería"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.short_desc": {
+          "source": "Courier connection reference",
+          "message": "Referencia de la conexión de mensajería"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Pares clave-valor personalizados de tipo cadena para datos de seguimiento adicionales"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Campos personalizados"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Datos clave-valor personalizados"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.desc": {
+          "source": "Name of the package recipient",
+          "message": "Nombre del destinatario del paquete"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.display_name": {
+          "source": "Customer Name",
+          "message": "Nombre del cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Nombre del destinatario"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Puerta a puerta"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Recogida en mensajería"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Recogida en tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Método de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Tipo de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Método de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Código de país de destino ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "País de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Código de país de destino (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Estado o provincia de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Estado de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Estado o provincia de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Fecha en que se realizó el pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Fecha del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Fecha de realización del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Identificador global del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Identificador global del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL al pedido en el sistema del comerciante"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Ruta del ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL al pedido en el sistema del comerciante"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Número de pedido legible por humanos"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Número de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Número de pedido legible por humanos"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Fecha de entrega prevista prometida al cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Fecha de entrega prometida"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Fecha de entrega prevista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Código de país de origen ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "País de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Código de país de origen (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Estado o provincia de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Estado de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Estado o provincia de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID de ubicación de la tienda; completa automáticamente los campos de dirección de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID de ubicación"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID de ubicación de la tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Código de idioma ISO 639-1 para notificaciones"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Idioma"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Idioma de notificación (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "User-provided text notes for this tracking",
+          "message": "Notas de texto proporcionadas por el usuario para este seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Nota"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Notas de texto"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "List of tags to assign to the shipment for categorization",
+          "message": "Lista de etiquetas para asignar al envío para categorización"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Etiquetas de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Tags for the shipment",
+          "message": "Etiquetas para el envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Descripción del tipo de servicio del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Tipo de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Descripción del servicio del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Método de servicio de envío seleccionado en el proceso de pago"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Método de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Método de servicio de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Código de grupo de transportista para detección de slug múltiple (p. ej., `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Grupo de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Código de grupo de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Unique courier code (e.g., `fedex`, `ups`). If not specified, Aftership will auto-detect",
+          "message": "Código de transportista único (p. ej., `fedex`, `ups`). Si no se especifica, Aftership lo detectará automáticamente"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Código de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Unique courier code",
+          "message": "Código de transportista único"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Instrucciones para la recogida del paquete"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Nota de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Instrucciones de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Detalles de la ubicación para la recogida del destinatario"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Ubicación de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Detalles del lugar de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking; defaults to the tracking number",
+          "message": "Nombre para mostrar del seguimiento; el valor predeterminado es el número de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name for the tracking",
+          "message": "Nombre para mostrar del seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Número de cuenta del transportista para credenciales de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Número de cuenta de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Número de cuenta del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Credencial de seguimiento para ciertos transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Clave de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Credencial de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Carrier tracking number (4-100 characters)",
+          "message": "Número de seguimiento del transportista (4-100 caracteres)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Número de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "Número de seguimiento del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Fecha de envío para el seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Create a new tracking",
+          "message": "Crear un nuevo seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.desc": {
+          "source": "Attach a shipping label or tracking number to a return",
+          "message": "Adjuntar una etiqueta de envío o número de seguimiento a una devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
+          "source": "Add Return Shipment",
+          "message": "Agregar envío de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier code for the return shipment (e.g., `fedex`, `ups`)",
+          "message": "Código de transportista para el envío de devolución (p. ej., `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Código de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Return shipment courier",
+          "message": "Transportista del envío de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.desc": {
+          "source": "The Aftership return ID to attach the shipping label/tracking to",
+          "message": "El ID de devolución de Aftership al que adjuntar la etiqueta de envío/seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.short_desc": {
+          "source": "The return ID to add shipment to",
+          "message": "El ID de devolución al que agregar el envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the return shipment",
+          "message": "Número de seguimiento para el envío de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Número de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Return shipment tracking number",
+          "message": "Número de seguimiento del envío de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
+          "source": "Add a shipment to a return",
+          "message": "Agregar un envío a una devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.desc": {
+          "source": "Approve a pending return request",
+          "message": "Aprobar una solicitud de devolución pendiente"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
+          "source": "Approve Return",
+          "message": "Aprobar devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to approve",
+          "message": "El ID de devolución de Aftership a aprobar"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to approve",
+          "message": "El ID de devolución a aprobar"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
+          "source": "Approve a return request",
+          "message": "Aprobar una solicitud de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.desc": {
+          "source": "Retrieve the most recent checkpoint event for a tracking",
+          "message": "Recuperar el evento de punto de control más reciente para un seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
+          "source": "Get Last Checkpoint",
+          "message": "Obtener último punto de control"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to get the last checkpoint for",
+          "message": "El ID de seguimiento de Aftership para el cual obtener el último punto de control"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.short_desc": {
+          "source": "The tracking ID",
+          "message": "El ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
+          "source": "Get the last checkpoint of a tracking",
+          "message": "Obtener el último punto de control de un seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve a single return record by its ID or RMA number",
+          "message": "Recuperar un registro de devolución individual por su ID o número RMA"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "Obtener devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID or RMA number to retrieve",
+          "message": "El ID de devolución o número RMA de Aftership a recuperar"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to retrieve",
+          "message": "El ID de devolución a recuperar"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a return by ID",
+          "message": "Obtener una devolución por ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.desc": {
+          "source": "Retrieve a single tracking record by its Aftership tracking ID",
+          "message": "Recuperar un registro de seguimiento individual por su ID de seguimiento de Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
+          "source": "Get Tracking",
+          "message": "Obtener seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrieve",
+          "message": "El ID de seguimiento de Aftership a recuperar"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrieve",
+          "message": "El ID de seguimiento a recuperar"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
+          "source": "Get a tracking by ID",
+          "message": "Obtener un seguimiento por ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.desc": {
+          "source": "Automatically detect the courier for a given tracking number",
+          "message": "Detectar automáticamente el transportista para un número de seguimiento determinado"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
+          "source": "Detect Courier",
+          "message": "Detectar transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code to improve detection accuracy",
+          "message": "Código de país de destino ISO Alpha-3 para mejorar la precisión de la detección"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "País de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Código de país de destino (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination to improve detection accuracy",
+          "message": "Estado o provincia de destino para mejorar la precisión de la detección"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Estado de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Estado o provincia de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Destination postal code to improve detection accuracy",
+          "message": "Código postal de destino para mejorar la precisión de la detección"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code to improve detection accuracy",
+          "message": "Código de país de origen ISO Alpha-3 para mejorar la precisión de la detección"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "País de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Código de país de origen (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Código de grupo de transportista para detección de slug múltiple (p. ej., `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Grupo de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Código de grupo de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.desc": {
+          "source": "List of courier codes to narrow detection (e.g., `fedex`, `ups`)",
+          "message": "Lista de códigos de transportista para restringir la detección (p. ej., `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.display_name": {
+          "source": "Courier Slugs",
+          "message": "Slugs de transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier codes",
+          "message": "Filtrar por códigos de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number to help narrow courier detection",
+          "message": "Número de cuenta de transportista para ayudar a acotar la detección de transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Número de cuenta de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Número de cuenta del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential to help narrow courier detection",
+          "message": "Credencial de seguimiento para ayudar a acotar la detección de transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Clave de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Credencial de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to identify the courier for",
+          "message": "Número de seguimiento para el que identificar el transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Número de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number to identify",
+          "message": "Número de seguimiento a identificar"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date to help narrow courier detection",
+          "message": "Fecha de envío para ayudar a acotar la detección de transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
+          "source": "Auto-detect courier from tracking number",
+          "message": "Detectar automáticamente el transportista a partir del número de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.desc": {
+          "source": "Delete an existing tracking by its Aftership tracking ID",
+          "message": "Eliminar un seguimiento existente por su ID de seguimiento de Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
+          "source": "Delete Tracking",
+          "message": "Eliminar seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to delete",
+          "message": "El ID de seguimiento de Aftership a eliminar"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to delete",
+          "message": "El ID de seguimiento a eliminar"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
+          "source": "Delete a tracking",
+          "message": "Eliminar un seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "Retrieve a list of all couriers supported by Aftership",
+          "message": "Obtener una lista de todos los transportistas admitidos por Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Listar transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List all supported couriers",
+          "message": "Listar todos los transportistas admitidos"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Aftership** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST de **Aftership** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtiliza esta acción para terminales que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Aftership",
+          "message": "Realizar una llamada personalizada a la API de Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.desc": {
+          "source": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+          "message": "Marcar un seguimiento como completado con un motivo (entregado, perdido o devuelto al remitente)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
+          "source": "Mark as Completed",
+          "message": "Marcar como completado"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.desc": {
+          "source": "Timestamp of when the completion event occurred. If not provided, the current time is used",
+          "message": "Marca de tiempo de cuándo ocurrió el evento de finalización. Si no se proporciona, se utiliza la hora actual"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.display_name": {
+          "source": "Event Date/Time",
+          "message": "Fecha/Hora del evento"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.short_desc": {
+          "source": "When the event occurred",
+          "message": "Cuándo ocurrió el evento"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to mark as completed",
+          "message": "El ID de seguimiento de Aftership a marcar como completado"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.short_desc": {
+          "source": "The tracking ID to mark as completed",
+          "message": "El ID de seguimiento a marcar como completado"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkRFTElWRVJFRA.display_name": {
+          "source": "Delivered",
+          "message": "Entregado"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkxPU1Q.display_name": {
+          "source": "Lost",
+          "message": "Perdida"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOlJFVFVSTkVEX1RPX1NFTkRFUg.display_name": {
+          "source": "Returned to Sender",
+          "message": "Devuelto al remitente"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.desc": {
+          "source": "Reason for marking the tracking as completed",
+          "message": "Motivo para marcar el seguimiento como completado"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Motivo"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.short_desc": {
+          "source": "Completion reason",
+          "message": "Motivo de finalización"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
+          "source": "Mark a tracking as completed",
+          "message": "Marcar un seguimiento como completado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.desc": {
+          "source": "Search and list returns with optional filters for status, email, outcome, and date range",
+          "message": "Buscar y listar devoluciones con filtros opcionales por estado, correo electrónico, resultado y rango de fechas"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
+          "source": "Search Returns",
+          "message": "Buscar devoluciones"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter returns created before this date",
+          "message": "Filtrar devoluciones creadas antes de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Creado antes de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtrar por fecha de creación máxima"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter returns created after this date",
+          "message": "Filtrar devoluciones creadas después de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Creado después de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtrar por fecha de creación mínima"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.desc": {
+          "source": "Filter returns by customer email address",
+          "message": "Filtrar devoluciones por dirección de correo electrónico del cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.display_name": {
+          "source": "Customer Email",
+          "message": "Correo electrónico del cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.short_desc": {
+          "source": "Filter by customer email",
+          "message": "Filtrar por correo electrónico del cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.display_name": {
+          "source": "Approved",
+          "message": "Aprobado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.display_name": {
+          "source": "Done",
+          "message": "Hecho"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Caducado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.display_name": {
+          "source": "Rejected",
+          "message": "Rechazado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnN1Ym1pdHRlZA.display_name": {
+          "source": "Submitted",
+          "message": "Enviado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.desc": {
+          "source": "Filter returns by approval status",
+          "message": "Filtrar devoluciones por estado de aprobación"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.display_name": {
+          "source": "Approval Status",
+          "message": "Estado de aprobación"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.short_desc": {
+          "source": "Filter by approval status",
+          "message": "Filtrar por estado de aprobación"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.desc": {
+          "source": "Filter by order name (e.g., `#1001`)",
+          "message": "Filtrar por nombre del pedido (p. ej., `#1001`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.display_name": {
+          "source": "Order Name",
+          "message": "Nombre del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.short_desc": {
+          "source": "Filter by order name",
+          "message": "Filtrar por nombre del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOmV4Y2hhbmdl.display_name": {
+          "source": "Exchange",
+          "message": "Cambio"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnJlZnVuZA.display_name": {
+          "source": "Refund",
+          "message": "Reembolso"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnN0b3JlX2NyZWRpdA.display_name": {
+          "source": "Store Credit",
+          "message": "Crédito de la tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnVwc2VsbA.display_name": {
+          "source": "Upsell",
+          "message": "Venta adicional"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.desc": {
+          "source": "Filter returns by outcome type",
+          "message": "Filtrar devoluciones por tipo de resultado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.display_name": {
+          "source": "Outcome",
+          "message": "Resultado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.short_desc": {
+          "source": "Filter by return outcome",
+          "message": "Filtrar por resultado de la devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.desc": {
+          "source": "Number of returns per page (1-50, default `10`)",
+          "message": "Número de devoluciones por página (1-50, valor predeterminado `10`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (1-200, default `1`)",
+          "message": "Número de página para la paginación (1-200, valor predeterminado `1`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Página"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Número de página"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+          "source": "Customer Courier",
+          "message": "Transportista del cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+          "source": "Carrier Dropoff",
+          "message": "Entrega en punto del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+          "source": "Carrier Pickup",
+          "message": "Recogida por transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+          "source": "Green Return",
+          "message": "Green Return"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+          "source": "Happy Returns",
+          "message": "Happy Returns"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+          "source": "In Store",
+          "message": "En tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+          "source": "Retail Reworks",
+          "message": "Retail Reworks"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+          "source": "Retailer Label",
+          "message": "Etiqueta del minorista"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.desc": {
+          "source": "Filter returns by shipping method",
+          "message": "Filtrar devoluciones por método de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.display_name": {
+          "source": "Return Method",
+          "message": "Método de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.short_desc": {
+          "source": "Filter by return method",
+          "message": "Filtrar por método de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
+          "source": "Search and list returns",
+          "message": "Buscar y listar devoluciones"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.desc": {
+          "source": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+          "message": "Buscar y listar seguimientos con filtros opcionales por palabra clave, transportista, estado y rango de fechas"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
+          "source": "Search Trackings",
+          "message": "Buscar seguimientos"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings created before this date",
+          "message": "Filtrar seguimientos creados antes de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Creado antes de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Filtrar por fecha de creación máxima"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings created after this date",
+          "message": "Filtrar seguimientos creados después de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Creado después de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Filtrar por fecha de creación mínima"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.desc": {
+          "source": "Cursor for pagination; use the value from the previous response to get the next page",
+          "message": "Cursor para paginación; use el valor de la respuesta anterior para obtener la página siguiente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Cursor de paginación"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.desc": {
+          "source": "ISO Alpha-3 destination country code(s), comma-separated",
+          "message": "Código(s) de país de destino ISO Alpha-3, separados por comas"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Country",
+          "message": "País de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Filter by destination country",
+          "message": "Filtrar por país de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.desc": {
+          "source": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+          "message": "Palabra clave de búsqueda para filtrar seguimientos por número de seguimiento, título, ID de pedido, etc."
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Palabra clave"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "Palabra clave de búsqueda"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.desc": {
+          "source": "Filter trackings by the order ID",
+          "message": "Filtrar seguimientos por el ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrar por ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.desc": {
+          "source": "ISO Alpha-3 origin country code(s), comma-separated",
+          "message": "Código(s) de país de origen ISO Alpha-3, separados por comas"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.display_name": {
+          "source": "Origin Country",
+          "message": "País de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.short_desc": {
+          "source": "Filter by origin country",
+          "message": "Filtrar por país de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.desc": {
+          "source": "Number of trackings per page (max 200)",
+          "message": "Número de seguimientos por página (máx. 200)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Número de resultados por página"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "Comma-separated shipment tags to filter by",
+          "message": "Etiquetas de envío separadas por comas por las que filtrar"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Etiquetas de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Filter by shipment tags",
+          "message": "Filtrar por etiquetas de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.desc": {
+          "source": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+          "message": "Filtrar seguimientos por código de transportista (p. ej., `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Código de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier code",
+          "message": "Filtrar por código de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.desc": {
+          "source": "Filter trackings by return-to-sender status. Set to `True` to show only return-to-sender shipments, `False` to exclude them",
+          "message": "Filtrar seguimientos por estado de devolución al remitente. Establezca en `True` para mostrar solo envíos de devolución al remitente, `False` para excluirlos"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.display_name": {
+          "source": "Return to Sender",
+          "message": "Devolución al remitente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.short_desc": {
+          "source": "Filter return-to-sender shipments",
+          "message": "Filtrar envíos devueltos al remitente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOk91dEZvckRlbGl2ZXJ5.display_name": {
+          "source": "Out for Delivery",
+          "message": "En reparto"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF0dGVtcHRGYWls.display_name": {
+          "source": "Attempt Failed",
+          "message": "Intento fallido"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF2YWlsYWJsZUZvclBpY2t1cA.display_name": {
+          "source": "Available for Pickup",
+          "message": "Disponible para recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Entregado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4Y2VwdGlvbg.display_name": {
+          "source": "Exception",
+          "message": "Excepción"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Caducado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluVHJhbnNpdA.display_name": {
+          "source": "In Transit",
+          "message": "En tránsito"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluZm9SZWNlaXZlZA.display_name": {
+          "source": "Info Received",
+          "message": "Información recibida"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOlBlbmRpbmc.display_name": {
+          "source": "Pending",
+          "message": "Pendiente"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.desc": {
+          "source": "Filter trackings by delivery status",
+          "message": "Filtrar seguimientos por estado de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.display_name": {
+          "source": "Status Tag",
+          "message": "Etiqueta de estado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.short_desc": {
+          "source": "Filter by status tag",
+          "message": "Filtrar por etiqueta de estado"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.desc": {
+          "source": "Comma-separated tracking numbers to filter by (up to 50)",
+          "message": "Números de seguimiento separados por comas por los que filtrar (hasta 50)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.display_name": {
+          "source": "Tracking Numbers",
+          "message": "Números de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.short_desc": {
+          "source": "Filter by tracking numbers",
+          "message": "Filtrar por números de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings updated before this date",
+          "message": "Filtrar seguimientos actualizados antes de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.display_name": {
+          "source": "Updated Before",
+          "message": "Actualizado antes de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum update date",
+          "message": "Filtrar por fecha máxima de actualización"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings updated after this date",
+          "message": "Filtrar seguimientos actualizados después de esta fecha"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.display_name": {
+          "source": "Updated After",
+          "message": "Actualizado después de"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum update date",
+          "message": "Filtrar por fecha mínima de actualización"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
+          "source": "Search and list trackings",
+          "message": "Buscar y listar seguimientos"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.desc": {
+          "source": "Reactivate tracking for an expired shipment",
+          "message": "Reactivar el seguimiento de un envío caducado"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.display_name": {
+          "source": "Retrack",
+          "message": "Reanudar seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrack (reactivates expired trackings)",
+          "message": "El ID de seguimiento de Aftership para reanudar el seguimiento (reactiva seguimientos caducados)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrack",
+          "message": "El ID de seguimiento para reanudar el seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.short_desc": {
+          "source": "Retrack an expired tracking",
+          "message": "Reanudar un seguimiento caducado"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.desc": {
+          "source": "Reject a pending return request with an optional reason",
+          "message": "Rechazar una solicitud de devolución pendiente con un motivo opcional"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
+          "source": "Reject Return",
+          "message": "Rechazar devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID to reject",
+          "message": "El ID de devolución de Aftership que se rechazará"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to reject",
+          "message": "El ID de devolución que se rechazará"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Reason for rejecting the return",
+          "message": "Motivo para rechazar la devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Motivo"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Rejection reason",
+          "message": "Motivo del rechazo"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
+          "source": "Reject a return request",
+          "message": "Rechazar una solicitud de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.desc": {
+          "source": "Mark a return as resolved (completed processing)",
+          "message": "Marcar una devolución como resuelta (procesamiento completado)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
+          "source": "Resolve Return",
+          "message": "Resolver devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to mark as resolved",
+          "message": "El ID de devolución de Aftership que se marcará como resuelto"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "ID de devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to resolve",
+          "message": "El ID de la devolución que se resolverá"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
+          "source": "Resolve a return",
+          "message": "Resolver una devolución"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+          "message": "Sondea la API de Aftership y activa un evento cuando cambia el estado de entrega de un seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Tracking Status Changed",
+          "message": "Estado de seguimiento cambiado"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Watch for tracking status changes",
+          "message": "Supervisar cambios en el estado del seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.desc": {
+          "source": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+          "message": "Actualiza los metadatos de un seguimiento existente (título, ID del pedido, notas, etc.)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
+          "source": "Update Tracking",
+          "message": "Actualizar seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Pares clave-valor personalizados de tipo cadena para datos de seguimiento adicionales"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Campos personalizados"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Datos clave-valor personalizados"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Puerta a puerta"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Recogida en mensajería"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Recogida en tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Método de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Tipo de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Método de entrega"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Código de país de destino ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "País de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Código de país de destino (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Ciudad de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Estado o provincia de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Estado de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Estado o provincia de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Código postal de destino"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to update",
+          "message": "El ID de seguimiento de Aftership que se actualizará"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "ID de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to update",
+          "message": "El ID de seguimiento que se actualizará"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Fecha en que se realizó el pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Fecha del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Fecha de realización del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Identificador global del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Identificador global del pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL al pedido en el sistema del comerciante"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Ruta del ID de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL al pedido en el sistema del comerciante"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Número de pedido legible por humanos"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Número de pedido"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Número de pedido legible por humanos"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Fecha de entrega prevista prometida al cliente"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Fecha de entrega prometida"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Fecha de entrega prevista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Ciudad de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Código de país de origen ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "País de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Código de país de origen (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Código postal de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Estado o provincia de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Estado de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Estado o provincia de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID de ubicación de la tienda; completa automáticamente los campos de dirección de origen"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID de ubicación"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID de ubicación de la tienda"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Código de idioma ISO 639-1 para notificaciones"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Idioma"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Idioma de notificación (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "Text notes for this tracking",
+          "message": "Notas de texto para este seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Nota"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Notas de texto"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Descripción del tipo de servicio del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Tipo de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Descripción del servicio del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Método de servicio de envío seleccionado en el proceso de pago"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Método de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Método de servicio de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Update the courier code for this tracking (e.g., `fedex`, `ups`)",
+          "message": "Actualiza el código del transportista para este seguimiento (p. ej., `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Código de transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Update the courier code",
+          "message": "Actualizar el código del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Instrucciones para la recogida del paquete"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Nota de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Instrucciones de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Detalles de la ubicación para la recogida del destinatario"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Ubicación de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Detalles del lugar de recogida"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking",
+          "message": "Nombre para mostrar del seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name",
+          "message": "Nombre para mostrar"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Número de cuenta del transportista para credenciales de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Número de cuenta de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Número de cuenta del transportista"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Credencial de seguimiento para ciertos transportistas"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Clave de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Credencial de seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Fecha de envío para el seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Fecha de envío"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Update a tracking",
+          "message": "Actualizar un seguimiento"
+        },
+        "app.QWZ0ZXJzaGlw.desc": {
+          "source": "Aftership package tracking and returns management services providing access to tracking, courier detection, and returns APIs",
+          "message": "Servicios de gestión de devoluciones y seguimiento de paquetes de Aftership que proporcionan acceso a las API de seguimiento, detección de transportistas y devoluciones"
+        },
+        "app.QWZ0ZXJzaGlw.display_name": {
+          "source": "Aftership",
+          "message": "Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.short_desc": {
+          "source": "Aftership package tracking and returns",
+          "message": "Seguimiento de paquetes y devoluciones de Aftership"
+        }
+      }
+    }
+  }
+}

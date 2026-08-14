@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.desc": {
+          "source": "Execute an aggregation pipeline on a MongoDB collection",
+          "message": "Spustit agregační pipeline na kolekci MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregation Pipeline",
+          "message": "Agregační pipeline"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
+          "source": "Run aggregation pipeline",
+          "message": "Spustit agregační pipeline"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.desc": {
+          "source": "Execute bulk insert, update, and delete operations on a MongoDB collection",
+          "message": "Provádět hromadné operace vložení, aktualizace a smazání v kolekci MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.display_name": {
+          "source": "Bulk Operations",
+          "message": "Hromadné operace"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
+          "source": "Execute bulk write operations",
+          "message": "Provádět hromadné operace zápisu"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.desc": {
+          "source": "Delete one or more documents from a MongoDB collection",
+          "message": "Smazat jeden nebo více dokumentů z kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
+          "source": "Delete Documents",
+          "message": "Smazat dokumenty"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
+          "source": "Delete documents from a collection",
+          "message": "Smazat dokumenty z kolekce"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.desc": {
+          "source": "Find documents in a MongoDB collection using query filters",
+          "message": "Vyhledat dokumenty v kolekci MongoDB pomocí filtrů dotazu"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.display_name": {
+          "source": "Find Documents",
+          "message": "Vyhledat dokumenty"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
+          "source": "Query documents in a collection",
+          "message": "Dotazovat se na dokumenty v kolekci"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.desc": {
+          "source": "Insert one or more documents into a MongoDB collection",
+          "message": "Vložit jeden nebo více dokumentů do kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
+          "source": "Insert Document",
+          "message": "Vložit dokument"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
+          "source": "Insert a document into a collection",
+          "message": "Vložit dokument do kolekce"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.desc": {
+          "source": "Update one or more documents in a MongoDB collection",
+          "message": "Aktualizovat jeden nebo více dokumentů v kolekci MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
+          "source": "Update Documents",
+          "message": "Aktualizovat dokumenty"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Kolekce"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Název kolekce MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Databáze"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Název databáze MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
+          "source": "Update documents in a collection",
+          "message": "Aktualizovat dokumenty v kolekci"
+        },
+        "app.TW9uZ29EQg.desc": {
+          "source": "MongoDB is a document-oriented NoSQL database for high volume data storage",
+          "message": "MongoDB je dokumentově orientovaná databáze NoSQL pro ukládání velkých objemů dat"
+        },
+        "app.TW9uZ29EQg.display_name": {
+          "source": "MongoDB Server",
+          "message": "MongoDB Server"
+        },
+        "app.TW9uZ29EQg.short_desc": {
+          "source": "MongoDB NoSQL database",
+          "message": "Databáze MongoDB NoSQL"
+        }
+      }
+    }
+  }
+}

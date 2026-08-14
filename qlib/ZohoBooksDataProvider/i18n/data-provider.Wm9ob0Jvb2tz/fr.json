@@ -1,0 +1,3181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.desc": {
+          "source": "Create a new bill from a vendor in Zoho Books",
+          "message": "Créer une nouvelle facture fournisseur dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.display_name": {
+          "source": "Create Bill",
+          "message": "Créer une facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.desc": {
+          "source": "A unique sequential identifier for the bill",
+          "message": "Un identifiant séquentiel unique pour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Numéro de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Identifiant unique de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Date d'émission de la facture au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Date d'émission de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Date d'échéance de paiement au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Date d'échéance"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Date d'échéance du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Liste de lignes d'articles avec les champs : `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Lignes d'articles de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Notes supplémentaires"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Vendor's reference number for this bill",
+          "message": "Numéro de référence du fournisseur pour cette facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Référence externe du fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Conditions de paiement et de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Le fournisseur pour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWJpbGw.short_desc": {
+          "source": "Create a new bill",
+          "message": "Créer une nouvelle facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new customer or vendor contact in Zoho Books",
+          "message": "Créer un nouveau contact client ou fournisseur dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Créer un contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Legal name of the company (max 200 characters)",
+          "message": "Raison sociale de l'entreprise (max 200 caractères)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Raison sociale de l'entreprise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Contact client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Contact fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Nom du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Nom du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Liste des personnes de contact avec les champs : `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Personnes de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Liste des personnes de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.desc": {
+          "source": "Currency ID for transactions with this contact",
+          "message": "ID de devise pour les transactions avec ce contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Devise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Devise pour les transactions"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Adresse de facturation avec les champs : `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Adresse de facturation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Détails de l'adresse de facturation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Notes supplémentaires"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Adresse de livraison avec les champs : `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Adresse de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Détails de l'adresse de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "Number of days within which payment must be made",
+          "message": "Nombre de jours dans lesquels le paiement doit être effectué"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Conditions de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Conditions de paiement en jours"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Site web"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL du site web du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Créer un nouveau contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Record a new expense in Zoho Books",
+          "message": "Enregistrer une nouvelle dépense dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "Créer une dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Customer to bill if the expense is billable",
+          "message": "Client à facturer si la dépense est facturable"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Client à facturer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Montant de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Compte de charges"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Date de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Description de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Facturable"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Cette dépense est-elle facturable"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Fournisseur pour la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "Créer une nouvelle dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new quote/estimate for a customer",
+          "message": "Créer un nouveau devis pour un client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "Créer un devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Le client pour le devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Date du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Date d'expiration"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Date d'expiration du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Liste de lignes d'articles avec les champs : `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Lignes du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notes pour le client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "Créer un nouveau devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in Zoho Books",
+          "message": "Créer un nouvel article produit ou service dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "Créer un article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Description de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.display_name": {
+          "source": "Taxable",
+          "message": "Taxable"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.aXNfdGF4YWJsZQ.short_desc": {
+          "source": "Whether the item is taxable",
+          "message": "Indique si l'article est taxable"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Item Name",
+          "message": "Nom de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Name of the item",
+          "message": "Nom de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit code",
+          "message": "Code unité de gestion des stocks"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOmdvb2Rz.desc": {
+          "source": "Physical goods",
+          "message": "Biens matériels"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.allowed-value.c3RyaW5nOnNlcnZpY2U.desc": {
+          "source": "Services",
+          "message": "Services"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.display_name": {
+          "source": "Product Type",
+          "message": "Type de produit"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cHJvZHVjdF90eXBl.short_desc": {
+          "source": "Type of product",
+          "message": "Type de produit"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tarif"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Price/rate of the item",
+          "message": "Prix/tarif de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.display_name": {
+          "source": "Tax",
+          "message": "Taxe"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dGF4X2lk.short_desc": {
+          "source": "Tax to apply",
+          "message": "Taxe à appliquer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.desc": {
+          "source": "Unit of measurement (e.g., `pcs`, `kg`, `hrs`)",
+          "message": "Unité de mesure (par ex., `pcs`, `kg`, `hrs`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "Unité"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "Unité de mesure"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "Créer un nouvel article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Books for a customer",
+          "message": "Créer une nouvelle facture dans Zoho Books pour un client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Créer une facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Valeurs des champs personnalisés pour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Champs personnalisés"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Valeurs de champs personnalisés"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Identifiant du client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Tout ajustement sur le total de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Montant de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "La date de la facture (format `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Le montant ou le pourcentage de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Remise appliquée au niveau de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Remise appliquée par ligne d'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Indique si la remise est appliquée au niveau de l'entité ou de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Type de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Type de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "La date d'échéance du paiement (format `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Date d'échéance"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Date d'échéance du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number (auto-generated if not provided)",
+          "message": "Numéro de facture personnalisé (généré automatiquement si non fourni)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Numéro de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Numéro de facture personnalisé"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Indique s'il faut appliquer la remise avant de calculer les taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Remise avant taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Appliquer la remise avant taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice",
+          "message": "Les lignes d'articles de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Lignes de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Remarques à afficher sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Remarques sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Le nom du commercial"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Vendeur"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Nom du commercial"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Frais d'expédition sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Frais d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Frais d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Les conditions de paiement en jours (par ex., 30 pour Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Conditions de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Conditions de paiement en jours"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Un numéro de référence facultatif (par ex., numéro de bon de commande)"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Conditions générales à afficher sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Créer une nouvelle facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a payment received from a customer",
+          "message": "Enregistrer un paiement reçu d'un client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "Créer un paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Le client effectuant le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Montant du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "ID of the account where the payment will be deposited",
+          "message": "ID du compte sur lequel le paiement sera déposé"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Deposit Account",
+          "message": "Compte de dépôt"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Account to deposit payment",
+          "message": "Compte pour déposer le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Date de paiement au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Date du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Date du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Description du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Liste des factures avec les champs : `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Factures"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Factures auxquelles appliquer le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmF1dG90cmFuc2FjdGlvbg.desc": {
+          "source": "Auto transaction",
+          "message": "Transaction automatique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmt0cmFuc2Zlcg.desc": {
+          "source": "Bank transfer",
+          "message": "Virement bancaire"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmJhbmtyZW1pdHRhbmNl.desc": {
+          "source": "Bank remittance",
+          "message": "Remise bancaire"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "Paiement en espèces"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "Paiement par chèque"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.allowed-value.c3RyaW5nOmNyZWRpdGNhcmQ.desc": {
+          "source": "Credit card payment",
+          "message": "Paiement par carte bancaire"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.desc": {
+          "source": "The mode of payment used",
+          "message": "Le mode de paiement utilisé"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Mode de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Mode de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "Reference number for the payment transaction",
+          "message": "Numéro de référence de la transaction de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Référence de transaction"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Créer un nouveau paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Create a new sales order for a customer",
+          "message": "Créer un nouveau bon de commande pour un client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Create Sales Order",
+          "message": "Créer une commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Le client pour le bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Date du bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Mode de diffusion"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Mode de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`",
+          "message": "Liste de lignes d'articles avec les champs : `item_id`, `name`, `description`, `quantity`, `rate`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Lignes d'articles du bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notes pour le client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Date d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Date d'expédition prévue"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.Y3JlYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Create a new sales order",
+          "message": "Créer une nouvelle commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.desc": {
+          "source": "Retrieve details of a specific bill",
+          "message": "Récupérer les détails d'une facture spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.display_name": {
+          "source": "Get Bill",
+          "message": "Obtenir la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to retrieve",
+          "message": "La facture à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWJpbGw.short_desc": {
+          "source": "Get bill details",
+          "message": "Obtenir les détails de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact",
+          "message": "Récupérer les détails d'un contact spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Obtenir le contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "Le contact à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by ID",
+          "message": "Obtenir un contact par ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve details of a specific expense",
+          "message": "Récupérer les détails d'une dépense spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "Obtenir la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "ID de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to retrieve",
+          "message": "La dépense à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get an expense by ID",
+          "message": "Obtenir une dépense par son ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve details of a specific estimate",
+          "message": "Récupérer les détails d'un devis spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "Obtenir le devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to retrieve",
+          "message": "Le devis à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get an estimate by ID",
+          "message": "Obtenir un devis par son ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item",
+          "message": "Récupérer les détails d'un article spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "Obtenir l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item ID",
+          "message": "ID de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "L'élément à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get an item by ID",
+          "message": "Obtenir un article par son ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice",
+          "message": "Récupérer les détails d'une facture spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Obtenir la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "La facture à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "Obtenir les détails de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Retrieve details of a specific purchase order",
+          "message": "Récupérer les détails d'un bon de commande fournisseur spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "Get Purchase Order",
+          "message": "Obtenir le bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order ID",
+          "message": "ID du bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "Le bon de commande fournisseur à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Get a purchase order by ID",
+          "message": "Obtenir un bon de commande fournisseur par son ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve details of a specific payment",
+          "message": "Récupérer les détails d'un paiement spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "Obtenir le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to retrieve",
+          "message": "Le paiement à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get payment details",
+          "message": "Obtenir les détails du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.desc": {
+          "source": "Retrieve details of a specific sales order",
+          "message": "Récupérer les détails d'un bon de commande client spécifique"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.display_name": {
+          "source": "Get Sales Order",
+          "message": "Obtenir la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID de la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "Le bon de commande client à récupérer"
+        },
+        "app.Wm9ob0Jvb2tz.action.Z2V0LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Get a sales order by ID",
+          "message": "Obtenir un bon de commande client par son ID"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.desc": {
+          "source": "Delete a bill from Zoho Books",
+          "message": "Supprimer une facture fournisseur de Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.display_name": {
+          "source": "Delete Bill",
+          "message": "Supprimer la facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to delete",
+          "message": "La facture fournisseur à supprimer"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWJpbGw.short_desc": {
+          "source": "Delete a bill",
+          "message": "Supprimer une facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Books",
+          "message": "Supprimer une facture de Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Supprimer la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "La facture à supprimer"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Supprimer une facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Delete a payment record from Zoho Books",
+          "message": "Supprimer un enregistrement de paiement de Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "Supprimer le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to delete",
+          "message": "Le paiement à supprimer"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "Supprimer un paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Delete a sales order from Zoho Books",
+          "message": "Supprimer un bon de commande client de Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Delete Sales Order",
+          "message": "Supprimer la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID de la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "Le bon de commande client à supprimer"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZGVsZXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Delete a sales order",
+          "message": "Supprimer une commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.desc": {
+          "source": "Send an invoice to the customer via email",
+          "message": "Envoyer une facture au client par e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.display_name": {
+          "source": "Email Invoice",
+          "message": "Envoyer la facture par e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.Ym9keQ.short_desc": {
+          "source": "Email body",
+          "message": "Corps de l'e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to email",
+          "message": "La facture à envoyer par e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Sujet"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Objet de l'e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.desc": {
+          "source": "Email addresses to send the invoice to",
+          "message": "Adresses e-mail auxquelles envoyer la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.display_name": {
+          "source": "To",
+          "message": "À"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.option.dG9fbWFpbF9pZHM.short_desc": {
+          "source": "Recipient email addresses",
+          "message": "Adresses e-mail des destinataires"
+        },
+        "app.Wm9ob0Jvb2tz.action.ZW1haWwtaW52b2ljZQ.short_desc": {
+          "source": "Send an invoice by email",
+          "message": "Envoyer une facture par e-mail"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.desc": {
+          "source": "Retrieve a list of bills with optional filtering",
+          "message": "Récupérer une liste de factures fournisseurs avec filtrage facultatif"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.display_name": {
+          "source": "List Bills",
+          "message": "Lister les factures fournisseurs"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue bills",
+          "message": "Factures fournisseurs en retard"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open bills",
+          "message": "Factures fournisseurs ouvertes"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid bills",
+          "message": "Factures fournisseurs payées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid bills",
+          "message": "Factures fournisseurs partiellement payées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided bills",
+          "message": "Factures fournisseurs annulées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by bill status",
+          "message": "Filtrer par statut de facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "Filtrer par fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1iaWxscw.short_desc": {
+          "source": "List all bills",
+          "message": "Lister toutes les factures fournisseurs"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of contacts (customers and vendors)",
+          "message": "Récupérer une liste de contacts (clients et fournisseurs)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Lister les contacts"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contacts only",
+          "message": "Contacts clients uniquement"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contacts only",
+          "message": "Contacts fournisseurs uniquement"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "Filtrer par type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Lister tous les contacts"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.desc": {
+          "source": "Retrieve a list of estimates/quotes",
+          "message": "Récupérer une liste de devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.display_name": {
+          "source": "List Estimates",
+          "message": "Lister les devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1lc3RpbWF0ZXM.short_desc": {
+          "source": "List all estimates",
+          "message": "Lister tous les devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.desc": {
+          "source": "Retrieve a list of expenses",
+          "message": "Récupérer une liste de dépenses"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.display_name": {
+          "source": "List Expenses",
+          "message": "Lister les dépenses"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1leHBlbnNlcw.short_desc": {
+          "source": "List all expenses",
+          "message": "Lister toutes les dépenses"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices with optional filtering",
+          "message": "Récupérer une liste de factures avec filtrage facultatif"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Lister les factures"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrer par client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "Factures en retard"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "Factures à l'état de brouillon"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Factures payées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "Factures partiellement payées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "Factures envoyées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "Factures impayées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Voided invoices",
+          "message": "Factures annulées"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtrer par statut de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List all invoices",
+          "message": "Lister toutes les factures"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items (products and services)",
+          "message": "Récupérer une liste d'articles (produits et services)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "Lister les articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List all items",
+          "message": "Lister tous les articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "Retrieve a list of customer payments",
+          "message": "Récupérer une liste de paiements clients"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Lister les paiements"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List all payments",
+          "message": "Lister tous les paiements"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.desc": {
+          "source": "Retrieve a list of purchase orders",
+          "message": "Récupérer une liste de bons de commande fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.display_name": {
+          "source": "List Purchase Orders",
+          "message": "Lister les bons de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1wdXJjaGFzZW9yZGVycw.short_desc": {
+          "source": "List all purchase orders",
+          "message": "Lister tous les bons de commande fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.desc": {
+          "source": "Retrieve a list of sales orders",
+          "message": "Récupérer une liste de bons de commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.display_name": {
+          "source": "List Sales Orders",
+          "message": "Lister les commandes client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bGlzdC1zYWxlc29yZGVycw.short_desc": {
+          "source": "List all sales orders",
+          "message": "Lister tous les bons de commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Books** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuer un appel d'API HTTP / REST personnalisé vers **Zoho Books** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête facultatifs, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hash contenant le code de statut, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.Wm9ob0Jvb2tz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Books",
+          "message": "Effectuer un appel d'API personnalisé vers Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.desc": {
+          "source": "Fires when a new bill is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle facture fournisseur est créée dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.display_name": {
+          "source": "New Bill",
+          "message": "Nouvelle facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new bills (seconds)",
+          "message": "Fréquence de vérification des nouvelles factures fournisseurs (en secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWJpbGw.short_desc": {
+          "source": "Trigger when a new bill is created",
+          "message": "Déclencher lorsqu'une nouvelle facture fournisseur est créée"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.desc": {
+          "source": "Fires when a new customer contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau contact client est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.display_name": {
+          "source": "New Customer",
+          "message": "Nouveau client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new customers (seconds)",
+          "message": "Fréquence de vérification des nouveaux clients (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWN1c3RvbWVy.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Déclencher lorsqu'un nouveau client est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.desc": {
+          "source": "Fires when a new expense is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle dépense est enregistrée dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.display_name": {
+          "source": "New Expense",
+          "message": "Nouvelle dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new expenses (seconds)",
+          "message": "Fréquence de vérification des nouvelles dépenses (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWV4cGVuc2U.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "Se déclenche lorsqu'une nouvelle dépense est créée"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.desc": {
+          "source": "Fires when a new estimate/quote is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau devis est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.display_name": {
+          "source": "New Estimate",
+          "message": "Nouveau devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new estimates (seconds)",
+          "message": "Fréquence de vérification des nouveaux devis (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWVzdGltYXRl.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "Se déclenche lorsqu'un nouveau devis est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new product/service item is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouvel article de produit/service est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "Nouvel élément"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "Fréquence de vérification des nouveaux articles (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "Déclencher lorsqu'un nouvel article est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle facture est créée dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Nouvelle facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "Fréquence de vérification des nouvelles factures (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Se déclenche lorsqu'une nouvelle facture est créée"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau bon de commande d'achat est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.display_name": {
+          "source": "New Purchase Order",
+          "message": "Nouveau bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "Fréquence de vérification des nouveaux bons de commande (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXB1cmNoYXNlb3JkZXI.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "Déclencher lorsqu'un nouveau bon de commande est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a new payment is recorded in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau paiement est enregistré dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nouveau paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new payments (seconds)",
+          "message": "Fréquence de vérification des nouveaux paiements (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "Déclencher lorsqu'un nouveau paiement est reçu"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.desc": {
+          "source": "Fires when a new sales order is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau bon de commande client est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.display_name": {
+          "source": "New Sales Order",
+          "message": "Nouvelle commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "Fréquence de vérification des nouveaux bons de commande client (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXNhbGVzb3JkZXI.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "Déclencher lorsqu'un nouveau bon de commande client est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.desc": {
+          "source": "Fires when a new vendor contact is created in Zoho Books. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau contact fournisseur est créé dans Zoho Books. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.display_name": {
+          "source": "New Vendor",
+          "message": "Nouveau fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new vendors (seconds)",
+          "message": "Fréquence de vérification des nouveaux fournisseurs (secondes)"
+        },
+        "app.Wm9ob0Jvb2tz.action.bmV3LXZlbmRvcg.short_desc": {
+          "source": "Trigger when a new vendor is created",
+          "message": "Déclencher lorsqu'un nouveau fournisseur est créé"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.desc": {
+          "source": "Update an existing bill in Zoho Books",
+          "message": "Mettre à jour une facture fournisseur existante dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.display_name": {
+          "source": "Update Bill",
+          "message": "Mettre à jour la facture fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.display_name": {
+          "source": "Bill ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9pZA.short_desc": {
+          "source": "The bill to update",
+          "message": "La facture fournisseur à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.display_name": {
+          "source": "Bill Number",
+          "message": "Numéro de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.YmlsbF9udW1iZXI.short_desc": {
+          "source": "Unique bill identifier",
+          "message": "Identifiant unique de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.desc": {
+          "source": "Bill issue date in `yyyy-mm-dd` format",
+          "message": "Date d'émission de la facture au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.display_name": {
+          "source": "Bill Date",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZGF0ZQ.short_desc": {
+          "source": "Bill issue date",
+          "message": "Date d'émission de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.desc": {
+          "source": "Payment due date in `yyyy-mm-dd` format",
+          "message": "Date d'échéance de paiement au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Date d'échéance"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Date d'échéance du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with fields: `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`",
+          "message": "Liste de lignes d'articles avec les champs : `item_id`, `name`, `description`, `quantity`, `rate`, `account_id`, `tax_id`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Bill line items",
+          "message": "Lignes d'articles de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Notes supplémentaires"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External vendor reference",
+          "message": "Référence externe du fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dGVybXM.short_desc": {
+          "source": "Payment and delivery terms",
+          "message": "Conditions de paiement et de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for the bill",
+          "message": "Le fournisseur pour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWJpbGw.short_desc": {
+          "source": "Update an existing bill",
+          "message": "Mettre à jour une facture fournisseur existante"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact's information",
+          "message": "Mettre à jour les informations d'un contact existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Mettre à jour le contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Legal company name",
+          "message": "Raison sociale de l'entreprise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "Contact client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "Contact fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "Type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "Type de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Le contact à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "Nom du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "Nom du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.desc": {
+          "source": "List of contact persons with fields: `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`",
+          "message": "Liste des personnes de contact avec les champs : `salutation`, `first_name`, `last_name`, `email`, `phone`, `mobile`, `designation`, `department`, `is_primary_contact`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.display_name": {
+          "source": "Contact Persons",
+          "message": "Personnes de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9wZXJzb25z.short_desc": {
+          "source": "List of contact persons",
+          "message": "Liste des personnes de contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "Devise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for transactions",
+          "message": "Devise pour les transactions"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Adresse de facturation avec les champs : `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "Adresse de facturation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address details",
+          "message": "Détails de l'adresse de facturation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Additional notes",
+          "message": "Notes supplémentaires"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.desc": {
+          "source": "Shipping address with fields: `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`",
+          "message": "Adresse de livraison avec les champs : `attention`, `address`, `street2`, `city`, `state`, `zip`, `country`, `phone`, `fax`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "Adresse de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.c2hpcHBpbmdfYWRkcmVzcw.short_desc": {
+          "source": "Shipping address details",
+          "message": "Détails de l'adresse de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Conditions de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Conditions de paiement en jours"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Site web"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL du site web du contact"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Mettre à jour un contact existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense record",
+          "message": "Mettre à jour un enregistrement de dépense existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "Mettre à jour la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer to bill",
+          "message": "Client à facturer"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "Montant de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Expense account",
+          "message": "Compte de charges"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "Date de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Expense description",
+          "message": "Description de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.display_name": {
+          "source": "Expense ID",
+          "message": "ID de la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.ZXhwZW5zZV9pZA.short_desc": {
+          "source": "The expense to update",
+          "message": "La dépense à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "Facturable"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.aXNfYmlsbGFibGU.short_desc": {
+          "source": "Is this expense billable",
+          "message": "Cette dépense est-elle facturable"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "Fournisseur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Vendor for the expense",
+          "message": "Fournisseur pour la dépense"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "Mettre à jour une dépense existante"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing quote/estimate",
+          "message": "Mettre à jour un devis existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "Mettre à jour le devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "Le client pour le devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGF0ZQ.short_desc": {
+          "source": "Estimate date",
+          "message": "Date du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "ID du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfaWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "Le devis à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.display_name": {
+          "source": "Expiry Date",
+          "message": "Date d'expiration"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.ZXhwaXJ5X2RhdGU.short_desc": {
+          "source": "Estimate expiry date",
+          "message": "Date d'expiration du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Liste des lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Estimate line items",
+          "message": "Lignes du devis"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notes pour le client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "Mettre à jour un devis existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Books",
+          "message": "Mettre à jour une facture existante dans Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Mettre à jour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom field values for the invoice",
+          "message": "Valeurs des champs personnalisés pour la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Champs personnalisés"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Valeurs de champs personnalisés"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer for this invoice",
+          "message": "L'ID du client pour cette facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID du client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Customer identifier",
+          "message": "Identifiant du client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.desc": {
+          "source": "Any adjustment to the invoice total",
+          "message": "Tout ajustement sur le total de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.display_name": {
+          "source": "Adjustment",
+          "message": "Ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudA.short_desc": {
+          "source": "Adjustment amount",
+          "message": "Montant de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.desc": {
+          "source": "Description for the adjustment",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Adjustment Description",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.YWRqdXN0bWVudF9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "Description of adjustment",
+          "message": "Description de l'ajustement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.desc": {
+          "source": "The date of the invoice (`YYYY-MM-DD` format)",
+          "message": "La date de la facture (format `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Invoice Date",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Date of the invoice",
+          "message": "Date de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount or percentage",
+          "message": "Le montant ou le pourcentage de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmVudGl0eV9sZXZlbA.desc": {
+          "source": "Discount applied at invoice level",
+          "message": "Remise appliquée au niveau de la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOml0ZW1fbGV2ZWw.desc": {
+          "source": "Discount applied per line item",
+          "message": "Remise appliquée par ligne d'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.desc": {
+          "source": "Whether the discount is applied at entity level or item level",
+          "message": "Indique si la remise est appliquée au niveau de l'entité ou de l'article"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Type de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Type de remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "The date payment is due (`YYYY-MM-DD` format)",
+          "message": "La date d'échéance du paiement (format `YYYY-MM-DD`)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Date d'échéance"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "Date d'échéance du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The ID of the invoice to update",
+          "message": "L'ID de la facture à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Invoice to update",
+          "message": "Facture à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Custom invoice number",
+          "message": "Numéro de facture personnalisé"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "Numéro de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "Numéro de facture personnalisé"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.desc": {
+          "source": "Whether to apply discount before calculating tax",
+          "message": "Indique s'il faut appliquer la remise avant de calculer les taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.display_name": {
+          "source": "Discount Before Tax",
+          "message": "Remise avant taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.aXNfZGlzY291bnRfYmVmb3JlX3RheA.short_desc": {
+          "source": "Apply discount before tax",
+          "message": "Appliquer la remise avant taxes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "The line items on the invoice (replaces existing line items if provided)",
+          "message": "Les lignes d'articles sur la facture (remplace les lignes existantes si fournies)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "Lignes de facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.desc": {
+          "source": "Notes to display on the invoice",
+          "message": "Remarques à afficher sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "Remarques sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.desc": {
+          "source": "The name of the salesperson",
+          "message": "Le nom du commercial"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.display_name": {
+          "source": "Salesperson",
+          "message": "Vendeur"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2FsZXNwZXJzb25fbmFtZQ.short_desc": {
+          "source": "Salesperson name",
+          "message": "Nom du commercial"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.desc": {
+          "source": "Shipping charges on the invoice",
+          "message": "Frais d'expédition sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "Frais d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charges",
+          "message": "Frais d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.desc": {
+          "source": "The payment terms in days (e.g., 30 for Net 30)",
+          "message": "Les conditions de paiement en jours (par ex., 30 pour Net 30)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "Conditions de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "Conditions de paiement en jours"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.desc": {
+          "source": "An optional reference number (e.g., PO number)",
+          "message": "Un numéro de référence facultatif (par ex., numéro de bon de commande)"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.desc": {
+          "source": "Terms and conditions to display on the invoice",
+          "message": "Conditions générales à afficher sur la facture"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms & Conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Mettre à jour une facture existante"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment record",
+          "message": "Mettre à jour un enregistrement de paiement existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "Mettre à jour le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer making the payment",
+          "message": "Le client effectuant le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "Montant du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in `yyyy-mm-dd` format",
+          "message": "Date de paiement au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Payment Date",
+          "message": "Date du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Date of payment",
+          "message": "Date du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Payment description",
+          "message": "Description du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.desc": {
+          "source": "List of invoices with fields: `invoice_id`, `amount_applied`",
+          "message": "Liste des factures avec les champs : `invoice_id`, `amount_applied`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "Factures"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.aW52b2ljZXM.short_desc": {
+          "source": "Invoices to apply payment to",
+          "message": "Factures auxquelles appliquer le paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID du paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to update",
+          "message": "Le paiement à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.display_name": {
+          "source": "Payment Mode",
+          "message": "Mode de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cGF5bWVudF9tb2Rl.short_desc": {
+          "source": "Mode of payment",
+          "message": "Mode de paiement"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Transaction reference",
+          "message": "Référence de transaction"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "Mettre à jour un paiement existant"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.desc": {
+          "source": "Update an existing sales order",
+          "message": "Mettre à jour une commande client existante"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.display_name": {
+          "source": "Update Sales Order",
+          "message": "Mettre à jour la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the sales order",
+          "message": "Le client pour le bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "Date du bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Mode de diffusion"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Delivery method",
+          "message": "Mode de livraison"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "Remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount",
+          "message": "Montant de la remise"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Books organization",
+          "message": "Organisation Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items",
+          "message": "Liste des lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Lignes d'articles"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "Lignes d'articles du bon de commande"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notes"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "Notes pour le client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order ID",
+          "message": "ID de la commande client"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "Le bon de commande client à mettre à jour"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "Date in `yyyy-mm-dd` format",
+          "message": "Date au format `yyyy-mm-dd`"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "Date d'expédition"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "Date d'expédition prévue"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "Numéro de référence"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "Conditions"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "Conditions générales"
+        },
+        "app.Wm9ob0Jvb2tz.action.dXBkYXRlLXNhbGVzb3JkZXI.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "Mettre à jour une commande client existante"
+        },
+        "app.Wm9ob0Jvb2tz.desc": {
+          "source": "Zoho Books is online accounting software that manages your finances, automates business workflows, and helps you work collectively across departments.\n\nThis integration supports invoices, bills, payments, contacts, expenses, estimates, sales orders, purchase orders, and items.",
+          "message": "Zoho Books est un logiciel de comptabilité en ligne qui gère vos finances, automatise les flux de travail professionnels et vous aide à travailler collectivement entre les services.\n\nCette intégration prend en charge les factures, les factures fournisseurs, les paiements, les contacts, les dépenses, les devis, les bons de commande clients, les bons de commande d'achat et les articles."
+        },
+        "app.Wm9ob0Jvb2tz.display_name": {
+          "source": "Zoho Books",
+          "message": "Zoho Books"
+        },
+        "app.Wm9ob0Jvb2tz.short_desc": {
+          "source": "Zoho Books online accounting software",
+          "message": "Logiciel de comptabilité en ligne Zoho Books"
+        }
+      }
+    }
+  }
+}

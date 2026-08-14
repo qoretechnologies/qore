@@ -1,0 +1,2177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Constant Contact",
+          "message": "在 Constant Contact 中建立新的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "建立自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The label for the custom field",
+          "message": "自訂欄位的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "自訂欄位標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Date field",
+          "message": "日期欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.desc": {
+          "source": "String field",
+          "message": "字串欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.desc": {
+          "source": "The type of the custom field",
+          "message": "自訂欄位的類型"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.short_desc": {
+          "source": "Custom field type",
+          "message": "自訂欄位類型"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "建立新的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Constant Contact",
+          "message": "在 Constant Contact 中建立新的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "建立聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the contact",
+          "message": "聯絡人的公司名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "公司名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "聯絡人公司名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Created by the account owner",
+          "message": "由帳戶擁有者建立"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Created by the contact themselves",
+          "message": "由聯絡人本人建立"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact creation",
+          "message": "聯絡人建立的來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "建立來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact creation",
+          "message": "聯絡人建立來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "聯絡人的自訂欄位值物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "自訂欄位值"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 格式的聯絡人週年紀念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "週年紀念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "週年紀念日 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "聯絡人的生日日期 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "生日日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "生日日期 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "聯絡人的生日月份 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "生日月份"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "生日月份 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "包含 `address` 及選填 `permission_to_send` 的電子郵件地址物件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "電子郵件地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "電子郵件地址物件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "聯絡人的名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "聯絡人名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "Job title of the contact",
+          "message": "聯絡人的職稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "職稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "聯絡人職稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the contact",
+          "message": "聯絡人的姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "聯絡人姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs to add the contact to",
+          "message": "要將聯絡人新增至其中的聯絡人名單 ID 清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "名單成員資格"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs to add the contact to",
+          "message": "要將聯絡人新增至其中的聯絡人名單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "聯絡人的街道地址物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "街道地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "聯絡人街道地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "聯絡人的電話號碼物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話號碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "聯絡電話號碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs to apply to the contact",
+          "message": "要套用至聯絡人的標籤 ID 清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs to apply to the contact",
+          "message": "要套用至聯絡人的標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "建立新聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Create a new contact list in Constant Contact",
+          "message": "在 Constant Contact 中建立新的聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Create a Contact List",
+          "message": "建立聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "聯絡人名單的描述"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "聯絡人名單描述"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "是否將此名單標記為最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "標記為最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "聯絡人清單的名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "聯絡人名單名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Create a new contact list",
+          "message": "建立新聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Create a new email campaign in Constant Contact",
+          "message": "在 Constant Contact 中建立新的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Create an Email Campaign",
+          "message": "建立電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.desc": {
+          "source": "List of campaign activity configurations including sender, subject, HTML content, and target lists",
+          "message": "活動設定清單，包含寄件者、主旨、HTML 內容與目標名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.display_name": {
+          "source": "Campaign Activities",
+          "message": "行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.short_desc": {
+          "source": "List of campaign activity configurations",
+          "message": "行銷活動設定清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the email campaign",
+          "message": "電子郵件行銷活動的名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "行銷活動名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new email campaign",
+          "message": "建立新的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.desc": {
+          "source": "Create a new segment in Constant Contact",
+          "message": "在 Constant Contact 中建立新的受眾區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Create a Segment",
+          "message": "建立受眾區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The name of the segment",
+          "message": "受眾區隔的名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "受眾區隔名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The criteria expression for the segment",
+          "message": "受眾區隔的條件運算式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "受眾區隔條件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "區隔條件運算式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Create a new segment",
+          "message": "建立新區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Constant Contact",
+          "message": "在 Constant Contact 中建立新標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "建立標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag",
+          "message": "標籤名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "標籤名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Tag created by the account owner",
+          "message": "由帳戶擁有者建立的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Tag created by the contact",
+          "message": "由聯絡人建立的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.desc": {
+          "source": "The source of the tag",
+          "message": "標籤來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.display_name": {
+          "source": "Tag Source",
+          "message": "標籤來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.short_desc": {
+          "source": "Source of the tag",
+          "message": "標籤來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "建立新標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Add contacts to one or more contact lists in bulk",
+          "message": "批次將聯絡人新增至一個或多個聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Add List Members",
+          "message": "新增清單成員"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the contacts to",
+          "message": "要新增聯絡人的聯絡人清單 ID 列表"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to add to the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber`, or `engagement_level`",
+          "message": "要新增至清單的聯絡人來源。請使用以下互斥欄位之一：`contact_ids`、`list_ids`、`tag_ids`、`segment_id`、`all_active_contacts`、`new_subscriber` 或 `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "聯絡人來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Add contacts to lists in bulk",
+          "message": "批次將聯絡人新增至清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Get the Constant Contact account information",
+          "message": "取得 Constant Contact 帳戶資訊"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "取得帳戶"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get account information",
+          "message": "取得帳戶資訊"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.desc": {
+          "source": "Retrieve a single custom field by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Get a Custom Field",
+          "message": "取得自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "自訂欄位 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID",
+          "message": "自訂欄位 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Get a single custom field by ID",
+          "message": "依 ID 取得單一自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "取得聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "依 ID 取得單一聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Retrieve a single contact list by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Get a Contact List",
+          "message": "取得聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list ID",
+          "message": "聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Get a single contact list by ID",
+          "message": "依 ID 取得單一聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single email campaign by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Get an Email Campaign",
+          "message": "取得電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign ID",
+          "message": "電子郵件行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Get a single email campaign by ID",
+          "message": "依 ID 取得單一電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.desc": {
+          "source": "Get a summary report for email campaigns in Constant Contact",
+          "message": "取得 Constant Contact 中電子郵件行銷活動的摘要報告"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
+          "source": "Get Email Summary",
+          "message": "取得電子郵件摘要"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.desc": {
+          "source": "A list of email campaign IDs to get summaries for",
+          "message": "要取得摘要的電子郵件行銷活動 ID 列表"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.display_name": {
+          "source": "Campaign IDs",
+          "message": "行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.short_desc": {
+          "source": "List of campaign IDs",
+          "message": "行銷活動 ID 列表"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
+          "source": "Get email campaign summary report",
+          "message": "取得電子郵件行銷活動摘要報告"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a single segment by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get a Segment",
+          "message": "取得區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a single segment by ID",
+          "message": "依 ID 取得單一區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Constant Contact",
+          "message": "從 Constant Contact 依 ID 擷取單一標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "取得標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "依 ID 取得單一標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Constant Contact",
+          "message": "從 Constant Contact 刪除自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "刪除自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "自訂欄位 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to delete",
+          "message": "要刪除的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "刪除自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Constant Contact",
+          "message": "從 Constant Contact 刪除聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "刪除聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "要刪除的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "刪除聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Delete a contact list from Constant Contact",
+          "message": "從 Constant Contact 刪除聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Delete a Contact List",
+          "message": "刪除聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to delete",
+          "message": "要刪除的聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Delete a contact list",
+          "message": "刪除聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Delete an email campaign from Constant Contact",
+          "message": "從 Constant Contact 刪除電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Delete an Email Campaign",
+          "message": "刪除電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to delete",
+          "message": "要刪除的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Delete an email campaign",
+          "message": "刪除電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.desc": {
+          "source": "Delete a segment from Constant Contact",
+          "message": "從 Constant Contact 刪除區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
+          "source": "Delete a Segment",
+          "message": "刪除區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to delete",
+          "message": "要刪除的區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Delete a segment",
+          "message": "刪除區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Constant Contact",
+          "message": "從 Constant Contact 刪除標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "刪除標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "要刪除的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "刪除標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Export contacts in bulk from Constant Contact",
+          "message": "從 Constant Contact 批次匯出聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Export Contacts",
+          "message": "匯出聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.desc": {
+          "source": "List of field names to include in the export",
+          "message": "要包含在匯出中的欄位名稱清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.short_desc": {
+          "source": "Fields to include in export",
+          "message": "要包含在匯出中的欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to export contacts from",
+          "message": "要從中匯出聯絡人的聯絡人清單 ID 列表"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to export from",
+          "message": "要從中匯出的聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.desc": {
+          "source": "The segment ID to export contacts from",
+          "message": "要從中匯出聯絡人的區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Segment to export",
+          "message": "要匯出的區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Export contacts in bulk",
+          "message": "批次匯出聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Import contacts in bulk into Constant Contact",
+          "message": "批次匯入聯絡人至 Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Import Contacts",
+          "message": "匯入聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.desc": {
+          "source": "List of contact data hashes to import",
+          "message": "要匯入的聯絡人資料雜湊清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.display_name": {
+          "source": "Import Data",
+          "message": "匯入資料"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.short_desc": {
+          "source": "List of contact data to import",
+          "message": "要匯入的聯絡人資料清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the imported contacts to",
+          "message": "要將匯入聯絡人新增至其中的聯絡人清單 ID 列表"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to add imported contacts to",
+          "message": "要新增匯入聯絡人的聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Import contacts in bulk",
+          "message": "批次匯入聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Constant Contact",
+          "message": "列出 Constant Contact 中的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "列出標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "依標籤 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "列出所有標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.desc": {
+          "source": "List contact lists in Constant Contact",
+          "message": "列出 Constant Contact 中的聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
+          "source": "List Contact Lists",
+          "message": "列出聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by list ID",
+          "message": "依清單 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
+          "source": "List all contact lists",
+          "message": "列出所有聯絡人清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Constant Contact with optional filtering",
+          "message": "列出 Constant Contact 中的聯絡人（可選篩選）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "列出聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "按聯絡人 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "Filter contacts by email address",
+          "message": "依電子郵件地址篩選聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "依電子郵件地址篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.desc": {
+          "source": "Filter contacts by contact list membership",
+          "message": "依聯絡人清單成員資格篩選聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by contact list ID",
+          "message": "依聯絡人清單 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.desc": {
+          "source": "Contacts with no status set",
+          "message": "未設定狀態的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.display_name": {
+          "source": "Not Set",
+          "message": "未設定"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "作用中聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "使用中"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "All contacts",
+          "message": "所有聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "全部"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted contacts",
+          "message": "已刪除的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "已刪除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.desc": {
+          "source": "Contacts pending confirmation",
+          "message": "等待確認的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.display_name": {
+          "source": "Pending Confirmation",
+          "message": "等待確認"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.desc": {
+          "source": "Contacts on temporary hold",
+          "message": "暫時保留的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.display_name": {
+          "source": "Temporary Hold",
+          "message": "暫時保留"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.desc": {
+          "source": "Unsubscribed contacts",
+          "message": "已取消訂閱的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.display_name": {
+          "source": "Unsubscribed",
+          "message": "已取消訂閱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contacts by status",
+          "message": "依狀態篩選聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "依聯絡人狀態篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Filter contacts updated after this date (ISO-8601)",
+          "message": "篩選在此日期之後更新的聯絡人 (ISO-8601)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "更新時間晚於"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "依更新日期篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "列出所有聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List custom fields in Constant Contact",
+          "message": "列出 Constant Contact 中的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "列出自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "自訂欄位 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "Filter by custom field ID",
+          "message": "依自訂欄位 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "列出所有自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.desc": {
+          "source": "List email campaigns in Constant Contact with optional filtering",
+          "message": "列出 Constant Contact 中的電子郵件行銷活動（可選篩選）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
+          "source": "List Email Campaigns",
+          "message": "列出電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Filter by campaign ID",
+          "message": "依行銷活動 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.desc": {
+          "source": "Completed campaigns",
+          "message": "已完成的行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.display_name": {
+          "source": "Done",
+          "message": "已完成"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "草稿行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.desc": {
+          "source": "Currently sending campaigns",
+          "message": "正在傳送的行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.display_name": {
+          "source": "Executing",
+          "message": "執行中"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.desc": {
+          "source": "Campaigns that encountered an error",
+          "message": "發生錯誤的行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.display_name": {
+          "source": "Error",
+          "message": "錯誤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.desc": {
+          "source": "Removed campaigns",
+          "message": "已移除的行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.display_name": {
+          "source": "Removed",
+          "message": "已移除"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.desc": {
+          "source": "Scheduled campaigns",
+          "message": "已排程的行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "排程"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by status",
+          "message": "按狀態篩選廣告活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "依廣告活動狀態篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all email campaigns",
+          "message": "列出所有電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "List segments in Constant Contact",
+          "message": "列出 Constant Contact 中的區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "列出受眾區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.desc": {
+          "source": "Sort by modified date",
+          "message": "依修改日期排序"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.display_name": {
+          "source": "Modified Date",
+          "message": "修改日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by name",
+          "message": "依名稱排序"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.desc": {
+          "source": "Sort by created date",
+          "message": "依建立日期排序"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.display_name": {
+          "source": "Created Date",
+          "message": "建立日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Sort by date",
+          "message": "依日期排序"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.desc": {
+          "source": "The field to sort results by",
+          "message": "用於排序結果的欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.display_name": {
+          "source": "Sort By",
+          "message": "排序依據"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.short_desc": {
+          "source": "Field to sort by",
+          "message": "排序欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Filter by segment ID",
+          "message": "依區隔 ID 篩選"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List all segments",
+          "message": "列出所有區隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Constant Contact** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Constant Contact** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭和請求主體。回應會以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n將此動作運用於尚未在此應用程式中公開為頂級動作的端點。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Constant Contact",
+          "message": "向 Constant Contact 發出自訂 API 呼叫"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Constant Contact. Uses polling to detect new records.",
+          "message": "當在 Constant Contact 中建立新聯絡人時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新增聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "當建立新聯絡人時觸發"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Fires when a new contact list is created in Constant Contact. Uses polling to detect new records.",
+          "message": "在 Constant Contact 中建立新的聯絡人名單時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "New Contact List",
+          "message": "新聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Trigger when a new contact list is created",
+          "message": "建立新的聯絡人名單時觸發"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Fires when a new email campaign is created in Constant Contact. Uses polling to detect new records.",
+          "message": "在 Constant Contact 中建立新的電子郵件行銷活動時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "New Email Campaign",
+          "message": "新電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Trigger when a new email campaign is created",
+          "message": "建立新的電子郵件行銷活動時觸發"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.desc": {
+          "source": "Schedule an email campaign activity for sending in Constant Contact",
+          "message": "在 Constant Contact 中排程傳送電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
+          "source": "Schedule an Email Campaign",
+          "message": "排程電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.display_name": {
+          "source": "Campaign Activity ID",
+          "message": "行銷活動活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.short_desc": {
+          "source": "The campaign activity to schedule",
+          "message": "要排程的行銷活動活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.desc": {
+          "source": "The scheduled send date in ISO-8601 format",
+          "message": "ISO-8601 格式的預定傳送日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.display_name": {
+          "source": "Scheduled Date",
+          "message": "預定日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.short_desc": {
+          "source": "ISO-8601 date",
+          "message": "ISO-8601 日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
+          "source": "Schedule an email campaign for sending",
+          "message": "排程傳送電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Remove contacts from one or more contact lists in bulk",
+          "message": "批次從一個或多個聯絡人名單中移除聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Remove List Members",
+          "message": "移除名單成員"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to remove the contacts from",
+          "message": "要從中移除聯絡人的聯絡人名單 ID 清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to remove from the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts`, or `engagement_level`",
+          "message": "要從名單中移除的聯絡人來源。請使用以下互斥欄位之一：`contact_ids`、`list_ids`、`tag_ids`、`all_active_contacts` 或 `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "聯絡人來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Remove contacts from lists in bulk",
+          "message": "批次從名單中移除聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update the Constant Contact account information.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "更新 Constant Contact 帳戶資訊。\n\n**重要提示**：此操作使用 PUT 語意（完全取代）。請求中未包含的任何欄位都將被清除為其預設值。請包含所有您希望保留的欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "更新帳戶"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The two-letter ISO country code",
+          "message": "兩位字母的 ISO 國家/地區代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "國家/地區代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Two-letter country code",
+          "message": "兩位字母的國家/地區代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Account owner first name",
+          "message": "帳戶擁有者名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.desc": {
+          "source": "The name of the organization",
+          "message": "組織名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "組織名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Organization name",
+          "message": "組織名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Account owner last name",
+          "message": "帳戶擁有者姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.desc": {
+          "source": "The state or province code",
+          "message": "州或省代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.display_name": {
+          "source": "State Code",
+          "message": "州/省代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.short_desc": {
+          "source": "State or province code",
+          "message": "州或省代碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "網站 URL"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.desc": {
+          "source": "The time zone ID (e.g., `US/Eastern`)",
+          "message": "時區 ID（例如 `US/Eastern`）"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.display_name": {
+          "source": "Time Zone",
+          "message": "時區"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.short_desc": {
+          "source": "Account time zone ID",
+          "message": "帳戶時區 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update account information",
+          "message": "更新帳戶資訊"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update an existing custom field in Constant Contact",
+          "message": "在 Constant Contact 中更新現有的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "更新自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "自訂欄位 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to update",
+          "message": "要更新的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new label for the custom field",
+          "message": "自訂欄位的新標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "自訂欄位標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update an existing custom field",
+          "message": "更新現有的自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Constant Contact.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "在 Constant Contact 中更新現有的聯絡人。\n\n**重要提示**：此操作使用 PUT 語意（完全取代）。請求中未包含的任何欄位都將被清除為其預設值。請包含所有您希望保留的欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "更新聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "公司名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "聯絡人公司名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "要更新的聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "聯絡人的自訂欄位值物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "自訂欄位"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "自訂欄位值"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 格式的聯絡人週年紀念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "週年紀念日"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "週年紀念日 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "聯絡人的生日日期 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "生日日期"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "生日日期 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "聯絡人的生日月份 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "生日月份"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "生日月份 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "包含 `address` 及選填 `permission_to_send` 的電子郵件地址物件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "電子郵件地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "電子郵件地址物件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "聯絡人名字"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "職稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "聯絡人職稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "聯絡人姓氏"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs",
+          "message": "聯絡人名單 ID 清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "名單成員資格"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs",
+          "message": "聯絡人清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "聯絡人的街道地址物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "街道地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "聯絡人街道地址"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "聯絡人的電話號碼物件清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話號碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "聯絡電話號碼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs",
+          "message": "標籤 ID 清單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Updated by the account owner",
+          "message": "由帳戶擁有者更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Updated by the contact themselves",
+          "message": "由聯絡人本人更新"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact update",
+          "message": "聯絡人更新的來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "更新來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact update",
+          "message": "聯絡人更新的來源"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "更新現有聯絡人"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Update an existing contact list in Constant Contact",
+          "message": "在 Constant Contact 中更新現有的聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Update a Contact List",
+          "message": "更新聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "聯絡人名單的描述"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "聯絡人名單描述"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "是否將此名單標記為最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "標記為最愛"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "清單 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to update",
+          "message": "要更新的聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "聯絡人清單的名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "聯絡人名單名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Update an existing contact list",
+          "message": "更新現有的聯絡人名單"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Update an existing email campaign in Constant Contact",
+          "message": "在 Constant Contact 中更新現有的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Update an Email Campaign",
+          "message": "更新電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to update",
+          "message": "要更新的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name of the email campaign",
+          "message": "電子郵件行銷活動的新名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "行銷活動名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing email campaign",
+          "message": "更新現有的電子郵件行銷活動"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.desc": {
+          "source": "Update an existing segment in Constant Contact",
+          "message": "在 Constant Contact 中更新現有的受眾細分"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Update a Segment",
+          "message": "更新受眾細分"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The new name of the segment",
+          "message": "受眾細分的新名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "受眾區隔名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The new criteria expression for the segment",
+          "message": "受眾細分的新條件運算式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "受眾區隔條件"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "區隔條件運算式"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to update",
+          "message": "要更新的受眾細分"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Update an existing segment",
+          "message": "更新現有的受眾細分"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Constant Contact",
+          "message": "在 Constant Contact 中更新現有的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "更新標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag",
+          "message": "標籤的新名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "標籤名稱"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "要更新的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "更新現有的標籤"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.desc": {
+          "source": "Constant Contact is an email marketing platform for creating campaigns, managing contacts, and tracking engagement.\n\nThis integration supports contacts, contact lists, tags, custom fields, segments, email campaigns, bulk activities, reports, and events.",
+          "message": "Constant Contact 是一個用於建立行銷活動、管理聯絡人和追蹤參與度的電子郵件行銷平台。\n\n此整合支援聯絡人、聯絡人名單、標籤、自訂欄位、受眾細分、電子郵件行銷活動、批次活動、報告和事件。"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.display_name": {
+          "source": "Constant Contact",
+          "message": "Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.short_desc": {
+          "source": "Constant Contact email marketing platform",
+          "message": "Constant Contact 電子郵件行銷平台"
+        }
+      }
+    }
+  }
+}

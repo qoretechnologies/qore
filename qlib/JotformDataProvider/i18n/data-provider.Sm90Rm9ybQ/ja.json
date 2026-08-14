@@ -1,0 +1,657 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Submit data to a form programmatically. Select a form first to see available fields.",
+          "message": "プログラムでフォームにデータを送信します。利用可能なフィールドを表示するには、まずフォームを選択してください。"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Create Submission",
+          "message": "送信を作成"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to create a submission for. The submission fields will update based on your selection.",
+          "message": "送信を作成するフォームを選択します。送信フィールドは選択内容に基づいて更新されます。"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to submit to",
+          "message": "送信先のフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Create a new form submission",
+          "message": "新しいフォーム送信を作成"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve details of a specific form including title, status, and submission count",
+          "message": "タイトル、ステータス、送信数を含む特定のフォームの詳細を取得します"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "フォームの取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve",
+          "message": "取得するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.short_desc": {
+          "source": "The form to retrieve",
+          "message": "取得するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get form details",
+          "message": "フォーム詳細を取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.desc": {
+          "source": "Retrieve all submissions for a specific form with optional filtering and pagination",
+          "message": "オプションのフィルタリングとページネーションを使用して、特定のフォームのすべての送信を取得します"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
+          "source": "Get Form Submissions",
+          "message": "フォーム送信の取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.desc": {
+          "source": "Select the form to retrieve submissions for",
+          "message": "送信を取得するフォームを選択"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get submissions from",
+          "message": "送信を取得するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions using JotForm filter syntax (e.g., {\"status\": \"ACTIVE\"})",
+          "message": "JotFormのフィルター構文を使用して送信をフィルターします（例: {\"status\": \"ACTIVE\"}）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "フィルター条件"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`)",
+          "message": "並べ替えの基準となるフィールド（例: `created_at`、`updated_at`）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of submissions to return",
+          "message": "返される送信の最大数"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
+          "source": "List submissions for a form",
+          "message": "フォームの送信を一覧表示"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.desc": {
+          "source": "Retrieve reports and analytics for a specific form",
+          "message": "特定のフォームのレポートとアナリティクスを取得します"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
+          "source": "Get Form Reports",
+          "message": "フォームレポートを取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve reports for",
+          "message": "レポートを取得するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get reports for",
+          "message": "レポートを取得するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
+          "source": "Get form analytics and reports",
+          "message": "フォームのアナリティクスとレポートを取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.desc": {
+          "source": "Retrieve all forms in the JotForm account with optional filtering",
+          "message": "オプションのフィルタリングを使用してJotFormアカウント内のすべてのフォームを取得します"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
+          "source": "Get Forms",
+          "message": "フォームを取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.desc": {
+          "source": "Filter forms using JotForm filter syntax (e.g., {\"status\": \"ENABLED\"})",
+          "message": "JotFormのフィルター構文を使用してフォームをフィルターします（例: {\"status\": \"ENABLED\"}）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "フィルター条件"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
+          "message": "並べ替えの基準となるフィールド（例: `created_at`、`updated_at`、`title`）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of forms to return",
+          "message": "返されるフォームの最大数"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
+          "source": "List all forms",
+          "message": "すべてのフォームを一覧表示"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific submission by its ID",
+          "message": "IDによって特定の送信を取得します"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "送信を取得"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The unique ID of the submission to retrieve",
+          "message": "取得する送信の一意のID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to retrieve",
+          "message": "取得する送信"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a specific form submission",
+          "message": "特定のフォーム送信を取得"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Permanently delete a submission from a form",
+          "message": "フォームから送信を完全に削除します"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "送信を削除"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to delete",
+          "message": "削除する送信のID"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to delete",
+          "message": "削除する送信"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a form submission",
+          "message": "フォーム送信を削除"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **JotForm** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**JotForm** に対してカスタムHTTP / REST API呼び出しを行います。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。応答はステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用してください。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to JotForm",
+          "message": "JotFormへのカスタムAPI呼び出しを実行"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a payment is completed on a form with payment integration.\n\n**Note:** This trigger only works for payments made through the form UI.",
+          "message": "決済連携が設定されたフォームで支払いが完了したときにトリガーされます。\n\n**注意:** このトリガーはフォームUI経由で行われた支払いにのみ機能します。"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "新規支払い"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.desc": {
+          "source": "Select the form (with payment integration) to monitor for payments",
+          "message": "支払いを監視するフォーム（決済連携付き）を選択"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for payments",
+          "message": "支払いを監視するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a payment is received",
+          "message": "支払いを受信したときにトリガー"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.desc": {
+          "source": "Fires when a new submission is received on a form via the JotForm UI.\n\n**Note:** This trigger only works for submissions made through the form UI, not for API-created submissions. This is a JotForm platform limitation.",
+          "message": "JotForm UI経由でフォームに新しい送信が受信されたときにトリガーされます。\n\n**注意:** このトリガーはフォームUI経由で行われた送信にのみ機能し、APIによって作成された送信には機能しません。これはJotFormプラットフォームの制限です。"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
+          "source": "New Submission",
+          "message": "新規送信"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to monitor for new submissions",
+          "message": "新しい送信を監視するフォームを選択"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "送信を監視するフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Trigger when a form receives a new submission",
+          "message": "フォームが新しい送信を受信したときにトリガー"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Modify the answers in an existing form submission. Select a form first to see available fields.",
+          "message": "既存のフォーム送信の回答を変更します。利用可能なフィールドを表示するには、まずフォームを選択してください。"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Update Submission",
+          "message": "送信を更新"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to get field definitions for the submission update. The submission fields will update based on your selection.",
+          "message": "送信の更新に必要なフィールド定義を取得するフォームを選択します。送信フィールドは選択内容に基づいて更新されます。"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "フォーム"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form containing the submission",
+          "message": "送信が含まれるフォーム"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to update",
+          "message": "更新する送信のID"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to update",
+          "message": "更新する送信"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Update an existing submission",
+          "message": "既存の送信を更新"
+        },
+        "app.Sm90Rm9ybQ.desc": {
+          "source": "JotForm is an online form builder that enables creating forms, collecting submissions, and processing payments. This integration enables managing form submissions through the JotForm REST API.\n\n**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, not for API-created submissions.",
+          "message": "JotFormは、フォームの作成、送信の収集、支払いの処理を可能にするオンラインフォームビルダーです。この連携により、JotForm REST APIを介してフォーム送信を管理できます。\n\n**注意:** WebhookベースのトリガーはJotForm UI経由で行われた送信に対してのみ発火し、APIで作成された送信に対しては発火しません。"
+        },
+        "app.Sm90Rm9ybQ.display_name": {
+          "source": "JotForm",
+          "message": "JotForm"
+        },
+        "app.Sm90Rm9ybQ.short_desc": {
+          "source": "JotForm online form builder and data collection",
+          "message": "JotForm オンラインフォームビルダーおよびデータ収集"
+        }
+      }
+    }
+  }
+}

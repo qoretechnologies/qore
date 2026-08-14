@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.SnNvbkZpbGU.action.cmVhZA.desc": {
+          "source": "Read standard JSON file data from a specific file location.\n\nThe JSON file may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Lire des données de fichier JSON standard à partir d'un emplacement de fichier spécifique.\n\nLe fichier JSON peut contenir :\n- Un **tableau d'objets** : chaque élément est parcouru comme un enregistrement distinct\n- Un **objet unique** : retourné comme un seul enregistrement\n- Un **tableau de valeurs non-objets** : chaque élément est enveloppé dans `{\"value\": <element>}`\n\n### Options clés\n- `path` : l'emplacement du fichier à lire (requis)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
+          "source": "Read JSON File",
+          "message": "Lire un fichier JSON"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Encodage US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "L'encodage de caractères à utiliser lors de la lecture de l'entrée (par défaut : `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Encodage"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "Encodage de caractères pour l'entrée"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL of the JSON file to read; mutually exclusive with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Le chemin du système de fichiers ou l'URL d'emplacement du fichier JSON à lire ; mutuellement exclusif avec `stream` et `data` ; résolu par un appel à [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Chemin du fichier"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON file to read",
+          "message": "Le chemin vers le fichier JSON à lire"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
+          "source": "Read standard JSON file data from a file location",
+          "message": "Lire les données d'un fichier JSON standard à partir d'un emplacement de fichier"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.desc": {
+          "source": "Read standard JSON inline data provided directly as a string.\n\nThe JSON data may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `data`: the JSON string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Lire des données JSON en ligne standard fournies directement sous forme de chaîne.\n\nLes données JSON peuvent contenir :\n- Un **tableau d'objets** : chaque élément est parcouru comme un enregistrement distinct\n- Un **objet unique** : retourné comme un seul enregistrement\n- Un **tableau de valeurs non-objets** : chaque élément est enveloppé dans `{\"value\": <element>}`\n\n### Options clés\n- `data` : la chaîne JSON à analyser (requis)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read JSON Inline Data",
+          "message": "Lire des données JSON en ligne"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "JSON data provided directly as a string; mutually exclusive with `path` and `stream`",
+          "message": "Données JSON fournies directement sous forme de chaîne ; mutuellement exclusif avec `path` et `stream`"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Données"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "JSON data as a string",
+          "message": "Données JSON sous forme de chaîne"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Encodage US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "L'encodage de caractères à utiliser lors de la lecture de l'entrée (par défaut : `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Encodage"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "Encodage de caractères pour l'entrée"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read standard JSON inline data",
+          "message": "Lire des données JSON en ligne standard"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Écrire des enregistrements sous forme de tableau JSON standard vers un emplacement de fichier spécifique.\n\nLes enregistrements sont accumulés et écrits sous forme de tableau JSON lorsque `commit()` est appelé ou que le fournisseur est détruit.\n\n### Options clés\n- `path` : l'emplacement du fichier de sortie (requis)\n- `pretty_print` : formater la sortie JSON avec de l'indentation (par défaut : `True`)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
+          "source": "Write JSON File",
+          "message": "Écrire un fichier JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Encodage US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "L'encodage de caractères à utiliser lors de l'écriture de la sortie (par défaut : `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Encodage"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Encodage de caractères pour la sortie"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL for the output JSON data file; mutually exclusive with `stream`; resolved with a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "Le chemin du système de fichiers ou l'URL d'emplacement pour le fichier de données JSON de sortie ; mutuellement exclusif avec `stream` ; résolu par un appel à [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output File Path",
+          "message": "Chemin du fichier de sortie"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON output file",
+          "message": "Le chemin vers le fichier de sortie JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "Formater la sortie JSON avec de l'indentation pour une meilleure lisibilité"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "Oui"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "Mise en forme lisible avec indentation"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "Écrire une sortie JSON compacte sans espaces supplémentaires"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "Non"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "Sortie compacte"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "Si `True` (par défaut), la sortie JSON est formatée avec de l'indentation pour la lisibilité ; si `False`, la sortie est compacte sans espaces supplémentaires"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "Mise en forme lisible"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "Formater le JSON avec de l'indentation"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
+          "source": "Write standard JSON file data to a file location",
+          "message": "Écrire des données de fichier JSON standard vers un emplacement de fichier"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "Écrire des enregistrements sous forme de tableau JSON standard vers un flux de sortie ou récupérer le résultat sous forme de données binaires.\n\nLes enregistrements sont accumulés et écrits sous forme de tableau JSON lorsque `commit()` est appelé ou que le fournisseur est détruit.\n\n### Options clés\n- `stream` : le flux de sortie dans lequel écrire\n- `pretty_print` : formater la sortie JSON avec de l'indentation (par défaut : `True`)\n- `encoding` : encodage des caractères (par défaut : `UTF-8`)\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write JSON Data",
+          "message": "Écrire des données JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Encodage Latin-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "Encodage US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "Encodage UTF-8 (recommandé)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "Encodage UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "L'encodage de caractères à utiliser lors de l'écriture de la sortie (par défaut : `UTF-8`)"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Encodage"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Encodage de caractères pour la sortie"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
+          "message": "Un flux de sortie dans lequel écrire des données JSON ; mutuellement exclusif avec `path`"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Flux de sortie"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the JSON data",
+          "message": "Un objet de flux de sortie pour les données JSON"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "Formater la sortie JSON avec de l'indentation pour une meilleure lisibilité"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "Oui"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "Mise en forme lisible avec indentation"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "Écrire une sortie JSON compacte sans espaces supplémentaires"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "Non"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "Sortie compacte"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "Si `True` (par défaut), la sortie JSON est formatée avec de l'indentation pour la lisibilité ; si `False`, la sortie est compacte sans espaces supplémentaires"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "Mise en forme lisible"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "Formater le JSON avec de l'indentation"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write standard JSON data to an output stream",
+          "message": "Écrire des données JSON standard dans un flux de sortie"
+        },
+        "app.SnNvbkZpbGU.desc": {
+          "source": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files containing an array of objects (iterated as individual records) or a single object (returned as one record). Provides configurable pretty-print output for writing.",
+          "message": "Lire et écrire des fichiers JSON standard (pas NDJSON/JSON Lines). Prend en charge les fichiers JSON contenant un tableau d'objets (itérés sous forme d'enregistrements individuels) ou un seul objet (renvoyé sous forme d'un seul enregistrement). Fournit une sortie imprimée de manière lisible (pretty-print) configurable pour l'écriture."
+        },
+        "app.SnNvbkZpbGU.display_name": {
+          "source": "JSON Files",
+          "message": "Fichiers JSON"
+        },
+        "app.SnNvbkZpbGU.short_desc": {
+          "source": "Read and write standard JSON files",
+          "message": "Lire et écrire des fichiers JSON standard"
+        }
+      }
+    }
+  }
+}

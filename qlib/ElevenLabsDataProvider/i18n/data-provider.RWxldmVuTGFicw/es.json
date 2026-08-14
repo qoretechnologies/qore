@@ -1,0 +1,2109 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.desc": {
+          "source": "Create a new dubbing project to translate audio/video content to another language",
+          "message": "Crear un nuevo proyecto de doblaje para traducir contenido de audio/video a otro idioma"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.display_name": {
+          "source": "Create Dubbing",
+          "message": "Crear doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.desc": {
+          "source": "If `True`, removes background audio from the final dubbed output",
+          "message": "Si es `True`, elimina el audio de fondo del resultado final doblado"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.display_name": {
+          "source": "Drop Background Audio",
+          "message": "Eliminar audio de fondo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZHJvcF9iYWNrZ3JvdW5kX2F1ZGlv.short_desc": {
+          "source": "Whether to remove background audio",
+          "message": "Indica si se debe eliminar el audio de fondo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.desc": {
+          "source": "The end position in seconds to clip the source content before dubbing",
+          "message": "La posición final en segundos para recortar el contenido de origen antes del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Hora de finalización"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End position in seconds",
+          "message": "Posición final en segundos"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.desc": {
+          "source": "The source audio or video file to dub. Provide either `file` or `source_url`, not both",
+          "message": "El archivo de audio o video de origen a doblar. Proporcione `file` o `source_url`, no ambos"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.display_name": {
+          "source": "Source File",
+          "message": "Archivo de origen"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.ZmlsZQ.short_desc": {
+          "source": "Source audio or video file for dubbing",
+          "message": "Archivo de audio o video de origen para el doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.desc": {
+          "source": "If `True`, uses the highest resolution available for the dubbed content",
+          "message": "Si es `True`, utiliza la resolución más alta disponible para el contenido doblado"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.display_name": {
+          "source": "Highest Resolution",
+          "message": "Máxima resolución"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.aGlnaGVzdF9yZXNvbHV0aW9u.short_desc": {
+          "source": "Whether to use the highest resolution",
+          "message": "Indica si se debe utilizar la resolución más alta"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.desc": {
+          "source": "The name for the new dubbing project",
+          "message": "El nombre para el nuevo proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bmFtZQ.short_desc": {
+          "source": "The name of the dubbing project",
+          "message": "El nombre del proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The number of speakers in the source content. Set to `0` to automatically detect the number of speakers",
+          "message": "El número de interlocutores en el contenido de origen. Establézcalo en `0` para detectar automáticamente el número de interlocutores"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "Número de interlocutores"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Number of speakers in the content",
+          "message": "Número de interlocutores en el contenido"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.desc": {
+          "source": "The language code of the source content (e.g., `en`)",
+          "message": "El código de idioma del contenido de origen (p. ej., `en`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.display_name": {
+          "source": "Source Language",
+          "message": "Idioma de origen"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX2xhbmc.short_desc": {
+          "source": "The source language code",
+          "message": "El código de idioma de origen"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.desc": {
+          "source": "The URL of the source audio or video content to dub",
+          "message": "La URL del contenido de audio o video de origen a doblar"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.display_name": {
+          "source": "Source URL",
+          "message": "URL de origen"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c291cmNlX3VybA.short_desc": {
+          "source": "URL of the source content",
+          "message": "URL del contenido de origen"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.desc": {
+          "source": "The start position in seconds to clip the source content before dubbing",
+          "message": "La posición inicial en segundos para recortar el contenido de origen antes del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.display_name": {
+          "source": "Start Time",
+          "message": "Hora de inicio"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.c3RhcnRfdGltZQ.short_desc": {
+          "source": "Start position in seconds",
+          "message": "Posición inicial en segundos"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.desc": {
+          "source": "If `True`, adds a watermark to the dubbed content",
+          "message": "Si es `True`, añade una marca de agua al contenido doblado"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.display_name": {
+          "source": "Watermark",
+          "message": "Marca de agua"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.d2F0ZXJtYXJr.short_desc": {
+          "source": "Whether to add a watermark",
+          "message": "Indica si se debe añadir una marca de agua"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.desc": {
+          "source": "The language code to dub the content into (e.g., `es`)",
+          "message": "El código de idioma al que se doblará el contenido (p. ej., `es`)"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.display_name": {
+          "source": "Target Language",
+          "message": "Idioma de destino"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dGFyZ2V0X2xhbmc.short_desc": {
+          "source": "The target language code",
+          "message": "El código de idioma de destino"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.desc": {
+          "source": "If `True`, profanities in the transcription will be censored. **Note**: this is a beta feature",
+          "message": "Si es `True`, se censurarán las palabras malsonantes en la transcripción. **Nota**: esta es una función beta"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.display_name": {
+          "source": "Profanity Filter",
+          "message": "Filtro de palabras malsonantes"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.option.dXNlX3Byb2Zhbml0eV9maWx0ZXI.short_desc": {
+          "source": "Whether to censor profanities in transcripts",
+          "message": "Indica si se deben censurar las palabras malsonantes en las transcripciones"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLWR1YmJpbmc.short_desc": {
+          "source": "Create a dubbing project",
+          "message": "Crear un proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Create a new pronunciation dictionary with custom pronunciation rules",
+          "message": "Crear un nuevo diccionario de pronunciación con reglas de pronunciación personalizadas"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Create Pronunciation Dictionary",
+          "message": "Crear diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the pronunciation dictionary",
+          "message": "Una descripción del diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Dictionary description",
+          "message": "Descripción del diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.desc": {
+          "source": "The name for the new pronunciation dictionary",
+          "message": "El nombre para el nuevo diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the dictionary",
+          "message": "El nombre del diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.desc": {
+          "source": "Workspace members can edit the dictionary",
+          "message": "Los miembros del espacio de trabajo pueden editar el diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOmVkaXRvcg.display_name": {
+          "source": "Editor",
+          "message": "Editor"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Workspace members can only view the dictionary",
+          "message": "Los miembros del espacio de trabajo solo pueden ver el diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Lector"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.desc": {
+          "source": "The access level for workspace members",
+          "message": "El nivel de acceso para los miembros del espacio de trabajo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.display_name": {
+          "source": "Workspace Access",
+          "message": "Acceso al espacio de trabajo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.d29ya3NwYWNlX2FjY2Vzcw.short_desc": {
+          "source": "Access level for workspace members",
+          "message": "Nivel de acceso para los miembros del espacio de trabajo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Create a pronunciation dictionary",
+          "message": "Crear un diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.desc": {
+          "source": "Create a new voice with a name and optional description",
+          "message": "Crear una nueva voz con un nombre y una descripción opcional"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.display_name": {
+          "source": "Create Voice",
+          "message": "Crear voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the voice",
+          "message": "Una descripción de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Voice description",
+          "message": "Descripción de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.desc": {
+          "source": "A list of audio sample files (as binary data) to use for voice cloning. Each file should be a clear recording of the target voice",
+          "message": "Una lista de archivos de muestra de audio (como datos binarios) para usar en la clonación de voz. Cada archivo debe ser una grabación clara de la voz objetivo"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.display_name": {
+          "source": "Audio Files",
+          "message": "Archivos de audio"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.ZmlsZXM.short_desc": {
+          "source": "Audio samples for voice cloning",
+          "message": "Muestras de audio para clonación de voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "Etiquetas clave-valor para asociar con la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "Etiquetas"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "Etiquetas para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.desc": {
+          "source": "The name for the new voice",
+          "message": "El nombre de la nueva voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.option.bmFtZQ.short_desc": {
+          "source": "The name of the voice",
+          "message": "El nombre de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Y3JlYXRlLXZvaWNl.short_desc": {
+          "source": "Create a new voice",
+          "message": "Crear una nueva voz"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.desc": {
+          "source": "Add pronunciation rules to an existing pronunciation dictionary. Rules can be alias rules (text replacement) or phoneme rules (IPA/phoneme representation)",
+          "message": "Agregar reglas de pronunciación a un diccionario de pronunciación existente. Las reglas pueden ser reglas de alias (reemplazo de texto) o reglas de fonemas (representación IPA/fonema)"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.display_name": {
+          "source": "Add Pronunciation Rules",
+          "message": "Agregar reglas de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to add rules to",
+          "message": "El identificador único del diccionario de pronunciación al que se agregarán las reglas"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "ID del diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "El ID del diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.desc": {
+          "source": "A list of pronunciation rules to add to the dictionary. Each rule has a `type` (`alias` or `phoneme`), a `string_to_replace`, and either an `alias` or a `phoneme` with `alphabet`",
+          "message": "Una lista de reglas de pronunciación para agregar al diccionario. Cada regla tiene un `type` (`alias` o `phoneme`), un `string_to_replace`, y un `alias` o un `phoneme` con `alphabet`"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.display_name": {
+          "source": "Rules",
+          "message": "Reglas"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.option.cnVsZXM.short_desc": {
+          "source": "Pronunciation rules to add",
+          "message": "Reglas de pronunciación para agregar"
+        },
+        "app.RWxldmVuTGFicw.action.YWRkLXByb251bmNpYXRpb24tcnVsZXM.short_desc": {
+          "source": "Add rules to a pronunciation dictionary",
+          "message": "Agregar reglas a un diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.desc": {
+          "source": "Remove background noise from audio, isolating the voice using ElevenLabs AI",
+          "message": "Eliminar el ruido de fondo del audio, aislando la voz con la IA de ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.display_name": {
+          "source": "Audio Isolation",
+          "message": "Aislamiento de audio"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.desc": {
+          "source": "The audio data to isolate voice from. Background noise will be removed and only the voice will be preserved",
+          "message": "Los datos de audio de los cuales aislar la voz. Se eliminará el ruido de fondo y solo se conservará la voz"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Audio"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.option.YXVkaW8.short_desc": {
+          "source": "The audio data to isolate voice from",
+          "message": "Los datos de audio de los cuales aislar la voz"
+        },
+        "app.RWxldmVuTGFicw.action.YXVkaW8taXNvbGF0aW9u.short_desc": {
+          "source": "Remove background noise from audio",
+          "message": "Eliminar el ruido de fondo del audio"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.desc": {
+          "source": "Get the current status and details of a dubbing project",
+          "message": "Obtener el estado actual y los detalles de un proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.display_name": {
+          "source": "Get Dubbing Status",
+          "message": "Obtener estado del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to retrieve",
+          "message": "El identificador único del proyecto de doblaje a recuperar"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "El ID del proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmc.short_desc": {
+          "source": "Get the status of a dubbing project",
+          "message": "Obtener el estado de un proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.desc": {
+          "source": "Download the dubbed audio file from a dubbing project for a specific target language",
+          "message": "Descargar el archivo de audio doblado de un proyecto de doblaje para un idioma de destino específico"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.display_name": {
+          "source": "Get Dubbing Audio",
+          "message": "Obtener audio del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to get audio for",
+          "message": "El identificador único del proyecto de doblaje del cual obtener el audio"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project",
+          "message": "El ID del proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "The language code for the dubbed audio to download (e.g., `es`, `fr`, `de`)",
+          "message": "El código de idioma del audio doblado a descargar (p. ej., `es`, `fr`, `de`)"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Código de idioma"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "The target language code",
+          "message": "El código de idioma de destino"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWR1YmJpbmctYXVkaW8.short_desc": {
+          "source": "Get dubbed audio for a specific language",
+          "message": "Obtener audio doblado para un idioma específico"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.desc": {
+          "source": "Get the audio file from a specific history item",
+          "message": "Obtener el archivo de audio de un elemento del historial específico"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.display_name": {
+          "source": "Get History Audio",
+          "message": "Obtener audio del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to get audio for",
+          "message": "El identificador único del elemento del historial del cual obtener el audio"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "El ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktYXVkaW8.short_desc": {
+          "source": "Get audio from a history item",
+          "message": "Obtener audio de un elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Get details of a specific audio generation history item",
+          "message": "Obtener detalles de un elemento específico del historial de generación de audio"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Get History Item",
+          "message": "Obtener elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to retrieve",
+          "message": "El identificador único del elemento del historial a recuperar"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item",
+          "message": "El ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Get details of a history item",
+          "message": "Obtener detalles de un elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.desc": {
+          "source": "Get details of a specific pronunciation dictionary by its ID",
+          "message": "Obtener detalles de un diccionario de pronunciación específico por su ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.display_name": {
+          "source": "Get Pronunciation Dictionary",
+          "message": "Obtener diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.desc": {
+          "source": "The unique identifier of the pronunciation dictionary to retrieve",
+          "message": "El identificador único del diccionario de pronunciación a recuperar"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.display_name": {
+          "source": "Dictionary ID",
+          "message": "ID del diccionario"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.option.ZGljdGlvbmFyeV9pZA.short_desc": {
+          "source": "The ID of the pronunciation dictionary",
+          "message": "El ID del diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXByb251bmNpYXRpb24tZGljdGlvbmFyeQ.short_desc": {
+          "source": "Get details of a pronunciation dictionary",
+          "message": "Obtener detalles de un diccionario de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.desc": {
+          "source": "Get details of a specific voice by its ID",
+          "message": "Obtener detalles de una voz específica por su ID"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.display_name": {
+          "source": "Get Voice",
+          "message": "Obtener voz"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to retrieve",
+          "message": "El identificador único de la voz a recuperar"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to retrieve",
+          "message": "El ID de la voz a recuperar"
+        },
+        "app.RWxldmVuTGFicw.action.Z2V0LXZvaWNl.short_desc": {
+          "source": "Get details of a specific voice",
+          "message": "Obtener detalles de una voz específica"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.desc": {
+          "source": "Delete a dubbing project by its ID",
+          "message": "Eliminar un proyecto de doblaje por su ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.display_name": {
+          "source": "Delete Dubbing",
+          "message": "Eliminar doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.desc": {
+          "source": "The unique identifier of the dubbing project to delete",
+          "message": "El identificador único del proyecto de doblaje a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.display_name": {
+          "source": "Dubbing ID",
+          "message": "ID de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.option.ZHViYmluZ19pZA.short_desc": {
+          "source": "The ID of the dubbing project to delete",
+          "message": "El ID del proyecto de doblaje a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWR1YmJpbmc.short_desc": {
+          "source": "Delete a dubbing project",
+          "message": "Eliminar un proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.desc": {
+          "source": "Delete a specific audio generation history item",
+          "message": "Eliminar un elemento específico del historial de generación de audio"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.display_name": {
+          "source": "Delete History Item",
+          "message": "Eliminar elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The unique identifier of the history item to delete",
+          "message": "El identificador único del elemento del historial que se va a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "History Item ID",
+          "message": "ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.option.aGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "The ID of the history item to delete",
+          "message": "El ID del elemento del historial que se va a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLWhpc3RvcnktaXRlbQ.short_desc": {
+          "source": "Delete a history item",
+          "message": "Eliminar un elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.desc": {
+          "source": "Delete a voice by its ID",
+          "message": "Eliminar una voz por su ID"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.display_name": {
+          "source": "Delete Voice",
+          "message": "Eliminar voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to delete",
+          "message": "El identificador único de la voz que se va a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to delete",
+          "message": "El ID de la voz que se va a eliminar"
+        },
+        "app.RWxldmVuTGFicw.action.ZGVsZXRlLXZvaWNl.short_desc": {
+          "source": "Delete a voice",
+          "message": "Eliminar una voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.desc": {
+          "source": "Edit the name, description, or labels of an existing voice",
+          "message": "Editar el nombre, la descripción o las etiquetas de una voz existente"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.display_name": {
+          "source": "Edit Voice",
+          "message": "Editar voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the voice",
+          "message": "La nueva descripción para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new description for the voice",
+          "message": "La nueva descripción para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.desc": {
+          "source": "Key-value labels to associate with the voice",
+          "message": "Etiquetas clave-valor para asociar con la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.display_name": {
+          "source": "Labels",
+          "message": "Etiquetas"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bGFiZWxz.short_desc": {
+          "source": "Labels for the voice",
+          "message": "Etiquetas para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the voice",
+          "message": "El nuevo nombre para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.bmFtZQ.short_desc": {
+          "source": "The new name for the voice",
+          "message": "El nuevo nombre para la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.desc": {
+          "source": "The unique identifier of the voice to edit",
+          "message": "El identificador único de la voz que se va a editar"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to edit",
+          "message": "El ID de la voz que se va a editar"
+        },
+        "app.RWxldmVuTGFicw.action.ZWRpdC12b2ljZQ.short_desc": {
+          "source": "Edit an existing voice",
+          "message": "Editar una voz existente"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.desc": {
+          "source": "List available voices with optional filtering and pagination",
+          "message": "Listar las voces disponibles con filtrado y paginación opcionales"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.display_name": {
+          "source": "List Voices",
+          "message": "Listar voces"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.desc": {
+          "source": "Cloned voices",
+          "message": "Voces clonadas"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNsb25lZA.display_name": {
+          "source": "Cloned",
+          "message": "Clonado"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.desc": {
+          "source": "Generated voices",
+          "message": "Voces generadas"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdlbmVyYXRlZA.display_name": {
+          "source": "Generated",
+          "message": "Generado"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.desc": {
+          "source": "Premade voices",
+          "message": "Voces predefinidas"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByZW1hZGU.display_name": {
+          "source": "Premade",
+          "message": "Predefinido"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.desc": {
+          "source": "Professional voices",
+          "message": "Voces profesionales"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbA.display_name": {
+          "source": "Professional",
+          "message": "Profesional"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter voices by category",
+          "message": "Filtrar voces por categoría"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "Categoría"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Filter by voice category",
+          "message": "Filtrar por categoría de voz"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by voice name",
+          "message": "Ordenar por nombre de voz"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.desc": {
+          "source": "Sort by creation date",
+          "message": "Ordenar por fecha de creación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRfYXRfdW5peA.display_name": {
+          "source": "Created At",
+          "message": "Fecha de creación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.desc": {
+          "source": "The field to sort results by",
+          "message": "El campo por el que ordenar los resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Ordenar"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydA.short_desc": {
+          "source": "Sort field for results",
+          "message": "Campo de ordenación para los resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Ordenar en orden ascendente"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Ascendente"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Ordenar en orden descendente"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Descendente"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.desc": {
+          "source": "The direction to sort results",
+          "message": "La dirección para ordenar los resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.display_name": {
+          "source": "Sort Direction",
+          "message": "Dirección de ordenación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c29ydF9kaXJlY3Rpb24.short_desc": {
+          "source": "Sort direction for results",
+          "message": "Dirección de ordenación para los resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.desc": {
+          "source": "A search term to filter voices by name",
+          "message": "Un término de búsqueda para filtrar voces por nombre"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Buscar"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.c2VhcmNo.short_desc": {
+          "source": "Search term to filter voices",
+          "message": "Término de búsqueda para filtrar voces"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of voices to return per page",
+          "message": "El número de voces que se devolverán por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of voices to return per page",
+          "message": "Número de voces que se devolverán por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.desc": {
+          "source": "Community voices",
+          "message": "Voces de la comunidad"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvbW11bml0eQ.display_name": {
+          "source": "Community",
+          "message": "Comunidad"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "Default voices",
+          "message": "Voces predeterminadas"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Default",
+          "message": "Predeterminado"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Personal voices",
+          "message": "Voces personales"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "Personal"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.desc": {
+          "source": "Workspace voices",
+          "message": "Voces del espacio de trabajo"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.allowed-value.c3RyaW5nOndvcmtzcGFjZQ.display_name": {
+          "source": "Workspace",
+          "message": "Entorno de trabajo"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.desc": {
+          "source": "Filter voices by type",
+          "message": "Filtrar voces por tipo"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.display_name": {
+          "source": "Voice Type",
+          "message": "Tipo de voz"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.option.dm9pY2VfdHlwZQ.short_desc": {
+          "source": "Filter by voice type",
+          "message": "Filtrar por tipo de voz"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC12b2ljZXM.short_desc": {
+          "source": "List available voices",
+          "message": "Listar las voces disponibles"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.desc": {
+          "source": "List dubbing projects with optional filtering by status and creator",
+          "message": "Listar proyectos de doblaje con filtrado opcional por estado y creador"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.display_name": {
+          "source": "List Dubbing Projects",
+          "message": "Listar proyectos de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.desc": {
+          "source": "Cursor for fetching the next page of results",
+          "message": "Cursor para obtener la siguiente página de resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor for the next page",
+          "message": "Cursor de paginación para la siguiente página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.desc": {
+          "source": "Successfully completed",
+          "message": "Completado con éxito"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJlZA.display_name": {
+          "source": "Dubbed",
+          "message": "Doblado"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.desc": {
+          "source": "Currently being processed",
+          "message": "Actualmente en procesamiento"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmR1YmJpbmc.display_name": {
+          "source": "Dubbing",
+          "message": "Doblando"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.desc": {
+          "source": "Processing failed",
+          "message": "Error en el procesamiento"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.allowed-value.c3RyaW5nOmZhaWxlZA.display_name": {
+          "source": "Failed",
+          "message": "Fallido"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.desc": {
+          "source": "Filter dubbing projects by their processing status",
+          "message": "Filtrar proyectos de doblaje por su estado de procesamiento"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.display_name": {
+          "source": "Dubbing Status",
+          "message": "Estado del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZHViYmluZ19zdGF0dXM.short_desc": {
+          "source": "Filter by dubbing status",
+          "message": "Filtrar por estado del doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.desc": {
+          "source": "Show only others' dubbing projects",
+          "message": "Mostrar solo los proyectos de doblaje de otros"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOm90aGVycw.display_name": {
+          "source": "Others",
+          "message": "Otros"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "Show all dubbing projects",
+          "message": "Mostrar todos los proyectos de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Todos"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.desc": {
+          "source": "Show only your dubbing projects",
+          "message": "Mostrar solo tus proyectos de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.allowed-value.c3RyaW5nOnBlcnNvbmFs.display_name": {
+          "source": "Personal",
+          "message": "Personal"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.desc": {
+          "source": "Filter dubbing projects by creator",
+          "message": "Filtrar proyectos de doblaje por creador"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.display_name": {
+          "source": "Filter by Creator",
+          "message": "Filtrar por creador"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.ZmlsdGVyX2J5X2NyZWF0b3I.short_desc": {
+          "source": "Filter by who created the dubbing project",
+          "message": "Filtrar por quién creó el proyecto de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of dubbing projects to return per page (1-200, default: 100)",
+          "message": "El número de proyectos de doblaje a devolver por página (1-200, predeterminado: 100)"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dubbing projects to return per page",
+          "message": "Número de proyectos de doblaje a devolver por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1kdWJiaW5n.short_desc": {
+          "source": "List dubbing projects",
+          "message": "Listar proyectos de doblaje"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.desc": {
+          "source": "List previously generated audio history items with optional pagination",
+          "message": "Listar elementos del historial de audio generados previamente con paginación opcional"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.display_name": {
+          "source": "List History",
+          "message": "Listar historial"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.desc": {
+          "source": "The history item ID to start after for pagination",
+          "message": "El ID del elemento del historial después del cual comenzar para la paginación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.display_name": {
+          "source": "Start After History Item ID",
+          "message": "Comenzar después del ID del elemento del historial"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.c3RhcnRfYWZ0ZXJfaGlzdG9yeV9pdGVtX2lk.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Cursor de paginación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of history items to return per page",
+          "message": "El número de elementos del historial a devolver por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of history items to return",
+          "message": "Número de elementos del historial a devolver"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1oaXN0b3J5.short_desc": {
+          "source": "List generated audio history items",
+          "message": "Listar elementos del historial de audio generados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List available ElevenLabs AI models and their capabilities",
+          "message": "Listar los modelos de IA de ElevenLabs disponibles y sus capacidades"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Listar modelos"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List available AI models",
+          "message": "Listar modelos de IA disponibles"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.desc": {
+          "source": "List available pronunciation dictionaries with optional pagination",
+          "message": "Listar diccionarios de pronunciación disponibles con paginación opcional"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.display_name": {
+          "source": "List Pronunciation Dictionaries",
+          "message": "Listar diccionarios de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor to use for pagination to retrieve the next page of results",
+          "message": "El cursor que se utilizará para la paginación y recuperar la página siguiente de resultados"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.Y3Vyc29y.short_desc": {
+          "source": "Cursor for pagination",
+          "message": "Cursor para paginación"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.desc": {
+          "source": "The number of pronunciation dictionaries to return per page",
+          "message": "El número de diccionarios de pronunciación a devolver por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Tamaño de página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Number of dictionaries to return per page",
+          "message": "Número de diccionarios a devolver por página"
+        },
+        "app.RWxldmVuTGFicw.action.bGlzdC1wcm9udW5jaWF0aW9uLWRpY3Rpb25hcmllcw.short_desc": {
+          "source": "List available pronunciation dictionaries",
+          "message": "Listar diccionarios de pronunciación disponibles"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ElevenLabs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada a la API HTTP / REST personalizada a **ElevenLabs** usando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUse esta acción para extremos que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.RWxldmVuTGFicw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ElevenLabs",
+          "message": "Realizar una llamada a la API personalizada a ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.desc": {
+          "source": "Convert audio from one voice to another using ElevenLabs AI voice conversion",
+          "message": "Convertir audio de una voz a otra utilizando la conversión de voz con IA de ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.display_name": {
+          "source": "Speech to Speech",
+          "message": "Speech to Speech"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.desc": {
+          "source": "The source audio data to convert to the target voice",
+          "message": "Los datos de audio de origen a convertir a la voz de destino"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Audio"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.YXVkaW8.short_desc": {
+          "source": "The source audio data to convert",
+          "message": "Los datos de audio de origen a convertir"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "Detectar automáticamente el formato de audio (predeterminado)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "Otro (detección automática)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM de 16 bits, 16 kHz mono, little-endian: menor latencia"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16 bits 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "El formato del archivo de audio de entrada. `pcm_s16le_16` requiere PCM de 16 bits, 16 kHz mono, little-endian y ofrece menor latencia"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formato de archivo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "El formato del audio de entrada"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 64 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44,1 kHz 64 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 128 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44,1 kHz 128 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 192 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44,1 kHz 192 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44,1 kHz 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 22,05 kHz y una tasa de bits de 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22,05 kHz 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 44,1 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44,1 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 16 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 22,05 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22,05 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 24 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "Audio u-law a una frecuencia de muestreo de 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the converted speech",
+          "message": "El formato de audio de salida para la voz convertida"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Formato de salida"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "El formato de audio de salida"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.desc": {
+          "source": "Default speech-to-speech model for English voice conversion",
+          "message": "Modelo de voz a voz predeterminado para la conversión de voz en inglés"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9lbmdsaXNoX3N0c192Mg.display_name": {
+          "source": "Eleven English STS v2",
+          "message": "Eleven English STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.desc": {
+          "source": "Multilingual speech-to-speech model for voice conversion",
+          "message": "Modelo multilingüe de voz a voz para la conversión de voz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfc3RzX3Yy.display_name": {
+          "source": "Eleven Multilingual STS v2",
+          "message": "Eleven Multilingual STS v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-speech model to use for voice conversion",
+          "message": "El modelo de voz a voz a utilizar para la conversión de voz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID del modelo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STS model to use",
+          "message": "El modelo STS a utilizar"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "Si se especifica, el sistema hará el mejor esfuerzo para muestrear de forma determinista, de modo que las solicitudes repetidas con la misma semilla y parámetros deberían devolver el mismo resultado. No se garantiza el determinismo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Semilla"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "Semilla para la generación determinista"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.desc": {
+          "source": "If `True`, background noise will be removed from the input audio before conversion",
+          "message": "Si es `True`, se eliminará el ruido de fondo del audio de entrada antes de la conversión"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.display_name": {
+          "source": "Remove Background Noise",
+          "message": "Eliminar ruido de fondo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.cmVtb3ZlX2JhY2tncm91bmRfbm9pc2U.short_desc": {
+          "source": "Whether to remove background noise from the input audio",
+          "message": "Indica si se debe eliminar el ruido de fondo del audio de entrada"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "El ID de la voz de destino para la conversión"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the target voice for conversion",
+          "message": "El ID de la voz de destino para la conversión"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "Ajustes de voz que anulan los ajustes guardados para la voz indicada. Solo se aplican en la solicitud indicada"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "Ajustes de voz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the conversion",
+          "message": "Ajustes de voz para la conversión"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXNwZWVjaA.short_desc": {
+          "source": "Convert audio from one voice to another",
+          "message": "Convertir audio de una voz a otra"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.desc": {
+          "source": "Transcribe audio to text using ElevenLabs Scribe speech-to-text model. Supports 90+ languages with word-level timestamps and speaker diarization",
+          "message": "Transcriba audio a texto mediante el modelo de voz a texto Scribe de ElevenLabs. Admite más de 90 idiomas con marcas de tiempo a nivel de palabra y diarización de hablantes"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.display_name": {
+          "source": "Speech to Text",
+          "message": "Voz a texto"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.desc": {
+          "source": "The audio data to transcribe to text",
+          "message": "Los datos de audio que se van a transcribir a texto"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.display_name": {
+          "source": "Audio",
+          "message": "Audio"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.YXVkaW8.short_desc": {
+          "source": "The audio data to transcribe",
+          "message": "Los datos de audio que se van a transcribir"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.desc": {
+          "source": "If `True`, the transcription will include speaker diarization, annotating which speaker is talking in each segment",
+          "message": "Si es `True`, la transcripción incluirá diarización de hablantes, anotando qué hablante está hablando en cada segmento"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "Diarizar"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Whether to annotate who is speaking",
+          "message": "Indica si se debe anotar quién está hablando"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Auto-detect the audio format (default)",
+          "message": "Detectar automáticamente el formato de audio (predeterminado)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other (Auto-detect)",
+          "message": "Otro (detección automática)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.desc": {
+          "source": "PCM 16-bit, 16kHz mono, little-endian — lower latency",
+          "message": "PCM de 16 bits, 16 kHz mono, little-endian: menor latencia"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOnBjbV9zMTZsZV8xNg.display_name": {
+          "source": "PCM 16-bit 16kHz",
+          "message": "PCM 16 bits 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "The format of the input audio file. `pcm_s16le_16` requires 16-bit, 16kHz mono, little-endian PCM and offers lower latency",
+          "message": "El formato del archivo de audio de entrada. `pcm_s16le_16` requiere PCM de 16 bits, 16 kHz mono, little-endian y ofrece menor latencia"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formato de archivo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "The format of the input audio",
+          "message": "El formato del audio de entrada"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "An ISO 639-1 language code to specify the language of the audio. If not provided, the model will auto-detect the language",
+          "message": "Un código de idioma ISO 639-1 para especificar el idioma del audio. Si no se proporciona, el modelo detectará automáticamente el idioma"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Código de idioma"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the audio (ISO 639-1)",
+          "message": "Código de idioma para el audio (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.desc": {
+          "source": "Speech-to-text model supporting 90+ languages with word-level timestamps and speaker diarization",
+          "message": "Modelo de voz a texto compatible con más de 90 idiomas con marcas de tiempo a nivel de palabra y diarización de hablantes"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnNjcmliZV92Mg.display_name": {
+          "source": "Scribe v2",
+          "message": "Scribe v2"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.desc": {
+          "source": "The speech-to-text model to use for transcription",
+          "message": "El modelo de voz a texto que se utilizará para la transcripción"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID del modelo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The STT model to use",
+          "message": "El modelo STT que se utilizará"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.desc": {
+          "source": "The maximum number of speakers expected in the audio. Maximum: `32`. Only used when `diarize` is `True`",
+          "message": "El número máximo de hablantes esperados en el audio. Máximo: `32`. Solo se utiliza cuando `diarize` es `True`"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.display_name": {
+          "source": "Number of Speakers",
+          "message": "Número de interlocutores"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.bnVtX3NwZWFrZXJz.short_desc": {
+          "source": "Maximum number of speakers in the audio",
+          "message": "Número máximo de hablantes en el audio"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.desc": {
+          "source": "If `True`, audio events such as music, laughter, and applause will be tagged in the transcription",
+          "message": "Si es `True`, los eventos de audio como música, risas y aplausos se etiquetarán en la transcripción"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.display_name": {
+          "source": "Tag Audio Events",
+          "message": "Etiquetar eventos de audio"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGFnX2F1ZGlvX2V2ZW50cw.short_desc": {
+          "source": "Whether to tag audio events like music or laughter",
+          "message": "Indica si se deben etiquetar eventos de audio como música o risas"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No timestamps in the response",
+          "message": "Sin marcas de tiempo en la respuesta"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Ninguno"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.desc": {
+          "source": "Character-level timestamps",
+          "message": "Marcas de tiempo a nivel de carácter"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOmNoYXJhY3Rlcg.display_name": {
+          "source": "Character",
+          "message": "Carácter"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.desc": {
+          "source": "Word-level timestamps",
+          "message": "Marcas de tiempo a nivel de palabra"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.allowed-value.c3RyaW5nOndvcmQ.display_name": {
+          "source": "Word",
+          "message": "Palabra"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.desc": {
+          "source": "The granularity of timestamps in the transcription response",
+          "message": "La granularidad de las marcas de tiempo en la respuesta de transcripción"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.display_name": {
+          "source": "Timestamps Granularity",
+          "message": "Granularidad de las marcas de tiempo"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.option.dGltZXN0YW1wc19ncmFudWxhcml0eQ.short_desc": {
+          "source": "The granularity of timestamps in the response",
+          "message": "La granularidad de las marcas de tiempo en la respuesta"
+        },
+        "app.RWxldmVuTGFicw.action.c3BlZWNoLXRvLXRleHQ.short_desc": {
+          "source": "Transcribe audio to text",
+          "message": "Transcribir audio a texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.desc": {
+          "source": "Generate sound effects from a text description using ElevenLabs AI",
+          "message": "Genere efectos de sonido a partir de una descripción de texto mediante la IA de ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.display_name": {
+          "source": "Text to Sound Effects",
+          "message": "Texto a efectos de sonido"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.desc": {
+          "source": "The duration of the generated sound effect in seconds. Range: `0.5` to `22.0`",
+          "message": "La duración del efecto de sonido generado en segundos. Rango: de `0.5` a `22.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.display_name": {
+          "source": "Duration (Seconds)",
+          "message": "Duración (segundos)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.ZHVyYXRpb25fc2Vjb25kcw.short_desc": {
+          "source": "Duration of the sound effect in seconds",
+          "message": "Duración del efecto de sonido en segundos"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.desc": {
+          "source": "If `True`, creates a seamlessly looping sound effect",
+          "message": "Si es `True`, crea un efecto de sonido en bucle continuo"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.display_name": {
+          "source": "Loop",
+          "message": "Bucle"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.bG9vcA.short_desc": {
+          "source": "Whether to create a looping sound effect",
+          "message": "Indica si se debe crear un efecto de sonido en bucle"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.desc": {
+          "source": "How much the text prompt influences the generated sound effect. Range: `0.0` to `1.0`. Higher values make the output more closely match the prompt",
+          "message": "Cuánto influye el prompt de texto en el efecto de sonido generado. Rango: de `0.0` a `1.0`. Los valores más altos hacen que la salida coincida más fielmente con el prompt"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.display_name": {
+          "source": "Prompt Influence",
+          "message": "Influencia del prompt"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.cHJvbXB0X2luZmx1ZW5jZQ.short_desc": {
+          "source": "How much the text prompt influences the output",
+          "message": "Cuánto influye el prompt de texto en la salida"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.desc": {
+          "source": "A text description of the sound effect to generate (e.g., `dog barking in a park`)",
+          "message": "Una descripción de texto del efecto de sonido a generar (p. ej., `dog barking in a park`)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.option.dGV4dA.short_desc": {
+          "source": "Description of the sound effect to generate",
+          "message": "Descripción del efecto de sonido a generar"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zb3VuZC1lZmZlY3Rz.short_desc": {
+          "source": "Generate sound effects from a text description",
+          "message": "Generar efectos de sonido a partir de una descripción de texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.desc": {
+          "source": "Convert text to speech audio using ElevenLabs AI voice synthesis. Supports multiple voices, models, and output formats",
+          "message": "Convierta texto a audio de voz mediante la síntesis de voz por IA de ElevenLabs. Admite múltiples voces, modelos y formatos de salida"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.display_name": {
+          "source": "Text to Speech",
+          "message": "Texto a voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.desc": {
+          "source": "Disable text normalization",
+          "message": "Desactivar la normalización de texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Off",
+          "message": "Apagado"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.desc": {
+          "source": "Always apply text normalization",
+          "message": "Aplicar siempre la normalización de texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "On",
+          "message": "Encendido"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Automatically decide whether to normalize text (default)",
+          "message": "Decidir automáticamente si normalizar el texto (predeterminado)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.desc": {
+          "source": "Controls how text is normalized before synthesis",
+          "message": "Controla cómo se normaliza el texto antes de la síntesis"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.display_name": {
+          "source": "Text Normalization",
+          "message": "Normalización de texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.YXBwbHlfdGV4dF9ub3JtYWxpemF0aW9u.short_desc": {
+          "source": "Controls text normalization behavior",
+          "message": "Controla el comportamiento de la normalización de texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 64kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 64 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF82NA.display_name": {
+          "source": "MP3 44.1kHz 64kbps",
+          "message": "MP3 44,1 kHz 64 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 128kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 128 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xMjg.display_name": {
+          "source": "MP3 44.1kHz 128kbps",
+          "message": "MP3 44,1 kHz 128 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 192kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 192 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8xOTI.display_name": {
+          "source": "MP3 44.1kHz 192kbps",
+          "message": "MP3 44,1 kHz 192 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.desc": {
+          "source": "MP3 audio at 44.1kHz sample rate and 32kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 44,1 kHz y una tasa de bits de 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM180NDEwMF8zMg.display_name": {
+          "source": "MP3 44.1kHz 32kbps",
+          "message": "MP3 44,1 kHz 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.desc": {
+          "source": "MP3 audio at 22.05kHz sample rate and 32kbps bitrate",
+          "message": "Audio MP3 a una frecuencia de muestreo de 22,05 kHz y una tasa de bits de 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOm1wM18yMjA1MF8zMg.display_name": {
+          "source": "MP3 22.05kHz 32kbps",
+          "message": "MP3 22,05 kHz 32 kbps"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.desc": {
+          "source": "PCM audio at 44.1kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 44,1 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV80NDEwMA.display_name": {
+          "source": "PCM 44.1kHz",
+          "message": "PCM 44,1 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.desc": {
+          "source": "PCM audio at 16kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 16 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8xNjAwMA.display_name": {
+          "source": "PCM 16kHz",
+          "message": "PCM 16 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.desc": {
+          "source": "PCM audio at 22.05kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 22,05 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yMjA1MA.display_name": {
+          "source": "PCM 22.05kHz",
+          "message": "PCM 22,05 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.desc": {
+          "source": "PCM audio at 24kHz sample rate (16-bit signed little-endian)",
+          "message": "Audio PCM a una frecuencia de muestreo de 24 kHz (16 bits signed little-endian)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBjbV8yNDAwMA.display_name": {
+          "source": "PCM 24kHz",
+          "message": "PCM 24 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.desc": {
+          "source": "u-law audio at 8kHz sample rate",
+          "message": "Audio u-law a una frecuencia de muestreo de 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnVsYXdfODAwMA.display_name": {
+          "source": "u-law 8kHz",
+          "message": "u-law 8 kHz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "The output audio format for the generated speech",
+          "message": "El formato de audio de salida para la voz generada"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Formato de salida"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "The output audio format",
+          "message": "El formato de audio de salida"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.desc": {
+          "source": "Language code (ISO 639-1) used to enforce a language for the model. Currently only supported by `eleven_turbo_v2_5`",
+          "message": "Código de idioma (ISO 639-1) utilizado para imponer un idioma para el modelo. Actualmente solo es compatible con `eleven_turbo_v2_5`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
+          "source": "Language Code",
+          "message": "Código de idioma"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "Language code for the speech (ISO 639-1)",
+          "message": "Código de idioma para la voz (ISO 639-1)"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.desc": {
+          "source": "High-quality low-latency model for 32 languages",
+          "message": "Modelo de alta calidad y baja latencia para 32 idiomas"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl90dXJib192Ml81.display_name": {
+          "source": "Eleven Turbo v2.5",
+          "message": "Eleven Turbo v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.desc": {
+          "source": "Speed-optimized model with ~75ms latency, 32 languages, 40,000 character limit, 50% lower cost",
+          "message": "Modelo optimizado para la velocidad con latencia de ~75 ms, 32 idiomas, límite de 40 000 caracteres y un coste un 50 % menor"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9mbGFzaF92Ml81.display_name": {
+          "source": "Eleven Flash v2.5",
+          "message": "Eleven Flash v2.5"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.desc": {
+          "source": "English-only model optimized for English content",
+          "message": "Modelo exclusivo en inglés optimizado para contenido en inglés"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tb25vbGluZ3VhbF92MQ.display_name": {
+          "source": "Eleven Monolingual v1",
+          "message": "Eleven Monolingual v1"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.desc": {
+          "source": "Mature model supporting 29 languages with 10,000 character limit",
+          "message": "Modelo maduro compatible con 29 idiomas y un límite de 10 000 caracteres"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOmVsZXZlbl9tdWx0aWxpbmd1YWxfdjI.display_name": {
+          "source": "Eleven Multilingual v2",
+          "message": "Eleven Multilingual v2"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.desc": {
+          "source": "The TTS model to use for speech synthesis",
+          "message": "El modelo TTS que se utilizará para la síntesis de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID del modelo"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bW9kZWxfaWQ.short_desc": {
+          "source": "The TTS model to use",
+          "message": "El modelo TTS que se utilizará"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.desc": {
+          "source": "Text that comes after the current text in a multi-part generation. Enhances continuity when concatenating audio from multiple requests",
+          "message": "Texto que va después del texto actual en una generación multiparte. Mejora la continuidad al concatenar audio de múltiples solicitudes"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.display_name": {
+          "source": "Next Text",
+          "message": "Texto siguiente"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.bmV4dF90ZXh0.short_desc": {
+          "source": "Text that comes after for continuity",
+          "message": "Texto que va después para mantener la continuidad"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.desc": {
+          "source": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same seed and parameters should return the same result. Determinism is not guaranteed",
+          "message": "Si se especifica, el sistema hará el mejor esfuerzo para muestrear de forma determinista, de modo que las solicitudes repetidas con la misma semilla y parámetros deberían devolver el mismo resultado. No se garantiza el determinismo"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Semilla"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c2VlZA.short_desc": {
+          "source": "Seed for deterministic generation",
+          "message": "Semilla para la generación determinista"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.desc": {
+          "source": "Controls the speed of the generated speech. Range: `0.25` to `4.0`. Default: `1.0`",
+          "message": "Controla la velocidad de la voz generada. Rango: `0.25` a `4.0`. Predeterminado: `1.0`"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.display_name": {
+          "source": "Speed",
+          "message": "Velocidad"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.c3BlZWQ.short_desc": {
+          "source": "Speech speed multiplier",
+          "message": "Multiplicador de velocidad de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.desc": {
+          "source": "Text that came before the current text in a multi-part generation. Improves prosody and continuity when splitting long text across multiple requests",
+          "message": "Texto que precedía al texto actual en una generación multiparte. Mejora la prosodia y la continuidad al dividir texto largo entre múltiples solicitudes"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.display_name": {
+          "source": "Previous Text",
+          "message": "Texto anterior"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJldmlvdXNfdGV4dA.short_desc": {
+          "source": "Text that came before for continuity",
+          "message": "Texto anterior para mantener la continuidad"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.desc": {
+          "source": "A list of pronunciation dictionary locators to apply during synthesis. Maximum of 3 dictionaries",
+          "message": "Una lista de localizadores de diccionarios de pronunciación para aplicar durante la síntesis. Máximo 3 diccionarios"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.display_name": {
+          "source": "Pronunciation Dictionaries",
+          "message": "Diccionarios de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.cHJvbnVuY2lhdGlvbl9kaWN0aW9uYXJ5X2xvY2F0b3Jz.short_desc": {
+          "source": "Pronunciation dictionaries to apply",
+          "message": "Diccionarios de pronunciación para aplicar"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to convert to speech",
+          "message": "El texto que se convertirá a voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "The text to convert to speech",
+          "message": "El texto que se convertirá a voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "El ID de la voz que se utilizará para la síntesis de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.display_name": {
+          "source": "Voice ID",
+          "message": "ID de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2VfaWQ.short_desc": {
+          "source": "The ID of the voice to use for speech synthesis",
+          "message": "El ID de la voz que se utilizará para la síntesis de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.desc": {
+          "source": "Voice settings overriding stored settings for the given voice. They are applied only on the given request",
+          "message": "Ajustes de voz que anulan los ajustes guardados para la voz indicada. Solo se aplican en la solicitud indicada"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.display_name": {
+          "source": "Voice Settings",
+          "message": "Ajustes de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.option.dm9pY2Vfc2V0dGluZ3M.short_desc": {
+          "source": "Voice settings for the synthesis",
+          "message": "Configuración de voz para la síntesis"
+        },
+        "app.RWxldmVuTGFicw.action.dGV4dC10by1zcGVlY2g.short_desc": {
+          "source": "Convert text to speech audio using AI voice synthesis",
+          "message": "Convierte texto a audio de voz mediante síntesis de voz con IA"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.desc": {
+          "source": "Design a new voice from a text description of the desired voice characteristics",
+          "message": "Diseña una nueva voz a partir de una descripción de texto con las características deseadas de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.display_name": {
+          "source": "Voice Design",
+          "message": "Diseño de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.desc": {
+          "source": "Sample text that will be spoken by the generated voice previews",
+          "message": "Texto de muestra que se reproducirá en las vistas previas de la voz generada"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dGV4dA.short_desc": {
+          "source": "Sample text to generate with the designed voice",
+          "message": "Texto de muestra para generar con la voz diseñada"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the desired voice characteristics (e.g., `a warm friendly female voice with a slight British accent`)",
+          "message": "Una descripción de texto de las características deseadas de la voz (p. ej., `a warm friendly female voice with a slight British accent`)"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.display_name": {
+          "source": "Voice Description",
+          "message": "Descripción de voz"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.option.dm9pY2VfZGVzY3JpcHRpb24.short_desc": {
+          "source": "Text describing desired voice characteristics",
+          "message": "Texto que describe las características deseadas de la voz"
+        },
+        "app.RWxldmVuTGFicw.action.dm9pY2UtZGVzaWdu.short_desc": {
+          "source": "Design a new voice from a text description",
+          "message": "Diseña una nueva voz a partir de una descripción de texto"
+        },
+        "app.RWxldmVuTGFicw.desc": {
+          "source": "Provides integration with [ElevenLabs](https://elevenlabs.io) AI voice synthesis and audio processing services.\n\nSupported operations:\n- **Speech synthesis**: text-to-speech, speech-to-speech, voice design\n- **Audio processing**: audio isolation, text-to-sound-effects\n- **Transcription**: speech-to-text with speaker diarization\n- **Voice management**: create, edit, delete, and list voices\n- **Dubbing**: create and manage dubbing projects\n- **Pronunciation**: manage pronunciation dictionaries",
+          "message": "Proporciona integración con los servicios de procesamiento de audio y síntesis de voz con IA de [ElevenLabs](https://elevenlabs.io).\n\nOperaciones compatibles:\n- **Síntesis de voz**: texto a voz, voz a voz, diseño de voz\n- **Procesamiento de audio**: aislamiento de audio, texto a efectos de sonido\n- **Transcripción**: voz a texto con diarización de hablantes\n- **Gestión de voces**: crear, editar, eliminar y listar voces\n- **Doblaje**: crear y gestionar proyectos de doblaje\n- **Pronunciación**: gestionar diccionarios de pronunciación"
+        },
+        "app.RWxldmVuTGFicw.display_name": {
+          "source": "ElevenLabs",
+          "message": "ElevenLabs"
+        },
+        "app.RWxldmVuTGFicw.short_desc": {
+          "source": "ElevenLabs AI voice synthesis services",
+          "message": "Servicios de síntesis de voz con IA de ElevenLabs"
+        }
+      }
+    }
+  }
+}

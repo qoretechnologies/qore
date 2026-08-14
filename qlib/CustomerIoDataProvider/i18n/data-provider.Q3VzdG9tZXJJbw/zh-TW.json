@@ -1,0 +1,2581 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Create a new collection in Customer.io for storing and managing data.",
+          "message": "在 Customer.io 中建立新的集合以儲存和管理資料。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Create Collection",
+          "message": "建立集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "The data array for the collection",
+          "message": "集合的資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Collection data array",
+          "message": "集合資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.desc": {
+          "source": "The name for the new collection",
+          "message": "新集合的名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.short_desc": {
+          "source": "Collection name",
+          "message": "集合名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.desc": {
+          "source": "URL for an external data source for the collection",
+          "message": "集合的外部資料來源 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.short_desc": {
+          "source": "URL for external data source",
+          "message": "外部資料來源的 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Create a new collection",
+          "message": "建立新集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.desc": {
+          "source": "Create a new data export in Customer.io for customers or deliveries.",
+          "message": "在 Customer.io 中為客戶或交付紀錄建立新的資料匯出。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
+          "source": "Create Export",
+          "message": "建立匯出"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.allowed-value.c3RyaW5nOmN1c3RvbWVycw.desc": {
+          "source": "Export customers",
+          "message": "匯出客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.allowed-value.c3RyaW5nOmRlbGl2ZXJpZXM.desc": {
+          "source": "Export deliveries",
+          "message": "匯出交付紀錄"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.desc": {
+          "source": "The type of export to create (customers or deliveries)",
+          "message": "要建立的匯出類型（客戶或交付紀錄）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.display_name": {
+          "source": "Export Type",
+          "message": "匯出類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.short_desc": {
+          "source": "Export type",
+          "message": "匯出類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.desc": {
+          "source": "Filters to apply to the export",
+          "message": "套用至匯出的篩選條件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.display_name": {
+          "source": "Filters",
+          "message": "篩選條件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.short_desc": {
+          "source": "Export filters",
+          "message": "匯出篩選條件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
+          "source": "Create a data export",
+          "message": "建立資料匯出"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.desc": {
+          "source": "Create a new snippet in Customer.io for reusable content in messages.",
+          "message": "在 Customer.io 中建立新的文字片段，以便在訊息中重複使用內容。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
+          "source": "Create Snippet",
+          "message": "建立文字片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.desc": {
+          "source": "The unique name for the new snippet",
+          "message": "新文字片段的唯一名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.short_desc": {
+          "source": "Snippet name",
+          "message": "文字片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.desc": {
+          "source": "The content of the snippet",
+          "message": "文字片段的內容"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.short_desc": {
+          "source": "Snippet content",
+          "message": "文字片段內容"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Create a new snippet",
+          "message": "建立新文字片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.desc": {
+          "source": "Create a new customer or update an existing customer in Customer.io via the Track API. Sets the customer's email, attributes, and other properties.",
+          "message": "透過 Track API 在 Customer.io 中建立新客戶或更新現有客戶。設定客戶的電子郵件、屬性與其他屬性。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
+          "source": "Create/Update Customer",
+          "message": "建立/更新客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "Unix timestamp when customer was created",
+          "message": "客戶建立時的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "Unix timestamp when customer was created",
+          "message": "客戶建立時的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.desc": {
+          "source": "Custom attributes to set on the customer",
+          "message": "要在客戶上設定的自訂屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Custom attributes to set on the customer",
+          "message": "要在客戶上設定的自訂屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
+          "source": "Create or update a customer",
+          "message": "建立或更新客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.desc": {
+          "source": "Create or update a custom object in Customer.io via the Track API.",
+          "message": "透過 Track API 在 Customer.io 中建立或更新自訂物件。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
+          "source": "Create/Update Object",
+          "message": "建立/更新物件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.desc": {
+          "source": "Custom attributes to set on the object",
+          "message": "要在物件上設定的自訂屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Custom attributes to set",
+          "message": "要設定的自訂屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "物件 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "物件類型 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
+          "source": "Create or update an object",
+          "message": "建立或更新物件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.desc": {
+          "source": "Add a mobile device to a customer in Customer.io for push notification targeting.",
+          "message": "在 Customer.io 中為客戶新增行動裝置以進行推播通知定位。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
+          "source": "Add Device",
+          "message": "新增裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.desc": {
+          "source": "Device attributes",
+          "message": "裝置屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Device attributes",
+          "message": "裝置屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.desc": {
+          "source": "The device token",
+          "message": "裝置權杖"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.display_name": {
+          "source": "Device ID",
+          "message": "裝置 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.short_desc": {
+          "source": "The device token",
+          "message": "裝置權杖"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.desc": {
+          "source": "Unix timestamp of last device use",
+          "message": "最後使用裝置的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.display_name": {
+          "source": "Last Used",
+          "message": "上次使用時間"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.short_desc": {
+          "source": "Unix timestamp of last device use",
+          "message": "最後使用裝置的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.allowed-value.c3RyaW5nOmFuZHJvaWQ.desc": {
+          "source": "Android device",
+          "message": "Android 裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.allowed-value.c3RyaW5nOmlvcw.desc": {
+          "source": "iOS device",
+          "message": "iOS 裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.desc": {
+          "source": "Device platform (ios or android)",
+          "message": "裝置平台（ios 或 android）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.display_name": {
+          "source": "Platform",
+          "message": "平台"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.short_desc": {
+          "source": "Device platform",
+          "message": "裝置平台"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
+          "source": "Add a device to a customer",
+          "message": "為客戶新增裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.desc": {
+          "source": "Add relationships between an object and people in Customer.io via the Track API.",
+          "message": "透過 Track API 在 Customer.io 中的物件與人員之間新增關聯。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
+          "source": "Add Relationships",
+          "message": "新增關聯"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.desc": {
+          "source": "List of identifier hashes, each with 'identifier' and optionally 'relationship_attributes'",
+          "message": "識別碼雜湊列表，每個包含 'identifier' 和可選的 'relationship_attributes'"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "List of identifier hashes",
+          "message": "識別碼雜湊列表"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "物件 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "物件類型 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
+          "source": "Add relationships between an object and people",
+          "message": "新增物件與人員之間的關聯"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a message's details from Customer.io by message ID.",
+          "message": "透過訊息 ID 從 Customer.io 擷取訊息的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get Message",
+          "message": "取得訊息"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The unique Customer.io message ID",
+          "message": "唯一的 Customer.io 訊息 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "訊息 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID to retrieve",
+          "message": "要擷取的訊息 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a message by ID",
+          "message": "依 ID 取得訊息"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.desc": {
+          "source": "Retrieve a newsletter's details from Customer.io by newsletter ID.",
+          "message": "透過電子報 ID 從 Customer.io 擷取電子報的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
+          "source": "Get Newsletter",
+          "message": "取得電子報"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.desc": {
+          "source": "The unique Customer.io newsletter ID",
+          "message": "唯一的 Customer.io 電子報 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.display_name": {
+          "source": "Newsletter ID",
+          "message": "電子報 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.short_desc": {
+          "source": "The newsletter ID to retrieve",
+          "message": "要擷取的電子報 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
+          "source": "Get a newsletter by ID",
+          "message": "依 ID 取得電子報"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a broadcast's details from Customer.io by broadcast ID.",
+          "message": "透過廣播 ID 從 Customer.io 擷取廣播的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get Broadcast",
+          "message": "取得廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique Customer.io broadcast ID",
+          "message": "唯一的 Customer.io 廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to retrieve",
+          "message": "要擷取的廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a broadcast by ID",
+          "message": "依 ID 取得廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a campaign's details from Customer.io by campaign ID.",
+          "message": "透過行銷活動 ID 從 Customer.io 擷取行銷活動的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "取得行銷活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID",
+          "message": "唯一的 Customer.io 行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID to retrieve",
+          "message": "要擷取的行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a campaign by ID",
+          "message": "依 ID 取得行銷活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.desc": {
+          "source": "Retrieve metrics and performance data for a Customer.io campaign.",
+          "message": "擷取 Customer.io 行銷活動的指標和成效資料。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
+          "source": "Get Campaign Metrics",
+          "message": "取得行銷活動指標"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID to get metrics for",
+          "message": "要取得指標的唯一 Customer.io 行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.desc": {
+          "source": "The period for metrics aggregation",
+          "message": "指標彙總的期間"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.display_name": {
+          "source": "Period",
+          "message": "週期"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.short_desc": {
+          "source": "Metrics period",
+          "message": "指標期間"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
+          "source": "Get metrics for a campaign",
+          "message": "取得行銷活動的指標"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.desc": {
+          "source": "Retrieve the list of actions (messages) configured for a Customer.io campaign.",
+          "message": "擷取為 Customer.io 行銷活動設定的動作（訊息）列表。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
+          "source": "Get Campaign Actions",
+          "message": "取得行銷活動動作"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID to get actions for",
+          "message": "要取得動作的唯一 Customer.io 行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID",
+          "message": "行銷活動 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
+          "source": "Get actions for a campaign",
+          "message": "取得行銷活動的動作"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.desc": {
+          "source": "Retrieve a collection's details from Customer.io by collection ID.",
+          "message": "透過集合 ID 從 Customer.io 擷取集合的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
+          "source": "Get Collection",
+          "message": "取得集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID",
+          "message": "唯一的 Customer.io 集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to retrieve",
+          "message": "要擷取的集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
+          "source": "Get a collection by ID",
+          "message": "依 ID 取得集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.desc": {
+          "source": "Check the status of a Customer.io data export by export ID.",
+          "message": "透過匯出 ID 檢查 Customer.io 資料匯出的狀態。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
+          "source": "Get Export Status",
+          "message": "取得匯出狀態"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.desc": {
+          "source": "The unique Customer.io export ID to check status for",
+          "message": "要檢查狀態的唯一 Customer.io 匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.display_name": {
+          "source": "Export ID",
+          "message": "匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.short_desc": {
+          "source": "The export ID to check",
+          "message": "要檢查的匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
+          "source": "Get the status of an export",
+          "message": "取得匯出狀態"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.desc": {
+          "source": "Retrieve a person's attributes from Customer.io by customer ID, email, or cio_id.",
+          "message": "透過客戶 ID、電子郵件或 cio_id 從 Customer.io 擷取人員的屬性。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
+          "source": "Get Person",
+          "message": "取得個人"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The customer ID, email, or cio_id to look up",
+          "message": "要查詢的客戶 ID、電子郵件或 cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID, email, or cio_id",
+          "message": "客戶 ID、電子郵件或 cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
+          "source": "Get a person by ID",
+          "message": "依 ID 取得人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a segment's details from Customer.io by segment ID.",
+          "message": "透過區段 ID 從 Customer.io 擷取區段的詳細資料。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "取得區段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.desc": {
+          "source": "The unique Customer.io segment ID",
+          "message": "唯一的 Customer.io 區段 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID to retrieve",
+          "message": "要擷取的區段 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a segment by ID",
+          "message": "依 ID 取得區段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.desc": {
+          "source": "Retrieve the list of people belonging to a Customer.io segment.",
+          "message": "擷取屬於特定 Customer.io 區段的人員清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
+          "source": "Get Segment People",
+          "message": "取得區段人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.desc": {
+          "source": "The unique Customer.io segment ID to get membership for",
+          "message": "要取得成員資格的唯一 Customer.io 區段 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "區隔 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.desc": {
+          "source": "The page number for paginated results",
+          "message": "分頁結果的頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.short_desc": {
+          "source": "Page number for pagination",
+          "message": "分頁的頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
+          "source": "Get people in a segment",
+          "message": "取得區段中的人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.desc": {
+          "source": "Retrieve a snippet's details from Customer.io by snippet name.",
+          "message": "依片段名稱從 Customer.io 擷取片段的詳細資訊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
+          "source": "Get Snippet",
+          "message": "取得片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to retrieve",
+          "message": "要擷取的片段唯一名稱識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name",
+          "message": "片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
+          "source": "Get a snippet by name",
+          "message": "依名稱取得片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.desc": {
+          "source": "Download the data from a completed Customer.io export.",
+          "message": "從已完成的 Customer.io 匯出中下載資料。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
+          "source": "Download Export",
+          "message": "下載匯出"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.desc": {
+          "source": "The unique Customer.io export ID to download",
+          "message": "要下載的唯一 Customer.io 匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.display_name": {
+          "source": "Export ID",
+          "message": "匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.short_desc": {
+          "source": "The export ID to download",
+          "message": "要下載的匯出 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
+          "source": "Download a completed export",
+          "message": "下載已完成的匯出項目"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Delete a custom object from Customer.io via the Track API.",
+          "message": "透過 Track API 從 Customer.io 刪除自訂物件。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "刪除物件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "物件 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "物件類型 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "刪除物件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Customer.io via the Track API. This action cannot be undone.",
+          "message": "透過 Track API 從 Customer.io 刪除客戶。此動作無法復原。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "刪除客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to delete",
+          "message": "要刪除的唯一客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "刪除客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Delete a collection from Customer.io. This action cannot be undone.",
+          "message": "從 Customer.io 刪除集合。此動作無法復原。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Delete Collection",
+          "message": "刪除集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID to delete",
+          "message": "要刪除的唯一 Customer.io 集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to delete",
+          "message": "要刪除的集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Delete a collection",
+          "message": "刪除集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.desc": {
+          "source": "Remove a mobile device from a customer in Customer.io.",
+          "message": "從 Customer.io 的客戶中移除行動裝置。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
+          "source": "Delete Device",
+          "message": "刪除裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.desc": {
+          "source": "The device token to remove",
+          "message": "要移除的裝置權杖"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.display_name": {
+          "source": "Device Token",
+          "message": "裝置權杖"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.short_desc": {
+          "source": "The device token to remove",
+          "message": "要移除的裝置權杖"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
+          "source": "Delete a device from a customer",
+          "message": "從客戶中刪除裝置"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.desc": {
+          "source": "Delete relationships between an object and people in Customer.io via the Track API.",
+          "message": "透過 Track API 刪除 Customer.io 中物件與人員之間的關聯。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
+          "source": "Delete Relationships",
+          "message": "刪除關聯"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.desc": {
+          "source": "List of identifier hashes to disconnect from the object",
+          "message": "要從該物件中斷連線的識別碼雜湊清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "List of identifier hashes to disconnect",
+          "message": "要中斷連線的識別碼雜湊清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "物件 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "物件識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "物件類型 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "物件類型識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
+          "source": "Delete relationships between an object and people",
+          "message": "刪除物件與人員之間的關聯"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.desc": {
+          "source": "Delete a snippet from Customer.io. This action cannot be undone.",
+          "message": "從 Customer.io 刪除片段。此動作無法復原。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
+          "source": "Delete Snippet",
+          "message": "刪除片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to delete",
+          "message": "要刪除的片段唯一名稱識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name to delete",
+          "message": "要刪除的片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Delete a snippet",
+          "message": "刪除片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of activities from Customer.io with optional filtering by type, customer ID, and date range.",
+          "message": "從 Customer.io 擷取活動清單，可選擇依類型、客戶 ID 和日期範圍進行篩選。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "列出活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter activities by customer ID",
+          "message": "依客戶 ID 篩選活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.desc": {
+          "source": "Filter activities on or before this Unix timestamp",
+          "message": "篩選此 Unix 時間戳記或之前的活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.display_name": {
+          "source": "End Timestamp",
+          "message": "結束時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.short_desc": {
+          "source": "Filter until this Unix timestamp",
+          "message": "篩選至此 Unix 時間戳記為止"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.desc": {
+          "source": "Filter activities on or after this Unix timestamp",
+          "message": "篩選此 Unix 時間戳記或之後的活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.display_name": {
+          "source": "Start Timestamp",
+          "message": "開始時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.short_desc": {
+          "source": "Filter from this Unix timestamp",
+          "message": "從此 Unix 時間戳記開始篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by type",
+          "message": "依類型篩選活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "活動類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "依活動類型篩言"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List activities",
+          "message": "列出活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "Retrieve a list of broadcasts from Customer.io.",
+          "message": "從 Customer.io 擷取廣播清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "列出廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "分頁頁碼（從 1 開始）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List broadcasts",
+          "message": "列出廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of campaigns from Customer.io.",
+          "message": "從 Customer.io 擷取行銷活動清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "列出行銷活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "分頁頁碼（從 1 開始）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List campaigns",
+          "message": "列出活動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.desc": {
+          "source": "Retrieve a list of collections from Customer.io.",
+          "message": "從 Customer.io 擷取集合清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
+          "source": "List Collections",
+          "message": "列出集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "分頁頁碼（從 1 開始）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
+          "source": "List collections",
+          "message": "列出集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.desc": {
+          "source": "Retrieve a list of message deliveries from Customer.io with optional filtering by metric type and date range.",
+          "message": "從 Customer.io 擷取訊息傳送清單，並可選擇依指標類型與日期範圍進行篩選。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
+          "source": "List Deliveries",
+          "message": "列出傳送記錄"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.desc": {
+          "source": "Filter messages sent on or before this Unix timestamp",
+          "message": "篩選在此 Unix 時間戳記或之前傳送的訊息"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.display_name": {
+          "source": "End Timestamp",
+          "message": "結束時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.short_desc": {
+          "source": "Filter until this Unix timestamp",
+          "message": "篩選至此 Unix 時間戳記為止"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX29wZW5lZA.desc": {
+          "source": "Email opened",
+          "message": "電子郵件已開啟"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2JvdW5jZWQ.desc": {
+          "source": "Email bounced",
+          "message": "電子郵件已退信"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2NsaWNrZWQ.desc": {
+          "source": "Email clicked",
+          "message": "電子郵件已點擊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2RlbGl2ZXJlZA.desc": {
+          "source": "Email delivered",
+          "message": "電子郵件已傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2Ryb3BwZWQ.desc": {
+          "source": "Email dropped",
+          "message": "電子郵件已捨棄"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3NlbnQ.desc": {
+          "source": "Email sent",
+          "message": "電子郵件已發送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3NwYW1tZWQ.desc": {
+          "source": "Email marked as spam",
+          "message": "電子郵件標記為垃圾郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3Vuc3Vic2NyaWJlZA.desc": {
+          "source": "Email unsubscribed",
+          "message": "電子郵件已取消訂閱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfZGVsaXZlcmVk.desc": {
+          "source": "Push delivered",
+          "message": "推播已傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfZmFpbGVk.desc": {
+          "source": "Push failed",
+          "message": "推播失敗"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfb3BlbmVk.desc": {
+          "source": "Push opened",
+          "message": "推播已開啟"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfc2VudA.desc": {
+          "source": "Push sent",
+          "message": "推播已發送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19kZWxpdmVyZWQ.desc": {
+          "source": "SMS delivered",
+          "message": "簡訊已傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19mYWlsZWQ.desc": {
+          "source": "SMS failed",
+          "message": "簡訊失敗"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19zZW50.desc": {
+          "source": "SMS sent",
+          "message": "簡訊已發送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.desc": {
+          "source": "Filter messages by delivery metric type (e.g., `email_sent`, `email_delivered`)",
+          "message": "依傳送指標類型篩選訊息（例如：`email_sent`、`email_delivered`）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.short_desc": {
+          "source": "Filter by delivery metric type",
+          "message": "依傳送指標類型篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.desc": {
+          "source": "Filter messages sent on or after this Unix timestamp",
+          "message": "篩選在此 Unix 時間戳記或之後傳送的訊息"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.display_name": {
+          "source": "Start Timestamp",
+          "message": "開始時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.short_desc": {
+          "source": "Filter from this Unix timestamp",
+          "message": "從此 Unix 時間戳記開始篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
+          "source": "List message deliveries",
+          "message": "列出訊息傳送記錄"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.desc": {
+          "source": "Retrieve a list of newsletters from Customer.io.",
+          "message": "從 Customer.io 擷取電子報清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
+          "source": "List Newsletters",
+          "message": "列出電子報"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "分頁頁碼（從 1 開始）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
+          "source": "List newsletters",
+          "message": "列出電子報"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.desc": {
+          "source": "Retrieve a list of people from Customer.io with optional filtering by email, ID, or Customer.io internal ID.",
+          "message": "從 Customer.io 擷取人員清單，並可選擇依電子郵件、ID 或 Customer.io 內部 ID 進行篩選。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
+          "source": "List People",
+          "message": "列出人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.desc": {
+          "source": "Filter people by Customer.io internal ID",
+          "message": "依 Customer.io 內部 ID 篩選人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.display_name": {
+          "source": "CIO ID",
+          "message": "CIO ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.short_desc": {
+          "source": "Filter by Customer.io ID",
+          "message": "依 Customer.io ID 篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.desc": {
+          "source": "Filter people by email address",
+          "message": "依電子郵件地址篩選人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "依電子郵件地址篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.desc": {
+          "source": "Filter people by customer ID",
+          "message": "依客戶 ID 篩選人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
+          "source": "List and search people",
+          "message": "列出並搜尋人員"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "Retrieve a list of segments from Customer.io.",
+          "message": "從 Customer.io 擷取區隔清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "列出受眾區隔"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "分頁頁碼（從 1 開始）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "每頁結果數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List segments",
+          "message": "列出區隔"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.desc": {
+          "source": "Retrieve a list of all snippets from Customer.io.",
+          "message": "從 Customer.io 擷取所有程式碼片段清單。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
+          "source": "List Snippets",
+          "message": "列出片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
+          "source": "List snippets",
+          "message": "列出片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Customer.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Customer.io** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填查詢參數、標頭以及請求內文。回應將以包含狀態碼、回應標頭和回應內文的雜湊形式傳回。\n\n當端點尚未在此應用程式中公開為一級動作時，請使用此動作。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Customer.io",
+          "message": "對 Customer.io 進行自訂 API 呼叫"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.desc": {
+          "source": "Merge two customer profiles in Customer.io. The primary profile is kept and the secondary profile's data is merged into it.",
+          "message": "在 Customer.io 中合併兩個客戶設定檔。主要設定檔將會保留，且次要設定檔的資料會合併至其中。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
+          "source": "Merge Customers",
+          "message": "合併客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmNpb19pZA.desc": {
+          "source": "Customer.io ID",
+          "message": "Customer.io ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.desc": {
+          "source": "Secondary identifier type (id, email, or cio_id)",
+          "message": "次要識別碼類型（id、email 或 cio_id）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.display_name": {
+          "source": "Secondary Type",
+          "message": "次要類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.short_desc": {
+          "source": "Secondary identifier type",
+          "message": "次要識別碼類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.desc": {
+          "source": "Secondary identifier value",
+          "message": "次要識別碼值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.display_name": {
+          "source": "Secondary Value",
+          "message": "次要值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.short_desc": {
+          "source": "Secondary identifier value",
+          "message": "次要識別碼值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmNpb19pZA.desc": {
+          "source": "Customer.io ID",
+          "message": "Customer.io ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.desc": {
+          "source": "Primary identifier type (id, email, or cio_id)",
+          "message": "主要識別碼類型（id、email 或 cio_id）"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.display_name": {
+          "source": "Primary Type",
+          "message": "主要類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.short_desc": {
+          "source": "Primary identifier type",
+          "message": "主要識別碼類型"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.desc": {
+          "source": "Primary identifier value",
+          "message": "主要識別碼值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.display_name": {
+          "source": "Primary Value",
+          "message": "主要值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.short_desc": {
+          "source": "Primary identifier value",
+          "message": "主要識別碼值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
+          "source": "Merge two customer profiles",
+          "message": "合併兩個客戶設定檔"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.desc": {
+          "source": "Send a transactional email via Customer.io using a pre-defined transactional message template.",
+          "message": "使用預先定義的交易式郵件範本，透過 Customer.io 傳送交易式電子郵件。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
+          "source": "Send Transactional Email",
+          "message": "傳送交易式電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.desc": {
+          "source": "Override the message body with HTML content",
+          "message": "使用 HTML 內容覆寫訊息本文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.short_desc": {
+          "source": "Override message body (HTML)",
+          "message": "覆寫訊息本文 (HTML)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.desc": {
+          "source": "Override the sender email address",
+          "message": "覆寫寄件者電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.short_desc": {
+          "source": "Override sender email",
+          "message": "覆寫寄件者電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.desc": {
+          "source": "Customer identifiers such as id, email, or cio_id",
+          "message": "客戶識別碼，例如 id、email 或 cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "Customer identifiers (id, email, or cio_id)",
+          "message": "客戶識別碼 (id、email 或 cio_id)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.desc": {
+          "source": "Data for Liquid merge tags in the message template",
+          "message": "訊息範本中 Liquid 合併標籤的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.display_name": {
+          "source": "Message Data",
+          "message": "訊息資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.short_desc": {
+          "source": "Data for Liquid merge tags in the message",
+          "message": "訊息中 Liquid 合併標籤的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.desc": {
+          "source": "Override the subject line of the email",
+          "message": "覆寫電子郵件的主旨"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "主題"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.short_desc": {
+          "source": "Override subject line",
+          "message": "覆寫主旨"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.desc": {
+          "source": "Override the reply-to email address",
+          "message": "覆寫回覆電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.display_name": {
+          "source": "Reply To",
+          "message": "回覆給"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.short_desc": {
+          "source": "Override reply-to email",
+          "message": "覆寫回覆電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.desc": {
+          "source": "The recipient email address",
+          "message": "收件者電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.display_name": {
+          "source": "To",
+          "message": "收件者"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.short_desc": {
+          "source": "Recipient email address",
+          "message": "收件者電子郵件地址"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.desc": {
+          "source": "The transactional message template ID to use for the email",
+          "message": "用於該電子郵件的交易訊息範本 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.display_name": {
+          "source": "Transactional Message ID",
+          "message": "交易訊息 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.short_desc": {
+          "source": "The transactional message template ID",
+          "message": "交易訊息範本 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {
+          "source": "Send a transactional email",
+          "message": "傳送交易電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.desc": {
+          "source": "Send a transactional push notification via Customer.io using a pre-defined transactional message template.",
+          "message": "使用預先定義的交易訊息範本透過 Customer.io 傳送交易推播通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
+          "source": "Send Transactional Push",
+          "message": "傳送交易推播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.desc": {
+          "source": "Override the push notification body text",
+          "message": "覆寫推播通知內文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "純文字內文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Override push body text",
+          "message": "覆寫推播內文"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.desc": {
+          "source": "Customer identifiers such as id, email, or cio_id",
+          "message": "客戶識別碼，例如 id、email 或 cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "Customer identifiers",
+          "message": "客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.desc": {
+          "source": "Data for merge tags in the push notification template",
+          "message": "推播通知範本中合併標籤的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.display_name": {
+          "source": "Message Data",
+          "message": "訊息資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.short_desc": {
+          "source": "Data for merge tags",
+          "message": "合併標籤的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.desc": {
+          "source": "Override the push notification title",
+          "message": "覆寫推播通知標題"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.short_desc": {
+          "source": "Override push title",
+          "message": "覆寫推播標題"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.desc": {
+          "source": "The transactional message template ID to use for the push notification",
+          "message": "用於該推播通知的交易訊息範本 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.display_name": {
+          "source": "Transactional Message ID",
+          "message": "交易訊息 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.short_desc": {
+          "source": "The transactional message template ID",
+          "message": "交易訊息範本 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
+          "source": "Send a transactional push notification",
+          "message": "傳送交易推播通知"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.desc": {
+          "source": "Suppress a customer in Customer.io, blocking all messaging to the customer.",
+          "message": "在 Customer.io 中抑制客戶，封鎖向該客戶傳送的所有訊息。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
+          "source": "Suppress Customer",
+          "message": "抑制客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to suppress",
+          "message": "要抑制的唯一客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
+          "source": "Suppress a customer",
+          "message": "抑制客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Receive a notification when a link in an email is clicked via Customer.io.",
+          "message": "當透過 Customer.io 傳送的電子郵件中的連結被點擊時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Watch Email Clicked",
+          "message": "監控電子郵件已點擊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Watch for email clicked events",
+          "message": "監控電子郵件已點擊事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.desc": {
+          "source": "Receive a notification when an email bounces via Customer.io.",
+          "message": "當透過 Customer.io 傳送的電子郵件退信時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Watch Email Bounced",
+          "message": "監控電子郵件已退信"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Watch for email bounced events",
+          "message": "監控電子郵件已退信事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.desc": {
+          "source": "Receive a notification when an email is delivered via Customer.io.",
+          "message": "當透過 Customer.io 傳送的電子郵件送達時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
+          "source": "Watch Email Delivered",
+          "message": "監控電子郵件已送達"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
+          "source": "Watch for email delivered events",
+          "message": "監控電子郵件已送達事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.desc": {
+          "source": "Receive a notification when an email is dropped by Customer.io.",
+          "message": "當電子郵件被 Customer.io 丟棄時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
+          "source": "Watch Email Dropped",
+          "message": "監控電子郵件已丟棄"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
+          "source": "Watch for email dropped events",
+          "message": "監控電子郵件已丟棄事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.desc": {
+          "source": "Receive a notification when an email is opened via Customer.io.",
+          "message": "當透過 Customer.io 傳送的電子郵件被開啟時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
+          "source": "Watch Email Opened",
+          "message": "監控電子郵件已開啟"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Watch for email opened events",
+          "message": "監控電子郵件已開啟事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.desc": {
+          "source": "Receive a notification when an email is sent via Customer.io.",
+          "message": "當透過 Customer.io 傳送電子郵件時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
+          "source": "Watch Email Sent",
+          "message": "監控電子郵件已傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
+          "source": "Watch for email sent events",
+          "message": "監控電子郵件已傳送事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.desc": {
+          "source": "Receive a notification when an email is marked as spam via Customer.io.",
+          "message": "當透過 Customer.io 傳送的電子郵件被標記為垃圾郵件時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
+          "source": "Watch Email Spammed",
+          "message": "監控電子郵件已標記為垃圾郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
+          "source": "Watch for email marked as spam events",
+          "message": "監控電子郵件被標記為垃圾郵件事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.desc": {
+          "source": "Receive a notification when a recipient unsubscribes via an email from Customer.io.",
+          "message": "當收件者透過來自 Customer.io 的電子郵件取消訂閱時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
+          "source": "Watch Email Unsubscribed",
+          "message": "監控電子郵件已取消訂閱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Watch for email unsubscribed events",
+          "message": "監控電子郵件已取消訂閱事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.desc": {
+          "source": "Receive a notification when a link in an SMS message is clicked via Customer.io.",
+          "message": "當透過 Customer.io 傳送的簡訊中的連結被點擊時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
+          "source": "Watch SMS Clicked",
+          "message": "監控簡訊已點擊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
+          "source": "Watch for SMS clicked events",
+          "message": "監控簡訊已點擊事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.desc": {
+          "source": "Receive a notification when an SMS message is delivered via Customer.io.",
+          "message": "當透過 Customer.io 傳送的簡訊送達時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
+          "source": "Watch SMS Delivered",
+          "message": "監控簡訊已送達"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
+          "source": "Watch for SMS delivered events",
+          "message": "監控簡訊已送達事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.desc": {
+          "source": "Receive a notification when an SMS message fails to send via Customer.io.",
+          "message": "當透過 Customer.io 傳送簡訊失敗時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
+          "source": "Watch SMS Failed",
+          "message": "監控簡訊傳送失敗"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
+          "source": "Watch for SMS failed events",
+          "message": "監控簡訊傳送失敗事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.desc": {
+          "source": "Receive a notification when an SMS message is sent via Customer.io.",
+          "message": "當透過 Customer.io 傳送簡訊時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
+          "source": "Watch SMS Sent",
+          "message": "監看已傳送 SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
+          "source": "Watch for SMS sent events",
+          "message": "監看 SMS 傳送事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.desc": {
+          "source": "Receive a notification when a link in a Slack message is clicked via Customer.io.",
+          "message": "當透過 Customer.io 點擊 Slack 訊息中的連結時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
+          "source": "Watch Slack Clicked",
+          "message": "監看 Slack 點擊"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
+          "source": "Watch for Slack clicked events",
+          "message": "監看 Slack 點擊事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.desc": {
+          "source": "Receive a notification when a Slack message fails to send via Customer.io.",
+          "message": "當透過 Customer.io 傳送 Slack 訊息失敗時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
+          "source": "Watch Slack Failed",
+          "message": "監看 Slack 傳送失敗"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
+          "source": "Watch for Slack failed events",
+          "message": "監看 Slack 失敗事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.desc": {
+          "source": "Receive a notification when a Slack message is sent via Customer.io.",
+          "message": "當透過 Customer.io 傳送 Slack 訊息時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
+          "source": "Watch Slack Sent",
+          "message": "監看已傳送 Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
+          "source": "Watch for Slack sent events",
+          "message": "監看 Slack 傳送事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.desc": {
+          "source": "Receive a notification when a customer subscribes via Customer.io.",
+          "message": "當客戶透過 Customer.io 訂閱時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
+          "source": "Watch Subscribed",
+          "message": "監看已訂閱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
+          "source": "Watch for customer subscribed events",
+          "message": "監看客戶訂閱事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.desc": {
+          "source": "Receive a notification when a push notification is delivered via Customer.io.",
+          "message": "當透過 Customer.io 送達推播通知時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
+          "source": "Watch Push Delivered",
+          "message": "監看推播已送達"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Watch for push delivered events",
+          "message": "監看推播送達事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.desc": {
+          "source": "Receive a notification when a push notification fails to send via Customer.io.",
+          "message": "當透過 Customer.io 傳送推播通知失敗時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
+          "source": "Watch Push Failed",
+          "message": "監看推播傳送失敗"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
+          "source": "Watch for push failed events",
+          "message": "監看推播失敗事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.desc": {
+          "source": "Receive a notification when a push notification is opened via Customer.io.",
+          "message": "當透過 Customer.io 開啟推播通知時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
+          "source": "Watch Push Opened",
+          "message": "監看推播已開啟"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
+          "source": "Watch for push opened events",
+          "message": "監看推播開啟事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.desc": {
+          "source": "Receive a notification when a push notification is sent via Customer.io.",
+          "message": "當透過 Customer.io 傳送推播通知時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
+          "source": "Watch Push Sent",
+          "message": "監看推播已傳送"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
+          "source": "Watch for push sent events",
+          "message": "監看推播傳送事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.desc": {
+          "source": "Receive a notification when a customer unsubscribes via Customer.io.",
+          "message": "當客戶透過 Customer.io 取消訂閱時接收通知。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
+          "source": "Watch Unsubscribed",
+          "message": "監看已取消訂閱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Watch for customer unsubscribed events",
+          "message": "監看客戶取消訂閱事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.desc": {
+          "source": "Track an anonymous event in Customer.io that is not tied to a specific customer.",
+          "message": "在 Customer.io 中追蹤未繫結至特定客戶的匿名事件。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
+          "source": "Track Anonymous Event",
+          "message": "追蹤匿名事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.desc": {
+          "source": "Anonymous identifier",
+          "message": "匿名識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.display_name": {
+          "source": "Anonymous ID",
+          "message": "匿名 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.short_desc": {
+          "source": "Anonymous identifier",
+          "message": "匿名識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.desc": {
+          "source": "Event data/properties",
+          "message": "事件資料／屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.display_name": {
+          "source": "Event Data",
+          "message": "事件資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.short_desc": {
+          "source": "Event data/properties",
+          "message": "事件資料／屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.desc": {
+          "source": "Event name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.short_desc": {
+          "source": "Event name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the event",
+          "message": "事件的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp",
+          "message": "Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
+          "source": "Track an anonymous event",
+          "message": "追蹤匿名事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.desc": {
+          "source": "Track a custom event for a customer in Customer.io via the Track API. Events can trigger campaigns and workflows.",
+          "message": "透過 Track API 在 Customer.io 中為客戶追蹤自訂事件。事件可觸發行銷活動和工作流程。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
+          "source": "Track Event",
+          "message": "追蹤事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.desc": {
+          "source": "Event data/properties",
+          "message": "事件資料／屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.display_name": {
+          "source": "Event Data",
+          "message": "事件資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.short_desc": {
+          "source": "Event data/properties",
+          "message": "事件資料／屬性"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.desc": {
+          "source": "Event name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.short_desc": {
+          "source": "Event name",
+          "message": "事件名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the event",
+          "message": "事件的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp for the event",
+          "message": "事件的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
+          "source": "Track a custom event for a customer",
+          "message": "為客戶追蹤自訂事件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.desc": {
+          "source": "Track a page view event for a customer in Customer.io via the Track API.",
+          "message": "透過 Track API 在 Customer.io 中為客戶追蹤頁面瀏覽事件。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
+          "source": "Track Page View",
+          "message": "追蹤頁面瀏覽"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.desc": {
+          "source": "Additional page view data",
+          "message": "其他頁面瀏覽資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.display_name": {
+          "source": "Page View Data",
+          "message": "頁面瀏覽資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.short_desc": {
+          "source": "Additional page view data",
+          "message": "其他頁面瀏覽資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the page view event",
+          "message": "頁面瀏覽事件的 Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp",
+          "message": "Unix 時間戳記"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.desc": {
+          "source": "The URL of the page viewed",
+          "message": "所瀏覽頁面的 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.short_desc": {
+          "source": "The URL of the page viewed",
+          "message": "所瀏覽頁面的 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
+          "source": "Track a page view for a customer",
+          "message": "為客戶追蹤頁面瀏覽"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.desc": {
+          "source": "Trigger a Customer.io broadcast, optionally targeting specific recipients with custom data.",
+          "message": "觸發 Customer.io 廣播，可選擇使用自訂資料指定特定收件者。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
+          "source": "Trigger Broadcast",
+          "message": "觸發廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique Customer.io broadcast ID to trigger",
+          "message": "要觸發的唯一 Customer.io 廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to trigger",
+          "message": "要觸發的廣播 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.desc": {
+          "source": "Data to pass to the broadcast",
+          "message": "要傳遞給廣播的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.short_desc": {
+          "source": "Data to pass to the broadcast",
+          "message": "要傳遞給廣播的資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.desc": {
+          "source": "List of email addresses to send the broadcast to",
+          "message": "要發送廣播的電子郵件地址清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.display_name": {
+          "source": "Emails",
+          "message": "電子郵件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.short_desc": {
+          "source": "List of email addresses",
+          "message": "電子郵件地址清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.desc": {
+          "source": "Whether to ignore missing customer IDs",
+          "message": "是否忽略遺失的客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.display_name": {
+          "source": "Ignore Missing IDs",
+          "message": "忽略遺失的 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.short_desc": {
+          "source": "Ignore missing IDs",
+          "message": "忽略遺失的 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.desc": {
+          "source": "List of customer IDs to send the broadcast to",
+          "message": "要發送廣播的客戶 ID 清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.display_name": {
+          "source": "IDs",
+          "message": "ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.short_desc": {
+          "source": "List of customer IDs",
+          "message": "客戶 ID 清單"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.desc": {
+          "source": "Per-user data array for the broadcast",
+          "message": "廣播的個別使用者資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.display_name": {
+          "source": "Per-User Data",
+          "message": "個別使用者資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.short_desc": {
+          "source": "Per-user data array",
+          "message": "個別使用者資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.desc": {
+          "source": "Recipients filter for the broadcast",
+          "message": "廣播的收件者篩選條件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.display_name": {
+          "source": "Recipients",
+          "message": "收件者"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.short_desc": {
+          "source": "Recipients filter",
+          "message": "收件者篩選條件"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
+          "source": "Trigger a broadcast",
+          "message": "觸發廣播"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.desc": {
+          "source": "Unsuppress a customer in Customer.io, re-enabling messaging to the customer.",
+          "message": "在 Customer.io 中解除封鎖客戶，重新啟用向該客戶傳送訊息。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
+          "source": "Unsuppress Customer",
+          "message": "解除封鎖客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to unsuppress",
+          "message": "要解除封鎖的唯一客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "唯一的客戶識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
+          "source": "Unsuppress a customer",
+          "message": "解除封鎖客戶"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Update an existing collection in Customer.io.",
+          "message": "更新 Customer.io 中的現有集合。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Update Collection",
+          "message": "更新集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID to update",
+          "message": "要更新的唯一 Customer.io 集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to update",
+          "message": "要更新的集合 ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "The updated data array for the collection",
+          "message": "集合的更新資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Collection data array",
+          "message": "集合資料陣列"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.desc": {
+          "source": "The updated name for the collection",
+          "message": "集合的更新名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.short_desc": {
+          "source": "Collection name",
+          "message": "集合名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.desc": {
+          "source": "Updated URL for an external data source",
+          "message": "外部資料來源的更新 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.short_desc": {
+          "source": "URL for external data source",
+          "message": "外部資料來源的 URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Update an existing collection",
+          "message": "更新現有集合"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.desc": {
+          "source": "Update an existing snippet in Customer.io.",
+          "message": "更新 Customer.io 中的現有片段。"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
+          "source": "Update Snippet",
+          "message": "更新片段"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to update",
+          "message": "要更新的片段唯一名稱識別碼"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name to update",
+          "message": "要更新的片段名稱"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.desc": {
+          "source": "The updated content of the snippet",
+          "message": "片段的更新內容"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "值"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.short_desc": {
+          "source": "Snippet content",
+          "message": "文字片段內容"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Update an existing snippet",
+          "message": "更新現有片段"
+        },
+        "app.Q3VzdG9tZXJJbw.desc": {
+          "source": "Customer.io is a marketing automation platform for sending targeted emails, push notifications, SMS messages, and Slack messages based on customer behavior and attributes.\n\n**Features:**\n- Customer management (create, update, delete, suppress)\n- Campaign and broadcast management\n- Transactional email and push notification sending\n- Event tracking and page view tracking\n- Segment management\n- Collection and snippet management\n- Real-time webhooks for email, SMS, push, and Slack events",
+          "message": "Customer.io 是一個行銷自動化平台，用於根據客戶行為和屬性傳送目標電子郵件、推播通知、SMS 簡訊及 Slack 訊息。\n\n**功能：**\n- 客戶管理（建立、更新、刪除、封鎖）\n- 行銷活動與廣播管理\n- 交易式電子郵件與推播通知傳送\n- 事件追蹤與頁面瀏覽追蹤\n- 受眾區隔管理\n- 集合與片段管理\n- 用於電子郵件、SMS、推播和 Slack 事件的即時 Webhook"
+        },
+        "app.Q3VzdG9tZXJJbw.display_name": {
+          "source": "Customer.io",
+          "message": "Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.short_desc": {
+          "source": "Customer.io marketing automation platform",
+          "message": "Customer.io 行銷自動化平台"
+        }
+      }
+    }
+  }
+}

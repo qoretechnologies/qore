@@ -1,0 +1,1757 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Squarespace",
+          "message": "在 Squarespace 中建立新訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "建立訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "第三方通路名稱（最多 30 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.display_name": {
+          "source": "Channel Name",
+          "message": "頻道名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y2hhbm5lbE5hbWU.short_desc": {
+          "source": "Third-party channel name (max 30 chars)",
+          "message": "第三方通路名稱（最多 30 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.desc": {
+          "source": "When the order was placed",
+          "message": "下單時間"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.display_name": {
+          "source": "Created On",
+          "message": "建立時間"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZE9u.short_desc": {
+          "source": "When the order was placed",
+          "message": "下單時間"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.display_name": {
+          "source": "Customer Email",
+          "message": "客戶電子郵件"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJFbWFpbA.short_desc": {
+          "source": "Customer email",
+          "message": "顧客電子郵件"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.desc": {
+          "source": "Billing address for the order",
+          "message": "訂單帳單地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.display_name": {
+          "source": "Billing Address",
+          "message": "帳單地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.YmlsbGluZ0FkZHJlc3M.short_desc": {
+          "source": "Billing address",
+          "message": "帳單地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.desc": {
+          "source": "Order grand total with `currency` and `value`",
+          "message": "含 `currency` 與 `value` 的訂單總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.display_name": {
+          "source": "Grand Total",
+          "message": "總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.Z3JhbmRUb3RhbA.short_desc": {
+          "source": "Order grand total",
+          "message": "訂單總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.desc": {
+          "source": "Discount total with `currency` and `value`",
+          "message": "含 `currency` 與 `value` 的折扣總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.display_name": {
+          "source": "Discount Total",
+          "message": "折扣總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZGlzY291bnRUb3RhbA.short_desc": {
+          "source": "Discount total",
+          "message": "折扣總額"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "第三方訂單參考（最多 200 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.display_name": {
+          "source": "External Order Reference",
+          "message": "外部訂單參考"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZXh0ZXJuYWxPcmRlclJlZmVyZW5jZQ.short_desc": {
+          "source": "Third-party order reference (max 200 chars)",
+          "message": "第三方訂單參考（最多 200 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Order has been fulfilled",
+          "message": "訂單已履約"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Order is pending fulfillment",
+          "message": "訂單等待履約中"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.desc": {
+          "source": "`PENDING` or `FULFILLED`",
+          "message": "`PENDING` 或 `FULFILLED`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.display_name": {
+          "source": "Fulfillment Status",
+          "message": "出貨狀態"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.ZnVsZmlsbG1lbnRTdGF0dXM.short_desc": {
+          "source": "PENDING or FULFILLED",
+          "message": "PENDING 或 FULFILLED"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOkRFRFVDVA.desc": {
+          "source": "Deduct from inventory",
+          "message": "從庫存扣除"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.allowed-value.c3RyaW5nOlNLSVA.desc": {
+          "source": "Do not adjust inventory",
+          "message": "不調整庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.desc": {
+          "source": "`DEDUCT` or `SKIP` (default: `SKIP`)",
+          "message": "`DEDUCT` 或 `SKIP`（預設值：`SKIP`）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.display_name": {
+          "source": "Inventory Behavior",
+          "message": "庫存行為"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.aW52ZW50b3J5QmVoYXZpb3I.short_desc": {
+          "source": "DEDUCT or SKIP (default: SKIP)",
+          "message": "DEDUCT 或 SKIP（預設：SKIP）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.desc": {
+          "source": "The list of line items for the order",
+          "message": "訂單的品項明細清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.bGluZUl0ZW1z.short_desc": {
+          "source": "Order line items",
+          "message": "訂單明細項目"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.desc": {
+          "source": "Shipping address for the order",
+          "message": "訂單運送地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.display_name": {
+          "source": "Shipping Address",
+          "message": "運送地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdBZGRyZXNz.short_desc": {
+          "source": "Shipping address",
+          "message": "送貨地址"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.desc": {
+          "source": "Shipping total with `currency` and `value`",
+          "message": "含 `currency` 與 `value` 的運費總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.display_name": {
+          "source": "Shipping Total",
+          "message": "運費總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdUb3RhbA.short_desc": {
+          "source": "Shipping total",
+          "message": "運費總額"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.desc": {
+          "source": "Order subtotal with `currency` and `value`",
+          "message": "含 `currency` 與 `value` 的訂單小計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "小計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWw.short_desc": {
+          "source": "Order subtotal",
+          "message": "訂單小計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOkVYQ0xVU0lWRQ.desc": {
+          "source": "Prices exclude tax",
+          "message": "價格未稅"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.allowed-value.c3RyaW5nOklOQ0xVU0lWRQ.desc": {
+          "source": "Prices include tax",
+          "message": "價格含稅"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.desc": {
+          "source": "`EXCLUSIVE` or `INCLUSIVE`",
+          "message": "`EXCLUSIVE` 或 `INCLUSIVE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.display_name": {
+          "source": "Price Tax Interpretation",
+          "message": "價格稅額解讀"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.cHJpY2VUYXhJbnRlcnByZXRhdGlvbg.short_desc": {
+          "source": "EXCLUSIVE or INCLUSIVE",
+          "message": "EXCLUSIVE 或 INCLUSIVE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.desc": {
+          "source": "Tax total with `currency` and `value`",
+          "message": "包含 `currency` 和 `value` 的稅額總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.display_name": {
+          "source": "Tax Total",
+          "message": "稅金總額"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.option.dGF4VG90YWw.short_desc": {
+          "source": "Tax total",
+          "message": "稅額總計"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "建立新訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in Squarespace",
+          "message": "在 Squarespace 中建立新產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "建立產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description in HTML format (max 102,400 characters)",
+          "message": "HTML 格式的產品描述（最多 102,400 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "產品描述（HTML）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store; defaults to hidden if omitted",
+          "message": "產品是否在商店中可見；若省略則預設為隱藏"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "是否可見"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "產品是否在商店中可見"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name (max 200 characters)",
+          "message": "產品名稱（最多 200 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "產品名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.desc": {
+          "source": "The store page ID to add the product to",
+          "message": "要新增產品的商店頁面 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.display_name": {
+          "source": "Store Page ID",
+          "message": "商店頁面 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c3RvcmVQYWdlSWQ.short_desc": {
+          "source": "The store page to add the product to",
+          "message": "要新增產品的商店頁面"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product (max 100 tags, each max 100 characters)",
+          "message": "產品的標籤清單（最多 100 個標籤，每個標籤最多 100 個字元）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "產品的標籤清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "禮品卡"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product with shipping",
+          "message": "需要運送的實體產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "服務產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "The product type: `PHYSICAL`, `SERVICE`, or `GIFT_CARD`. Note: `DIGITAL` products cannot be created via the API.",
+          "message": "產品類型：`PHYSICAL`、`SERVICE` 或 `GIFT_CARD`。注意：無法透過 API 建立 `DIGITAL` 產品。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "The product type",
+          "message": "產品類型"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product (alphanumeric + hyphens, must be unique)",
+          "message": "產品的 URL slug（英數字 + 連字號，必須是唯一的）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "URL Slug"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "產品的 URL slug"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color); PHYSICAL and SERVICE products only",
+          "message": "款式屬性名稱清單（例如 Size、Color）；僅限 PHYSICAL 和 SERVICE 產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "款式屬性"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "款式屬性名稱清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.desc": {
+          "source": "List of product variants (1-100 items); fields depend on product type",
+          "message": "產品款式清單（1-100 個項目）；欄位取決於產品類型"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.display_name": {
+          "source": "Variants",
+          "message": "變體"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dmFyaWFudHM.short_desc": {
+          "source": "List of product variants",
+          "message": "產品款式清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "建立新產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Create a new product variant in Squarespace",
+          "message": "在 Squarespace 中建立新產品款式"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Create a Product Variant",
+          "message": "建立產品款式"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "款式屬性（自由格式的鍵值組）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "屬性"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "款式屬性（鍵值組）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "運送尺寸測量資訊，包含 `weight` 和 `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "運送尺寸測量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "運送尺寸測量資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "款式的庫存單位識別碼 (SKU)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "款式 SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "庫存資訊，包含 `quantity` 和 `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "庫存資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "款式定價，包含 `basePrice`、`salePrice` 和 `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "定價"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "款式定價"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to add the variant to",
+          "message": "要新增款式的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to add the variant to",
+          "message": "要新增款式的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Y3JlYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Create a new product variant",
+          "message": "建立新產品款式"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Assign a product image to a variant in Squarespace",
+          "message": "在 Squarespace 中為款式指派產品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Assign a Product Image",
+          "message": "指派產品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to assign",
+          "message": "要指派的圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "影像 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to assign the image to",
+          "message": "要指派圖片的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the variant to assign the image to",
+          "message": "要指派圖片的款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "變體 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.YXNzaWduLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Assign an image to a variant",
+          "message": "為款式指派圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Squarespace",
+          "message": "從 Squarespace 依 ID 擷取單一訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "取得訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "依 ID 取得單一訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.desc": {
+          "source": "Retrieve inventory for a specific variant from Squarespace",
+          "message": "從 Squarespace 擷取特定款式的庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.display_name": {
+          "source": "Get Inventory",
+          "message": "取得庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID",
+          "message": "變體 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LWludmVudG9yeQ.short_desc": {
+          "source": "Get inventory for a variant",
+          "message": "取得款式的庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Squarespace",
+          "message": "從 Squarespace 依 ID 擷取單一產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "取得商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "依 ID 取得單項商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve a single transaction by ID from Squarespace",
+          "message": "從 Squarespace 依 ID 擷取單一交易"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get a Transaction",
+          "message": "取得交易"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "交易 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction ID",
+          "message": "交易 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a single transaction by ID",
+          "message": "依 ID 取得單一交易"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.desc": {
+          "source": "Delete a product from Squarespace",
+          "message": "從 Squarespace 刪除產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
+          "source": "Delete a Product",
+          "message": "刪除產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to delete",
+          "message": "要刪除的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to delete",
+          "message": "要刪除的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Delete a product",
+          "message": "刪除產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Delete a product image from Squarespace",
+          "message": "從 Squarespace 刪除產品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Delete a Product Image",
+          "message": "刪除產品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to delete",
+          "message": "要刪除的圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "影像 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "擁有該圖片的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Delete a product image",
+          "message": "刪除商品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Delete a product variant from Squarespace",
+          "message": "從 Squarespace 刪除商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Delete a Product Variant",
+          "message": "刪除商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "包含此規格的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "包含此規格的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to delete",
+          "message": "要刪除的規格 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to delete",
+          "message": "要刪除的規格 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZGVsZXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Delete a product variant",
+          "message": "刪除商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.desc": {
+          "source": "Fulfill an order in Squarespace with shipment details",
+          "message": "在 Squarespace 中使用貨運資訊履行訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.display_name": {
+          "source": "Fulfill an Order",
+          "message": "履行訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.desc": {
+          "source": "The order ID to fulfill",
+          "message": "要履行的訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to fulfill",
+          "message": "要履行的訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.desc": {
+          "source": "The list of shipment tracking details for the fulfillment",
+          "message": "用於履行訂單的貨運追蹤資訊清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "貨件"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipment tracking details",
+          "message": "貨運追蹤詳細資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.desc": {
+          "source": "Send customer notification email",
+          "message": "傳送顧客通知電子郵件"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.display_name": {
+          "source": "Send Notification",
+          "message": "傳送通知"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.option.c2hvdWxkU2VuZE5vdGlmaWNhdGlvbg.short_desc": {
+          "source": "Send customer notification email",
+          "message": "傳送顧客通知電子郵件"
+        },
+        "app.U3F1YXJlc3BhY2U.action.ZnVsZmlsbC1vcmRlcg.short_desc": {
+          "source": "Fulfill an existing order",
+          "message": "履行現有訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "當 Squarespace 中建立或更新訂單時觸發。使用輪詢來偵測變更。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Created/Updated",
+          "message": "訂單已建立/已更新"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "在建立或更新訂單時觸發"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.desc": {
+          "source": "List transactions in Squarespace with optional filtering",
+          "message": "在 Squarespace 中列出交易（可選篩選條件）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "列出交易"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "修改時間晚於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "依修改日期篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "修改時間早於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "依修改日期篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "交易 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Filter by transaction ID",
+          "message": "依交易 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC10cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List all transactions",
+          "message": "列出所有交易"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.desc": {
+          "source": "List inventory items in Squarespace with optional filtering",
+          "message": "在 Squarespace 中列出庫存品項（可選篩選條件）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.display_name": {
+          "source": "List Inventory",
+          "message": "列出庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "修改時間晚於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "依修改日期篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "修改時間早於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Filter by modification date",
+          "message": "依修改日期篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "依規格 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1pbnZlbnRvcnk.short_desc": {
+          "source": "List inventory items",
+          "message": "列出庫存品項"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Squarespace with optional filtering",
+          "message": "在 Squarespace 中列出訂單（可選篩選條件）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "列出訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled",
+          "message": "已取消"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOkZVTEZJTExFRA.desc": {
+          "source": "Fulfilled",
+          "message": "已出貨"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending fulfillment",
+          "message": "待履行"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.desc": {
+          "source": "Filter by fulfillment status (`PENDING`, `FULFILLED`, `CANCELED`)",
+          "message": "依履行狀態篩選 (`PENDING`, `FULFILLED`, `CANCELED`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.display_name": {
+          "source": "Fulfillment Status",
+          "message": "出貨狀態"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.ZnVsZmlsbG1lbnRfc3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "按狀態篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "依訂單 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.desc": {
+          "source": "Orders modified after this datetime",
+          "message": "在此日期時間後修改的訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "修改時間晚於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Orders modified after this date",
+          "message": "在此日期後修改的訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.desc": {
+          "source": "Orders modified before this datetime",
+          "message": "在此日期時間前修改的訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "修改時間早於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Orders modified before this date",
+          "message": "在此日期前修改的訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "列出所有訂單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.desc": {
+          "source": "List product variants in Squarespace (requires product_id)",
+          "message": "在 Squarespace 中列出商品規格（需要 product_id）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.display_name": {
+          "source": "List Product Variants",
+          "message": "列出商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product to list variants for",
+          "message": "要列出規格的商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Filter by variant ID",
+          "message": "依規格 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0LXZhcmlhbnRz.short_desc": {
+          "source": "List variants for a product",
+          "message": "列出商品的規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Squarespace with optional filtering",
+          "message": "在 Squarespace 中列出商品（可選篩選條件）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "列出產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "修改時間晚於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Products modified after this date",
+          "message": "在此日期後修改的商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.display_name": {
+          "source": "Modified Before",
+          "message": "修改時間早於"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.bW9kaWZpZWRfYmVmb3Jl.short_desc": {
+          "source": "Products modified before this date",
+          "message": "在此日期前修改的商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "依商品 ID 篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkRJR0lUQUw.desc": {
+          "source": "Digital product",
+          "message": "數位產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOkdJRlRfQ0FSRA.desc": {
+          "source": "Gift card",
+          "message": "禮品卡"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlBIWVNJQ0FM.desc": {
+          "source": "Physical product",
+          "message": "實體產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOlNFUlZJQ0U.desc": {
+          "source": "Service product",
+          "message": "服務產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Filter by product type (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)",
+          "message": "依商品類型篩選 (`PHYSICAL`, `SERVICE`, `GIFT_CARD`, `DIGITAL`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Product Type",
+          "message": "產品類型"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Filter by type",
+          "message": "依類型篩選"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "列出所有產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Squarespace** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Squarespace** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填查詢參數、標頭和請求主體。回應將以雜湊形式傳回，其中包含狀態碼、回應標頭和回應主體。\n\n對於此應用程式中尚未公開為第一級動作的端點，請使用此動作。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.U3F1YXJlc3BhY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Squarespace",
+          "message": "向 Squarespace 發出自訂 API 呼叫"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "當 Squarespace 中建立或更新商品時觸發。使用輪詢來偵測變更。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Created/Updated",
+          "message": "商品已建立/已更新"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a product is created or updated",
+          "message": "在建立或更新商品時觸發"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.desc": {
+          "source": "Fires when a transaction is created or updated in Squarespace. Uses polling to detect changes.",
+          "message": "當 Squarespace 中建立或更新交易時觸發。使用輪詢來偵測變更。"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.display_name": {
+          "source": "Transaction Created/Updated",
+          "message": "交易已建立/已更新"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dHJhbnNhY3Rpb24tdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a transaction is created or updated",
+          "message": "在建立或更新交易時觸發"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in Squarespace",
+          "message": "更新 Squarespace 中的現有商品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "更新產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The product description (HTML)",
+          "message": "產品描述（HTML）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The product description (HTML)",
+          "message": "產品描述（HTML）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "產品是否在商店中可見"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.display_name": {
+          "source": "Is Visible",
+          "message": "是否可見"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNWaXNpYmxl.short_desc": {
+          "source": "Whether the product is visible on the store",
+          "message": "產品是否在商店中可見"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The product name",
+          "message": "產品名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "產品名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.desc": {
+          "source": "SEO configuration (`title`, `description`)",
+          "message": "SEO 設定 (`title`, `description`)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.display_name": {
+          "source": "SEO Options",
+          "message": "SEO 選項"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvT3B0aW9ucw.short_desc": {
+          "source": "SEO configuration",
+          "message": "SEO 設定"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to update",
+          "message": "要更新的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to update",
+          "message": "要更新的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.desc": {
+          "source": "List of tags for the product",
+          "message": "產品的標籤清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGFncw.short_desc": {
+          "source": "List of tags for the product",
+          "message": "產品的標籤清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.desc": {
+          "source": "The URL slug for the product",
+          "message": "產品的 URL slug"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.display_name": {
+          "source": "URL Slug",
+          "message": "URL Slug"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dXJsU2x1Zw.short_desc": {
+          "source": "The URL slug for the product",
+          "message": "產品的 URL slug"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.desc": {
+          "source": "List of variant attribute names (e.g., Size, Color)",
+          "message": "規格屬性名稱清單（例如 Size、Color）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.display_name": {
+          "source": "Variant Attributes",
+          "message": "款式屬性"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dmFyaWFudEF0dHJpYnV0ZXM.short_desc": {
+          "source": "List of variant attribute names",
+          "message": "款式屬性名稱清單"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "更新現有產品"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Update a product image alt text in Squarespace",
+          "message": "更新 Squarespace 中的商品圖片替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Update a Product Image",
+          "message": "更新商品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "The alt text to set for the product image",
+          "message": "要為商品圖片設定的替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "The alt text for the image",
+          "message": "圖片的替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.desc": {
+          "source": "The ID of the image to update",
+          "message": "要更新的圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.display_name": {
+          "source": "Image ID",
+          "message": "影像 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.aW1hZ2VfaWQ.short_desc": {
+          "source": "The image ID",
+          "message": "圖片 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product that owns the image",
+          "message": "擁有該圖片的產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Update image alt text",
+          "message": "更新圖片替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.desc": {
+          "source": "Update an existing product variant in Squarespace",
+          "message": "更新 Squarespace 中的現有商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.display_name": {
+          "source": "Update a Product Variant",
+          "message": "更新商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.desc": {
+          "source": "The variant attributes (freeform key-value pairs)",
+          "message": "款式屬性（自由格式的鍵值組）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "屬性"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "The variant attributes (key-value pairs)",
+          "message": "款式屬性（鍵值組）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.desc": {
+          "source": "The shipping measurements including `weight` and `dimensions`",
+          "message": "運送尺寸測量資訊，包含 `weight` 和 `dimensions`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.display_name": {
+          "source": "Shipping Measurements",
+          "message": "運送尺寸測量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2hpcHBpbmdNZWFzdXJlbWVudHM.short_desc": {
+          "source": "The shipping measurements",
+          "message": "運送尺寸測量資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.desc": {
+          "source": "The stock keeping unit identifier for the variant",
+          "message": "款式的庫存單位識別碼 (SKU)"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c2t1.short_desc": {
+          "source": "The variant SKU",
+          "message": "款式 SKU"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.desc": {
+          "source": "The stock information including `quantity` and `unlimited`",
+          "message": "庫存資訊，包含 `quantity` 和 `unlimited`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.c3RvY2s.short_desc": {
+          "source": "The stock information",
+          "message": "庫存資訊"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.desc": {
+          "source": "The variant pricing including `basePrice`, `salePrice`, and `onSale`",
+          "message": "款式定價，包含 `basePrice`、`salePrice` 和 `onSale`"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.display_name": {
+          "source": "Pricing",
+          "message": "定價"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJpY2luZw.short_desc": {
+          "source": "The variant pricing",
+          "message": "款式定價"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID containing the variant",
+          "message": "包含此規格的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID containing the variant",
+          "message": "包含此規格的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.desc": {
+          "source": "The variant ID to update",
+          "message": "要更新的規格 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to update",
+          "message": "要更新的規格 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXByb2R1Y3QtdmFyaWFudA.short_desc": {
+          "source": "Update an existing product variant",
+          "message": "更新現有商品規格"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.desc": {
+          "source": "Adjust inventory stock for a product variant in Squarespace",
+          "message": "在 Squarespace 中調整商品規格的庫存數量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.display_name": {
+          "source": "Update Stock Quantities",
+          "message": "更新庫存數量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOkRFQ1JFTUVOVA.desc": {
+          "source": "Remove stock",
+          "message": "減少庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.allowed-value.c3RyaW5nOklOQ1JFTUVOVA.desc": {
+          "source": "Add stock",
+          "message": "增加庫存"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.desc": {
+          "source": "The operation to perform: INCREMENT to add stock, DECREMENT to remove stock (default: INCREMENT)",
+          "message": "要執行的操作：INCREMENT 增加庫存，DECREMENT 減少庫存（預設：INCREMENT）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.display_name": {
+          "source": "Operation",
+          "message": "操作"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.b3BlcmF0aW9u.short_desc": {
+          "source": "INCREMENT or DECREMENT (default: INCREMENT)",
+          "message": "INCREMENT 或 DECREMENT（預設：INCREMENT）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity to increment or decrement (always positive; operation controls direction)",
+          "message": "要增加或減少的數量（一律為正數；操作控制增減方向）"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "數量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity to adjust",
+          "message": "要調整的數量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.desc": {
+          "source": "The ID of the product variant to adjust inventory for",
+          "message": "要調整庫存的商品子型號 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "款式 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "The variant ID to adjust stock for",
+          "message": "要調整庫存的子型號 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBkYXRlLXN0b2NrLXF1YW50aXRpZXM.short_desc": {
+          "source": "Adjust inventory stock for a variant",
+          "message": "調整子型號的庫存量"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.desc": {
+          "source": "Upload a product image in Squarespace",
+          "message": "在 Squarespace 中上傳商品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.display_name": {
+          "source": "Upload a Product Image",
+          "message": "上傳商品圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.desc": {
+          "source": "Alternative text for the image",
+          "message": "圖片的替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.display_name": {
+          "source": "Alt Text",
+          "message": "替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.YWx0VGV4dA.short_desc": {
+          "source": "Alternative text for the image",
+          "message": "圖片的替代文字"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.desc": {
+          "source": "The image file name or URL",
+          "message": "圖片檔案名稱或 URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.display_name": {
+          "source": "File Name",
+          "message": "檔案名稱"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The image file name or URL",
+          "message": "圖片檔案名稱或 URL"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The product ID to upload the image for",
+          "message": "要上傳圖片的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to upload the image for",
+          "message": "要上傳圖片的商品 ID"
+        },
+        "app.U3F1YXJlc3BhY2U.action.dXBsb2FkLXByb2R1Y3QtaW1hZ2U.short_desc": {
+          "source": "Upload an image for a product",
+          "message": "為商品上傳圖片"
+        },
+        "app.U3F1YXJlc3BhY2U.desc": {
+          "source": "Squarespace is an e-commerce platform for managing online stores.\n\nThis integration supports orders, products, product variants, product images, inventory, and transactions.",
+          "message": "Squarespace 是一個用於管理線上商店的電子商務平台。\n\n此整合支援訂單、商品、商品子型號、商品圖片、庫存與交易。"
+        },
+        "app.U3F1YXJlc3BhY2U.display_name": {
+          "source": "Squarespace",
+          "message": "Squarespace"
+        },
+        "app.U3F1YXJlc3BhY2U.short_desc": {
+          "source": "Squarespace Commerce platform",
+          "message": "Squarespace Commerce 平台"
+        }
+      }
+    }
+  }
+}

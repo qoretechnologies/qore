@@ -1,0 +1,2705 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Close CRMで連絡先が更新されたときにトリガーされます。変更を検出するためにEvent Log APIのポーリングを使用します。"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "連絡先が更新されました"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Fires when a contact is updated",
+          "message": "連絡先が更新されたときにトリガー"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Close CRMで新しい連絡先が作成されたときにトリガーされます。新しいレコードを検出するためにEvent Log APIのポーリングを使用します。"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "連絡先作成時"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "連絡先が作成されたときにトリガー"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.desc": {
+          "source": "Fires when a contact is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Close CRMで連絡先が削除されたときにトリガーされます。削除を検出するためにEvent Log APIのポーリングを使用します。"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
+          "source": "Contact Deleted",
+          "message": "連絡先が削除されました"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
+          "source": "Fires when a contact is deleted",
+          "message": "連絡先が削除されたときにトリガー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note activity in Close CRM",
+          "message": "Close CRMで新しいノートアクティビティを作成します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "ノートを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this note",
+          "message": "このノートに関連付ける連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "関連付けられた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the note with",
+          "message": "ノートを関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The plain text content of the note",
+          "message": "ノートのプレーンテキストコンテンツ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "ノートのテキストコンテンツ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The HTML content of the note",
+          "message": "ノートのHTMLコンテンツ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "ノートのHTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "ノートのHTMLコンテンツ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.desc": {
+          "source": "Set to `True` to pin this note to the top",
+          "message": "このノートを上部に固定するには `True` に設定します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.display_name": {
+          "source": "Pinned",
+          "message": "固定"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.short_desc": {
+          "source": "Pin the note",
+          "message": "ノートを固定"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "新しいノートを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Close CRM",
+          "message": "Close CRMで新しい案件を作成します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "案件を作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The confidence percentage of winning, from 0 to 100",
+          "message": "成約確率のパーセンテージ（0〜100）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "成約確率"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "成約確率のパーセンテージ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.desc": {
+          "source": "The primary contact for this opportunity",
+          "message": "この案件のメイン連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "関連付けられた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.desc": {
+          "source": "The date won in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の成約日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.display_name": {
+          "source": "Date Won",
+          "message": "成約日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.short_desc": {
+          "source": "Date the opportunity was won",
+          "message": "案件が成約した日付"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.desc": {
+          "source": "The date lost in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の失注日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.display_name": {
+          "source": "Date Lost",
+          "message": "失注日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.short_desc": {
+          "source": "Date the opportunity was lost",
+          "message": "案件が失注した日付"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the opportunity with",
+          "message": "案件を関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "A text note with additional context about the opportunity",
+          "message": "案件に関する追加のコンテキストを含むテキストノート"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "案件に関するメモ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the opportunity status to assign",
+          "message": "割り当てる案件ステータスの一意の識別子"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "案件ステータスID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.desc": {
+          "source": "The user to assign this opportunity to",
+          "message": "この案件を割り当てるユーザー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.short_desc": {
+          "source": "The assigned user",
+          "message": "割り当てられたユーザー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The monetary value of the opportunity in cents (e.g., 10000 = $100.00)",
+          "message": "セント単位の案件の金額（例: 10000 = $100.00）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "値"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "セント単位の案件の金額"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code (e.g., `USD`, `EUR`, `GBP`)",
+          "message": "ISO 4217通貨コード（例: `USD`、`EUR`、`GBP`）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.display_name": {
+          "source": "Value Currency",
+          "message": "金額の通貨"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "通貨コード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "月額経常"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "一括払い"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "年額経常"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The billing period for the opportunity value",
+          "message": "案件金額の請求期間"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "金額の期間"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "金額の期間"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "新しい案件を作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.desc": {
+          "source": "Log a new call activity in Close CRM",
+          "message": "Close CRMで新しい通話アクティビティを記録します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
+          "source": "Create a Call",
+          "message": "通話の作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact associated with this call",
+          "message": "この通話に関連付けられた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "関連付けられた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGJvdW5k.desc": {
+          "source": "Outbound call",
+          "message": "発信通話"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluYm91bmQ.desc": {
+          "source": "Inbound call",
+          "message": "着信通話"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.desc": {
+          "source": "Call direction",
+          "message": "通話方向"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Call direction",
+          "message": "通話方向"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The disposition or outcome of the call",
+          "message": "通話の処理結果または結果"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "処理結果"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "通話の処理結果"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.desc": {
+          "source": "Call duration in seconds",
+          "message": "通話時間（秒）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.display_name": {
+          "source": "Duration",
+          "message": "所要時間"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.short_desc": {
+          "source": "Call duration in seconds",
+          "message": "通話時間（秒）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the call with",
+          "message": "通話に関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "A text note to associate with this call",
+          "message": "この通話に関連付けるテキストメモ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "通話メモ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.desc": {
+          "source": "An HTML-formatted note for this call",
+          "message": "この通話用のHTML形式のメモ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "ノートのHTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.short_desc": {
+          "source": "HTML note for the call",
+          "message": "通話のHTMLメモ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Call was cancelled",
+          "message": "通話がキャンセルされました"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Call was completed",
+          "message": "通話が完了しました"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.desc": {
+          "source": "Call was created/logged",
+          "message": "通話が作成/記録されました"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.desc": {
+          "source": "The status of the call",
+          "message": "通話のステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.short_desc": {
+          "source": "Call status",
+          "message": "通話ステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.desc": {
+          "source": "The phone number associated with this call",
+          "message": "この通話に関連付けられた電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.short_desc": {
+          "source": "The phone number",
+          "message": "電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.desc": {
+          "source": "The user who made or received this call",
+          "message": "この通話を発信または受信したユーザー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.short_desc": {
+          "source": "The user who made the call",
+          "message": "通話を発信したユーザー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
+          "source": "Log a new call",
+          "message": "新しい通話を記録"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Close CRM",
+          "message": "Close CRMで新しい連絡先を作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "連絡先を作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "A list of email address objects, each with `type` and `email` fields",
+          "message": "`type`フィールドおよび`email`フィールドを含むメールアドレスオブジェクトのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "メールアドレス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the contact with",
+          "message": "連絡先に関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The full name of the contact",
+          "message": "連絡先の氏名"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "連絡先名"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "A list of phone number objects, each with `type` and `phone` fields",
+          "message": "`type`フィールドおよび`phone`フィールドを含む電話番号オブジェクトのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "連絡先の電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The job title of the contact",
+          "message": "連絡先の役職"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "連絡先の役職"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.desc": {
+          "source": "List of URL objects for the contact",
+          "message": "連絡先のURLオブジェクトのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.short_desc": {
+          "source": "Contact URLs",
+          "message": "連絡先URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.desc": {
+          "source": "Log a new email activity in Close CRM",
+          "message": "Close CRMで新しいメールアクティビティを記録"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
+          "source": "Create an Email",
+          "message": "メールを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this email",
+          "message": "このメールに関連付ける連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "関連付けられた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.desc": {
+          "source": "List of CC recipient email addresses",
+          "message": "CC受信者のメールアドレスのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "CC 受信者"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the email",
+          "message": "メールのプレーンテキスト本文"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "本文テキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Email body as plain text",
+          "message": "プレーンテキスト形式のメール本文"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the email",
+          "message": "メールのHTML本文"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "本文HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.short_desc": {
+          "source": "Email body as HTML",
+          "message": "HTML形式のメール本文"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.desc": {
+          "source": "List of BCC recipient email addresses",
+          "message": "BCC受信者のメールアドレスのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "BCC 受信者"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGdvaW5n.desc": {
+          "source": "Outgoing email",
+          "message": "送信メール"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluY29taW5n.desc": {
+          "source": "Incoming email",
+          "message": "受信メール"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.desc": {
+          "source": "The direction: `incoming` or `outgoing`",
+          "message": "方向: `incoming`または`outgoing`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Email direction",
+          "message": "メールの方向"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the email with",
+          "message": "メールに関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.desc": {
+          "source": "The sender email address",
+          "message": "送信者のメールアドレス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "送信者"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.short_desc": {
+          "source": "Sender email address",
+          "message": "送信者のメールアドレス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOm91dGJveA.desc": {
+          "source": "Email in outbox",
+          "message": "送信トレイ内のメール"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft email",
+          "message": "下書きメール"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent email",
+          "message": "送信済みメール"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.desc": {
+          "source": "Email status",
+          "message": "メールステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.short_desc": {
+          "source": "Email status",
+          "message": "メールステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the email",
+          "message": "メールの件名"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "メールの件名"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.desc": {
+          "source": "A list of recipient email addresses",
+          "message": "宛先メールアドレスのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.display_name": {
+          "source": "To",
+          "message": "宛先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.short_desc": {
+          "source": "To recipients",
+          "message": "To受信者"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
+          "source": "Log a new email",
+          "message": "新しいメールを記録"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead in Close CRM",
+          "message": "Close CRMで新しいリードを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "リードを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.desc": {
+          "source": "A list of contact objects to create and associate with this lead. Each contact can include `name`, `title`, `emails`, and `phones` fields",
+          "message": "このリードに対して作成および関連付ける連絡先オブジェクトのリスト。各連絡先には`name`、`title`、`emails`、`phones`フィールドを含めることができます"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.short_desc": {
+          "source": "Nested contacts to create",
+          "message": "作成するネストされた連絡先"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.desc": {
+          "source": "List of address objects for the lead",
+          "message": "リードの住所オブジェクトのリスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "住所"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "Lead addresses",
+          "message": "リードの住所"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the lead with additional context or notes",
+          "message": "追加のコンテキストやメモを含むリードのテキスト説明"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "リードの説明"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The name of the lead (typically the company or organization name)",
+          "message": "リードの名前（通常は会社名または組織名）"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "リード名"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the lead status to assign",
+          "message": "割り当てるリードステータスの一意識別子"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "リードステータスID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "リードに関連付けられたWebサイトのURL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "リードURL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead",
+          "message": "新しいリードを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.desc": {
+          "source": "Send a new SMS activity in Close CRM",
+          "message": "Close CRMで新しいSMSアクティビティを送信します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.display_name": {
+          "source": "Create an SMS",
+          "message": "SMSを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.desc": {
+          "source": "The local phone number to send the SMS from",
+          "message": "SMSの送信元となるローカル電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.display_name": {
+          "source": "Local Phone",
+          "message": "送信元電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.short_desc": {
+          "source": "Local phone number",
+          "message": "ローカル電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the SMS with",
+          "message": "SMSを関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft SMS",
+          "message": "下書きSMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbmRpbmc.desc": {
+          "source": "Sending SMS",
+          "message": "送信中のSMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent SMS",
+          "message": "送信済みSMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.desc": {
+          "source": "SMS status",
+          "message": "SMSステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.short_desc": {
+          "source": "SMS status",
+          "message": "SMSステータス"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.desc": {
+          "source": "The remote phone number to send the SMS to",
+          "message": "SMSの送信先となる相手先電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.display_name": {
+          "source": "Remote Phone",
+          "message": "送信先電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.short_desc": {
+          "source": "Remote phone number",
+          "message": "相手先電話番号"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.desc": {
+          "source": "The text content of the SMS message",
+          "message": "SMSメッセージの本文テキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.short_desc": {
+          "source": "SMS message text",
+          "message": "SMSメッセージテキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.short_desc": {
+          "source": "Send a new SMS",
+          "message": "新しいSMSを送信"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Close CRM",
+          "message": "Close CRMで新しいタスクを作成します"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "タスクを作成"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "発信コールタスク"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "リードタスク"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.desc": {
+          "source": "The type of the task to create",
+          "message": "作成するタスクのタイプ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "タスクタイプ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.short_desc": {
+          "source": "The task type",
+          "message": "タスクタイプ"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The user ID to assign this task to",
+          "message": "このタスクを割り当てるユーザーID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "担当者"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "タスクの割り当て先ユーザー"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The due date of the task in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式のタスク期日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "タスク期日"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the task with",
+          "message": "タスクを関連付けるリード"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The text description or body of the task",
+          "message": "タスクのテキスト説明または本文"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "タスクテキスト"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "新しいタスクを作成"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.desc": {
+          "source": "Retrieve a single meeting activity by ID from Close CRM",
+          "message": "Close CRMからIDで単一のミーティングアクティビティを取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
+          "source": "Get a Meeting",
+          "message": "ミーティングの取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "会議 ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.short_desc": {
+          "source": "The meeting ID",
+          "message": "ミーティングID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
+          "source": "Get a single meeting by ID",
+          "message": "IDで単一のミーティングを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.desc": {
+          "source": "Retrieve a single note activity by ID from Close CRM",
+          "message": "Close CRMからIDで単一のメモアクティビティを取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
+          "source": "Get a Note",
+          "message": "メモを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note ID",
+          "message": "メモID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
+          "source": "Get a single note by ID",
+          "message": "IDで単一のメモを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Close CRM",
+          "message": "Close CRMからIDで単一の商談を取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "商談を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "商談ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "IDで単一の商談を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.desc": {
+          "source": "Retrieve a single call activity by ID from Close CRM",
+          "message": "Close CRMからIDで単一の通話アクティビティを取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
+          "source": "Get a Call",
+          "message": "通話を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "通話ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call ID",
+          "message": "通話ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
+          "source": "Get a single call by ID",
+          "message": "IDで単一の通話を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Close CRM",
+          "message": "Close CRMからIDで単一の連絡先を取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "連絡先を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.desc": {
+          "source": "Retrieve a single email activity by ID from Close CRM",
+          "message": "Close CRMからIDで単一のメールアクティビティを取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
+          "source": "Get an Email",
+          "message": "メールを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "メールID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email ID",
+          "message": "メールID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
+          "source": "Get a single email by ID",
+          "message": "IDで単一のメールを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID from Close CRM",
+          "message": "Close CRMからIDで単一のリードを取得します"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "リードを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "IDで単一のリードを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.desc": {
+          "source": "Retrieve a single SMS activity by ID from Close CRM",
+          "message": "Close CRMからIDで単一のSMSアクティビティを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.display_name": {
+          "source": "Get an SMS",
+          "message": "SMSを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "SMS ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS ID",
+          "message": "SMS ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.short_desc": {
+          "source": "Get a single SMS by ID",
+          "message": "IDで単一のSMSを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Close CRM",
+          "message": "Close CRMからIDで単一のタスクを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "タスクを取得"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "タスクID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "IDで単一のタスクを取得"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note activity from Close CRM",
+          "message": "Close CRMからノートアクティビティを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "メモを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "削除するノート"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "メモを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Close CRM",
+          "message": "Close CRMから商談を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "商談を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "削除する商談"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "商談を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.desc": {
+          "source": "Delete a call activity from Close CRM",
+          "message": "Close CRMから通話アクティビティを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
+          "source": "Delete a Call",
+          "message": "通話を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "通話ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to delete",
+          "message": "削除する通話"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
+          "source": "Delete a call",
+          "message": "通話を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Close CRM",
+          "message": "Close CRMから連絡先を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "連絡先を削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "削除する連絡先"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.desc": {
+          "source": "Delete an email activity from Close CRM",
+          "message": "Close CRMからメールアクティビティを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
+          "source": "Delete an Email",
+          "message": "メールを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "メールID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email to delete",
+          "message": "削除するメール"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
+          "source": "Delete an email",
+          "message": "メールを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from Close CRM",
+          "message": "Close CRMからリードを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "リードを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to delete",
+          "message": "削除するリード"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead",
+          "message": "リードを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.desc": {
+          "source": "Delete an SMS activity from Close CRM",
+          "message": "Close CRMからSMSアクティビティを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.display_name": {
+          "source": "Delete an SMS",
+          "message": "SMSを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "SMS ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS to delete",
+          "message": "削除するSMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.short_desc": {
+          "source": "Delete an SMS",
+          "message": "SMSを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Close CRM",
+          "message": "Close CRMからタスクを削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "タスクの削除"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "削除するタスク"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "タスクを削除"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.desc": {
+          "source": "List tasks in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMのタスクを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "タスクの一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "発信コールタスク"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "リードタスク"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.desc": {
+          "source": "Filter tasks by type",
+          "message": "タイプでタスクをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "タスクタイプ"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.short_desc": {
+          "source": "Task type filter",
+          "message": "タスクタイプフィルター"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.desc": {
+          "source": "Filter tasks by the user they are assigned to",
+          "message": "割り当てられているユーザーでタスクをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "担当者"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "担当ユーザーでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.desc": {
+          "source": "Filter tasks by completion status",
+          "message": "完了ステータスでタスクをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "完了済み"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Filter by completion status",
+          "message": "完了ステータスでフィルター処理"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter tasks by the lead they are associated with",
+          "message": "関連付けられているリードでタスクをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "タスクIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
+          "source": "List and search tasks",
+          "message": "タスクの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.desc": {
+          "source": "List call activities in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMの通話アクティビティを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
+          "source": "List Calls",
+          "message": "通話を一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "通話ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.short_desc": {
+          "source": "Filter by call ID",
+          "message": "通話IDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.desc": {
+          "source": "Filter calls by lead ID",
+          "message": "リードIDで通話をフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.desc": {
+          "source": "Filter calls by user ID",
+          "message": "ユーザーIDで通話をフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
+          "source": "List and search calls",
+          "message": "通話の一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.desc": {
+          "source": "List contacts in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMの連絡先を一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "連絡先IDで絞り込み"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.desc": {
+          "source": "Filter contacts by the lead they belong to",
+          "message": "所属するリードで連絡先をフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
+          "source": "List and search contacts",
+          "message": "連絡先の一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.desc": {
+          "source": "List email activities in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMのメールアクティビティを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "メールを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "メールID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.short_desc": {
+          "source": "Filter by email ID",
+          "message": "メールIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.desc": {
+          "source": "Filter emails by lead ID",
+          "message": "リードIDでメールをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.desc": {
+          "source": "Filter emails by user ID",
+          "message": "ユーザーIDでメールをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
+          "source": "List and search emails",
+          "message": "メールの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.desc": {
+          "source": "List leads in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMのリードを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "リードを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter leads by status ID",
+          "message": "ステータスIDでリードをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by lead status",
+          "message": "リードステータスでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.desc": {
+          "source": "Search query text to filter leads by name, email, phone, or other fields",
+          "message": "名前、メール、電話番号、その他のフィールドでリードをフィルタリングするための検索クエリテキスト"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.short_desc": {
+          "source": "Search query text",
+          "message": "検索クエリテキスト"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
+          "source": "List and search leads",
+          "message": "リードの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.desc": {
+          "source": "List meeting activities in Close CRM with optional filtering",
+          "message": "任意のフィルタリングを使用してClose CRMのミーティングアクティビティを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
+          "source": "List Meetings",
+          "message": "ミーティングを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.desc": {
+          "source": "Filter meetings by lead ID",
+          "message": "リードIDでミーティングをフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "会議 ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.short_desc": {
+          "source": "Filter by meeting ID",
+          "message": "ミーティングIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.desc": {
+          "source": "Filter meetings by user ID",
+          "message": "ミーティングをユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
+          "source": "List and search meetings",
+          "message": "ミーティングの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.desc": {
+          "source": "List note activities in Close CRM with optional filtering",
+          "message": "Close CRM内のノートアクティビティをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "ノートを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter notes by lead ID",
+          "message": "ノートをリードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "ノートIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.desc": {
+          "source": "Filter notes by user ID",
+          "message": "ノートをユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
+          "source": "List and search notes",
+          "message": "ノートの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Close CRM with optional filtering",
+          "message": "Close CRM内の商談をオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "商談を一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "商談IDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.desc": {
+          "source": "Filter opportunities by the lead they belong to",
+          "message": "商談を所属するリードでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter by status ID",
+          "message": "ステータスIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by status ID",
+          "message": "ステータスIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active opportunities",
+          "message": "進行中の商談"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmxvc3Q.desc": {
+          "source": "Lost opportunities",
+          "message": "失注した商談"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOndvbg.desc": {
+          "source": "Won opportunities",
+          "message": "受注した商談"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.desc": {
+          "source": "Filter opportunities by status type",
+          "message": "商談をステータスタイプでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.display_name": {
+          "source": "Status Type",
+          "message": "ステータスタイプ"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.short_desc": {
+          "source": "Filter by status type",
+          "message": "ステータスタイプでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.desc": {
+          "source": "Text search query",
+          "message": "テキスト検索クエリ"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.short_desc": {
+          "source": "Search query",
+          "message": "検索クエリ"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by assigned user ID",
+          "message": "割り当てられたユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "担当ユーザーでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List and search opportunities",
+          "message": "商談の一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.desc": {
+          "source": "List SMS activities in Close CRM with optional filtering",
+          "message": "Close CRM内のSMSアクティビティをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.display_name": {
+          "source": "List SMS",
+          "message": "SMSを一覧表示"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.desc": {
+          "source": "Filter SMS activities by lead ID",
+          "message": "SMSアクティビティをリードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "リードIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "SMS ID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.short_desc": {
+          "source": "Filter by SMS ID",
+          "message": "SMS IDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.desc": {
+          "source": "Filter SMS activities by user ID",
+          "message": "SMSアクティビティをユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.short_desc": {
+          "source": "List and search SMS messages",
+          "message": "SMSメッセージの一覧表示と検索"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.desc": {
+          "source": "Fires when a new opportunity is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Close CRMで新しい商談が作成されたときにトリガーされます。Event Log APIのポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
+          "source": "Opportunity Created",
+          "message": "商談が作成されました"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is created",
+          "message": "商談が作成されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.desc": {
+          "source": "Fires when an opportunity is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Close CRMで商談が削除されたときにトリガーされます。Event Log APIのポーリングを使用して削除を検出します。"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
+          "source": "Opportunity Deleted",
+          "message": "商談が削除されました"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {
+          "source": "Fires when an opportunity is deleted",
+          "message": "商談が削除されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.desc": {
+          "source": "Fires when an opportunity is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Close CRMで商談が更新されたときにトリガーされます。Event Log APIのポーリングを使用して変更を検出します。"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
+          "source": "Opportunity Updated",
+          "message": "商談が更新されました"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is updated",
+          "message": "商談が更新されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.desc": {
+          "source": "Fires when a lead is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Close CRMでリードが更新されたときにトリガーされます。Event Log APIのポーリングを使用して変更を検出します。"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
+          "source": "Lead Updated",
+          "message": "リードが更新されました"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
+          "source": "Fires when a lead is updated",
+          "message": "リードが更新されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.desc": {
+          "source": "Fires when a new lead is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Close CRMで新しいリードが作成されたときにトリガーされます。Event Log APIのポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
+          "source": "Lead Created",
+          "message": "リードが作成されました"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a lead is created",
+          "message": "リードが作成されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.desc": {
+          "source": "Fires when a lead is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Close CRMでリードが削除されたときにトリガーされます。Event Log APIのポーリングを使用して削除を検出します。"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
+          "source": "Lead Deleted",
+          "message": "リードが削除されました"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
+          "source": "Fires when a lead is deleted",
+          "message": "リードが削除されたときにトリガーされます"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Close** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Close** に対するカスタムHTTP / REST APIコールを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Close",
+          "message": "CloseへのカスタムAPIコールを実行"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note activity in Close CRM",
+          "message": "Close CRM内の既存のノートアクティビティを更新します"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "メモを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The new plain text content of the note",
+          "message": "ノートの新しいプレーンテキストコンテンツ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "ノートのテキストコンテンツ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The new HTML content of the note",
+          "message": "ノートの新しいHTMLコンテンツ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "ノートのHTML"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "ノートのHTMLコンテンツ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "更新するノート"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "既存のノートを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Close CRM",
+          "message": "Close CRM内の既存の商談を更新します"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "商談を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The new confidence percentage, from 0 to 100",
+          "message": "新しい信頼度パーセンテージ（0〜100）"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "成約確率"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "成約確率のパーセンテージ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "更新する商談"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "The new text note for the opportunity",
+          "message": "商談の新しいテキストノート"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "案件に関するメモ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign",
+          "message": "割り当てる新しいステータスID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "案件ステータスID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The new monetary value in cents",
+          "message": "新しい金額（セント単位）"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "値"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "セント単位の案件の金額"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "月額経常"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "一括払い"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "年額経常"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The new billing period",
+          "message": "新しい請求期間"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "金額の期間"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "金額の期間"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "既存の商談を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.desc": {
+          "source": "Update an existing call activity in Close CRM",
+          "message": "Close CRM内の既存の通話アクティビティを更新します"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
+          "source": "Update a Call",
+          "message": "通話を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "通話ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to update",
+          "message": "更新する通話"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The new disposition or outcome of the call",
+          "message": "通話の新しい処理結果または結果"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "処理結果"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "通話の処理結果"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "The new text note for this call",
+          "message": "この通話の新しいテキストメモ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "通話メモ"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
+          "source": "Update an existing call",
+          "message": "既存の通話を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Close CRM",
+          "message": "Close CRM 内の既存の連絡先を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "連絡先を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "更新する連絡先"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "The new list of email address objects",
+          "message": "メールアドレスオブジェクトの新しいリスト"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "メールアドレス"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The new full name of the contact",
+          "message": "連絡先の新しい氏名"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "連絡先名"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "The new list of phone number objects",
+          "message": "電話番号オブジェクトの新しいリスト"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "電話番号"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "連絡先の電話番号"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The new job title of the contact",
+          "message": "連絡先の新しい役職"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "連絡先の役職"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update an existing lead in Close CRM",
+          "message": "Close CRM 内の既存のリードを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update a Lead",
+          "message": "リードを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new text description of the lead",
+          "message": "リードの新しいテキスト説明"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "リードの説明"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to update",
+          "message": "更新するリード"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The new name of the lead",
+          "message": "リードの新しい名前"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "リード名"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign to the lead",
+          "message": "リードに割り当てる新しいステータス ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ステータスID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "リードステータスID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The new website URL associated with the lead",
+          "message": "リードに関連付けられた新しい Web サイト URL"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "リードURL"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "既存のリードを更新します"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Close CRM",
+          "message": "Close CRM 内の既存のタスクを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "タスクを更新"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The new user ID to assign this task to",
+          "message": "このタスクを割り当てる新しいユーザー ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "担当者"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "タスクの割り当て先ユーザー"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The new due date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 形式の新しい期日"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "タスク期日"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.desc": {
+          "source": "Set to `True` to mark the task as complete, or `False` for incomplete",
+          "message": "タスクを完了としてマークするには `True`、未完了にするには `False` に設定します"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "完了済み"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Whether the task is complete",
+          "message": "タスクが完了しているかどうか"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "更新するタスク"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The new text description or body of the task",
+          "message": "タスクの新しいテキスト説明または本文"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "タスクテキスト"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "既存のタスクを更新"
+        },
+        "app.Q2xvc2U.desc": {
+          "source": "Close is a CRM platform built for sales teams, offering lead management, contact tracking, opportunities, tasks, and activity logging (calls, emails, notes, meetings, SMS).\n\nThis integration supports leads, contacts, opportunities, tasks, calls, emails, notes, meetings, SMS, and event triggers.",
+          "message": "Close は営業チーム向けに構築された CRM プラットフォームであり、リード管理、連絡先追跡、商談、タスク、およびアクティビティログ記録（通話、メール、メモ、ミーティング、SMS）を提供します。\n\nこの統合は、リード、連絡先、商談、タスク、通話、メール、メモ、ミーティング、SMS、およびイベントトリガーをサポートします。"
+        },
+        "app.Q2xvc2U.display_name": {
+          "source": "Close",
+          "message": "Close"
+        },
+        "app.Q2xvc2U.short_desc": {
+          "source": "Close CRM for sales teams",
+          "message": "営業チーム向け Close CRM"
+        }
+      }
+    }
+  }
+}

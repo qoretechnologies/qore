@@ -1,0 +1,1177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of tokens that a model would use to process the given content. Use the `prompt` field for simple text, or `contents` for multi-turn input",
+          "message": "Spočítat počet tokenů, které by model použil ke zpracování daného obsahu. Pro jednoduchý text použijte pole `prompt` nebo `contents` pro vícekolový vstup"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "Spočítat tokeny"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.desc": {
+          "source": "The content to count tokens for. For simple text, use the `prompt` field instead",
+          "message": "Obsah, pro který se mají spočítat tokeny. Pro jednoduchý text použijte raději pole `prompt`"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.short_desc": {
+          "source": "The content to count tokens for",
+          "message": "Obsah pro spočítání tokenů"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model name to use for token counting",
+          "message": "Název modelu, který se má použít pro počítání tokenů"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for token counting",
+          "message": "Model pro počítání tokenů"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.desc": {
+          "source": "A simple text string to count tokens for. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal input",
+          "message": "Jednoduchý textový řetězec, pro který se mají spočítat tokeny. Poskytovatel jej automaticky zabalí do formátu zprávy `contents`. Pro vícekolový nebo multimodální vstup použijte raději `contents`"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.short_desc": {
+          "source": "Simple text to count tokens for",
+          "message": "Jednoduchý text pro spočítání tokenů"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in the given content",
+          "message": "Spočítat počet tokenů v daném obsahu"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Create cached content that can be reused across multiple generation requests to reduce latency and cost. Use the `prompt` field for simple text, or `contents` for multi-turn or multimodal content",
+          "message": "Vytvořit obsah v mezipaměti, který lze znovu použít napříč více požadavky na generování pro snížení latence a nákladů. Pro jednoduchý text použijte pole `prompt` nebo `contents` pro vícekolový či multimodální obsah"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Create Cached Content",
+          "message": "Vytvořit obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.desc": {
+          "source": "The content to cache for future use. For simple text, use the `prompt` field instead",
+          "message": "Obsah k uložení do mezipaměti pro budoucí použití. Pro jednoduchý text použijte raději pole `prompt`"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.short_desc": {
+          "source": "The content to cache",
+          "message": "Obsah k uložení do mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "Optional human-readable display name",
+          "message": "Volitelný čitelný zobrazovaný název"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Zobrazovaný název"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the cached content",
+          "message": "Zobrazovaný název pro obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "Timestamp in UTC when the cached content should expire (RFC 3339 format)",
+          "message": "Časové razítko v UTC, kdy má vypršet platnost obsahu v mezipaměti (formát RFC 3339)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Čas vypršení platnosti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "Expiration timestamp",
+          "message": "Časové razítko vypršení platnosti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.desc": {
+          "source": "The name of the model to use for cached content (e.g., `gemini-2.5-flash`)",
+          "message": "Název modelu, který se má použít pro obsah v mezipaměti (např. `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.short_desc": {
+          "source": "The model to use",
+          "message": "Model k použití"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text to include in the cache",
+          "message": "Volitelný text systémových instrukcí k zahrnutí do mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Systémová instrukce"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction to cache",
+          "message": "Systémová instrukce k uložení do mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.desc": {
+          "source": "A simple text string to cache for reuse across multiple requests. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal content",
+          "message": "Jednoduchý textový řetězec k uložení do mezipaměti pro opakované použití napříč více požadavky. Poskytovatel jej automaticky zabalí do formátu zprávy `contents`. Pro vícekolový nebo multimodální obsah použijte raději `contents`"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.short_desc": {
+          "source": "Simple text content to cache",
+          "message": "Jednoduchý textový obsah k uložení do mezipaměti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "Time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Doba životnosti pro obsah v mezipaměti (např. `3600s` pro jednu hodinu)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "Time-to-live duration",
+          "message": "Délka doby životnosti"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Create cached content for reuse across multiple requests",
+          "message": "Vytvořit obsah v mezipaměti pro opakované použití v rámci více požadavků"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Create an empty file search store for organizing and searching files",
+          "message": "Vytvořit prázdné úložiště vyhledávání v souborech pro uspořádání a vyhledávání souborů"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Create File Search Store",
+          "message": "Vytvořit úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "The human-readable display name for the new file search store",
+          "message": "Čitelný zobrazovaný název pro nové úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Zobrazovaný název"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the store",
+          "message": "Zobrazovaný název pro úložiště"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Create an empty file search store",
+          "message": "Vytvořit prázdné úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.desc": {
+          "source": "Generate embeddings for multiple content items in a single batch request",
+          "message": "Generovat embeddingy pro více položek obsahu v jednom dávkovém požadavku"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
+          "source": "Batch Embed",
+          "message": "Dávkový embedding"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`)",
+          "message": "Název modelu, který se má použít pro embedding (např. `gemini-embedding-001`)"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "Model embeddingu, který se má použít"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.desc": {
+          "source": "List of individual embed content requests. The `model` field in each request is ignored in favor of the top-level model",
+          "message": "Seznam jednotlivých požadavků na embedding obsahu. Pole `model` v každém požadavku je ignorováno ve prospěch modelu na nejvyšší úrovni"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "Požadavky"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.short_desc": {
+          "source": "Embed requests to batch",
+          "message": "Požadavky na embedding ke zpracování v dávce"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
+          "source": "Generate embeddings for multiple content items in a single request",
+          "message": "Generovat embeddingy pro více položek obsahu v jediném požadavku"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate content with a Gemini model. Use the `prompt` field for simple text requests, or the `contents` field for multi-turn conversations and multimodal input. Supports system instructions, generation configuration, and safety settings",
+          "message": "Generovat obsah pomocí modelu Gemini. Pro jednoduché textové požadavky použijte pole `prompt`, pro vícekolové konverzace a multimodální vstup pole `contents`. Podporuje systémové instrukce, konfiguraci generování a bezpečnostní nastavení"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Generovat obsah"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "Obsah aktuální konverzace s modelem. Pro jednokolové dotazy se jedná o jedinou zprávu. Pro vícekolové dotazy jde o opakované pole obsahující historii konverzace a nejnovější požadavek. Pro jednoduché textové výzvy použijte místo toho pole `prompt`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "Obsah konverzace pro vícekolový nebo multimodální vstup"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Možnosti konfigurace pro generování modelem a výstupy"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Konfigurace generování"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Konfigurace pro generování"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "Název úložiště vyhledávání v souborech, které se má použít pro retrieval-augmented generation (RAG). Model prohledá dokumenty v úložišti, aby svou odpověď podložil relevantním obsahem"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Úložiště vyhledávání v souborech pro ukotvení RAG"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Název modelu, který se má použít pro generování (např. `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Model, který se má použít pro generování"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Seznam jedinečných bezpečnostních nastavení pro blokování nebezpečného obsahu"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Bezpečnostní nastavení"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Bezpečnostní nastavení pro filtrování obsahu"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Volitelný text systémové instrukce, který nastavuje chování a kontext pro model. Například: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Systémová instrukce"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Systémová instrukce pro model"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Jednoduchá textová výzva pro jednokolové generování. Poskytovatel ji automaticky zabalí do formátu zprávy `contents`. Použijte pro jednoduché požadavky; pro vícekolové konverzace nebo multimodální vstup použijte místo toho `contents`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Jednoduchá textová výzva pro jednokolové generování"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate content with a Gemini model",
+          "message": "Generovat obsah pomocí modelu Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Delete cached content that is no longer needed",
+          "message": "Odstranit obsah v mezipaměti, který již není potřeba"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Delete Cached Content",
+          "message": "Odstranit obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to delete",
+          "message": "Název prostředku obsahu v mezipaměti, který se má odstranit"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to delete",
+          "message": "Obsah v mezipaměti k odstranění"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Delete cached content",
+          "message": "Odstranit obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Odstranit soubor uložený ve službě Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Smazat soubor"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of the file to delete (e.g., `files/abc-123`)",
+          "message": "Název prostředku souboru, který se má odstranit (např. `files/abc-123`)"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.display_name": {
+          "source": "File",
+          "message": "Soubor"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The file to delete",
+          "message": "Soubor ke smazání"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Odstranit soubor uložený ve službě Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Delete a file search store and its contents",
+          "message": "Odstranit úložiště vyhledávání v souborech a jeho obsah"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Delete File Search Store",
+          "message": "Odstranit úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The resource name of the file search store to delete",
+          "message": "Název prostředku úložiště vyhledávání v souborech, které se má odstranit"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to delete",
+          "message": "Úložiště vyhledávání v souborech k odstranění"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Delete a file search store",
+          "message": "Odstranit úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.desc": {
+          "source": "Generate an embedding vector for the given content using a Gemini embedding model. Use the `text` field for simple text input, or `content` for multimodal input",
+          "message": "Generovat vektor embeddingu pro daný obsah pomocí modelu embeddingu Gemini. Pro jednoduchý textový vstup použijte pole `text` nebo pro multimodální vstup pole `content`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
+          "source": "Embed Content",
+          "message": "Vytvořit embedding obsahu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.desc": {
+          "source": "The content to embed. Only the `parts.text` fields will be counted. For simple text, use the `text` field instead",
+          "message": "Obsah pro vytvoření embeddingu. Započítána budou pouze pole `parts.text`. Pro jednoduchý text použijte místo toho pole `text`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.short_desc": {
+          "source": "The content to embed",
+          "message": "Obsah pro vytvoření embeddingu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.desc": {
+          "source": "Optional reduced dimension for the output embedding. If set, excessive values in the output embedding are truncated from the end",
+          "message": "Volitelná redukovaná dimenze pro výstupní embedding. Pokud je nastavena, nadbytečné hodnoty ve výstupním embeddingu jsou od konce oříznuty"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.display_name": {
+          "source": "Output Dimensionality",
+          "message": "Dimenze výstupu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.short_desc": {
+          "source": "Optional reduced dimension for the output embedding",
+          "message": "Volitelná redukovaná dimenze pro výstupní embedding"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`). Required for standalone requests; ignored in batch requests where the top-level model is used",
+          "message": "Název modelu, který se má použít pro embedding (např. `gemini-embedding-001`). Vyžadováno pro samostatné požadavky; ignorováno v dávkových požadavcích, kde se používá model nejvyšší úrovně"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "Model embeddingu, který se má použít"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.desc": {
+          "source": "Specifies that the given text will be classified",
+          "message": "Určuje, že daný text bude klasifikován"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.display_name": {
+          "source": "Classification",
+          "message": "Klasifikace"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.desc": {
+          "source": "Specifies that the embeddings will be used for clustering",
+          "message": "Určuje, že embeddingy budou použity pro shlukování"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.display_name": {
+          "source": "Clustering",
+          "message": "Shlukování"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.desc": {
+          "source": "Specifies the given text is a document from the corpus being searched",
+          "message": "Určuje, že daný text je dokumentem z prohledávaného korpusu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.display_name": {
+          "source": "Retrieval Document",
+          "message": "Dokument pro vyhledávání"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.desc": {
+          "source": "Specifies the given text is a query in a search/retrieval setting",
+          "message": "Určuje, že daný text je dotazem v rámci vyhledávání"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.display_name": {
+          "source": "Retrieval Query",
+          "message": "Dotaz pro vyhledávání"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.desc": {
+          "source": "Specifies the given text will be used for semantic text similarity",
+          "message": "Určuje, že daný text bude použit pro sémantickou podobnost textu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.display_name": {
+          "source": "Semantic Similarity",
+          "message": "Sémantická podobnost"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.desc": {
+          "source": "Optional task type for which the embeddings will be used",
+          "message": "Volitelný typ úlohy, pro který budou embeddingy použity"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Typ úkolu"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.short_desc": {
+          "source": "The intended task type for the embedding",
+          "message": "Zamýšlený typ úlohy pro embedding"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.desc": {
+          "source": "A simple text string to generate an embedding for. The provider automatically wraps this into the `content` message format. Use `content` instead for multimodal input",
+          "message": "Jednoduchý textový řetězec, pro který se má vygenerovat embedding. Poskytovatel jej automaticky zabalí do formátu zprávy `content`. Pro multimodální vstup použijte místo toho `content`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.short_desc": {
+          "source": "Simple text to embed",
+          "message": "Jednoduchý text pro embedding"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.desc": {
+          "source": "An optional title for the text. Only applicable when `taskType` is `RETRIEVAL_DOCUMENT`",
+          "message": "Volitelný název pro text. Použitelné pouze v případě, že `taskType` je `RETRIEVAL_DOCUMENT`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.short_desc": {
+          "source": "An optional title for the text",
+          "message": "Volitelný název pro text"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
+          "source": "Generate an embedding vector for the given content",
+          "message": "Vygenerovat vektor embeddingu pro daný obsah"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.desc": {
+          "source": "Import an uploaded file into a file search store for retrieval-augmented generation. Select the target store and the file to import from dropdowns",
+          "message": "Importovat nahraný soubor do úložiště vyhledávání souborů pro retrieval-augmented generation (RAG). Vyberte cílové úložiště a soubor k importu z rozbalovacích nabídek"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
+          "source": "Import File to Search Store",
+          "message": "Importovat soubor do úložiště vyhledávání"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.desc": {
+          "source": "Upload a new file and import it into the search store in one step. The provider uploads the file first, then imports it. Use this or `fileName` for an already-uploaded file",
+          "message": "Nahrát nový soubor a importovat jej do úložiště vyhledávání v jednom kroku. Poskytovatel soubor nejprve nahraje a poté importuje. Pro již nahraný soubor použijte toto nebo `fileName`"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Soubor"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.short_desc": {
+          "source": "Upload and import a file",
+          "message": "Nahrát a importovat soubor"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of an already-uploaded file to import (e.g., `files/abc-123`). Use this or `file` to upload a new file directly",
+          "message": "Název prostředku již nahraného souboru k importu (např. `files/abc-123`). Použijte toto nebo `file` pro přímé nahrání nového souboru"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.display_name": {
+          "source": "Existing File",
+          "message": "Existující soubor"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "An already-uploaded file to import",
+          "message": "Již nahraný soubor k importu"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of the file search store to import the file into",
+          "message": "Název úložiště vyhledávání souborů, do kterého se má soubor importovat"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to import into",
+          "message": "Úložiště vyhledávání souborů pro import"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {
+          "source": "Import an uploaded file into a file search store",
+          "message": "Importovat nahraný soubor do úložiště vyhledávání souborů"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Gemini** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Google Gemini** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese API připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou vystaveny jako plnohodnotné akce."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Gemini",
+          "message": "Provést vlastní volání API do Google Gemini"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply. Simplifies the API by handling message formatting automatically",
+          "message": "Chatovat s modelem Gemini odesláním jedné zprávy a přijetím jedné odpovědi. Zjednodušuje API automatickým zpracováním formátování zpráv"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Jednoduchý chat"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The text content of the message to send to the model",
+          "message": "Textový obsah zprávy, která se má odeslat modelu"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message text",
+          "message": "Text zprávy"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Název modelu, který se má použít pro generování (např. `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Model, který se má použít pro generování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.desc": {
+          "source": "The maximum number of tokens to generate in the response",
+          "message": "Maximální počet tokenů k vygenerování v odpovědi"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Maximální počet výstupních tokenů"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.short_desc": {
+          "source": "Maximum number of tokens to generate",
+          "message": "Maximální počet tokenů k vygenerování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model",
+          "message": "Volitelný text systémových instrukcí, který nastavuje chování a kontext pro model"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Systémová instrukce"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction text",
+          "message": "Text systémových instrukcí"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the message author (default: `user`)",
+          "message": "Role autora zprávy (výchozí: `user`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Role"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "Role autora zprávy"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.desc": {
+          "source": "The maximum number of tokens to consider when sampling",
+          "message": "Maximální počet tokenů ke zvážení při vzorkování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.short_desc": {
+          "source": "Top-K sampling parameter",
+          "message": "Parametr vzorkování Top-K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.desc": {
+          "source": "The maximum cumulative probability of tokens to consider when sampling",
+          "message": "Maximální kumulativní pravděpodobnost tokenů ke zvážení při vzorkování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "Parametr jádrového vzorkování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
+          "message": "Řídí náhodnost výstupu. Hodnoty se pohybují od `0.0` do `2.0`"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Controls randomness in generation",
+          "message": "Řídí náhodnost při generování"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply",
+          "message": "Chatovat s modelem Gemini odesláním jedné zprávy a přijetím jedné odpovědi"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events (SSE). Provides incremental responses as the model generates content",
+          "message": "Streamovat generování obsahu z modelu Gemini přes Server-Sent Events (SSE). Poskytuje inkrementální odpovědi podle toho, jak model generuje obsah"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
+          "source": "Stream Content",
+          "message": "Streamovat obsah"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "Obsah aktuální konverzace s modelem. Pro jednokolové dotazy se jedná o jedinou zprávu. Pro vícekolové dotazy jde o opakované pole obsahující historii konverzace a nejnovější požadavek. Pro jednoduché textové výzvy použijte místo toho pole `prompt`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Obsah"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "Obsah konverzace pro vícekolový nebo multimodální vstup"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Možnosti konfigurace pro generování modelem a výstupy"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Konfigurace generování"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Konfigurace pro generování"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "Název úložiště vyhledávání v souborech, které se má použít pro retrieval-augmented generation (RAG). Model prohledá dokumenty v úložišti, aby svou odpověď podložil relevantním obsahem"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Úložiště vyhledávání v souborech"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Úložiště vyhledávání v souborech pro ukotvení RAG"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "Název modelu, který se má použít pro generování (např. `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "Model, který se má použít pro generování"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Seznam jedinečných bezpečnostních nastavení pro blokování nebezpečného obsahu"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Bezpečnostní nastavení"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Bezpečnostní nastavení pro filtrování obsahu"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Volitelný text systémové instrukce, který nastavuje chování a kontext pro model. Například: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Systémová instrukce"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Systémová instrukce pro model"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Jednoduchá textová výzva pro jednokolové generování. Poskytovatel ji automaticky zabalí do formátu zprávy `contents`. Použijte pro jednoduché požadavky; pro vícekolové konverzace nebo multimodální vstup použijte místo toho `contents`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Jednoduchá textová výzva pro jednokolové generování"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events",
+          "message": "Streamovat generování obsahu z modelu Gemini přes Server-Sent Events"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Update the expiration time or TTL of existing cached content",
+          "message": "Aktualizovat čas vypršení platnosti nebo TTL existujícího obsahu v mezipaměti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Update Cached Content",
+          "message": "Aktualizovat obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to update",
+          "message": "Název prostředku obsahu v mezipaměti k aktualizaci"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Obsah v mezipaměti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to update",
+          "message": "Obsah v mezipaměti k aktualizaci"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "New expiration timestamp in UTC (RFC 3339 format)",
+          "message": "Nové časové razítko vypršení platnosti v UTC (formát RFC 3339)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Čas vypršení platnosti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "New expiration timestamp",
+          "message": "Nové časové razítko vypršení platnosti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "New time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Nová doba životnosti pro obsah v mezipaměti (např. `3600s` pro jednu hodinu)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "New time-to-live duration",
+          "message": "Nová doba životnosti"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Update the expiration of cached content",
+          "message": "Aktualizovat vypršení platnosti obsahu v mezipaměti"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file for use with the Gemini API for multimodal content generation",
+          "message": "Nahrát soubor pro použití s API Gemini pro multimodální generování obsahu"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Nahrát soubor"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "Optional display name for the uploaded file. If not provided, the file name from the uploaded file is used",
+          "message": "Volitelný zobrazovaný název nahraného souboru. Pokud není uveden, použije se název souboru z nahraného souboru"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "Zobrazovaný název"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "Display name for the uploaded file",
+          "message": "Zobrazovaný název nahraného souboru"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Google Gemini for use with multimodal content generation",
+          "message": "Soubor k nahrání do Google Gemini pro použití s multimodálním generováním obsahu"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Soubor"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "Soubor k nahrání"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for use with the Gemini API",
+          "message": "Nahrát soubor pro použití s API Gemini"
+        },
+        "app.R2VtaW5p.desc": {
+          "source": "Google Gemini generative AI services including text generation, embeddings, streaming, and multimodal content",
+          "message": "Služby generativní AI Google Gemini včetně generování textu, embeddingů, streamování a multimodálního obsahu"
+        },
+        "app.R2VtaW5p.display_name": {
+          "source": "Google Gemini",
+          "message": "Google Gemini"
+        },
+        "app.R2VtaW5p.short_desc": {
+          "source": "Google Gemini AI services",
+          "message": "Služby Google Gemini AI"
+        }
+      }
+    }
+  }
+}

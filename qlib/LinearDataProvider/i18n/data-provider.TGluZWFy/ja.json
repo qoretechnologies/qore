@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear内の任意の課題に新しいコメントが追加されたときにトリガーされます。リアルタイム通知にWebhookを使用します。"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
+          "source": "Comment Created",
+          "message": "コメント作成時"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new comment is created",
+          "message": "新しいコメントが作成されたときにトリガー"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.desc": {
+          "source": "Create a new cycle for time-boxed work",
+          "message": "タイムボックス化された作業のための新しいサイクルを作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
+          "source": "Create Cycle",
+          "message": "サイクルを作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.desc": {
+          "source": "The end date of the cycle",
+          "message": "サイクルの終了日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.display_name": {
+          "source": "Ends At",
+          "message": "終了日時"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.short_desc": {
+          "source": "When the cycle ends",
+          "message": "サイクルの終了日時"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.desc": {
+          "source": "The name of the cycle",
+          "message": "サイクルの名前"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.short_desc": {
+          "source": "The cycle name",
+          "message": "サイクル名"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.desc": {
+          "source": "The start date of the cycle",
+          "message": "サイクルの開始日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.display_name": {
+          "source": "Starts At",
+          "message": "開始日時"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.short_desc": {
+          "source": "When the cycle starts",
+          "message": "サイクルの開始日時"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.desc": {
+          "source": "The team to create the cycle in",
+          "message": "サイクルを作成するチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the cycle in",
+          "message": "サイクルを作成するチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
+          "source": "Create a new cycle (sprint) in Linear",
+          "message": "Linearで新しいサイクル（スプリント）を作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Create a new comment on an existing Linear issue",
+          "message": "既存のLinear課題に新しいコメントを作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create Comment",
+          "message": "コメントを作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body/content of the comment in markdown format",
+          "message": "Markdown形式のコメント本文/コンテンツ"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "The comment body",
+          "message": "コメント本文"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.desc": {
+          "source": "The issue to add the comment to",
+          "message": "コメントを追加する課題"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.display_name": {
+          "source": "Issue",
+          "message": "イシュー"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.short_desc": {
+          "source": "The issue to add the comment to",
+          "message": "コメントを追加する課題"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Add a comment to a Linear issue",
+          "message": "Linear課題にコメントを追加"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.desc": {
+          "source": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+          "message": "タイトル、説明、優先度、その他の属性を指定してLinearチームに新しい課題を作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
+          "source": "Create Issue",
+          "message": "課題を作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to add the issue to",
+          "message": "課題を追加するサイクル（スプリント）"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "サイクル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle/sprint",
+          "message": "サイクル/スプリント"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The user to assign the issue to",
+          "message": "課題を割り当てるユーザー"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "担当者"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The user to assign the issue to",
+          "message": "課題を割り当てるユーザー"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the issue in markdown format",
+          "message": "Markdown形式の課題の説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The issue description",
+          "message": "課題の説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The estimated complexity/effort",
+          "message": "見積もられた複雑さ/工数"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "見積もり"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The issue estimate",
+          "message": "課題の見積もり"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to attach to the issue",
+          "message": "課題に添付するラベル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "ラベル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels",
+          "message": "ラベル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The workflow state to set on the issue",
+          "message": "課題に設定するワークフローステータス"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The workflow state",
+          "message": "ワークフローステータス"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue for creating a sub-issue",
+          "message": "サブ課題を作成するための親課題"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "親課題"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "親課題"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "優先度なし"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "優先度なし"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "緊急優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "緊急"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "高優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "通常の優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "標準"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "低い優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The priority of the issue",
+          "message": "課題の優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The issue priority",
+          "message": "課題の優先度"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to add the issue to",
+          "message": "課題を追加するプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "プロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project",
+          "message": "プロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.desc": {
+          "source": "The team to create the issue in",
+          "message": "課題を作成するチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the issue in",
+          "message": "課題を作成するチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The title of the issue",
+          "message": "Issueのタイトル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The issue title",
+          "message": "課題のタイトル"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
+          "source": "Create a new issue in Linear",
+          "message": "Linear で新しい課題を作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label for categorizing issues",
+          "message": "課題を分類するための新しいラベルを作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "ラベルを作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.desc": {
+          "source": "The color of the label in hex format",
+          "message": "16進数（HEX）形式のラベル色"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "色"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.short_desc": {
+          "source": "The label color",
+          "message": "ラベルの色"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the label",
+          "message": "ラベルの説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The label description",
+          "message": "ラベルの説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The name of the label",
+          "message": "ラベルの名前"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The label name",
+          "message": "ラベル名"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.desc": {
+          "source": "The team to create the label in (leave empty for workspace labels)",
+          "message": "ラベルを作成するチーム（ワークスペースラベルの場合は空のままにします）"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the label in",
+          "message": "ラベルを作成するチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label in Linear",
+          "message": "Linear で新しいラベルを作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project for organizing related issues",
+          "message": "関連する課題を整理するための新しいプロジェクトを作成します"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create Project",
+          "message": "プロジェクトを作成"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the project",
+          "message": "プロジェクトの説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "プロジェクトの説明"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.desc": {
+          "source": "The user leading the project",
+          "message": "プロジェクトをリードするユーザー"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.display_name": {
+          "source": "Lead",
+          "message": "リード"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.short_desc": {
+          "source": "The project lead",
+          "message": "プロジェクトリード"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project",
+          "message": "プロジェクト名"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The project name",
+          "message": "プロジェクト名"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.desc": {
+          "source": "The planned start date of the project",
+          "message": "プロジェクトの開始予定日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "開始日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.short_desc": {
+          "source": "The project start date",
+          "message": "プロジェクトの開始日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled project",
+          "message": "キャンセルされたプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "キャンセル済み"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed project",
+          "message": "完了したプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused project",
+          "message": "一時停止中のプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "一時停止"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned project",
+          "message": "計画中のプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "計画中"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started project",
+          "message": "開始済みのプロジェクト"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "開始済み"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.desc": {
+          "source": "The initial state of the project",
+          "message": "プロジェクトの初期ステータス"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.short_desc": {
+          "source": "The project state",
+          "message": "プロジェクトのステータス"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.desc": {
+          "source": "The target completion date of the project",
+          "message": "プロジェクトの目標完了日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.display_name": {
+          "source": "Target Date",
+          "message": "目標日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.short_desc": {
+          "source": "The project target date",
+          "message": "プロジェクトの目標日"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.desc": {
+          "source": "The teams to associate with the project",
+          "message": "プロジェクトに関連付けるチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.display_name": {
+          "source": "Teams",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.short_desc": {
+          "source": "The teams to associate with the project",
+          "message": "プロジェクトに関連付けるチーム"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project in Linear",
+          "message": "Linear で新しいプロジェクトを作成します"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.desc": {
+          "source": "Archive (soft delete) a Linear issue",
+          "message": "Linear の課題をアーカイブ（論理削除）します"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
+          "source": "Archive Issue",
+          "message": "課題をアーカイブ"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.desc": {
+          "source": "The issue to archive",
+          "message": "アーカイブする課題"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "イシュー"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.short_desc": {
+          "source": "The issue to archive",
+          "message": "アーカイブする課題"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
+          "source": "Archive a Linear issue",
+          "message": "Linear の課題をアーカイブします"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.desc": {
+          "source": "Retrieve a specific issue by its ID",
+          "message": "ID で特定の課題を取得します"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
+          "source": "Get Issue",
+          "message": "課題の取得"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to retrieve",
+          "message": "取得する課題"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "イシュー"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to retrieve",
+          "message": "取得する課題"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
+          "source": "Get a specific issue from Linear",
+          "message": "Linear から特定の課題を取得します"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.desc": {
+          "source": "Retrieve a specific team by its ID",
+          "message": "ID で特定のチームを取得します"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
+          "source": "Get Team",
+          "message": "チームを取得"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.desc": {
+          "source": "The team to retrieve",
+          "message": "取得するチーム"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.short_desc": {
+          "source": "The team to retrieve",
+          "message": "取得するチーム"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
+          "source": "Get a specific team from Linear",
+          "message": "Linear から特定のチームを取得します"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear で新しい課題が作成されたときに発火します。リアルタイム通知に Webhook を使用します。"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
+          "source": "Issue Created",
+          "message": "課題の作成"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues created in this team (optional)",
+          "message": "このチームで作成された課題のみをトリガー（任意）"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "特定のチームの課題に絞り込み"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new issue is created",
+          "message": "新しい課題が作成されたときにトリガー"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.desc": {
+          "source": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear で既存の課題が更新されたときに発火します。リアルタイム通知に Webhook を使用します。"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
+          "source": "Issue Updated",
+          "message": "課題の更新"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues updated in this team (optional)",
+          "message": "このチームで更新された課題に対してのみトリガー（任意）"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "特定のチームの課題に絞り込み"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an issue is updated",
+          "message": "課題が更新されたときにトリガー"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Linear** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、およびレスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用してください。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Linear",
+          "message": "Linear へのカスタムAPI呼び出しを実行"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.desc": {
+          "source": "Search for cycles with optional team filter",
+          "message": "任意のチームフィルターを使用してサイクルを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
+          "source": "Search Cycles",
+          "message": "サイクルの検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.desc": {
+          "source": "Filter cycles by team",
+          "message": "チームでサイクルを絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "チームで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
+          "source": "Search for cycles in Linear",
+          "message": "Linear でサイクルを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.desc": {
+          "source": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+          "message": "チーム、プロジェクト、サイクル、担当者、ステータスのオプションフィルターを使用して課題を検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
+          "source": "Search Issues",
+          "message": "課題の検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.desc": {
+          "source": "Filter issues by cycle (sprint)",
+          "message": "サイクル（スプリント）で課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "サイクル"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.short_desc": {
+          "source": "Filter by cycle",
+          "message": "サイクルで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.desc": {
+          "source": "Filter issues by assignee",
+          "message": "担当者で課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "担当者"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "Filter by assignee",
+          "message": "担当者でフィルタリング"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.desc": {
+          "source": "Filter issues by workflow state",
+          "message": "ワークフローステータスで課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.short_desc": {
+          "source": "Filter by workflow state",
+          "message": "ワークフローステータスで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "優先度なし"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "緊急"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "標準"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.desc": {
+          "source": "Filter issues by priority level",
+          "message": "優先度レベルで課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.short_desc": {
+          "source": "Filter by priority",
+          "message": "優先度で絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.desc": {
+          "source": "Filter issues by project",
+          "message": "プロジェクトで課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "プロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.short_desc": {
+          "source": "Filter by project",
+          "message": "プロジェクトで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.desc": {
+          "source": "Filter issues by team",
+          "message": "チームで課題を絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "チームで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
+          "source": "Search for issues in Linear",
+          "message": "Linear で課題を検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.desc": {
+          "source": "Search for labels with optional team filter",
+          "message": "任意のチームフィルターを使用してラベルを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
+          "source": "Search Labels",
+          "message": "ラベルの検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.desc": {
+          "source": "Filter labels by team (`NOTHING` for workspace labels)",
+          "message": "チームでラベルを絞り込み（ワークスペースラベルの場合は `NOTHING`）"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "チームで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
+          "source": "Search for labels in Linear",
+          "message": "Linear でラベルを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects with optional state filter",
+          "message": "任意のステータスフィルターを使用してプロジェクトを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "プロジェクトの検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled projects",
+          "message": "キャンセルされたプロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "キャンセル済み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed projects",
+          "message": "完了したプロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused projects",
+          "message": "一時停止中のプロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "一時停止"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned projects",
+          "message": "計画中のプロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "計画中"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started projects",
+          "message": "開始済みのプロジェクト"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "開始済み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.desc": {
+          "source": "Filter projects by state",
+          "message": "ステータスでプロジェクトを絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.short_desc": {
+          "source": "Filter by project state",
+          "message": "プロジェクトステータスで絞り込み"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects in Linear",
+          "message": "Linear でプロジェクトを検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.desc": {
+          "source": "List all teams accessible to the authenticated user",
+          "message": "認証済みユーザーがアクセス可能なすべてのチームを一覧表示"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
+          "source": "Search Teams",
+          "message": "チームの検索"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
+          "source": "List teams in Linear",
+          "message": "Linear のチームを一覧表示"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.desc": {
+          "source": "Update the properties of an existing Linear issue",
+          "message": "既存の Linear 課題のプロパティを更新"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
+          "source": "Update Issue",
+          "message": "課題の更新"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to move the issue to",
+          "message": "課題の移動先サイクル（スプリント）"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "サイクル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle to move the issue to",
+          "message": "課題の移動先サイクル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The new user to assign the issue to",
+          "message": "課題を割り当てる新しいユーザー"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "担当者"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The new assignee",
+          "message": "新しい担当者"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the issue (supports markdown)",
+          "message": "課題の新しい説明（Markdown をサポート）"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new issue description",
+          "message": "新しい課題の説明"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The new estimated complexity/effort",
+          "message": "新しい見積もり複雑度/工数"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "見積もり"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The new issue estimate",
+          "message": "新しい課題の見積もり"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to update",
+          "message": "更新する課題"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "イシュー"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to update",
+          "message": "更新する課題"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to set on the issue (replaces existing labels)",
+          "message": "課題に設定するラベル（既存のラベルを置き換えます）"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "ラベル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels to set",
+          "message": "設定するラベル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The new workflow state for the issue",
+          "message": "課題の新しいワークフローステータス"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The new workflow state",
+          "message": "新しいワークフローステータス"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue ID (to make this a sub-issue)",
+          "message": "親課題ID（サブ課題にする場合）"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "親課題"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "親課題"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "優先度なし"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "優先度なし"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "緊急優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "緊急"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "高優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "通常の優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "標準"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "低い優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority of the issue",
+          "message": "課題の新しい優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The new issue priority",
+          "message": "新しい課題の優先度"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to move the issue to",
+          "message": "課題の移動先プロジェクト"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "プロジェクト"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project to move the issue to",
+          "message": "課題の移動先プロジェクト"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The new title of the issue",
+          "message": "課題の新しいタイトル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The new issue title",
+          "message": "新しい課題のタイトル"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
+          "source": "Update an existing Linear issue",
+          "message": "既存の Linear 課題を更新"
+        },
+        "app.TGluZWFy.desc": {
+          "source": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API.",
+          "message": "Linear は、ソフトウェアチーム向けの最新の課題追跡およびプロジェクト管理ツールです。この連携により、Linear の GraphQL API を介して課題、プロジェクト、サイクル、ラベル、コメントの作成、読み取り、更新、アーカイブが可能になります。"
+        },
+        "app.TGluZWFy.display_name": {
+          "source": "Linear",
+          "message": "Linear"
+        },
+        "app.TGluZWFy.short_desc": {
+          "source": "Linear issue tracking and project management",
+          "message": "Linear 課題追跡およびプロジェクト管理"
+        }
+      }
+    }
+  }
+}

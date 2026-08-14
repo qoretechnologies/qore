@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.desc": {
+          "source": "Cancel a running A2A task by its ID",
+          "message": "Скасувати запущене завдання A2A за його ID"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
+          "source": "Cancel Task",
+          "message": "Скасувати завдання"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to cancel",
+          "message": "Унікальний ідентифікатор завдання для скасування"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
+          "source": "Cancel a running task",
+          "message": "Скасувати запущене завдання"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.desc": {
+          "source": "Retrieve the A2A agent's card with its capabilities and skills",
+          "message": "Отримати картку агента A2A з його можливостями та навичками"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Agent Card",
+          "message": "Отримати картку агента"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get the agent's card",
+          "message": "Отримати картку агента"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.desc": {
+          "source": "Get the authenticated extended agent card with additional details",
+          "message": "Отримати автентифіковану розширену картку агента з додатковими деталями"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Extended Agent Card",
+          "message": "Отримати розширену картку агента"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get authenticated extended agent card",
+          "message": "Отримати автентифіковану розширену картку агента"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Get the push notification configuration for an A2A task",
+          "message": "Отримати конфігурацію push-сповіщень для завдання A2A"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Get Push Notification Config",
+          "message": "Отримати конфігурацію push-сповіщень"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "ID завдання, для якого потрібно керувати конфігурацією push-сповіщень"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Get push notification config for a task",
+          "message": "Отримати конфігурацію push-сповіщень для завдання"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve the current status of an A2A task by its ID",
+          "message": "Отримати поточний статус завдання A2A за його ID"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Отримати завдання"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "Унікальний ідентифікатор завдання для отримання"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get task status by ID",
+          "message": "Отримати статус завдання за ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Delete push notification configuration for an A2A task",
+          "message": "Видалити конфігурацію push-сповіщень для завдання A2A"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Delete Push Notification Config",
+          "message": "Видалити конфігурацію push-сповіщень"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to delete push notification config for",
+          "message": "ID завдання, для якого потрібно видалити конфігурацію push-сповіщень"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.desc": {
+          "source": "The ID of the push notification config to delete",
+          "message": "ID конфігурації push-сповіщень для видалення"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.display_name": {
+          "source": "Config ID",
+          "message": "ID конфігурації"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.short_desc": {
+          "source": "Push notification config ID",
+          "message": "ID конфігурації push-сповіщень"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Delete push notification config for a task",
+          "message": "Видалити конфігурацію push-сповіщень для завдання"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.desc": {
+          "source": "List A2A tasks, optionally filtered by context ID",
+          "message": "Отримати список завдань A2A, за бажанням відфільтрованих за ID контексту"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Отримати список завдань"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID to filter tasks by",
+          "message": "Необов'язковий ID контексту для фільтрації завдань"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "ID контексту"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.short_desc": {
+          "source": "Filter by context ID",
+          "message": "Фільтрувати за ID контексту"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.desc": {
+          "source": "Optional page size for cursor-based pagination",
+          "message": "Необов'язковий розмір сторінки для пагінації на основі курсора"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.short_desc": {
+          "source": "Number of results per page (v1.0)",
+          "message": "Кількість результатів на сторінку (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.desc": {
+          "source": "Optional cursor for retrieving the next page of results",
+          "message": "Необов'язковий курсор для отримання наступної сторінки результатів"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Pagination cursor (v1.0)",
+          "message": "Курсор пагінації (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filtering",
+          "message": "Отримати список завдань із необов'язковою фільтрацією"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.desc": {
+          "source": "List all push notification configurations for an A2A task",
+          "message": "Отримати список усіх конфігурацій push-сповіщень для завдання A2A"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
+          "source": "List Push Notification Configs",
+          "message": "Отримати список конфігурацій push-сповіщень"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "ID завдання, для якого потрібно керувати конфігурацією push-сповіщень"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
+          "source": "List push notification configs for a task",
+          "message": "Отримати список конфігурацій push-сповіщень для завдання"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Set the push notification configuration for an A2A task",
+          "message": "Задати конфігурацію push-сповіщень для завдання A2A"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Set Push Notification Config",
+          "message": "Задати конфігурацію push-сповіщень"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to set push notification config for",
+          "message": "ID завдання, для якого потрібно задати конфігурацію push-сповіщень"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Ідентифікатор завдання"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.desc": {
+          "source": "Optional verification token for the webhook",
+          "message": "Необов'язковий токен перевірки для вебхука"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.display_name": {
+          "source": "Token",
+          "message": "Токен"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.short_desc": {
+          "source": "Verification token",
+          "message": "Токен перевірки"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.desc": {
+          "source": "The URL to receive push notifications for task events",
+          "message": "URL-адреса для отримання push-сповіщень про події завдань"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.display_name": {
+          "source": "Webhook URL",
+          "message": "URL вебхука"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.short_desc": {
+          "source": "Push notification webhook URL",
+          "message": "URL вебхука push-сповіщень"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Set push notification config for a task",
+          "message": "Налаштувати push-сповіщення для завдання"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message to the A2A agent and get back a task",
+          "message": "Надіслати повідомлення агенту A2A та отримати завдання у відповідь"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send Message",
+          "message": "Надіслати повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.desc": {
+          "source": "Optional v1.0 configuration including `acceptedOutputModes`, `historyLength`, `returnImmediately`",
+          "message": "Необов'язкова конфігурація v1.0, що включає `acceptedOutputModes`, `historyLength`, `returnImmediately`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.display_name": {
+          "source": "Configuration",
+          "message": "Конфігурація"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.short_desc": {
+          "source": "Send message configuration (v1.0)",
+          "message": "Конфігурація надсилання повідомлення (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID for grouping related tasks into a conversation",
+          "message": "Необов'язковий ID контексту для групування пов'язаних завдань у розмову"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "ID контексту"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.short_desc": {
+          "source": "Context identifier",
+          "message": "Ідентифікатор контексту"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata for the message",
+          "message": "Необов'язкові метадані для повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Метадані"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Message metadata",
+          "message": "Метадані повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.desc": {
+          "source": "Optional unique identifier for the message",
+          "message": "Необов'язковий унікальний ідентифікатор для повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.short_desc": {
+          "source": "Optional message identifier",
+          "message": "Необов'язковий ідентифікатор повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.desc": {
+          "source": "List of message parts (text, file, or data).\n\nEach part is a hash with a `type` key:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`",
+          "message": "Список частин повідомлення (текст, файл або дані).\n\nКожна частина є хешем із ключем `type`:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.display_name": {
+          "source": "Parts",
+          "message": "Частини"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.short_desc": {
+          "source": "Message parts",
+          "message": "Частини повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.desc": {
+          "source": "A message from the agent",
+          "message": "Повідомлення від агента"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.display_name": {
+          "source": "Agent",
+          "message": "Агент"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.short_desc": {
+          "source": "Message from agent",
+          "message": "Повідомлення від агента"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A message from the user",
+          "message": "Повідомлення від користувача"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Користувач"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Message from user",
+          "message": "Повідомлення від користувача"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.desc": {
+          "source": "The role of the message sender: `user` or `agent`",
+          "message": "Роль відправника повідомлення: `user` або `agent`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Роль"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.short_desc": {
+          "source": "Message role",
+          "message": "Роль повідомлення"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.desc": {
+          "source": "Optional tenant identifier for multi-tenancy support",
+          "message": "Необов'язковий ідентифікатор тенанта для підтримки мультитенантності"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "Тенант"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.short_desc": {
+          "source": "Tenant identifier (v1.0)",
+          "message": "Ідентифікатор тенанта (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to the agent",
+          "message": "Надіслати повідомлення агенту"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.desc": {
+          "source": "Receive a notification when an A2A task artifact is added or modified",
+          "message": "Отримувати сповіщення, коли артефакт завдання A2A додано або змінено"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
+          "source": "Task Artifact Update",
+          "message": "Оновлення артефакту завдання"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
+          "source": "An A2A task artifact has been updated",
+          "message": "Артефакт завдання A2A було оновлено"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.desc": {
+          "source": "Receive a notification when a new message is added to an A2A task",
+          "message": "Отримувати сповіщення, коли до завдання A2A додано нове повідомлення"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
+          "source": "Task Message Update",
+          "message": "Оновлення повідомлення завдання"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {
+          "source": "An A2A task has a new message",
+          "message": "У завданні A2A є нове повідомлення"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.desc": {
+          "source": "Receive a notification when an A2A task status changes",
+          "message": "Отримувати сповіщення у разі зміни статусу завдання A2A"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
+          "source": "Task Status Update",
+          "message": "Оновлення статусу завдання"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
+          "source": "An A2A task status has changed",
+          "message": "Статус завдання A2A змінився"
+        },
+        "app.QTJB.desc": {
+          "source": "Connect to A2A agents for agent-to-agent collaboration",
+          "message": "Підключайтеся до агентів A2A для взаємодії між агентами"
+        },
+        "app.QTJB.display_name": {
+          "source": "A2A Agent",
+          "message": "Агент A2A"
+        },
+        "app.QTJB.short_desc": {
+          "source": "Agent-to-Agent protocol",
+          "message": "Протокол Agent-to-Agent"
+        }
+      }
+    }
+  }
+}

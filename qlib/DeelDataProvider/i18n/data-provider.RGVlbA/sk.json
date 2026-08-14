@@ -1,0 +1,2437 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.desc": {
+          "source": "Fires when a new contract is created in Deel. Uses polling to detect new records.",
+          "message": "Spustí sa pri vytvorení novej zmluvy v službe Deel. Na detekciu nových záznamov využíva intervalové dopytovanie (polling)."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
+          "source": "Contract Created",
+          "message": "Vytvorená zmluva"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new contract is created",
+          "message": "Spustiť pri vytvorení novej zmluvy"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a contract's status is updated in Deel. Uses polling to detect changes.",
+          "message": "Spustí sa pri aktualizácii stavu zmluvy v službe Deel. Na zistenie zmien používa dopytovanie."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Contract Status Updated",
+          "message": "Stav zmluvy bol aktualizovaný"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a contract's status changes",
+          "message": "Spustiť pri zmene stavu zmluvy"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.desc": {
+          "source": "Fires when a contract is terminated in Deel. Uses polling to detect terminated contracts.",
+          "message": "Spustí sa pri ukončení zmluvy v službe Deel. Na zistenie ukončených zmlúv používa dopytovanie."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
+          "source": "Contract Terminated",
+          "message": "Zmluva bola ukončená"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
+          "source": "Trigger when a contract is terminated",
+          "message": "Spustiť pri ukončení zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.desc": {
+          "source": "Create a new contractor or employee contract in Deel",
+          "message": "Vytvoriť novú zmluvu pre dodávateľa alebo zamestnanca v službe Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Create a Contract",
+          "message": "Vytvoriť zmluvu"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Kód krajiny ISO 3166-1 alpha-2 pre polohu pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.short_desc": {
+          "source": "The worker's country",
+          "message": "Krajina pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)",
+          "message": "Kód meny ISO 4217 pre platby (napr. `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.short_desc": {
+          "source": "The contract currency",
+          "message": "Mena zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The monetary amount for the contract (rate or fixed amount)",
+          "message": "Peňažná čiastka pre zmluvu (sadzba alebo fixná čiastka)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "The contract amount",
+          "message": "Suma zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.desc": {
+          "source": "The date the contract ends (YYYY-MM-DD format), if applicable",
+          "message": "Dátum ukončenia zmluvy (formát RRRR-MM-DD), ak je k dispozícii"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Koncový dátum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The contract end date",
+          "message": "Dátum ukončenia zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the contractor or employee",
+          "message": "Názov pracovnej pozície dodávateľa alebo zamestnanca"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Pracovná pozícia pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "A description of the work to be performed under this contract",
+          "message": "Popis práce, ktorá sa má vykonať na základe tejto zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Rozsah práce"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Description of the work",
+          "message": "Popis práce"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The date the contract starts (YYYY-MM-DD format)",
+          "message": "Dátum začiatku platnosti zmluvy (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The contract start date",
+          "message": "Dátum začiatku platnosti zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly payments",
+          "message": "Mesačné platby"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOmJpd2Vla2x5.desc": {
+          "source": "Biweekly (every two weeks) payments",
+          "message": "Dvojtýždenné platby (každé dva týždne)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOndlZWtseQ.desc": {
+          "source": "Weekly payments",
+          "message": "Týždenné platby"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.desc": {
+          "source": "The payment cycle for this contract",
+          "message": "Platobný cyklus pre túto zmluvu"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.display_name": {
+          "source": "Payment Cycle",
+          "message": "Platobný cyklus"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.short_desc": {
+          "source": "How often payments are made",
+          "message": "Ako často sa platby vykonávajú"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.desc": {
+          "source": "The email address of the contractor or employee",
+          "message": "E-mailová adresa dodávateľa alebo zamestnanca"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.display_name": {
+          "source": "Worker Email",
+          "message": "E-mail pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.short_desc": {
+          "source": "The worker's email address",
+          "message": "E-mailová adresa pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A descriptive title for the contract",
+          "message": "Popisný názov zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "The contract title",
+          "message": "Názov zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contract",
+          "message": "Zmluva založená na míľnikoch"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contract",
+          "message": "Zamestnanecká zmluva"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contract",
+          "message": "Zmluva s fixnou sadzbou"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contract",
+          "message": "Časovo ohraničená zmluva s priebežnými platbami (pay-as-you-go)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.desc": {
+          "source": "The type of contract to create",
+          "message": "Typ zmluvy, ktorá sa má vytvoriť"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Typ zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.short_desc": {
+          "source": "The type of contract",
+          "message": "Typ zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Create a new contract in Deel",
+          "message": "Vytvoriť novú zmluvu v službe Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel",
+          "message": "Vytvoriť novú úpravu faktúry (bonus, preplatenie alebo zrážka) v službe Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Create an Invoice Adjustment",
+          "message": "Vytvoriť úpravu faktúry"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this adjustment belongs to",
+          "message": "Jedinečný identifikátor zmluvy, ku ktorej táto úprava patrí"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Pridružená zmluva"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code (e.g., `USD`, `EUR`)",
+          "message": "Kód meny ISO 4217 (napr. `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.short_desc": {
+          "source": "The adjustment currency",
+          "message": "Mena úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The monetary amount for this invoice adjustment",
+          "message": "Peňažná čiastka pre túto úpravu faktúry"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The adjustment amount",
+          "message": "Suma úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this adjustment entry (YYYY-MM-DD format)",
+          "message": "Dátum pre tento záznam úpravy (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Dátum odoslania"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The adjustment date",
+          "message": "Dátum úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An explanation for why this invoice adjustment is being created",
+          "message": "Vysvetlenie, prečo sa táto úprava faktúry vytvára"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The reason for the adjustment",
+          "message": "Dôvod úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmJvbnVz.desc": {
+          "source": "Bonus payment",
+          "message": "Výplata bonusu"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmRlZHVjdGlvbg.desc": {
+          "source": "Payment deduction",
+          "message": "Zrážka z platby"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlaW1idXJzZW1lbnQ.desc": {
+          "source": "Expense reimbursement",
+          "message": "Preplatenie výdavkov"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.desc": {
+          "source": "The type of invoice adjustment",
+          "message": "Typ úpravy faktúry"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.display_name": {
+          "source": "Adjustment Type",
+          "message": "Typ úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.short_desc": {
+          "source": "The type of adjustment",
+          "message": "Typ úpravy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new invoice adjustment",
+          "message": "Vytvoriť novú úpravu faktúry"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Create a new time-off request for a worker in Deel",
+          "message": "Vytvoriť novú žiadosť o voľno pre pracovníka v službe Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Create a Time-Off Request",
+          "message": "Vytvoriť žiadosť o voľno"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract for this time-off request",
+          "message": "Jedinečný identifikátor zmluvy pre túto žiadosť o voľno"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Pridružená zmluva"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.desc": {
+          "source": "The last day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Posledný deň požadovaného obdobia voľna (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Koncový dátum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The time-off end date",
+          "message": "Dátum ukončenia voľna"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.desc": {
+          "source": "Optional notes or reason for the time-off request",
+          "message": "Voliteľné poznámky alebo dôvod žiadosti o voľno"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Poznámky"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the request",
+          "message": "Poznámky k žiadosti"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The first day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Prvý deň požadovaného obdobia voľna (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The time-off start date",
+          "message": "Dátum začiatku voľna"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.desc": {
+          "source": "The ID of the time-off type (entitlement) to use for this request",
+          "message": "ID typu voľna (nároku), ktorý sa má použiť pre túto žiadosť"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.display_name": {
+          "source": "Time-Off Type ID",
+          "message": "ID typu voľna"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.short_desc": {
+          "source": "The time-off type",
+          "message": "Typ voľna"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Create a new time-off request",
+          "message": "Vytvoriť novú žiadosť o voľno"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.desc": {
+          "source": "Create a new worker or person record in Deel",
+          "message": "Vytvoriť nový záznam pracovníka alebo osoby v Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
+          "source": "Create a Worker",
+          "message": "Vytvoriť pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Kód krajiny ISO 3166-1 alpha-2 pre polohu pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Kód krajiny"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "The worker's country",
+          "message": "Krajina pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the worker",
+          "message": "E-mailová adresa pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.short_desc": {
+          "source": "The worker's email address",
+          "message": "E-mailová adresa pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The given (first) name of the worker",
+          "message": "Meno pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Meno pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the worker",
+          "message": "Pracovná pozícia pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Pracovná pozícia pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The family (last) name of the worker",
+          "message": "Priezvisko pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Priezvisko pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Úroveň mid"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Úroveň junior"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Úroveň lead"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Úroveň senior"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The seniority level of the worker",
+          "message": "Úroveň seniority pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Seniorita"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Úroveň seniority pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.desc": {
+          "source": "The worker's phone number in international format",
+          "message": "Telefónne číslo pracovníka v medzinárodnom formáte"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.short_desc": {
+          "source": "The worker's phone number",
+          "message": "Telefónne číslo pracovníka"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
+          "source": "Create a new worker/person in Deel",
+          "message": "Vytvoriť nového pracovníka/osobu v Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.desc": {
+          "source": "Approve a pending time-off request for a worker in Deel",
+          "message": "Schváliť čakajúcu žiadosť o voľno pre pracovníka v Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
+          "source": "Approve a Time-Off Request",
+          "message": "Schváliť žiadosť o voľno"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to approve",
+          "message": "Jedinečný identifikátor žiadosti o voľno na schválenie"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "ID žiadosti"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to approve",
+          "message": "Žiadosť o voľno na schválenie"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
+          "source": "Approve a time-off request",
+          "message": "Schváliť žiadosť o voľno"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.desc": {
+          "source": "Approve a timesheet entry in Deel",
+          "message": "Schváliť položku časového výkazu v Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
+          "source": "Approve a Timesheet",
+          "message": "Schváliť časový výkaz"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to approve",
+          "message": "Jedinečný identifikátor položky časového výkazu na schválenie"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to approve",
+          "message": "Časový výkaz na schválenie"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
+          "source": "Approve a timesheet entry",
+          "message": "Schváliť položku časového výkazu"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.desc": {
+          "source": "Retrieve a single contract by ID from Deel",
+          "message": "Získať jednu zmluvu podľa ID zo služby Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
+          "source": "Get a Contract",
+          "message": "Získať zmluvu"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract",
+          "message": "Jedinečný identifikátor zmluvy"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
+          "source": "Get a single contract by ID",
+          "message": "Získať jednu zmluvu podľa ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Deel",
+          "message": "Získať jednu faktúru podľa ID zo služby Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Získať faktúru"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The unique identifier of the invoice",
+          "message": "Jedinečný identifikátor faktúry"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Získať jednu faktúru podľa ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve a single invoice adjustment by ID from Deel",
+          "message": "Získať jednu úpravu faktúry podľa ID zo služby Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Get an Invoice Adjustment",
+          "message": "Získať úpravu faktúry"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment",
+          "message": "Jedinečný identifikátor úpravy faktúry"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Get a single invoice adjustment by ID",
+          "message": "Získať jednu úpravu faktúry podľa ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.desc": {
+          "source": "Retrieve a single timesheet entry by ID from Deel",
+          "message": "Získať jednu položku časového výkazu podľa ID zo služby Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
+          "source": "Get a Timesheet",
+          "message": "Získať časový výkaz"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry",
+          "message": "Jedinečný identifikátor položky časového výkazu"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
+          "source": "Get a single timesheet by ID",
+          "message": "Získať jeden časový výkaz podľa ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.desc": {
+          "source": "Retrieve a single worker or person record by ID from Deel",
+          "message": "Získať jeden záznam pracovníka alebo osoby podľa ID zo služby Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
+          "source": "Get a Worker",
+          "message": "Získať pracovníka"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker",
+          "message": "Jedinečný identifikátor pracovníka"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID pracovníka"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker ID",
+          "message": "ID pracovníka"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
+          "source": "Get a single worker by ID",
+          "message": "Získať jedného pracovníka podľa ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Delete an invoice adjustment in Deel",
+          "message": "Odstrániť úpravu faktúry v službe Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Delete an Invoice Adjustment",
+          "message": "Odstrániť úpravu faktúry"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to delete",
+          "message": "Jedinečný identifikátor úpravy faktúry, ktorá sa má odstrániť"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to delete",
+          "message": "Úprava na odstránenie"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an invoice adjustment",
+          "message": "Odstrániť úpravu faktúry"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.desc": {
+          "source": "Delete a timesheet entry in Deel",
+          "message": "Odstrániť záznam časového výkazu v službe Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Delete a Timesheet",
+          "message": "Odstrániť časový výkaz"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to delete",
+          "message": "Jedinečný identifikátor záznamu časového výkazu, ktorý sa má odstrániť"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to delete",
+          "message": "Časový výkaz na odstránenie"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Delete a timesheet entry",
+          "message": "Odstrániť záznam časového výkazu"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new invoice adjustment is created in Deel. Uses polling to detect new records.",
+          "message": "Spustí sa pri vytvorení novej úpravy faktúry v službe Deel. Na zistenie nových záznamov používa cyklické dopytovanie (polling)."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
+          "source": "Invoice Adjustment Created",
+          "message": "Úprava faktúry vytvorená"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new invoice adjustment is created",
+          "message": "Spustiť pri vytvorení novej úpravy faktúry"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.desc": {
+          "source": "Fires when an invoice adjustment is approved or declined in Deel. Uses polling to detect changes.",
+          "message": "Spustí sa po schválení alebo zamietnutí úpravy faktúry v službe Deel. Na zistenie zmien používa cyklické dopytovanie (polling)."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
+          "source": "Invoice Adjustment Reviewed",
+          "message": "Úprava faktúry posúdená"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when an invoice adjustment is reviewed",
+          "message": "Spustiť pri posúdení úpravy faktúry"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.desc": {
+          "source": "List all legal entities (companies) registered in Deel",
+          "message": "Zoznam všetkých právnických osôb (spoločností) zaregistrovaných v službe Deel"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
+          "source": "List Legal Entities",
+          "message": "Zoznam právnických osôb"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
+          "source": "List legal entities in Deel",
+          "message": "Zoznam právnických osôb v službe Deel"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Deel** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deel",
+          "message": "Vykonať vlastné volanie API do služby Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.desc": {
+          "source": "List and search contracts in Deel with optional filtering",
+          "message": "Zobraziť a vyhľadávať zmluvy v službe Deel s voliteľným filtrovaním"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
+          "source": "Search Contracts",
+          "message": "Vyhľadať zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Get a specific contract by its ID",
+          "message": "Získať konkrétnu zmluvu podľa jej ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract ID",
+          "message": "Filtrovať podľa ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contracts",
+          "message": "Zmluvy založené na míľnikoch"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contracts",
+          "message": "Zamestnanecké zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contracts",
+          "message": "Zmluvy s fixnou sadzbou"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contracts",
+          "message": "Priebežne platené zmluvy založené na čase (pay-as-you-go)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.desc": {
+          "source": "Filter contracts by type",
+          "message": "Filtrovať zmluvy podľa typu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Typ zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.short_desc": {
+          "source": "Filter by contract type",
+          "message": "Filtrovať podľa typu zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contracts",
+          "message": "Aktívne zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended contracts",
+          "message": "Ukončené zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending contracts",
+          "message": "Čakajúce zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlcm1pbmF0ZWQ.desc": {
+          "source": "Terminated contracts",
+          "message": "Zrušené zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contracts by status",
+          "message": "Filtrovať zmluvy podľa stavu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contract status",
+          "message": "Filtrovať podľa stavu zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
+          "source": "Search for contracts in Deel",
+          "message": "Vyhľadávať zmluvy v službe Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.desc": {
+          "source": "List and search invoice adjustments in Deel with optional filtering",
+          "message": "Zobraziť a vyhľadávať úpravy faktúr v službe Deel s voliteľným filtrovaním"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
+          "source": "Search Invoice Adjustments",
+          "message": "Vyhľadať úpravy faktúr"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter adjustments by associated contract ID",
+          "message": "Filtrovať úpravy podľa ID priradenej zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filtrovať podľa zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "Get a specific adjustment by its ID",
+          "message": "Získať konkrétnu úpravu podľa jej ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "Filter by adjustment ID",
+          "message": "Filtrovať podľa ID úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved adjustments",
+          "message": "Schválené úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Declined adjustments",
+          "message": "Zamietnuté úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending adjustments",
+          "message": "Čakajúce úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.desc": {
+          "source": "Filter adjustments by status",
+          "message": "Filtrovať úpravy podľa stavu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by adjustment status",
+          "message": "Filtrovať podľa stavu úpravy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
+          "source": "Search for invoice adjustments",
+          "message": "Vyhľadávať úpravy faktúr"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "List and search invoices in Deel with optional filtering",
+          "message": "Zobraziť a vyhľadávať faktúry v službe Deel s voliteľným filtrovaním"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Vyhľadať faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter invoices by associated contract ID",
+          "message": "Filtrovať faktúry podľa ID priradenej zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filtrovať podľa zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.desc": {
+          "source": "Filter invoices up to this date (YYYY-MM-DD format)",
+          "message": "Filtrovať faktúry do tohto dátumu (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Dátum do"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Koniec rozsahu dátumov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter invoices from this date (YYYY-MM-DD format)",
+          "message": "Filtrovať faktúry od tohto dátumu (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Dátum od"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Začiatok rozsahu dátumov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.desc": {
+          "source": "Get a specific invoice by its ID",
+          "message": "Získať konkrétnu faktúru podľa jej ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Filtrovať podľa ID faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled invoices",
+          "message": "Zrušené faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Zaplatené faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending invoices",
+          "message": "Čakajúce faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Filtrovať faktúry podľa stavu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtrovať podľa stavu faktúry"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Deel",
+          "message": "Vyhľadať faktúry v službe Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.desc": {
+          "source": "List available time-off types and entitlements in Deel",
+          "message": "Zoznam dostupných typov voľna a nárokov v službe Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
+          "source": "Search Time-Off Types",
+          "message": "Vyhľadať typy voľna"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter time-off types by associated contract ID",
+          "message": "Filtrovať typy voľna podľa priradeného ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filtrovať podľa zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
+          "source": "List available time-off types/entitlements",
+          "message": "Zoznam dostupných typov voľna/nárokov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.desc": {
+          "source": "List and search timesheet entries in Deel with optional filtering",
+          "message": "Zoznam a vyhľadávanie záznamov v časových výkazoch v službe Deel s voliteľným filtrovaním"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
+          "source": "Search Timesheets",
+          "message": "Vyhľadať časové výkazy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter timesheets by associated contract ID",
+          "message": "Filtrovať časové výkazy podľa priradeného ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Filtrovať podľa zmluvy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.desc": {
+          "source": "Filter timesheets up to this date (YYYY-MM-DD format)",
+          "message": "Filtrovať časové výkazy do tohto dátumu (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Dátum do"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Koniec rozsahu dátumov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter timesheets from this date (YYYY-MM-DD format)",
+          "message": "Filtrovať časové výkazy od tohto dátumu (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Dátum od"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Začiatok rozsahu dátumov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved timesheets",
+          "message": "Schválené časové výkazy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending timesheets",
+          "message": "Čakajúce časové výkazy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.desc": {
+          "source": "Rejected timesheets",
+          "message": "Zamietnuté časové výkazy"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.desc": {
+          "source": "Filter timesheets by status",
+          "message": "Filtrovať časové výkazy podľa stavu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by timesheet status",
+          "message": "Filtrovať podľa stavu časového výkazu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "Get a specific timesheet by its ID",
+          "message": "Získať konkrétny časový výkaz podľa jeho ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "Filter by timesheet ID",
+          "message": "Filtrovať podľa ID časového výkazu"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
+          "source": "Search for timesheets in Deel",
+          "message": "Vyhľadať časové výkazy v službe Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.desc": {
+          "source": "List and search workers/people in Deel with optional filtering",
+          "message": "Zoznam a vyhľadávanie pracovníkov/osôb v službe Deel s voliteľným filtrovaním"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
+          "source": "Search Workers",
+          "message": "Vyhľadať pracovníkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "Filter workers by country code (ISO 3166-1 alpha-2)",
+          "message": "Filtrovať pracovníkov podľa kódu krajiny (ISO 3166-1 alpha-2)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Kód krajiny"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Filter by country",
+          "message": "Filtrovať podľa krajiny"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active workers",
+          "message": "Aktívni pracovníci"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive workers",
+          "message": "Neaktívni pracovníci"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending workers",
+          "message": "Čakajúci pracovníci"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.desc": {
+          "source": "Filter workers by employment status",
+          "message": "Filtrovať pracovníkov podľa stavu zamestnania"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.display_name": {
+          "source": "Employment Status",
+          "message": "Stav zamestnania"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.short_desc": {
+          "source": "Filter by employment status",
+          "message": "Filtrovať podľa stavu zamestnania"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Počet výsledkov, ktoré sa majú preskočiť (pre manuálne stránkovanie)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Posun výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.desc": {
+          "source": "Get a specific worker by their ID",
+          "message": "Získať konkrétneho pracovníka podľa jeho ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID pracovníka"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.short_desc": {
+          "source": "Filter by worker ID",
+          "message": "Filtrovať podľa ID pracovníka"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
+          "source": "Search for workers in Deel",
+          "message": "Vyhľadať pracovníkov v službe Deel"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.desc": {
+          "source": "Sign a contract in Deel on behalf of the organization",
+          "message": "Podpísať zmluvu v službe Deel v mene organizácie"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
+          "source": "Sign a Contract",
+          "message": "Podpísať zmluvu"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to sign",
+          "message": "Jedinečný identifikátor zmluvy na podpis"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to sign",
+          "message": "Zmluva na podpis"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
+          "source": "Sign a contract in Deel",
+          "message": "Podpísať zmluvu v službe Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.desc": {
+          "source": "Submit a new timesheet entry for a contract in Deel",
+          "message": "Odoslať nový záznam do časového výkazu pre zmluvu v službe Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
+          "source": "Submit a Timesheet",
+          "message": "Odoslať časový výkaz"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this timesheet belongs to",
+          "message": "Jedinečný identifikátor zmluvy, ku ktorej tento časový výkaz patrí"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Pridružená zmluva"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this timesheet entry (YYYY-MM-DD format)",
+          "message": "Dátum pre tento záznam časového výkazu (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Dátum odoslania"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The timesheet date",
+          "message": "Dátum časového výkazu"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the work performed",
+          "message": "Popis vykonanej práce"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Work description",
+          "message": "Popis práce"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The number of hours worked for this timesheet entry",
+          "message": "Počet odpracovaných hodín pre tento záznam časového výkazu"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Hodiny (Množstvo)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The number of hours worked",
+          "message": "Počet odpracovaných hodín"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
+          "source": "Submit a timesheet entry in Deel",
+          "message": "Odoslať záznam časového výkazu v službe Deel"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Approve or decline an invoice adjustment in Deel",
+          "message": "Schváliť alebo odmietnuť úpravu faktúry v službe Deel"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Review an Invoice Adjustment",
+          "message": "Skontrolovať úpravu faktúry"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to review",
+          "message": "Jedinečný identifikátor úpravy faktúry na kontrolu"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to review",
+          "message": "Úprava na kontrolu"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approve the adjustment",
+          "message": "Schváliť úpravu"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Decline the adjustment",
+          "message": "Odmietnuť úpravu"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.desc": {
+          "source": "The review decision for the invoice adjustment",
+          "message": "Rozhodnutie o kontrole pre úpravu faktúry"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.display_name": {
+          "source": "Review Status",
+          "message": "Stav kontroly"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.short_desc": {
+          "source": "The review decision",
+          "message": "Rozhodnutie o kontrole"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Approve or decline an invoice adjustment",
+          "message": "Schváliť alebo odmietnuť úpravu faktúry"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Reject a pending time-off request for a worker in Deel",
+          "message": "Zamietnuť čakajúcu žiadosť o voľno pre pracovníka v službe Deel"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Reject a Time-Off Request",
+          "message": "Zamietnuť žiadosť o voľno"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the time-off request was rejected",
+          "message": "Vysvetlenie, prečo bola žiadosť o voľno zamietnutá"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Dôvod zamietnutia"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Dôvod zamietnutia"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to reject",
+          "message": "Jedinečný identifikátor žiadosti o voľno, ktorá sa má zamietnuť"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "ID žiadosti"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to reject",
+          "message": "Žiadosť o voľno na zamietnutie"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Reject a time-off request",
+          "message": "Zamietnuť žiadosť o voľno"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.desc": {
+          "source": "Reject a timesheet entry in Deel with an optional rejection reason",
+          "message": "Zamietnuť položku časového výkazu v Deel s voliteľným dôvodom zamietnutia"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
+          "source": "Reject a Timesheet",
+          "message": "Zamietnuť časový výkaz"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the timesheet entry was rejected",
+          "message": "Vysvetlenie, prečo bola položka časového výkazu zamietnutá"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Dôvod zamietnutia"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Dôvod zamietnutia"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to reject",
+          "message": "Jedinečný identifikátor položky časového výkazu, ktorá sa má zamietnuť"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to reject",
+          "message": "Časový výkaz na zamietnutie"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
+          "source": "Reject a timesheet entry",
+          "message": "Zamietnuť položku časového výkazu"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.desc": {
+          "source": "Terminate an existing contractor or employee contract in Deel",
+          "message": "Ukončiť existujúcu zmluvu s dodávateľom alebo zamestnancom v Deel"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Terminate a Contract",
+          "message": "Ukončiť zmluvu"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to terminate",
+          "message": "Jedinečný identifikátor zmluvy, ktorá sa má ukončiť"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to terminate",
+          "message": "Zmluva na ukončenie"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.desc": {
+          "source": "The last day the worker will be active (YYYY-MM-DD format)",
+          "message": "Posledný deň, kedy bude pracovník aktívny (formát RRRR-MM-DD)"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.display_name": {
+          "source": "Last Day of Work",
+          "message": "Posledný pracovný deň"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.short_desc": {
+          "source": "The worker's last working day",
+          "message": "Posledný pracovný deň pracovníka"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.desc": {
+          "source": "The reason for terminating the contract",
+          "message": "Dôvod ukončenia zmluvy"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.display_name": {
+          "source": "Termination Reason",
+          "message": "Dôvod ukončenia"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.short_desc": {
+          "source": "The reason for termination",
+          "message": "Dôvod ukončenia"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Terminate an existing contract",
+          "message": "Ukončiť existujúcu zmluvu"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.desc": {
+          "source": "Fires when a new time-off request is created in Deel. Uses polling to detect new records.",
+          "message": "Spustí sa pri vytvorení novej žiadosti o voľno v Deel. Na detekciu nových záznamov využíva polling."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
+          "source": "Time-Off Request Created",
+          "message": "Žiadosť o voľno vytvorená"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new time-off request is created",
+          "message": "Spustiť pri vytvorení novej žiadosti o voľno"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.desc": {
+          "source": "Fires when a time-off request is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Spustí sa pri schválení alebo zamietnutí žiadosti o voľno v Deel. Na detekciu zmien využíva polling."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
+          "source": "Time-Off Request Reviewed",
+          "message": "Žiadosť o voľno posúdená"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {
+          "source": "Trigger when a time-off request is approved or rejected",
+          "message": "Spustiť pri schválení alebo zamietnutí žiadosti o voľno"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.desc": {
+          "source": "Fires when a time-off request is updated in Deel. Uses polling to detect changes.",
+          "message": "Spustí sa pri aktualizácii žiadosti o voľno v Deel. Na detekciu zmien využíva polling."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
+          "source": "Time-Off Request Updated",
+          "message": "Žiadosť o voľno aktualizovaná"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a time-off request is updated",
+          "message": "Spustiť pri aktualizácii žiadosti o voľno"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new timesheet entry is submitted in Deel. Uses polling to detect new records.",
+          "message": "Spustí sa pri odoslaní novej položky časového výkazu v Deel. Na detekciu nových záznamov využíva polling."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
+          "source": "Timesheet Submitted",
+          "message": "Časový výkaz odoslaný"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new timesheet is submitted",
+          "message": "Spustiť pri odoslaní nového časového výkazu"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.desc": {
+          "source": "Fires when a timesheet entry is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Spustí sa pri schválení alebo zamietnutí položky časového výkazu v Deel. Na detekciu zmien využíva polling."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
+          "source": "Timesheet Reviewed",
+          "message": "Časový výkaz posúdený"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Rozpoznať iba udalosti vytvorené alebo aktualizované po tomto dátume/čase. Ak nie je nastavené, dopytovanie začne od aktuálneho času."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Dátum začiatku"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Rozpoznať iba udalosti po tomto dátume"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when a timesheet is approved or rejected",
+          "message": "Spustiť pri schválení alebo zamietnutí časového výkazu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.desc": {
+          "source": "Update the details of an existing contract in Deel",
+          "message": "Aktualizovať podrobnosti existujúcej zmluvy v Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Update a Contract",
+          "message": "Aktualizovať zmluvu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to update",
+          "message": "Jedinečný identifikátor zmluvy, ktorá sa má aktualizovať"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID zmluvy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to update",
+          "message": "Zmluva na aktualizáciu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The updated monetary amount for the contract",
+          "message": "Aktualizovaná peňažná suma pre zmluvu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "Updated contract amount",
+          "message": "Aktualizovaná suma zmluvy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title for the contract",
+          "message": "Aktualizovaný názov pracovnej pozície pre zmluvu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "Updated job title",
+          "message": "Aktualizovaná pracovná pozícia"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "Updated description of the work to be performed",
+          "message": "Aktualizovaný opis práce, ktorá sa má vykonať"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Rozsah práce"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Updated scope of work",
+          "message": "Aktualizovaný rozsah práce"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A new descriptive title for the contract",
+          "message": "Nový popisný názov zmluvy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "Updated contract title",
+          "message": "Aktualizovaný názov zmluvy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Update an existing contract",
+          "message": "Aktualizovať existujúcu zmluvu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Update an existing invoice adjustment in Deel",
+          "message": "Aktualizovať existujúcu úpravu faktúry v Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Update an Invoice Adjustment",
+          "message": "Aktualizovať úpravu faktúry"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The new monetary amount for this invoice adjustment",
+          "message": "Nová peňažná suma pre túto úpravu faktúry"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The updated adjustment amount",
+          "message": "Aktualizovaná suma úpravy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to update",
+          "message": "Jedinečný identifikátor úpravy faktúry, ktorá sa má aktualizovať"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID úpravy"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to update",
+          "message": "Úprava na aktualizáciu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated explanation for this invoice adjustment",
+          "message": "Aktualizované vysvetlenie tejto úpravy faktúry"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The updated description",
+          "message": "Aktualizovaný popis"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Update an existing invoice adjustment",
+          "message": "Aktualizovať existujúcu úpravu faktúry"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.desc": {
+          "source": "Update an existing timesheet entry in Deel",
+          "message": "Aktualizovať existujúcu položku časového výkazu v Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Update a Timesheet",
+          "message": "Aktualizovať časový výkaz"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated description of the work performed",
+          "message": "Aktualizovaný opis vykonanej práce"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated work description",
+          "message": "Aktualizovaný opis práce"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The new number of hours worked",
+          "message": "Nový počet odpracovaných hodín"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Hodiny (Množstvo)"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The updated number of hours",
+          "message": "Aktualizovaný počet hodín"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to update",
+          "message": "Jedinečný identifikátor položky časového výkazu, ktorá sa má aktualizovať"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID časového výkazu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to update",
+          "message": "Pracovný výkaz na aktualizáciu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Update an existing timesheet entry",
+          "message": "Aktualizovať existujúci záznam pracovného výkazu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.desc": {
+          "source": "Update an existing worker or person record in Deel",
+          "message": "Aktualizovať existujúci záznam pracovníka alebo osoby v službe Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
+          "source": "Update a Worker",
+          "message": "Aktualizovať pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The updated given (first) name of the worker",
+          "message": "Aktualizované krstné meno pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Meno pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title of the worker",
+          "message": "Aktualizovaná pracovná pozícia pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Pracovná pozícia"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Pracovná pozícia pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The updated family (last) name of the worker",
+          "message": "Aktualizované priezvisko pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Priezvisko pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Úroveň mid"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Úroveň junior"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Úroveň lead"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Úroveň senior"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The updated seniority level of the worker",
+          "message": "Aktualizovaná úroveň seniority pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Seniorita"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Úroveň seniority pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker to update",
+          "message": "Jedinečný identifikátor pracovníka na aktualizáciu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID pracovníka"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker to update",
+          "message": "Pracovník na aktualizáciu"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
+          "source": "Update an existing worker's information",
+          "message": "Aktualizovať informácie o existujúcom pracovníkovi"
+        },
+        "app.RGVlbA.desc": {
+          "source": "Deel is a global workforce management and HR platform for hiring, managing, and paying contractors and full-time employees worldwide.\n\nThis integration supports contracts, timesheets, invoice adjustments, workers, time-off requests, legal entities, invoices, and polling-based event triggers.",
+          "message": "Deel je globálna platforma na správu pracovných síl a HR pre nábor, riadenie a vyplácanie dodávateľov a zamestnancov na plný úväzok po celom svete.\n\nTáto integrácia podporuje zmluvy, pracovné výkazy, úpravy faktúr, pracovníkov, žiadosti o voľno, právnické osoby, faktúry a triggery udalostí založené na dopytovaní (polling)."
+        },
+        "app.RGVlbA.display_name": {
+          "source": "Deel",
+          "message": "Deel"
+        },
+        "app.RGVlbA.short_desc": {
+          "source": "Deel global workforce management platform",
+          "message": "Globálna platforma na správu pracovných síl Deel"
+        }
+      }
+    }
+  }
+}

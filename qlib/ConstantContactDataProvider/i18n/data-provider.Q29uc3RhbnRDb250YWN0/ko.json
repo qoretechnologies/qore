@@ -1,0 +1,2177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Constant Contact",
+          "message": "Constant Contact에서 새 사용자 정의 필드 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "사용자 정의 필드 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The label for the custom field",
+          "message": "사용자 정의 필드의 레이블"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "라벨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "사용자 정의 필드 레이블"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Date field",
+          "message": "날짜 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.desc": {
+          "source": "String field",
+          "message": "문자열 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.desc": {
+          "source": "The type of the custom field",
+          "message": "사용자 정의 필드의 유형"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.short_desc": {
+          "source": "Custom field type",
+          "message": "사용자 정의 필드 유형"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "새 사용자 정의 필드 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Constant Contact",
+          "message": "Constant Contact에서 새 연락처 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "연락처 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the contact",
+          "message": "연락처의 회사 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "회사 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "연락처 회사 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Created by the account owner",
+          "message": "계정 소유자가 생성함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Created by the contact themselves",
+          "message": "연락처 본인이 직접 생성함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact creation",
+          "message": "연락처 생성 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "생성 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact creation",
+          "message": "연락처 생성 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "연락처의 사용자 정의 필드 값 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "사용자 지정 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "사용자 지정 필드 값"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 형식의 연락처 기념일 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "기념일"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "기념일 날짜 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "연락처의 생일 일자 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "생일 일자"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "생일 일자 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "연락처의 생일 월 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "생일 월"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "생일 월 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "`address` 및 선택적 `permission_to_send`을 포함하는 이메일 주소 객체"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "이메일 주소 객체"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "연락처의 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "연락처 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "Job title of the contact",
+          "message": "연락처의 직책"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "직책"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "연락처 직책"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the contact",
+          "message": "연락처의 성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "연락처 성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs to add the contact to",
+          "message": "연락처를 추가할 연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "목록 멤버십"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs to add the contact to",
+          "message": "연락처를 추가할 연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "연락처의 주소 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "상세 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "연락처 상세 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "연락처의 전화번호 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "연락처 전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs to apply to the contact",
+          "message": "연락처에 적용할 태그 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "태그 지정"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs to apply to the contact",
+          "message": "연락처에 적용할 태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "새 연락처 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Create a new contact list in Constant Contact",
+          "message": "Constant Contact에서 새 연락처 목록 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Create a Contact List",
+          "message": "연락처 목록 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "연락처 목록 설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "연락처 목록 설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "이 목록을 즐겨찾기로 표시할지 여부"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "즐겨찾기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "즐겨찾기로 표시"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "연락처 목록의 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "연락처 목록 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Create a new contact list",
+          "message": "새 연락처 목록 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Create a new email campaign in Constant Contact",
+          "message": "Constant Contact에서 새 이메일 캠페인 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Create an Email Campaign",
+          "message": "이메일 캠페인 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.desc": {
+          "source": "List of campaign activity configurations including sender, subject, HTML content, and target lists",
+          "message": "발신자, 제목, HTML 콘텐츠 및 대상 목록을 포함한 캠페인 활동 구성 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.display_name": {
+          "source": "Campaign Activities",
+          "message": "캠페인 활동"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.short_desc": {
+          "source": "List of campaign activity configurations",
+          "message": "캠페인 활동 구성 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the email campaign",
+          "message": "이메일 캠페인의 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "캠페인 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new email campaign",
+          "message": "새 이메일 캠페인 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.desc": {
+          "source": "Create a new segment in Constant Contact",
+          "message": "Constant Contact에서 새 세그먼트 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Create a Segment",
+          "message": "세그먼트 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The name of the segment",
+          "message": "세그먼트의 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "세그먼트 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The criteria expression for the segment",
+          "message": "세그먼트의 조건식"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "세그먼트 조건"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "세그먼트 조건식"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Create a new segment",
+          "message": "새 세그먼트 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Constant Contact",
+          "message": "Constant Contact에서 새 태그 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "태그 만들기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag",
+          "message": "태그 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "태그 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Tag created by the account owner",
+          "message": "계정 소유자가 생성한 태그"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Tag created by the contact",
+          "message": "연락처가 생성한 태그"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.desc": {
+          "source": "The source of the tag",
+          "message": "태그의 출처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.display_name": {
+          "source": "Tag Source",
+          "message": "태그 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.short_desc": {
+          "source": "Source of the tag",
+          "message": "태그 출처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "새 태그 생성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Add contacts to one or more contact lists in bulk",
+          "message": "하나 이상의 연락처 목록에 연락처를 일괄 추가합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Add List Members",
+          "message": "목록 구성원 추가"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the contacts to",
+          "message": "연락처를 추가할 연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to add to the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber`, or `engagement_level`",
+          "message": "목록에 추가할 연락처의 출처입니다. 상호 배타적인 필드 중 하나를 사용하세요: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber` 또는 `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "연락처 출처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Add contacts to lists in bulk",
+          "message": "목록에 연락처 일괄 추가"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Get the Constant Contact account information",
+          "message": "Constant Contact 계정 정보를 가져옵니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "계정 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get account information",
+          "message": "계정 정보 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.desc": {
+          "source": "Retrieve a single custom field by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 사용자 정의 필드를 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Get a Custom Field",
+          "message": "사용자 정의 필드 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Get a single custom field by ID",
+          "message": "ID로 단일 사용자 정의 필드 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 연락처를 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "연락처 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "ID로 단일 연락처 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Retrieve a single contact list by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 연락처 목록을 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Get a Contact List",
+          "message": "연락처 목록 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "리스트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list ID",
+          "message": "연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Get a single contact list by ID",
+          "message": "ID로 단일 연락처 목록 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single email campaign by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 이메일 캠페인을 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Get an Email Campaign",
+          "message": "이메일 캠페인 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign ID",
+          "message": "이메일 캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Get a single email campaign by ID",
+          "message": "ID로 단일 이메일 캠페인 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.desc": {
+          "source": "Get a summary report for email campaigns in Constant Contact",
+          "message": "Constant Contact에서 이메일 캠페인 요약 보고서를 가져옵니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
+          "source": "Get Email Summary",
+          "message": "이메일 요약 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.desc": {
+          "source": "A list of email campaign IDs to get summaries for",
+          "message": "요약을 가져올 이메일 캠페인 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.display_name": {
+          "source": "Campaign IDs",
+          "message": "캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.short_desc": {
+          "source": "List of campaign IDs",
+          "message": "캠페인 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
+          "source": "Get email campaign summary report",
+          "message": "이메일 캠페인 요약 보고서 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a single segment by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 세그먼트를 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get a Segment",
+          "message": "세그먼트 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a single segment by ID",
+          "message": "ID로 단일 세그먼트 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Constant Contact",
+          "message": "Constant Contact에서 ID로 단일 태그를 조회합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "태그 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID로 단일 태그 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Constant Contact",
+          "message": "Constant Contact에서 사용자 정의 필드를 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "사용자 정의 필드 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to delete",
+          "message": "삭제할 사용자 정의 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "사용자 정의 필드 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Constant Contact",
+          "message": "Constant Contact에서 연락처를 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "연락처 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "삭제할 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "연락처 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Delete a contact list from Constant Contact",
+          "message": "Constant Contact에서 연락처 목록을 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Delete a Contact List",
+          "message": "연락처 목록 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "리스트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to delete",
+          "message": "삭제할 연락처 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Delete a contact list",
+          "message": "연락처 목록 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Delete an email campaign from Constant Contact",
+          "message": "Constant Contact에서 이메일 캠페인을 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Delete an Email Campaign",
+          "message": "이메일 캠페인 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to delete",
+          "message": "삭제할 이메일 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Delete an email campaign",
+          "message": "이메일 캠페인 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.desc": {
+          "source": "Delete a segment from Constant Contact",
+          "message": "Constant Contact에서 세그먼트를 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
+          "source": "Delete a Segment",
+          "message": "세그먼트 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to delete",
+          "message": "삭제할 세그먼트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Delete a segment",
+          "message": "세그먼트 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Constant Contact",
+          "message": "Constant Contact에서 태그를 삭제합니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "태그 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "삭제할 태그"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "태그 삭제"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Export contacts in bulk from Constant Contact",
+          "message": "Constant Contact에서 연락처를 일괄 내보냅니다"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Export Contacts",
+          "message": "연락처 내보내기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.desc": {
+          "source": "List of field names to include in the export",
+          "message": "내보내기에 포함할 필드 이름 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.short_desc": {
+          "source": "Fields to include in export",
+          "message": "내보내기에 포함할 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to export contacts from",
+          "message": "연락처를 내보낼 연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to export from",
+          "message": "내보낼 연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.desc": {
+          "source": "The segment ID to export contacts from",
+          "message": "연락처를 내보낼 세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Segment to export",
+          "message": "내보낼 세그먼트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Export contacts in bulk",
+          "message": "연락처 일괄 내보내기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Import contacts in bulk into Constant Contact",
+          "message": "Constant Contact로 연락처 일괄 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Import Contacts",
+          "message": "연락처 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.desc": {
+          "source": "List of contact data hashes to import",
+          "message": "가져올 연락처 데이터 해시 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.display_name": {
+          "source": "Import Data",
+          "message": "데이터 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.short_desc": {
+          "source": "List of contact data to import",
+          "message": "가져올 연락처 데이터 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the imported contacts to",
+          "message": "가져온 연락처를 추가할 연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to add imported contacts to",
+          "message": "가져온 연락처를 추가할 연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Import contacts in bulk",
+          "message": "연락처 일괄 가져오기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Constant Contact",
+          "message": "Constant Contact의 태그 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "태그 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "태그 ID별 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "모든 태그 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.desc": {
+          "source": "List contact lists in Constant Contact",
+          "message": "Constant Contact의 연락처 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
+          "source": "List Contact Lists",
+          "message": "연락처 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "리스트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by list ID",
+          "message": "목록 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
+          "source": "List all contact lists",
+          "message": "모든 연락처 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Constant Contact with optional filtering",
+          "message": "Constant Contact의 연락처 목록을 선택적 필터링과 함께 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "연락처 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "연락처 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "Filter contacts by email address",
+          "message": "이메일 주소로 연락처 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "이메일 주소로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.desc": {
+          "source": "Filter contacts by contact list membership",
+          "message": "연락처 목록 멤버십별로 연락처 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "리스트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by contact list ID",
+          "message": "연락처 목록 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.desc": {
+          "source": "Contacts with no status set",
+          "message": "상태가 설정되지 않은 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.display_name": {
+          "source": "Not Set",
+          "message": "설정되지 않음"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "활성 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "활성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "All contacts",
+          "message": "모든 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "모두"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted contacts",
+          "message": "삭제된 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "삭제됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.desc": {
+          "source": "Contacts pending confirmation",
+          "message": "확인 대기 중인 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.display_name": {
+          "source": "Pending Confirmation",
+          "message": "확인 대기 중"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.desc": {
+          "source": "Contacts on temporary hold",
+          "message": "일시 보류 상태의 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.display_name": {
+          "source": "Temporary Hold",
+          "message": "일시 보류"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.desc": {
+          "source": "Unsubscribed contacts",
+          "message": "구독 취소한 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.display_name": {
+          "source": "Unsubscribed",
+          "message": "구독 취소됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contacts by status",
+          "message": "상태별로 연락처 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "연락처 상태로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Filter contacts updated after this date (ISO-8601)",
+          "message": "이 날짜 이후에 업데이트된 연락처 필터링 (ISO-8601)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "이후 업데이트됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "업데이트 날짜로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "모든 연락처 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List custom fields in Constant Contact",
+          "message": "Constant Contact의 사용자 정의 필드 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "사용자 지정 필드 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "Filter by custom field ID",
+          "message": "사용자 정의 필드 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "모든 사용자 정의 필드 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.desc": {
+          "source": "List email campaigns in Constant Contact with optional filtering",
+          "message": "Constant Contact의 이메일 캠페인 목록을 선택적 필터링과 함께 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
+          "source": "List Email Campaigns",
+          "message": "이메일 캠페인 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Filter by campaign ID",
+          "message": "캠페인 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.desc": {
+          "source": "Completed campaigns",
+          "message": "완료된 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.display_name": {
+          "source": "Done",
+          "message": "완료됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "초안 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "임시 저장"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.desc": {
+          "source": "Currently sending campaigns",
+          "message": "현재 발송 중인 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.display_name": {
+          "source": "Executing",
+          "message": "실행 중"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.desc": {
+          "source": "Campaigns that encountered an error",
+          "message": "오류가 발생한 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.display_name": {
+          "source": "Error",
+          "message": "오류"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.desc": {
+          "source": "Removed campaigns",
+          "message": "제거된 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.display_name": {
+          "source": "Removed",
+          "message": "제거됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.desc": {
+          "source": "Scheduled campaigns",
+          "message": "예약된 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "예약됨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by status",
+          "message": "상태별 캠페인 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "캠페인 상태로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all email campaigns",
+          "message": "모든 이메일 캠페인 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "List segments in Constant Contact",
+          "message": "Constant Contact의 세그먼트 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "세그먼트 목록 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.desc": {
+          "source": "Sort by modified date",
+          "message": "수정 날짜순으로 정렬"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.display_name": {
+          "source": "Modified Date",
+          "message": "수정 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by name",
+          "message": "이름순으로 정렬"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.desc": {
+          "source": "Sort by created date",
+          "message": "생성 날짜순으로 정렬"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.display_name": {
+          "source": "Created Date",
+          "message": "생성 일자"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Sort by date",
+          "message": "날짜순으로 정렬"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.desc": {
+          "source": "The field to sort results by",
+          "message": "결과를 정렬할 기준 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.display_name": {
+          "source": "Sort By",
+          "message": "정렬 기준"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.short_desc": {
+          "source": "Field to sort by",
+          "message": "정렬 기준 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Filter by segment ID",
+          "message": "세그먼트 ID로 필터링"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List all segments",
+          "message": "모든 세그먼트 조회"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Constant Contact** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Constant Contact**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에 기본 액션으로 아직 노출되지 않은 엔드포인트에 이 액션을 사용합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Constant Contact",
+          "message": "Constant Contact에 사용자 정의 API 호출 수행"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contact에서 새 연락처가 생성될 때 실행됩니다. 새 레코드를 감지하기 위해 폴링을 사용합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "새 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "새 연락처가 생성될 때 트리거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Fires when a new contact list is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contact에서 새 연락처 목록이 생성될 때 실행됩니다. 새 레코드를 감지하기 위해 폴링을 사용합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "New Contact List",
+          "message": "새 연락처 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Trigger when a new contact list is created",
+          "message": "새 연락처 목록이 생성될 때 트리거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Fires when a new email campaign is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Constant Contact에서 새 이메일 캠페인이 생성될 때 실행됩니다. 새 레코드를 감지하기 위해 폴링을 사용합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "New Email Campaign",
+          "message": "새 이메일 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Trigger when a new email campaign is created",
+          "message": "새 이메일 캠페인이 생성될 때 트리거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.desc": {
+          "source": "Schedule an email campaign activity for sending in Constant Contact",
+          "message": "Constant Contact에서 발송할 이메일 캠페인 활동 예약"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
+          "source": "Schedule an Email Campaign",
+          "message": "이메일 캠페인 예약"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.display_name": {
+          "source": "Campaign Activity ID",
+          "message": "캠페인 활동 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.short_desc": {
+          "source": "The campaign activity to schedule",
+          "message": "예약할 캠페인 활동"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.desc": {
+          "source": "The scheduled send date in ISO-8601 format",
+          "message": "ISO-8601 형식의 발송 예정 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.display_name": {
+          "source": "Scheduled Date",
+          "message": "예약된 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.short_desc": {
+          "source": "ISO-8601 date",
+          "message": "ISO-8601 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
+          "source": "Schedule an email campaign for sending",
+          "message": "발송할 이메일 캠페인 예약"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Remove contacts from one or more contact lists in bulk",
+          "message": "하나 이상의 연락처 목록에서 연락처를 대량으로 제거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Remove List Members",
+          "message": "목록 멤버 제거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to remove the contacts from",
+          "message": "연락처를 제거할 연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to remove from the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts`, or `engagement_level`",
+          "message": "목록에서 제거할 연락처의 소스입니다. 상호 배타적인 필드 중 하나를 사용하십시오: `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts`, 또는 `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "연락처 출처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Remove contacts from lists in bulk",
+          "message": "목록에서 연락처 대량 제거"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update the Constant Contact account information.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Constant Contact 계정 정보를 업데이트합니다.\n\n**중요**: 이 기능은 PUT 시맨틱(전체 교체)을 사용합니다. 요청에 포함되지 않은 모든 필드는 기본값으로 초기화됩니다. 유지하려는 모든 필드를 포함하십시오."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "계정 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The two-letter ISO country code",
+          "message": "두 자리 ISO 국가 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "국가 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Two-letter country code",
+          "message": "두 자리 국가 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Account owner first name",
+          "message": "계정 소유자 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.desc": {
+          "source": "The name of the organization",
+          "message": "조직 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "조직 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Organization name",
+          "message": "조직 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Account owner last name",
+          "message": "계정 소유자 성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.desc": {
+          "source": "The state or province code",
+          "message": "주 또는 도/시 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.display_name": {
+          "source": "State Code",
+          "message": "주/도 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.short_desc": {
+          "source": "State or province code",
+          "message": "주 또는 도/시 코드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "웹사이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "웹사이트 URL"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.desc": {
+          "source": "The time zone ID (e.g., `US/Eastern`)",
+          "message": "표준 시간대 ID (예: `US/Eastern`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.display_name": {
+          "source": "Time Zone",
+          "message": "표준 시간대"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.short_desc": {
+          "source": "Account time zone ID",
+          "message": "계정 표준 시간대 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update account information",
+          "message": "계정 정보 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update an existing custom field in Constant Contact",
+          "message": "Constant Contact의 기존 사용자 정의 필드 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "사용자 정의 필드 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to update",
+          "message": "업데이트할 사용자 정의 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new label for the custom field",
+          "message": "사용자 정의 필드의 새 레이블"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "라벨"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "사용자 정의 필드 레이블"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update an existing custom field",
+          "message": "기존 사용자 정의 필드 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Constant Contact.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Constant Contact의 기존 연락처를 업데이트합니다.\n\n**중요**: 이 기능은 PUT 시맨틱(전체 교체)을 사용합니다. 요청에 포함되지 않은 모든 필드는 기본값으로 초기화됩니다. 유지하려는 모든 필드를 포함하십시오."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "연락처 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "회사 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "연락처 회사 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "연락처 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "업데이트할 연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "연락처의 사용자 정의 필드 값 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "사용자 지정 필드"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "사용자 지정 필드 값"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "`YYYY-MM-DD` 형식의 연락처 기념일 날짜"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "기념일"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "기념일 날짜 (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "연락처의 생일 일자 (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "생일 일자"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "생일 일자 (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "연락처의 생일 월 (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "생일 월"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "생일 월 (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "`address` 및 선택적 `permission_to_send`을 포함하는 이메일 주소 객체"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "이메일 주소 객체"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "연락처 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "직책"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "연락처 직책"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "연락처 성"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs",
+          "message": "연락처 목록 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "목록 멤버십"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs",
+          "message": "연락처 목록 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "연락처의 주소 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "상세 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "연락처 상세 주소"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "연락처의 전화번호 객체 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "연락처 전화번호"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs",
+          "message": "태그 ID 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "태그 지정"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Updated by the account owner",
+          "message": "계정 소유자가 업데이트함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "계정"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Updated by the contact themselves",
+          "message": "연락처 본인이 직접 업데이트함"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "연락처"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact update",
+          "message": "연락처 업데이트 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "업데이트 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact update",
+          "message": "연락처 업데이트 소스"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "기존 연락처 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Update an existing contact list in Constant Contact",
+          "message": "Constant Contact의 기존 연락처 목록 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Update a Contact List",
+          "message": "연락처 목록 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "연락처 목록 설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "연락처 목록 설명"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "이 목록을 즐겨찾기로 표시할지 여부"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "즐겨찾기"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "즐겨찾기로 표시"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "리스트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to update",
+          "message": "업데이트할 연락처 목록"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "연락처 목록의 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "연락처 목록 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Update an existing contact list",
+          "message": "기존 연락처 목록 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Update an existing email campaign in Constant Contact",
+          "message": "Constant Contact의 기존 이메일 캠페인 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Update an Email Campaign",
+          "message": "이메일 캠페인 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "캠페인 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to update",
+          "message": "업데이트할 이메일 캠페인"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name of the email campaign",
+          "message": "이메일 캠페인의 새 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "캠페인 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing email campaign",
+          "message": "기존 이메일 캠페인 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.desc": {
+          "source": "Update an existing segment in Constant Contact",
+          "message": "Constant Contact의 기존 세그먼트 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Update a Segment",
+          "message": "세그먼트 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The new name of the segment",
+          "message": "세그먼트의 새 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "세그먼트 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The new criteria expression for the segment",
+          "message": "세그먼트의 새 기준 표현식"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "세그먼트 조건"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "세그먼트 조건식"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "세그먼트 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to update",
+          "message": "업데이트할 세그먼트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Update an existing segment",
+          "message": "기존 세그먼트 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Constant Contact",
+          "message": "Constant Contact의 기존 태그 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "태그 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag",
+          "message": "태그의 새 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "태그 이름"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "업데이트할 태그"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "기존 태그 업데이트"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.desc": {
+          "source": "Constant Contact is an email marketing platform for creating campaigns, managing contacts, and tracking engagement.\n\nThis integration supports contacts, contact lists, tags, custom fields, segments, email campaigns, bulk activities, reports, and events.",
+          "message": "Constant Contact는 캠페인 생성, 연락처 관리, 참여도 추적을 지원하는 이메일 마케팅 플랫폼입니다.\n\n이 연동은 연락처, 연락처 목록, 태그, 사용자 정의 필드, 세그먼트, 이메일 캠페인, 대량 작업, 보고서 및 이벤트를 지원합니다."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.display_name": {
+          "source": "Constant Contact",
+          "message": "Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.short_desc": {
+          "source": "Constant Contact email marketing platform",
+          "message": "Constant Contact 이메일 마케팅 플랫폼"
+        }
+      }
+    }
+  }
+}

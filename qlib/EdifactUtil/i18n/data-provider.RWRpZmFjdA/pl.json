@@ -1,0 +1,509 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.RWRpZmFjdA.action.c2NoZW1h.desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "Załaduj schemat katalogu EDIFACT z pamięci podręcznej lub plików płaskich"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.display_name": {
+          "source": "Load EDIFACT Schema",
+          "message": "Załaduj schemat EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "Zastępuje QORE_EDIFACT_DIRCACHE dla tego procesu."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "Katalog pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "Zastąp katalog główny pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "Sposób obsługi błędów parsowania/typów pamięci podręcznej: ignorowanie (ignore), ostrzeżenie (warn) lub błąd (error)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "Obsługa błędów pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "Obsługuj błędy parsowania/typów pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "Jeśli `True`, ładuj wyłącznie z pamięci podręcznej i zgłaszaj błąd w przypadku jej braku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "Tylko pamięć podręczna"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "Ładuj tylko z pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "Katalog zawierający pliki płaskie EDMD/EDSD/EDCD/EDED/UNCL dla danego wydania."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "Katalog"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "Katalog zawierający pliki płaskie EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "Jeśli `True`, pomiń odczytywanie pamięci podręcznej z dysku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "Pomiń odczyt pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "Nie odczytuj z pamięci podręcznej na dysku"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "Jeśli `True`, sprawdzaj poprawność plików EDMD w bardziej rygorystyczny sposób (nagłówek tabeli segmentów, wcięcia i integralność strukturalna)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "Rygorystyczna walidacja EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "Włącz rygorystyczną walidację EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "Jeśli `True`, zwróć tylko liczby i indeks segmentów bez pełnych danych schematu."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Tylko podsumowanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Zwróć tylko podsumowanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "Identyfikator wydania EDIFACT (np.: D01B)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "Wydanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "Identyfikator wydania EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "Jeśli `True`, zignoruj rejestr w pamięci i załaduj ponownie."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Załaduj ponownie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "Ignoruj rejestr w pamięci i załaduj ponownie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1h.short_desc": {
+          "source": "Load EDIFACT directory schema from cache or flat files",
+          "message": "Załaduj schemat katalogu EDIFACT z pamięci podręcznej lub plików płaskich"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "Załaduj tylko podsumowanie schematu EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "Schema Summary",
+          "message": "Podsumowanie schematu"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.desc": {
+          "source": "Overrides QORE_EDIFACT_DIRCACHE for this process.",
+          "message": "Zastępuje QORE_EDIFACT_DIRCACHE dla tego procesu."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.display_name": {
+          "source": "Cache Directory",
+          "message": "Katalog pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZGly.short_desc": {
+          "source": "Override cache directory root",
+          "message": "Zastąp katalog główny pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.desc": {
+          "source": "How to handle cache parse/type errors: ignore, warn, or error.",
+          "message": "Sposób obsługi błędów parsowania/typów pamięci podręcznej: ignorowanie (ignore), ostrzeżenie (warn) lub błąd (error)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.display_name": {
+          "source": "Cache Error Handling",
+          "message": "Obsługa błędów pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfZXJyb3I.short_desc": {
+          "source": "Handle cache parse/type errors",
+          "message": "Obsługuj błędy parsowania/typów pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.desc": {
+          "source": "If `True`, load only from cache and throw on cache miss.",
+          "message": "Jeśli `True`, ładuj wyłącznie z pamięci podręcznej i zgłaszaj błąd w przypadku jej braku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.display_name": {
+          "source": "Cache Only",
+          "message": "Tylko pamięć podręczna"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.Y2FjaGVfb25seQ.short_desc": {
+          "source": "Load only from cache",
+          "message": "Ładuj tylko z pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.desc": {
+          "source": "Directory containing EDMD/EDSD/EDCD/EDED/UNCL flat files for the release.",
+          "message": "Katalog zawierający pliki płaskie EDMD/EDSD/EDCD/EDED/UNCL dla danego wydania."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.display_name": {
+          "source": "Directory",
+          "message": "Katalog"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.ZGly.short_desc": {
+          "source": "Directory containing EDIFACT flat files",
+          "message": "Katalog zawierający pliki płaskie EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.desc": {
+          "source": "If `True`, skip reading the on-disk cache.",
+          "message": "Jeśli `True`, pomiń odczytywanie pamięci podręcznej z dysku."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.display_name": {
+          "source": "Skip Cache Read",
+          "message": "Pomiń odczyt pamięci podręcznej"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c2tpcF9jYWNoZV9yZWFk.short_desc": {
+          "source": "Do not read from on-disk cache",
+          "message": "Nie odczytuj z pamięci podręcznej na dysku"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.desc": {
+          "source": "If `True`, validate EDMD files more strictly (segment table header, indentation, and structural integrity).",
+          "message": "Jeśli `True`, sprawdzaj poprawność plików EDMD w bardziej rygorystyczny sposób (nagłówek tabeli segmentów, wcięcia i integralność strukturalna)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.display_name": {
+          "source": "Strict EDMD Validation",
+          "message": "Rygorystyczna walidacja EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3RyaWN0.short_desc": {
+          "source": "Enable strict EDMD validation",
+          "message": "Włącz rygorystyczną walidację EDMD"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return only counts and segment index without full schema data.",
+          "message": "Jeśli `True`, zwróć tylko liczby i indeks segmentów bez pełnych danych schematu."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Tylko podsumowanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Zwróć tylko podsumowanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.desc": {
+          "source": "EDIFACT release identifier (ex: D01B).",
+          "message": "Identyfikator wydania EDIFACT (np.: D01B)."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.display_name": {
+          "source": "Release",
+          "message": "Wydanie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsZWFzZQ.short_desc": {
+          "source": "EDIFACT release identifier",
+          "message": "Identyfikator wydania EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory registry and reload.",
+          "message": "Jeśli `True`, zignoruj rejestr w pamięci i załaduj ponownie."
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Załaduj ponownie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory registry and reload",
+          "message": "Ignoruj rejestr w pamięci i załaduj ponownie"
+        },
+        "app.RWRpZmFjdA.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load EDIFACT schema summary only",
+          "message": "Załaduj tylko podsumowanie schematu EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "Odczytaj dane komunikatu EDIFACT z określonej lokalizacji pliku"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.display_name": {
+          "source": "Read EDIFACT File",
+          "message": "Odczytaj plik EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII (podstawowy)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1 (Latin-1, domyślny)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2 (środkowoeuropejski)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5 (cyrylica)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9 (turecki)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8 (zalecany dla Unicode)"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding used in the EDIFACT message. Common values are ISO-8859-1 (Latin-1, default for UNOC) and UTF-8 (for UNOY).",
+          "message": "Kodowanie znaków używane w komunikacie EDIFACT. Typowe wartości to ISO-8859-1 (Latin-1, domyślne dla UNOC) oraz UTF-8 (dla UNOY)."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kodowanie znaków"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding of the EDIFACT data",
+          "message": "Kodowanie znaków danych EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.desc": {
+          "source": "If `True`, skip service segments (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) during iteration, returning only business data segments.",
+          "message": "Jeśli `True`, pomijaj segmenty usługowe (`UNA`, `UNB`, `UNZ`, `UNH`, `UNT`, `UNG`, `UNE`, `UNS`) podczas iteracji, zwracając tylko segmenty danych biznesowych."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.display_name": {
+          "source": "Skip Service Segments",
+          "message": "Pomiń segmenty usługowe"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.c2tpcF9zZXJ2aWNlX3NlZ21lbnRz.short_desc": {
+          "source": "Skip envelope segments during iteration",
+          "message": "Pomiń segmenty koperty podczas iteracji"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "Ścieżka bezwzględna lub względna do pliku EDIFACT. Obsługuje standardową składnię lokalizacji plików, w tym file://, sftp:// itp."
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Location",
+          "message": "Lokalizacja pliku"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the EDIFACT file to read",
+          "message": "Lokalizacja pliku EDIFACT do odczytu"
+        },
+        "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
+          "source": "Read EDIFACT message data from a specific file location",
+          "message": "Odczytaj dane komunikatu EDIFACT z określonej lokalizacji pliku"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "Zapisz dane komunikatu EDIFACT w określonej lokalizacji pliku"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.display_name": {
+          "source": "Write EDIFACT Data",
+          "message": "Zapisz dane EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOkFTQ0lJ.desc": {
+          "source": "US-ASCII (basic)",
+          "message": "US-ASCII (podstawowy)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "ISO 8859-1 (Latin-1, default)",
+          "message": "ISO 8859-1 (Latin-1, domyślny)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTI.desc": {
+          "source": "ISO 8859-2 (Central European)",
+          "message": "ISO 8859-2 (środkowoeuropejski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTU.desc": {
+          "source": "ISO 8859-5 (Cyrillic)",
+          "message": "ISO 8859-5 (cyrylica)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTk.desc": {
+          "source": "ISO 8859-9 (Turkish)",
+          "message": "ISO 8859-9 (turecki)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 (recommended for Unicode)",
+          "message": "UTF-8 (zalecany dla Unicode)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use for the EDIFACT output. Should match the syntax identifier (e.g., ISO-8859-1 for UNOC, UTF-8 for UNOY).",
+          "message": "Kodowanie znaków do użycia dla danych wyjściowych EDIFACT. Powinno być zgodne z identyfikatorem składni (np. ISO-8859-1 dla UNOC, UTF-8 dla UNOY)."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kodowanie znaków"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "Kodowanie znaków dla danych wyjściowych"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.desc": {
+          "source": "If `True`, add a newline character after each segment terminator. This makes the output more readable but increases file size slightly.",
+          "message": "Jeśli `True`, dodaj znak nowej linii po każdym terminatorze segmentu. Zwiększa to czytelność danych wyjściowych, ale nieznacznie zwiększa rozmiar pliku."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.display_name": {
+          "source": "Add Line Breaks",
+          "message": "Dodaj podziały wierszy"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.bGluZV9icmVhaw.short_desc": {
+          "source": "Add newlines after each segment",
+          "message": "Dodaj znaki nowej linii po każdym segmencie"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0E.desc": {
+          "source": "Level A - basic Latin uppercase",
+          "message": "Poziom A - podstawowe wielkie litery łacińskie"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0I.desc": {
+          "source": "Level B - Latin upper/lowercase",
+          "message": "Poziom B - wielkie/małe litery łacińskie"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0M.desc": {
+          "source": "Level C - ISO 8859-1 (Latin-1, most common)",
+          "message": "Poziom C - ISO 8859-1 (Latin-1, najczęściej używany)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Q.desc": {
+          "source": "Level D - ISO 8859-2 (Central European)",
+          "message": "Poziom D - ISO 8859-2 (środkowoeuropejski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0U.desc": {
+          "source": "Level E - ISO 8859-5 (Cyrillic)",
+          "message": "Poziom E - ISO 8859-5 (cyrylica)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0Y.desc": {
+          "source": "Level F - ISO 8859-7 (Greek)",
+          "message": "Poziom F - ISO 8859-7 (grecki)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0c.desc": {
+          "source": "Level G - ISO 8859-3 (South European)",
+          "message": "Poziom G - ISO 8859-3 (południowoeuropejski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0g.desc": {
+          "source": "Level H - ISO 8859-4 (North European)",
+          "message": "Poziom H - ISO 8859-4 (północnoeuropejski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0k.desc": {
+          "source": "Level I - ISO 8859-6 (Arabic)",
+          "message": "Poziom I - ISO 8859-6 (arabski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0o.desc": {
+          "source": "Level J - ISO 8859-8 (Hebrew)",
+          "message": "Poziom J - ISO 8859-8 (hebrajski)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT0s.desc": {
+          "source": "Level K - ISO 8859-9 (Turkish)",
+          "message": "Poziom K - ISO 8859-9 (turecki)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1g.desc": {
+          "source": "Level X - ISO 2022 with escapes",
+          "message": "Poziom X - ISO 2022 z sekwencjami sterującymi"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.allowed-value.c3RyaW5nOlVOT1k.desc": {
+          "source": "Level Y - UTF-8 (recommended for Unicode)",
+          "message": "Poziom Y - UTF-8 (zalecany dla Unicode)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.desc": {
+          "source": "The syntax identifier to use in the UNB segment. Defines the character set and syntax rules. UNOC (ISO 8859-1) is most common.",
+          "message": "Identyfikator składni do użycia w segmencie UNB. Określa zestaw znaków i reguły składniowe. UNOC (ISO 8859-1) jest najczęściej używany."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.display_name": {
+          "source": "Syntax Identifier",
+          "message": "Identyfikator składni"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X2lkZW50aWZpZXI.short_desc": {
+          "source": "EDIFACT syntax identifier for UNB",
+          "message": "Identyfikator składni EDIFACT dla UNB"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjE.desc": {
+          "source": "Syntax version 1",
+          "message": "Wersja składni 1"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjI.desc": {
+          "source": "Syntax version 2",
+          "message": "Wersja składni 2"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjM.desc": {
+          "source": "Syntax version 3 (most common)",
+          "message": "Wersja składni 3 (najczęściej używana)"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.allowed-value.c3RyaW5nOjQ.desc": {
+          "source": "Syntax version 4",
+          "message": "Wersja składni 4"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.desc": {
+          "source": "The syntax version number to use in the UNB segment. Version 3 is most commonly used.",
+          "message": "Numer wersji składni do użycia w segmencie UNB. Wersja 3 jest najczęściej używana."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.display_name": {
+          "source": "Syntax Version",
+          "message": "Wersja składni"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.c3ludGF4X3ZlcnNpb24.short_desc": {
+          "source": "EDIFACT syntax version for UNB",
+          "message": "Wersja składni EDIFACT dla UNB"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The absolute or relative path to write the EDIFACT file. Supports standard file location syntax including file://, sftp://, etc.",
+          "message": "Ścieżka bezwzględna lub względna do zapisu pliku EDIFACT. Obsługuje standardową składnię lokalizacji plików, w tym file://, sftp:// itp."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Ścieżka do pliku"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the EDIFACT output file",
+          "message": "Ścieżka do wyjściowego pliku EDIFACT"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.desc": {
+          "source": "If `True`, write the UNA segment at the beginning of the interchange to explicitly define the delimiter characters. Recommended for interoperability.",
+          "message": "Jeśli `True`, zapisz segment UNA na początku wymiany, aby jawnie zdefiniować znaki separatorów. Zalecane dla zachowania interoperacyjności."
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.display_name": {
+          "source": "Write UNA Segment",
+          "message": "Zapisz segment UNA"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.option.d3JpdGVfdW5h.short_desc": {
+          "source": "Include UNA service string advice",
+          "message": "Dołącz definicję znaków usługowych UNA"
+        },
+        "app.RWRpZmFjdA.action.d3JpdGU.short_desc": {
+          "source": "Write EDIFACT message data to a specific file location",
+          "message": "Zapisz dane komunikatu EDIFACT w określonej lokalizacji pliku"
+        },
+        "app.RWRpZmFjdA.desc": {
+          "source": "Read and write UN/EDIFACT electronic data interchange messages",
+          "message": "Odczytuj i zapisuj komunikaty elektronicznej wymiany danych UN/EDIFACT"
+        },
+        "app.RWRpZmFjdA.display_name": {
+          "source": "EDIFACT Messages",
+          "message": "Komunikaty EDIFACT"
+        },
+        "app.RWRpZmFjdA.short_desc": {
+          "source": "Read and write UN/EDIFACT EDI messages",
+          "message": "Odczytuj i zapisuj komunikaty EDI UN/EDIFACT"
+        }
+      }
+    }
+  }
+}

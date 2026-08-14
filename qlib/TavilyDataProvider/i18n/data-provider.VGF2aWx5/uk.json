@@ -1,0 +1,761 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.VGF2aWx5.action.Y3Jhd2w.desc": {
+          "source": "Multi-page web crawl starting from a seed URL via Tavily's `/crawl` endpoint.  Returns a tree of discovered pages with their extracted content.",
+          "message": "Багатосторінкове сканування вебсайтів, починаючи з початкового URL-а, через кінцеву точку Tavily `/crawl`. Повертає дерево виявлених сторінок із вилученим вмістом."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
+          "source": "Crawl Site",
+          "message": "Сканувати сайт"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Розширений"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Базовий"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth applied to each crawled page.",
+          "message": "Глибина вилучення, що застосовується до кожної просканованої сторінки."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "Глибина вилучення"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Per-page extraction depth",
+          "message": "Глибина вилучення для сторінки"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "Список шаблонів шляхів URL для виключення."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "Виключити шляхи"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "Шаблони шляхів URL для виключення"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints to guide the crawler (e.g. \"focus on API reference pages\").",
+          "message": "Необов'язкові підказки природною мовою для спрямування краулера (наприклад, \"focus on API reference pages\")."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Інструкції"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the crawl agent",
+          "message": "Інструкції природною мовою для агента сканування"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum total pages to fetch across the crawl.",
+          "message": "Максимальна загальна кількість сторінок для отримання під час сканування."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Overall page limit",
+          "message": "Загальний ліміт сторінок"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum number of outgoing links to follow per page.",
+          "message": "Максимальна кількість вихідних посилань для переходу з однієї сторінки."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "Максимальна ширина"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "Максимальна кількість посилань для переходу зі сторінки"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth from the seed URL.",
+          "message": "Максимальна глибина графа посилань від початкового URL."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "Максимальна глибина"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum crawl depth from the seed",
+          "message": "Максимальна глибина сканування від початкового URL"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "Список шаблонів шляхів URL для включення."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "Вибрати шляхи"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "Шаблони шляхів URL для включення"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "Seed URL the crawl begins at.",
+          "message": "Початковий URL, з якого починається сканування."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "Вихідна URL-адреса"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "URL to start the crawl from",
+          "message": "URL, з якого слід розпочати сканування"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a site starting from a seed URL",
+          "message": "Сканувати сайт, починаючи з початкового URL"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts the main readable content from a list of URLs via Tavily's `/extract` endpoint.  Useful as a follow-up to a `search` result when the agent decides to read specific pages in full.",
+          "message": "Видобуває основний читабельний вміст зі списку URL-адрес через кінцеву точку `/extract` Tavily. Корисно як наступний крок після результату `search`, коли агент вирішує прочитати певні сторінки повністю."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract URLs",
+          "message": "Видобути вміст URL"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Розширений"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Базовий"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth.",
+          "message": "Глибина видобування."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "Глибина вилучення"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Extraction depth: 'basic' or 'advanced'",
+          "message": "Глибина видобування: 'basic' або 'advanced'"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, each result includes image URLs found on the page.",
+          "message": "Якщо `True`, кожен результат містить URL-адреси зображень, знайдених на сторінці."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "Включати зображення"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside extracted text",
+          "message": "Повертати URL зображень разом із видобутим текстом"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "Absolute URLs whose main content should be extracted.",
+          "message": "Абсолютні URL-адреси, основний вміст яких слід видобути."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL-адреси"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "List of URLs to extract content from",
+          "message": "Список URL-адрес для видобування вмісту"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract main content from URLs via Tavily",
+          "message": "Видобути основний вміст із URL-адрес через Tavily"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tavily** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати спеціальний виклик HTTP / REST API до **Tavily**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базового URL API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як стандартні дії в цьому додатку."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tavily",
+          "message": "Виконати спеціальний виклик API до Tavily"
+        },
+        "app.VGF2aWx5.action.bWFw.desc": {
+          "source": "Enumerates URLs reachable from a seed URL via Tavily's `/map` endpoint without fetching page content.  Useful for site discovery before a targeted `/extract` or `/crawl` call.",
+          "message": "Перелічує URL-адреси, доступні з початкового URL, через кінцеву точку `/map` Tavily без отримання вмісту сторінок. Корисно для виявлення структури сайту перед цільовим викликом `/extract` або `/crawl`."
+        },
+        "app.VGF2aWx5.action.bWFw.display_name": {
+          "source": "Map Site URLs",
+          "message": "Картографувати URL-адреси сайту"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "Список шаблонів шляхів URL для виключення."
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "Виключити шляхи"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "Шаблони шляхів URL для виключення"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints.",
+          "message": "Необов'язкові підказки природною мовою."
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Інструкції"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the mapper",
+          "message": "Інструкції природною мовою для картографування"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum total URLs to enumerate.",
+          "message": "Максимальна загальна кількість URL для перелічення."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Overall URL limit",
+          "message": "Загальне обмеження URL"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum links per page.",
+          "message": "Максимальна кількість посилань на сторінку."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "Максимальна ширина"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "Максимальна кількість посилань для переходу зі сторінки"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth.",
+          "message": "Максимальна глибина графа посилань."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "Максимальна глибина"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum link-graph depth",
+          "message": "Максимальна глибина графа посилань"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "Список шаблонів шляхів URL для включення."
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "Вибрати шляхи"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "Шаблони шляхів URL для включення"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.desc": {
+          "source": "Seed URL.",
+          "message": "Вихідна URL-адреса."
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "Вихідна URL-адреса"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.short_desc": {
+          "source": "URL to start the URL map from",
+          "message": "URL, з якого слід розпочати картографування URL"
+        },
+        "app.VGF2aWx5.action.bWFw.short_desc": {
+          "source": "Enumerate URLs reachable from a seed URL",
+          "message": "Перелічити URL-адреси, доступні з початкового URL"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.desc": {
+          "source": "Performs a real-time web search via Tavily's `/search` endpoint and returns ranked results with title, url, content snippet, and relevance score.  Optionally includes an AI-summarized answer over the top results.",
+          "message": "Виконує пошук в Інтернеті в режимі реального часу через кінцеву точку `/search` Tavily і повертає ранжовані результати із заголовком, URL, фрагментом вмісту та оцінкою релевантності. За бажанням включає згенеровану штучним інтелектом підсумкову відповідь на основі найкращих результатів."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Вебпошук"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.desc": {
+          "source": "For `topic: news`, restrict results to the last N days.",
+          "message": "Для `topic: news`, обмежити результати останніми N днями."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.display_name": {
+          "source": "Days (news topic)",
+          "message": "Дні (тема новин)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.short_desc": {
+          "source": "Restrict 'news' searches to the last N days",
+          "message": "Обмежити пошук 'news' останніми N днями"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude.",
+          "message": "Список доменів для виключення."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Виключити домени"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude specific domains from results",
+          "message": "Виключити певні домени з результатів"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.desc": {
+          "source": "When `True`, Tavily generates an AI-summarized answer over the top results and includes it in the response under the `answer` field.",
+          "message": "Якщо `True`, Tavily генерує підсумкову відповідь за допомогою ШІ на основі найкращих результатів і включає її у відповідь у полі `answer`."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.display_name": {
+          "source": "Include Answer",
+          "message": "Включити відповідь"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.short_desc": {
+          "source": "AI-summarize the top results into a single answer",
+          "message": "Зробити підсумок найкращих результатів за допомогою ШІ в єдину відповідь"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict the search to (e.g. `(\"docs.qore.org\",)`).",
+          "message": "Список доменів для обмеження пошуку (наприклад, `(\"docs.qore.org\",)`)."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Включити домени"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict search to specific domains",
+          "message": "Обмежити пошук певними доменами"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, response includes a list of image URLs.",
+          "message": "Якщо `True`, відповідь містить список URL зображень."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "Включати зображення"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside text results",
+          "message": "Повертати URL зображень разом із текстовими результатами"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.desc": {
+          "source": "When `True`, each result includes `raw_content` with the full scraped HTML/text.  Larger response, useful for downstream parsing.",
+          "message": "Якщо `True`, кожен результат містить `raw_content` із повним зібраним HTML/текстом. Більший обсяг відповіді, корисно для подальшого парсингу."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.display_name": {
+          "source": "Include Raw Content",
+          "message": "Включити необроблений вміст"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.short_desc": {
+          "source": "Include raw scraped HTML in each result",
+          "message": "Включати неопрацьований зібраний HTML у кожен результат"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of results to return.  Range 1-20.  Default 5.",
+          "message": "Максимальна кількість результатів для повернення. Діапазон 1-20. За замовчуванням 5."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of search results (1-20)",
+          "message": "Максимальна кількість результатів пошуку (1-20)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Розширений"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Базовий"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.desc": {
+          "source": "Search depth.  `basic` returns faster, `advanced` does more iterative refinement at higher cost.",
+          "message": "Глибина пошуку. `basic` повертає швидше, `advanced` виконує більше ітеративних уточнень із вищими витратами."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.display_name": {
+          "source": "Search Depth",
+          "message": "Глибина пошуку"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.short_desc": {
+          "source": "Search depth: 'basic' (fast) or 'advanced' (higher recall)",
+          "message": "Глибина пошуку: 'basic' (швидко) або 'advanced' (вища повнота)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "Natural-language search query — what the agent wants to find on the web.",
+          "message": "Пошуковий запит природною мовою — те, що агент хоче знайти в Інтернеті."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "Natural-language search query",
+          "message": "Пошуковий запит природною мовою"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Новини"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOmdlbmVyYWw.display_name": {
+          "source": "General",
+          "message": "Загальні"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.desc": {
+          "source": "Topic-aware search.  `news` biases toward recent news sources.",
+          "message": "Пошук з урахуванням теми. `news` надає перевагу свіжим джерелам новин."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "Тема"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.short_desc": {
+          "source": "Search topic: 'general' or 'news'",
+          "message": "Тема пошуку: 'general' або 'news'"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
+          "source": "Search the web via Tavily",
+          "message": "Шукати в Інтернеті через Tavily"
+        },
+        "app.VGF2aWx5.desc": {
+          "source": "Provides access to [Tavily](https://www.tavily.com) — the agentic web-search API used by AI agents to retrieve real-time information.\n\n**Common use cases**:\n- **Agent tools**: register `tavily_search` / `tavily_extract` as tools an LLM can invoke (see @ref tavilyrestclientintro \"TavilyRestClient\" docs)\n- **RAG ingestion**: fetch fresh sources before embedding\n- **Background research** in workflows: get current information about products, competitors, news, regulations",
+          "message": "Надає доступ до [Tavily](https://www.tavily.com) — API агентивного вебпошуку, що використовується ШІ-агентами для отримання інформації в режимі реального часу.\n\n**Поширені варіанти використання**:\n- **Інструменти агентів**: реєстрація `tavily_search` / `tavily_extract` як інструментів, які LLM може викликати (дивіться документацію @ref tavilyrestclientintro \"TavilyRestClient\")\n- **Наповнення RAG**: отримання свіжих джерел перед ембедингом\n- **Фонове дослідження** у робочих процесах: отримання актуальної інформації про продукти, конкурентів, новини, регуляторні норми"
+        },
+        "app.VGF2aWx5.display_name": {
+          "source": "Tavily",
+          "message": "Tavily"
+        },
+        "app.VGF2aWx5.short_desc": {
+          "source": "Tavily real-time web search for AI agents",
+          "message": "Пошук в Інтернеті в режимі реального часу Tavily для ШІ-агентів"
+        }
+      }
+    }
+  }
+}

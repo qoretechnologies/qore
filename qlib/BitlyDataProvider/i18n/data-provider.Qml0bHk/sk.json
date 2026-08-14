@@ -1,0 +1,1389 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.desc": {
+          "source": "Create a new bitlink with title, tags, and deep links",
+          "message": "Vytvoriť nový bitlink s názvom, značkami a hĺbkovými odkazmi"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
+          "source": "Create a Bitlink",
+          "message": "Vytvoriť bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the bitlink in",
+          "message": "GUID skupiny, v ktorej sa má bitlink vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the link in",
+          "message": "Skupina, v ktorej sa má odkaz vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.desc": {
+          "source": "The short domain to use for the link. Defaults to `bit.ly` if not specified. Can also use a branded short domain (BSD) configured on the account",
+          "message": "Krátka doména, ktorá sa má použiť pre odkaz. Ak nie je zadaná, predvolená hodnota je `bit.ly`. Môže použiť aj vlastnú krátku doménu značky (BSD) nakonfigurovanú v účte"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.short_desc": {
+          "source": "Custom short domain",
+          "message": "Vlastná krátka doména"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.desc": {
+          "source": "A list of deep link configurations for mobile apps",
+          "message": "Zoznam konfigurácií hĺbkových odkazov pre mobilné aplikácie"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.display_name": {
+          "source": "Deeplinks",
+          "message": "Hĺbkové odkazy"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.short_desc": {
+          "source": "Mobile deep links",
+          "message": "Mobilné hĺbkové odkazy"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.desc": {
+          "source": "The URL to be shortened",
+          "message": "URL adresa, ktorá sa má skrátiť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "Dlhá URL adresa"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.short_desc": {
+          "source": "The URL to shorten",
+          "message": "URL adresa na skrátenie"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.desc": {
+          "source": "A list of tags to associate with the bitlink for organization",
+          "message": "Zoznam značiek, ktoré sa majú priradiť k bitlinku na účely organizácie"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.short_desc": {
+          "source": "Tags for the link",
+          "message": "Značky pre odkaz"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.desc": {
+          "source": "A title or description for the bitlink",
+          "message": "Názov alebo popis pre bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.short_desc": {
+          "source": "Link title",
+          "message": "Názov odkazu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
+          "source": "Create a bitlink with advanced options",
+          "message": "Vytvoriť bitlink s pokročilými možnosťami"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.desc": {
+          "source": "Add a custom back-half (slug) to an existing bitlink for branded URLs",
+          "message": "Pridať vlastnú koncovú časť (slug) k existujúcemu bitlinku pre brandované URL adresy"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
+          "source": "Create Custom Bitlink",
+          "message": "Vytvoriť vlastný bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.desc": {
+          "source": "The custom bitlink to create (e.g., `mydom.ain/custom-slug`)",
+          "message": "Vlastný bitlink, ktorý sa má vytvoriť (napr. `mydom.ain/custom-slug`)"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.display_name": {
+          "source": "Custom Bitlink",
+          "message": "Vlastný bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.short_desc": {
+          "source": "The custom back-half URL",
+          "message": "Vlastná koncová URL adresa"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.desc": {
+          "source": "The ID of the existing bitlink to add a custom back-half to",
+          "message": "ID existujúceho bitlinku, ku ktorému sa má pridať vlastná koncová časť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.display_name": {
+          "source": "Bitlink ID",
+          "message": "ID bitlinku"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.short_desc": {
+          "source": "Existing bitlink to customize",
+          "message": "Existujúci bitlink na prispôsobenie"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
+          "source": "Add a custom back-half to a bitlink",
+          "message": "Pridať vlastnú koncovú časť k bitlinku"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new campaign for organizing and tracking bitlinks",
+          "message": "Vytvoriť novú kampaň na organizáciu a sledovanie bitlinkov"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create a Campaign",
+          "message": "Vytvoriť kampaň"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.desc": {
+          "source": "A list of channel GUIDs to associate with the campaign",
+          "message": "Zoznam GUID kanálov na priradenie ku kampani"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.display_name": {
+          "source": "Channel GUIDs",
+          "message": "GUID kanálov"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.short_desc": {
+          "source": "Channels to associate with the campaign",
+          "message": "Kanály na priradenie ku kampani"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the campaign in",
+          "message": "GUID skupiny, v ktorej sa má kampaň vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the campaign in",
+          "message": "Skupina, v ktorej sa má kampaň vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the campaign",
+          "message": "Popis kampane"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Campaign description",
+          "message": "Popis kampane"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "Názov kampane, ktorá sa má vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "Názov kampane"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "Vytvoriť novú kampaň"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.desc": {
+          "source": "Create a new QR code linked to a URL or existing bitlink with optional appearance customization",
+          "message": "Vytvoriť nový QR kód prepojený s URL adresou alebo existujúcim bitlinkom s voliteľným prispôsobením vzhľadu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
+          "source": "Create a QR Code",
+          "message": "Vytvoriť QR kód"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the QR code in",
+          "message": "GUID skupiny, v ktorej sa má QR kód vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the QR code in",
+          "message": "Skupina, v ktorej sa má QR kód vytvoriť"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination for the QR code. Provide either `long_url` or `bitlink_id`",
+          "message": "Cieľ pre QR kód. Zadajte buď `long_url` alebo `bitlink_id`"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cieľ"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Target URL or bitlink",
+          "message": "Cieľová URL adresa alebo bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.desc": {
+          "source": "ISO 8601 timestamp when the QR code should expire",
+          "message": "Časová pečiatka ISO 8601, kedy má vypršať platnosť QR kódu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.display_name": {
+          "source": "Expiration",
+          "message": "Expirácia"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.short_desc": {
+          "source": "When the QR code expires",
+          "message": "Kedy vyprší platnosť QR kódu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.desc": {
+          "source": "Appearance customization settings for the QR code including colors and dot pattern",
+          "message": "Nastavenia prispôsobenia vzhľadu pre QR kód vrátane farieb a vzoru bodiek"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.display_name": {
+          "source": "Render Customizations",
+          "message": "Prispôsobenia vykresľovania"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.short_desc": {
+          "source": "QR code appearance settings",
+          "message": "Nastavenia vzhľadu QR kódu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.desc": {
+          "source": "A list of tags to associate with the QR code for organization",
+          "message": "Zoznam štítkov na priradenie ku QR kódu pre organizáciu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.short_desc": {
+          "source": "Tags for the QR code",
+          "message": "Štítky pre QR kód"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.desc": {
+          "source": "The title of the QR code",
+          "message": "Názov QR kódu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.short_desc": {
+          "source": "QR code title",
+          "message": "Názov QR kódu"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
+          "source": "Create a new QR code",
+          "message": "Vytvoriť nový QR kód"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.desc": {
+          "source": "Fires when a bitlink receives new click activity in a group",
+          "message": "Spustí sa, keď bitlink zaznamená novú aktivitu kliknutí v skupine"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
+          "source": "Bitlink Clicked",
+          "message": "Na bitlink bolo kliknuté"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {
+          "source": "Trigger when a bitlink receives clicks",
+          "message": "Spustiť, keď bitlink získa kliknutia"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Retrieve a single organization by its GUID",
+          "message": "Získať konkrétnu organizáciu podľa jej GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Get an Organization",
+          "message": "Získať organizáciu"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID organizácie"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "The organization GUID",
+          "message": "GUID organizácie"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Get a single organization by GUID",
+          "message": "Získať konkrétnu organizáciu podľa GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.desc": {
+          "source": "Retrieve a single bitlink by its ID",
+          "message": "Získať konkrétny bitlink podľa jeho ID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
+          "source": "Get a Bitlink",
+          "message": "Získať bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink ID",
+          "message": "ID bitlinku"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
+          "source": "Get a single bitlink by ID",
+          "message": "Získať konkrétny bitlink podľa ID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.desc": {
+          "source": "Retrieve aggregate click statistics for a bitlink over a specified time period",
+          "message": "Získať agregované štatistiky kliknutí pre bitlink za zadané časové obdobie"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
+          "source": "Get Bitlink Clicks",
+          "message": "Získať kliknutia na bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to retrieve click summary for (e.g., `bit.ly/abc123`)",
+          "message": "ID bitlinku, pre ktorý sa má získať súhrn kliknutí (napr. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to get clicks for",
+          "message": "Bitlink, pre ktorý sa majú získať kliknutia"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "Minute",
+          "message": "Minúta"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Month",
+          "message": "Mesiac"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Day (default)",
+          "message": "Deň (predvolené)"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Hour",
+          "message": "Hodina"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Week",
+          "message": "Týždeň"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.desc": {
+          "source": "The time unit to use for aggregating click data",
+          "message": "Časová jednotka použitá na agregáciu údajov o kliknutiach"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.display_name": {
+          "source": "Time Unit",
+          "message": "Časová jednotka"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.short_desc": {
+          "source": "The time unit for aggregation",
+          "message": "Časová jednotka pre agregáciu"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.desc": {
+          "source": "The number of time units to query. Use `-1` for all available data",
+          "message": "Počet časových jednotiek na dopytovanie. Pre všetky dostupné údaje použite `-1`"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.display_name": {
+          "source": "Number of Units",
+          "message": "Počet jednotiek"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.short_desc": {
+          "source": "How many time units to query",
+          "message": "Koľko časových jednotiek dopytovať"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
+          "source": "Get click summary for a bitlink",
+          "message": "Získať súhrn kliknutí pre bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single campaign by its GUID",
+          "message": "Získať jednu kampaň podľa jej GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get a Campaign",
+          "message": "Získať kampaň"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID kampane"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "The campaign GUID",
+          "message": "GUID kampane"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by GUID",
+          "message": "Získať jednu kampaň podľa GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.desc": {
+          "source": "Retrieve a single group by its GUID",
+          "message": "Získať jednu skupinu podľa jej GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
+          "source": "Get a Group",
+          "message": "Získať skupinu"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "The group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
+          "source": "Get a single group by GUID",
+          "message": "Získať jednu skupinu podľa GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.desc": {
+          "source": "Retrieve a single QR code by its ID",
+          "message": "Získať jeden QR kód podľa jeho ID"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
+          "source": "Get a QR Code",
+          "message": "Získať QR kód"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID QR kódu"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.option.cXJjb2RlX2lk.short_desc": {
+          "source": "The QR code ID",
+          "message": "ID QR kódu"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
+          "source": "Get a single QR code by ID",
+          "message": "Získať jeden QR kód podľa ID"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.desc": {
+          "source": "Permanently delete a bitlink",
+          "message": "Trvalo vymazať bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
+          "source": "Delete a Bitlink",
+          "message": "Vymazať bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to delete (e.g., `bit.ly/abc123`)",
+          "message": "ID bitlinku na vymazanie (napr. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to delete",
+          "message": "Bitlink na vymazanie"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
+          "source": "Delete an existing bitlink",
+          "message": "Vymazať existujúci bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.desc": {
+          "source": "List bitlinks in a group with optional filtering by keyword, date, tags, and more",
+          "message": "Zoznam bitlinkov v skupine s voliteľným filtrovaním podľa kľúčového slova, dátumu, značiek a ďalších kritérií"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
+          "source": "List Bitlinks",
+          "message": "Zoznam bitlinkov"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID kampane"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "Filtrovať podľa kampane"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "Vytvorené po"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtrovať podľa dátumu vytvorenia"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "Vytvorené pred"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtrovať podľa dátumu vytvorenia"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "No Custom",
+          "message": "Bez vlastného"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "Has Custom",
+          "message": "S vlastným"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOmJvdGg.display_name": {
+          "source": "Both",
+          "message": "Oba"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.display_name": {
+          "source": "Custom Bitlink",
+          "message": "Vlastný bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.short_desc": {
+          "source": "Filter custom back-halves",
+          "message": "Filtrovať vlastné koncovky"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Not Archived",
+          "message": "Nearchivované"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "Archived",
+          "message": "Archivované"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOmJvdGg.display_name": {
+          "source": "Both",
+          "message": "Oba"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archivované"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Filter by archive status",
+          "message": "Filtrovať podľa stavu archivácie"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Yml0bGluaw.short_desc": {
+          "source": "Get a specific bitlink",
+          "message": "Získať konkrétny bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to list bitlinks for",
+          "message": "Skupina, pre ktorú sa majú vypísať bitlinky"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Kľúčové slovo"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.a2V5d29yZA.short_desc": {
+          "source": "Search by keyword",
+          "message": "Hľadať podľa kľúčového slova"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Upravené po"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtrovať podľa dátumu úpravy"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.dGFncw.short_desc": {
+          "source": "Filter by tags",
+          "message": "Filtrovať podľa značiek"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
+          "source": "List bitlinks in a group",
+          "message": "Zoznam bitlinkov v skupine"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.desc": {
+          "source": "List all branded short domains (BSDs) available in the account",
+          "message": "Zoznam všetkých vlastných skrátených domén (BSD) dostupných v účte"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
+          "source": "List Branded Short Domains",
+          "message": "Zoznam vlastných skrátených domén"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
+          "source": "List all branded short domains",
+          "message": "Zoznam všetkých vlastných skrátených domén"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "List campaigns with optional filtering by group",
+          "message": "Zoznam kampaní s voliteľným filtrovaním podľa skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Zoznam kampaní"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID kampane"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "Get a specific campaign",
+          "message": "Získať konkrétnu kampaň"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Filter by group",
+          "message": "Filtrovať podľa skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List campaigns",
+          "message": "Zoznam kampaní"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.desc": {
+          "source": "List all groups in the account",
+          "message": "Zoznam všetkých skupín v účte"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
+          "source": "List Groups",
+          "message": "Zobraziť skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Get a specific group",
+          "message": "Získať konkrétnu skupinu"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID organizácie"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "Filter by organization",
+          "message": "Filtrovať podľa organizácie"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
+          "source": "List all groups",
+          "message": "Zoznam všetkých skupín"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.desc": {
+          "source": "List all organizations in the account",
+          "message": "Zoznam všetkých organizácií v účte"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
+          "source": "List Organizations",
+          "message": "Zoznam organizácií"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID organizácie"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "Get a specific organization",
+          "message": "Získať konkrétnu organizáciu"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
+          "source": "List all organizations",
+          "message": "Zoznam všetkých organizácií"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.desc": {
+          "source": "List QR codes in a group with optional filtering",
+          "message": "Zoznam QR kódov v skupine s voliteľným filtrovaním"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
+          "source": "List QR Codes",
+          "message": "Zoznam QR kódov"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to list QR codes for",
+          "message": "Skupina, pre ktorú sa majú vypísať QR kódy"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID QR kódu"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.cXJjb2RlX2lk.short_desc": {
+          "source": "Get a specific QR code",
+          "message": "Získať konkrétny QR kód"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
+          "source": "List QR codes in a group",
+          "message": "Zoznam QR kódov v skupine"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Bitly** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Bitly** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vracia ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Bitly",
+          "message": "Vykonať vlastné volanie API do Bitly"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.desc": {
+          "source": "Shorten a URL to create a new bitlink with optional custom domain",
+          "message": "Skrátiť adresu URL a vytvoriť nový bitlink s voliteľnou vlastnou doménou"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.display_name": {
+          "source": "Shorten a URL",
+          "message": "Skrátiť adresu URL"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the bitlink in. Uses the default group if not specified",
+          "message": "GUID skupiny, v ktorej sa má bitlink vytvoriť. Ak nie je zadané, použije sa predvolená skupina"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the link in",
+          "message": "Skupina, v ktorej sa má odkaz vytvoriť"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.desc": {
+          "source": "The short domain to use for the link. Defaults to `bit.ly` if not specified. Can also use a branded short domain (BSD) configured on the account",
+          "message": "Krátka doména, ktorá sa má použiť pre odkaz. Ak nie je zadaná, predvolená hodnota je `bit.ly`. Môže použiť aj vlastnú krátku doménu značky (BSD) nakonfigurovanú v účte"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.short_desc": {
+          "source": "Custom short domain",
+          "message": "Vlastná krátka doména"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.desc": {
+          "source": "The URL to be shortened",
+          "message": "URL adresa, ktorá sa má skrátiť"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "Dlhá URL adresa"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.short_desc": {
+          "source": "The URL to shorten",
+          "message": "URL adresa na skrátenie"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.short_desc": {
+          "source": "Create a shortened bitlink",
+          "message": "Vytvoriť skrátený bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.desc": {
+          "source": "Update the destination URL, title, tags, or archive status of a bitlink",
+          "message": "Aktualizovať cieľovú adresu URL, názov, značky alebo stav archivácie bitlinku"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
+          "source": "Update a Bitlink",
+          "message": "Aktualizovať bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.desc": {
+          "source": "Set to `True` to archive the bitlink or `False` to unarchive it",
+          "message": "Nastavte na `True` na archiváciu bitlinku alebo `False` na zrušenie jeho archivácie"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archivované"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Archive status",
+          "message": "Stav archivácie"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to update (e.g., `bit.ly/abc123`)",
+          "message": "ID bitlinku na aktualizáciu (napr. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to update",
+          "message": "Bitlink na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.desc": {
+          "source": "The new destination URL for the bitlink",
+          "message": "Nová cieľová URL pre bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "Dlhá URL adresa"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.short_desc": {
+          "source": "New destination URL",
+          "message": "Nová cieľová URL"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.desc": {
+          "source": "A new list of tags for the bitlink (replaces existing tags)",
+          "message": "Nový zoznam značiek pre bitlink (nahradí existujúce značky)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.short_desc": {
+          "source": "New tags",
+          "message": "Nové značky"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.desc": {
+          "source": "The new title for the bitlink",
+          "message": "Nový názov pre bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.short_desc": {
+          "source": "New title",
+          "message": "Nový názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
+          "source": "Update an existing bitlink",
+          "message": "Aktualizovať existujúci bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.desc": {
+          "source": "Update the name or description of an existing campaign",
+          "message": "Aktualizovať názov alebo popis existujúcej kampane"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Update a Campaign",
+          "message": "Aktualizovať kampaň"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.desc": {
+          "source": "The GUID of the campaign to update",
+          "message": "GUID kampane na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID kampane"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "The campaign to update",
+          "message": "Kampaň na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.desc": {
+          "source": "A new list of channel GUIDs to associate with the campaign",
+          "message": "Nový zoznam GUID kanálov na priradenie ku kampani"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.display_name": {
+          "source": "Channel GUIDs",
+          "message": "GUID kanálov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.short_desc": {
+          "source": "Channels to associate with the campaign",
+          "message": "Kanály na priradenie ku kampani"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the campaign",
+          "message": "Nový popis pre kampaň"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "New campaign description",
+          "message": "Nový popis kampane"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name for the campaign",
+          "message": "Nový názov pre kampaň"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "New campaign name",
+          "message": "Nový názov kampane"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing campaign",
+          "message": "Aktualizovať existujúcu kampaň"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.desc": {
+          "source": "Update the name, organization, or branded short domains of a group",
+          "message": "Aktualizovať názov, organizáciu alebo značkové krátke domény skupiny"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
+          "source": "Update a Group",
+          "message": "Aktualizovať skupinu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.desc": {
+          "source": "A list of branded short domains to associate with the group",
+          "message": "Zoznam značkových krátkych domén na priradenie ku skupine"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.display_name": {
+          "source": "Branded Short Domains",
+          "message": "Značkové krátke domény"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.short_desc": {
+          "source": "BSDs to associate",
+          "message": "BSD na priradenie"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to update",
+          "message": "GUID skupiny na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID skupiny"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "The group to update",
+          "message": "Skupina na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.desc": {
+          "source": "The GUID of the organization to move the group to",
+          "message": "GUID organizácie, do ktorej sa má skupina presunúť"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID organizácie"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "New organization",
+          "message": "Nová organizácia"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The new name for the group",
+          "message": "Nový názov pre skupinu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "New group name",
+          "message": "Nový názov skupiny"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
+          "source": "Update an existing group",
+          "message": "Aktualizovať existujúcu skupinu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.desc": {
+          "source": "Update the title, destination, appearance, or archive status of a QR code",
+          "message": "Aktualizovať názov, cieľ, vzhľad alebo stav archivácie QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
+          "source": "Update a QR Code",
+          "message": "Aktualizovať QR kód"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.desc": {
+          "source": "Set to `True` to archive the QR code or `False` to unarchive it",
+          "message": "Nastavte na `True` na archiváciu QR kódu alebo `False` na jeho obnovenie z archívu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archivované"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Archive status",
+          "message": "Stav archivácie"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The new destination for the QR code. Provide either `long_url` or `bitlink_id`",
+          "message": "Nový cieľ pre QR kód. Zadajte buď `long_url` alebo `bitlink_id`"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Cieľ"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "New target URL or bitlink",
+          "message": "Nová cieľová URL alebo bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.desc": {
+          "source": "ISO 8601 timestamp when the QR code should expire",
+          "message": "Časová pečiatka ISO 8601, kedy má vypršať platnosť QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.display_name": {
+          "source": "Expiration",
+          "message": "Expirácia"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.short_desc": {
+          "source": "When the QR code expires",
+          "message": "Kedy vyprší platnosť QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.desc": {
+          "source": "The ID of the QR code to update",
+          "message": "ID QR kódu na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.short_desc": {
+          "source": "The QR code to update",
+          "message": "QR kód na aktualizáciu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.desc": {
+          "source": "Updated appearance customization settings for the QR code",
+          "message": "Aktualizované nastavenia prispôsobenia vzhľadu QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.display_name": {
+          "source": "Render Customizations",
+          "message": "Prispôsobenia vykresľovania"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.short_desc": {
+          "source": "QR code appearance settings",
+          "message": "Nastavenia vzhľadu QR kódu"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.desc": {
+          "source": "A new list of tags for the QR code (replaces existing tags)",
+          "message": "Nový zoznam značiek pre QR kód (nahradí existujúce značky)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.short_desc": {
+          "source": "New tags",
+          "message": "Nové značky"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.desc": {
+          "source": "The new title for the QR code",
+          "message": "Nový názov pre QR kód"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.short_desc": {
+          "source": "New title",
+          "message": "Nový názov"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
+          "source": "Update an existing QR code",
+          "message": "Aktualizovať existujúci QR kód"
+        },
+        "app.Qml0bHk.desc": {
+          "source": "Bitly is a URL shortening and link management platform for creating branded links, QR codes, and tracking click analytics.\n\nThis integration supports creating, managing, and tracking bitlinks, campaigns, QR codes, and engagement events.",
+          "message": "Bitly je platforma na skracovanie URL a správu odkazov na vytváranie značkových odkazov, QR kódov a sledovanie analytiky kliknutí.\n\nTáto integrácia podporuje vytváranie, správu a sledovanie bitlinkov, kampaní, QR kódov a udalostí zapojenia."
+        },
+        "app.Qml0bHk.display_name": {
+          "source": "Bitly",
+          "message": "Bitly"
+        },
+        "app.Qml0bHk.short_desc": {
+          "source": "Bitly URL shortening and link management",
+          "message": "Skracovanie URL adries a správa odkazov Bitly"
+        }
+      }
+    }
+  }
+}

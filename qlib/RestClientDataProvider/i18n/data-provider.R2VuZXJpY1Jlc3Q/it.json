@@ -1,0 +1,1061 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.desc": {
+          "source": "Make a call to a REST server or a webhook and return the response",
+          "message": "Esegue una chiamata a un server REST o a un webhook e restituisce la risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.display_name": {
+          "source": "Call REST API / Webhook",
+          "message": "Chiama API REST / Webhook"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.desc": {
+          "source": "The connection timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Il timeout di connessione da utilizzare in millisecondi (valore predefinito: 45 secondi)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.display_name": {
+          "source": "Connect Timeout",
+          "message": "Timeout connessione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29ubmVjdF90aW1lb3V0.short_desc": {
+          "source": "The connect timeout in milliseconds",
+          "message": "Il timeout di connessione in millisecondi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "usa la codifica bzip2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "usa l'algoritmo deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "usa la codifica GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.allowed-value.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "non usa alcuna codifica dei contenuti"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "Sets the data compression / send encoding (if the `send_encoding` option is not set) and the response encoding used",
+          "message": "Imposta la compressione dati / codifica di invio (se l'opzione `send_encoding` non è impostata) e la codifica della risposta utilizzata"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Compression",
+          "message": "Compressione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "Sets data compression / encoding",
+          "message": "Imposta compressione / codifica dati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "Metodo HTTP `GET`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "Metodo HTTP GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "Metodo HTTP `PATCH`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "Metodo HTTP PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "Metodo HTTP `POST`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "Metodo HTTP POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "Metodo HTTP `PUT`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "Metodo HTTP PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Imposta il metodo HTTP per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.display_name": {
+          "source": "Custom Token Refresh Method",
+          "message": "Metodo aggiornamento token personalizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX21ldGhvZA.short_desc": {
+          "source": "Sets the HTTP method for custom token refresh actions",
+          "message": "Imposta il metodo HTTP per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.allowed-value.c3RyaW5nOmJvZHktdXNlci1wYXNz.desc": {
+          "source": "Include the username and password in the message body; cannot be used with `custom_token_method` = `GET`",
+          "message": "Includi il nome utente e la password nel corpo del messaggio; non può essere utilizzato con `custom_token_method` = `GET`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Imposta il metodo di autenticazione per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.display_name": {
+          "source": "Custom Token Refresh Auth Method",
+          "message": "Metodo autenticazione aggiornamento token personalizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2F1dGg.short_desc": {
+          "source": "Sets the auth method for custom token refresh actions",
+          "message": "Imposta il metodo di autenticazione per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed-value.c3RyaW5nOmJvZHktZGlyZWN0.desc": {
+          "source": "Take the token from the response body directly",
+          "message": "Prendi il token direttamente dal corpo della risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.allowed-value.c3RyaW5nOmJvZHktcGxhaW4.desc": {
+          "source": "Take the token from the response body without any deserialization",
+          "message": "Prendi il token dal corpo della risposta senza alcuna deserializzazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Fornisce la posizione del nuovo token nella risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.display_name": {
+          "source": "Custom Token Refresh Location",
+          "message": "Posizione aggiornamento token personalizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX2xvY2F0aW9u.short_desc": {
+          "source": "Provides the location of the new token in the response",
+          "message": "Fornisce la posizione del nuovo token nella risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Imposta il percorso URI per la richiesta per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.display_name": {
+          "source": "Custom Token Refresh URI Path",
+          "message": "Percorso URI aggiornamento token personalizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Y3VzdG9tX3Rva2VuX3BhdGg.short_desc": {
+          "source": "Sets the URI path for the request for custom token refresh actions",
+          "message": "Imposta il percorso URI per la richiesta per le azioni personalizzate di aggiornamento del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.desc": {
+          "source": "If set, undeserializable responses will be returned as-is; this is useful when making REST-like requests that return HTML or file data",
+          "message": "Se impostato, le risposte non deserializzabili verranno restituite così come sono; questo è utile quando si effettuano richieste di tipo REST che restituiscono HTML o dati di file"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.display_name": {
+          "source": "Allow Any Response?",
+          "message": "Consenti qualsiasi risposta?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YWxsb3dfYW55X3Jlc3BvbnNl.short_desc": {
+          "source": "If set, undeserializable responses will be returned as-is",
+          "message": "Se impostato, le risposte non deserializzabili verranno restituite così come sono"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.desc": {
+          "source": "Assumes the given encoding if the server does not send a `charset` value",
+          "message": "Presume la codifica specificata se il server non invia un valore `charset`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.display_name": {
+          "source": "Assume Character Encoding",
+          "message": "Presumi codifica caratteri"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.YXNzdW1lX2VuY29kaW5n.short_desc": {
+          "source": "Sets the character encoding to assume if 'charset' is missing",
+          "message": "Imposta la codifica dei caratteri da presumere se 'charset' è mancante"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Il corpo del messaggio"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Il corpo del messaggio"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "prefers in this order: `json`, `yaml`, `rawxml`, `xml`, `url`, and `text`",
+          "message": "preferisce in questo ordine: `json`, `yaml`, `rawxml`, `xml`, `url` e `text`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmJpbg.desc": {
+          "source": "for binary message bodies without data serialization",
+          "message": "per corpi di messaggi binari senza serializzazione dei dati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "use JSON serialization",
+          "message": "usa la serializzazione JSON"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnJhd3htbA.desc": {
+          "source": "use raw XML serialization",
+          "message": "usa la serializzazione raw XML"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "use only plain text; no serialization is used",
+          "message": "usa solo testo normale; non viene utilizzata alcuna serializzazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnVybA.desc": {
+          "source": "for URL-encoded message bodies",
+          "message": "per corpi di messaggi con codifica URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "use only XML-RPC serialization",
+          "message": "usa solo la serializzazione XML-RPC"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "use only YAML serialization",
+          "message": "usa solo la serializzazione YAML"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.desc": {
+          "source": "Sets how data is serialized in requests",
+          "message": "Imposta la modalità di serializzazione dei dati nelle richieste"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.display_name": {
+          "source": "Data Serialization",
+          "message": "Serializzazione dati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGF0YQ.short_desc": {
+          "source": "Sets how data is serialized",
+          "message": "Imposta la modalità di serializzazione dei dati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.desc": {
+          "source": "Disables automatic pings; useful for rate-limited or metered connections",
+          "message": "Disabilita i ping automatici; utile per connessioni con limiti di frequenza o a consumo"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.display_name": {
+          "source": "Disable Automatic Pings?",
+          "message": "Disabilitare i ping automatici?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZGlzYWJsZV9hdXRvbWF0aWNfcGluZ3M.short_desc": {
+          "source": "Disables automatic pings",
+          "message": "Disabilita i ping automatici"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Un insieme di caratteri aggiuntivi da sottoporre a percent-encoding negli URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.display_name": {
+          "source": "Encode URL Characters",
+          "message": "Codifica caratteri URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.short_desc": {
+          "source": "A set of additional characters to subject to percent encoding in URLs",
+          "message": "Un insieme di caratteri aggiuntivi da sottoporre a percent-encoding negli URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
+          "message": "Se `True`, i codici di stato HTTP che indicano errori non genereranno un'eccezione `HTTP-CLIENT-RECEIVE-ERROR`; tali risposte verranno invece inoltrate al chiamante come qualsiasi altra risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Error Passthrough",
+          "message": "Inoltro errori"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "If errors should be returned like normal successful responses",
+          "message": "Indica se gli errori devono essere restituiti come normali risposte riuscite"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.desc": {
+          "source": "Any headers to include in the request",
+          "message": "Eventuali intestazioni da includere nella richiesta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.display_name": {
+          "source": "Headers",
+          "message": "Intestazioni"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aGRy.short_desc": {
+          "source": "Any headers to include in the request",
+          "message": "Eventuali intestazioni da includere nella richiesta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMA.desc": {
+          "source": "HTTP/1.0 only",
+          "message": "Solo HTTP/1.0"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjEuMQ.desc": {
+          "source": "HTTP/1.1 only",
+          "message": "Solo HTTP/1.1"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjIuMA.desc": {
+          "source": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+          "message": "Richiede HTTP/2, genera errore se il server non lo supporta (TLS richiesto)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOjMuMA.desc": {
+          "source": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
+          "message": "Richiede HTTP/3 (QUIC), genera errore se non disponibile (TLS richiesto)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
+          "message": "Usa Happy Eyeballs con priorità a HTTP/3 per HTTPS; fallback a HTTP/2 se necessario (predefinito)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.desc": {
+          "source": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), `1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires TLS and uses QUIC as the transport protocol",
+          "message": "La versione HTTP da utilizzare: `auto` (Happy Eyeballs con priorità a HTTP/3 per HTTPS, predefinito), `1.0`, `1.1`, `2.0` o `3.0`. HTTP/2 richiede TLS e viene negoziato tramite ALPN. HTTP/3 richiede TLS e utilizza QUIC come protocollo di trasporto"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.display_name": {
+          "source": "HTTP Version",
+          "message": "Versione HTTP"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.aHR0cF92ZXJzaW9u.short_desc": {
+          "source": "The HTTP version to use",
+          "message": "La versione HTTP da utilizzare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.desc": {
+          "source": "If OAuth2 tokens should be automatically refreshed",
+          "message": "Indica se i token OAuth2 devono essere rinnovati automaticamente"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.display_name": {
+          "source": "OAuth2 Auto Refresh",
+          "message": "Rinnovo automatico OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use",
+          "message": "Imposta se i token OAuth2 devono essere rinnovati automaticamente; abilita inoltre qualsiasi rinnovo personalizzato del token nel caso in cui non sia in uso OAuth2 puro"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
+          "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "Argomenti opzionali per le richieste di autenticazione per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
+          "source": "OAuth2 Authorization Args",
+          "message": "Argomenti autorizzazione OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Optional arguments for authentication requests for the authorization_code grant type",
+          "message": "Argomenti opzionali per le richieste di autenticazione per il grant type authorization_code"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
+          "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
+          "message": "L'URL di autorizzazione OAuth2 per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.display_name": {
+          "source": "OAuth2 Auth URL",
+          "message": "URL autorizzazione OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
+          "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
+          "message": "Imposta l'URL di autorizzazione OAuth2 per il grant type authorization_code"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
+          "message": "Un URL alternativo per il token che verrà utilizzato per incapsulare la chiamata per ottenere il token; se impostato, ha la precedenza su `oauth2_token_url`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.display_name": {
+          "source": "OAuth2 Alternate Token URL",
+          "message": "URL token alternativo OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
+          "source": "An alternate token URL which will be used to wrap the call to get the token",
+          "message": "Un URL alternativo per il token che verrà utilizzato per incapsulare la chiamata per ottenere il token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Informazioni opzionali di sostituzione dell'URL per le richieste di token al server alternativo"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.display_name": {
+          "source": "OAuth2 Alternate URL Substitution Info",
+          "message": "Info sostituzione URL alternativo OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
+          "source": "Optional URL substitution info for token requests to the alternate server",
+          "message": "Informazioni opzionali di sostituzione dell'URL per le richieste di token al server alternativo"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.desc": {
+          "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
+          "message": "Questo è un suggerimento per i programmi esterni che elaborano richieste OAuth2 verso la configurazione esterna per la configurazione OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.display_name": {
+          "source": "OAuth2 Application",
+          "message": "Applicazione OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.short_desc": {
+          "source": "Sets a hint to external programs for the OAuth2 config",
+          "message": "Imposta un suggerimento per i programmi esterni per la configurazione OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.desc": {
+          "source": "The OAuth2 client ID; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "L'ID client OAuth2; ignorato per gli accessi se l'opzione `token` è impostata (ma eventualmente utilizzato durante il rinnovo dei token)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.display_name": {
+          "source": "OAuth2 Client ID",
+          "message": "ID client OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9pZA.short_desc": {
+          "source": "Sets the OAuth2 client ID",
+          "message": "Imposta l'ID client OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.desc": {
+          "source": "Sets the OAuth2 client secret; ignored for logins if the `token` option is set (but possibly used when refreshing tokens)",
+          "message": "Imposta il segreto client OAuth2; ignorato per gli accessi se l'opzione `token` è impostata (ma eventualmente utilizzato durante il rinnovo dei token)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.display_name": {
+          "source": "OAuth2 Client Secret",
+          "message": "Segreto client OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2NsaWVudF9zZWNyZXQ.short_desc": {
+          "source": "Sets the OAuth2 client secret",
+          "message": "Imposta il segreto client OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No OAuth2 grant flow will be used",
+          "message": "Nessun flusso di grant OAuth2 verrà utilizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmF1dGhvcml6YXRpb25fY29kZQ.desc": {
+          "source": "OAuth2 2.0 authorization code grant ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); this grant type requires external user authorization to acquire an access token; the `oauth2_auth_url` must be set to inform external code where to request authorization from the external authorization server",
+          "message": "Grant authorization code di OAuth 2.0 ([RFC 6749 authorization code grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1)); questo grant type richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso; `oauth2_auth_url` deve essere impostato per informare il codice esterno su dove richiedere l'autorizzazione dal server di autorizzazione esterno"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmNsaWVudF9jcmVkZW50aWFscw.desc": {
+          "source": "OAuth2 2.0 client credentials grant ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))",
+          "message": "Grant client credentials di OAuth 2.0 ([RFC 6749 client credentials grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.4))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOmltcGxpY2l0.desc": {
+          "source": "OAuth2 2.0 implicit grant ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); this grant type returns the access token directly in the redirect URL fragment without a code exchange step; requires external user authorization; the `oauth2_auth_url` must be set; no `oauth2_token_url` is required",
+          "message": "Grant implicit di OAuth 2.0 ([RFC 6749 implicit grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.2)); questo grant type restituisce il token di accesso direttamente nel frammento dell'URL di reindirizzamento senza un passaggio di scambio del codice; richiede l'autorizzazione dell'utente esterno; `oauth2_auth_url` deve essere impostato; nessun `oauth2_token_url` è richiesto"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.allowed-value.c3RyaW5nOnBhc3N3b3Jk.desc": {
+          "source": "OAuth2 2.0 legacy password grant ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))",
+          "message": "Grant password legacy di OAuth 2.0 ([RFC 6749 password grant](https://datatracker.ietf.org/doc/html/rfc6749#section-1.3.3))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.desc": {
+          "source": "The OAuth2 grant type; ignored for logins if the `token` option is set",
+          "message": "Il grant type OAuth2; ignorato per gli accessi se l'opzione `token` è impostata"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.display_name": {
+          "source": "OAuth2 Grant Type",
+          "message": "Grant type OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2dyYW50X3R5cGU.short_desc": {
+          "source": "Sets the OAuth2 grant type",
+          "message": "Imposta il grant type OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOlMyNTY.desc": {
+          "source": "The code challenge will be sent as a URL-encoded SHA-256 digest when PKCE is used",
+          "message": "Il code challenge verrà inviato come digest SHA-256 con codifica URL quando viene utilizzato PKCE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "PKCE will not be used",
+          "message": "PKCE non verrà utilizzato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.allowed-value.c3RyaW5nOnBsYWlu.desc": {
+          "source": "No encoding will be made with the code challenge when PKCE is used",
+          "message": "Nessuna codifica verrà applicata al code challenge quando viene utilizzato PKCE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.desc": {
+          "source": "The code challenge method for PKCE (Proof Key Code Exchange) with the `authorization_code` flow",
+          "message": "Il metodo code challenge per PKCE (Proof Key Code Exchange) con il flusso `authorization_code`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.display_name": {
+          "source": "OAuth2 PKCE",
+          "message": "PKCE OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow",
+          "message": "Imposta un suggerimento per le applicazioni esterne per utilizzare PKCE (Proof Key Code Exchange) con il flusso authorization code"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
+          "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
+          "message": "In base alle specifiche OAuth2 (RFC 6749), il parametro state deve essere restituito dal server di autorizzazione. Alcuni provider (come Trello) non inoltrano il parametro state. Impostare su False per incorporare lo state in redirect_uri come soluzione alternativa per i provider non conformi. Valore predefinito: True (comportamento conforme alle specifiche)."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.display_name": {
+          "source": "OAuth2 Redirect Passthrough State?",
+          "message": "Inoltro state di reindirizzamento OAuth2?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
+          "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
+          "message": "Se False, incorpora lo state in redirect_uri per i provider OAuth2 non conformi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
+          "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
+          "message": "L'URL di reindirizzamento OAuth2 per il grant type `authorization_code`; ignorato se l'opzione `token` è impostata. Nota che il grant type `authorization_code` richiede l'autorizzazione dell'utente esterno per acquisire un token di accesso; il valore speciale `auto` (predefinito) è destinato a essere interpretato dai server che implementano la gestione del client authorization code OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.display_name": {
+          "source": "OAuth2 Redirect URL",
+          "message": "URL di reindirizzamento OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.short_desc": {
+          "source": "The OAuth2 redirect URL for the authorization code grant type",
+          "message": "L'URL di reindirizzamento OAuth2 per il grant type authorization code"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.desc": {
+          "source": "Sets the OAuth2 refresh token, if any (complements option `token`)",
+          "message": "Imposta il refresh token OAuth2, se presente (integra l'opzione `token`)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.display_name": {
+          "source": "OAuth2 Refresh Token",
+          "message": "Refresh token OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZnJlc2hfdG9rZW4.short_desc": {
+          "source": "Sets the OAuth2 refresh token",
+          "message": "Imposta il refresh token OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Un carattere separatore per gli scope OAuth2 negli argomenti dell'URI"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.display_name": {
+          "source": "OAuth2 Scope Separator",
+          "message": "Separatore degli ambiti OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3BlX3NlcGFyYXRvcl9jaGFy.short_desc": {
+          "source": "A separator character for OAuth2 scopes in URI arguments",
+          "message": "Un carattere separatore per gli scope OAuth2 negli argomenti dell'URI"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.desc": {
+          "source": "List of OAuth2 scope strings to request; ignored if the `token` option is set",
+          "message": "Elenco di stringhe di ambito OAuth2 da richiedere; ignorato se l'opzione `token` è impostata"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.display_name": {
+          "source": "OAuth2 Scopes",
+          "message": "Ambiti OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Njb3Blcw.short_desc": {
+          "source": "List of OAuth2 scopes to request",
+          "message": "Elenco di ambiti OAuth2 da richiedere"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Usa l'autorizzazione di base solo con il segreto client quando si effettuano richieste di token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.display_name": {
+          "source": "OAuth2 Token Auth Client Secret Only?",
+          "message": "Autenticazione token OAuth2 solo con segreto client?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
+          "source": "Use basic authorization with the client secret only when making token requests",
+          "message": "Usa l'autorizzazione di base solo con il segreto client quando si effettuano richieste di token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
+          "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
+          "message": "Argomenti aggiuntivi opzionali per le richieste di rinnovo del token; se questa opzione è impostata insieme a `oauth2_alt_token_url`, il valore `oauth2_token_url` verrà aggiunto anche a questa quando la richiesta viene effettuata all'`oauth2_alt_token_url`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.display_name": {
+          "source": "OAuth2 Token Refresh Args",
+          "message": "Argomenti di rinnovo token OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.short_desc": {
+          "source": "Optional extra arguments for token requests",
+          "message": "Argomenti aggiuntivi opzionali per le richieste di token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.desc": {
+          "source": "The expiry date for the token",
+          "message": "La data di scadenza del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.display_name": {
+          "source": "OAuth2 Token Expiry Date",
+          "message": "Data di scadenza token OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeQ.short_desc": {
+          "source": "The expiry date for the token",
+          "message": "La data di scadenza del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed. This option is only used when the connection has a refresh token and the server does not indicate the lifetime of the token in token responses",
+          "message": "Il numero previsto di minuti per cui un token rimarrà valido prima di dover essere rinnovato. Questa opzione viene utilizzata solo quando la connessione dispone di un token di rinnovo e il server non indica la durata del token nelle risposte del token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.display_name": {
+          "source": "OAuth2 Token Lifetime Hint in Minutes",
+          "message": "Suggerimento durata token OAuth2 in minuti"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "The expected number of minutes that a token will remain valid before it must be refreshed",
+          "message": "Il numero previsto di minuti per cui un token rimarrà valido prima di dover essere rinnovato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
+          "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
+          "message": "L'URL del token per i flussi OAuth2; ignorato per i login se l'opzione `token` è impostata"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.display_name": {
+          "source": "OAuth2 Token URL",
+          "message": "URL token OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.short_desc": {
+          "source": "The token URL for OAuth2 flows",
+          "message": "L'URL del token per i flussi OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "Usa l'autorizzazione di base con ID client e segreto client quando si effettuano richieste di token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
+          "source": "OAuth2 Token Use Basic Auth?",
+          "message": "Usa autorizzazione di base per token OAuth2?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Use basic authorization with the client ID and client secret when making token requests",
+          "message": "Usa l'autorizzazione di base con ID client e segreto client quando si effettuano richieste di token"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
+          "source": "An OpenApi 3 schema location or file data for the REST connection",
+          "message": "Una posizione dello schema OpenAPI 3 o dati di file per la connessione REST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.display_name": {
+          "source": "OpenApi 3 Schema",
+          "message": "Schema OpenAPI 3"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.short_desc": {
+          "source": "Sets the location of an OpenApi 3 schema to use for the connection",
+          "message": "Imposta la posizione di uno schema OpenAPI 3 da utilizzare per la connessione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.desc": {
+          "source": "Sets the maximum HTTP redirects to support in a single request",
+          "message": "Imposta il numero massimo di reindirizzamenti HTTP da supportare in una singola richiesta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.display_name": {
+          "source": "Max Redirects",
+          "message": "Reindirizzamenti massimi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3JlZGlyZWN0cw.short_desc": {
+          "source": "Sets the maximum HTTP redirects to support",
+          "message": "Imposta il numero massimo di reindirizzamenti HTTP da supportare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS` method",
+          "message": "Metodo HTTP `OPTIONS`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS method",
+          "message": "Metodo HTTP OPTIONS"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE` method",
+          "message": "Metodo HTTP `DELETE`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE method",
+          "message": "Metodo HTTP DELETE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET` method",
+          "message": "Metodo HTTP `GET`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET method",
+          "message": "Metodo HTTP GET"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD` method",
+          "message": "Metodo HTTP `HEAD`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD method",
+          "message": "Metodo HTTP HEAD"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH` method",
+          "message": "Metodo HTTP `PATCH`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH method",
+          "message": "Metodo HTTP PATCH"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST` method",
+          "message": "Metodo HTTP `POST`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST method",
+          "message": "Metodo HTTP POST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT` method",
+          "message": "Metodo HTTP `PUT`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT method",
+          "message": "Metodo HTTP PUT"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE` method",
+          "message": "Metodo HTTP `TRACE`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE method",
+          "message": "Metodo HTTP TRACE"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.desc": {
+          "source": "The REST method to use",
+          "message": "Il metodo REST da utilizzare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.display_name": {
+          "source": "Method",
+          "message": "Metodo"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The REST method to use",
+          "message": "Il metodo REST da utilizzare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+          "message": "Abilita l'autenticazione HTTP Negotiate Kerberos/SPNEGO per i client REST che la supportano; i percorsi HTTPClient non elaborati rifiutano questa opzione con HTTP-NEGOTIATE-AUTH-ERROR"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.display_name": {
+          "source": "Kerberos Negotiate Auth?",
+          "message": "Autenticazione Negotiate Kerberos?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2F1dGg.short_desc": {
+          "source": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Abilita l'autenticazione HTTP Negotiate Kerberos/SPNEGO"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.desc": {
+          "source": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Cache delle credenziali da utilizzare per l'autenticazione HTTP Negotiate Kerberos/SPNEGO"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.display_name": {
+          "source": "Kerberos Credential Cache",
+          "message": "Cache credenziali Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2NyZWRlbnRpYWxfY2FjaGU.short_desc": {
+          "source": "Credential cache for Kerberos HTTP Negotiate authentication",
+          "message": "Cache delle credenziali per l'autenticazione HTTP Negotiate Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Do not delegate credentials",
+          "message": "Non delegare le credenziali"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOmRpcmVjdA.desc": {
+          "source": "Delegate the initiator credential directly where supported",
+          "message": "Delega direttamente la credenziale dell'iniziatore dove supportato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.allowed-value.c3RyaW5nOnM0dQ.desc": {
+          "source": "Use constrained delegation with S4U where supported",
+          "message": "Usa la delega vincolata con S4U dove supportato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.desc": {
+          "source": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Modalità di delega per l'autenticazione HTTP Negotiate Kerberos/SPNEGO"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.display_name": {
+          "source": "Kerberos Delegation Mode",
+          "message": "Modalità di delega Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2RlbGVnYXRpb25fbW9kZQ.short_desc": {
+          "source": "Delegation mode for Kerberos HTTP Negotiate authentication",
+          "message": "Modalità di delega per l'autenticazione HTTP Negotiate Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.desc": {
+          "source": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+          "message": "Keytab client da utilizzare per l'autenticazione HTTP Negotiate Kerberos/SPNEGO"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.display_name": {
+          "source": "Kerberos Client Keytab",
+          "message": "Keytab client Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX2tleXRhYg.short_desc": {
+          "source": "Client keytab for Kerberos HTTP Negotiate authentication",
+          "message": "Keytab client per l'autenticazione HTTP Negotiate Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.desc": {
+          "source": "If True, send the initial Negotiate token before receiving a 401 challenge",
+          "message": "Se True, invia il token Negotiate iniziale prima di ricevere una richiesta di autenticazione 401"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.display_name": {
+          "source": "Preemptive Kerberos Negotiate?",
+          "message": "Negotiate Kerberos preventivo?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3ByZWVtcHRpdmU.short_desc": {
+          "source": "Sends the initial Negotiate token without waiting for a 401 challenge",
+          "message": "Invia il token Negotiate iniziale senza attendere una richiesta di autenticazione 401"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.desc": {
+          "source": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, REST clients derive a host-based HTTP service name from the URL",
+          "message": "Il principal di servizio Kerberos da utilizzare per l'autenticazione HTTP Negotiate; se omesso, i client REST deducono un nome di servizio HTTP basato sull'host dall'URL"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.display_name": {
+          "source": "Kerberos Service Principal",
+          "message": "Principal di servizio Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bmVnb3RpYXRlX3NlcnZpY2VfcHJpbmNpcGFs.short_desc": {
+          "source": "The Kerberos HTTP service principal",
+          "message": "Il principal di servizio HTTP Kerberos"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmJ6aXAy.desc": {
+          "source": "use bzip2 encoding",
+          "message": "usa la codifica bzip2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmxhdGU.desc": {
+          "source": "use the deflate algorithm ([RFC 1951](https://tools.ietf.org/html/rfc1951))",
+          "message": "usa l'algoritmo deflate ([RFC 1951](https://tools.ietf.org/html/rfc1951))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmd6aXA.desc": {
+          "source": "use GNU zip encoding ([RFC 1952](https://tools.ietf.org/html/rfc1952))",
+          "message": "usa la codifica GNU zip ([RFC 1952](https://tools.ietf.org/html/rfc1952))"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.allowed-value.c3RyaW5nOmlkZW50aXR5.desc": {
+          "source": "use no content encoding",
+          "message": "non usa alcuna codifica dei contenuti"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Imposta l'algoritmo di compressione da utilizzare durante l'invio dei messaggi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.display_name": {
+          "source": "Send Compression",
+          "message": "Compressione invio"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.c2VuZF9lbmNvZGluZw.short_desc": {
+          "source": "Sets the compression algorithm to use when sending messages",
+          "message": "Imposta l'algoritmo di compressione da utilizzare durante l'invio dei messaggi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path",
+          "message": "Il percorso URI"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.display_name": {
+          "source": "URI path",
+          "message": "Percorso URI"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path",
+          "message": "Il percorso URI"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.desc": {
+          "source": "The password for authentication; only used if no username or password is set in the URL and if the `username` option is also used; conflicts with the `token` option",
+          "message": "La password per l'autenticazione; utilizzata solo se nell'URL non è impostato alcun nome utente o password e se viene utilizzata anche l'opzione `username`; è in conflitto con l'opzione `token`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
+          "source": "Password",
+          "message": "Password"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.short_desc": {
+          "source": "The password for authentication",
+          "message": "La password per l'autenticazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.desc": {
+          "source": "Any message body to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set or if `ping_method` is `GET`",
+          "message": "Qualsiasi corpo del messaggio da inviare durante l'esecuzione di un'operazione di ping avanzata; ignorato se `ping_method` o `ping_path` non sono impostati o se `ping_method` è `GET`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.display_name": {
+          "source": "Ping Body",
+          "message": "Corpo ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19ib2R5.short_desc": {
+          "source": "The message body to send with pings",
+          "message": "Il corpo del messaggio da inviare con i ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.desc": {
+          "source": "Any HTTP headers to send when performing an advanced ping operation; ignored if either one of `ping_method` and `ping_path` are not set",
+          "message": "Eventuali intestazioni HTTP da inviare durante l'esecuzione di un'operazione di ping avanzata; ignorato se uno tra `ping_method` e `ping_path` non è impostato"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.display_name": {
+          "source": "Ping Headers",
+          "message": "Intestazioni ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19oZWFkZXJz.short_desc": {
+          "source": "Any HTTP headers to send with pings",
+          "message": "Eventuali intestazioni HTTP da inviare con i ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.desc": {
+          "source": "The HTTP method to use for an advanced ping; this and `ping_path` must be set to make an HTTP request as a part of the socket polling ping operation; must be a valid HTTP method name",
+          "message": "Il metodo HTTP da utilizzare per un ping avanzato; questo e `ping_path` devono essere impostati per effettuare una richiesta HTTP come parte dell'operazione di ping con polling dei socket; deve essere un nome di metodo HTTP valido"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.display_name": {
+          "source": "Ping Method",
+          "message": "Metodo ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19tZXRob2Q.short_desc": {
+          "source": "The HTTP method to use for pings",
+          "message": "Il metodo HTTP da utilizzare per i ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.desc": {
+          "source": "The URI path to use for an advanced ping; this and `ping_method` must be set to make an HTTP request as a part of the socket polling ping operation.  If the value for this option begins with a `/` character, then it replaces any connection path for the REST client, otherwise the value is appended to the connection path for the REST client.",
+          "message": "Il percorso URI da utilizzare per un ping avanzato; questo e `ping_method` devono essere impostati per effettuare una richiesta HTTP come parte dell'operazione di ping con polling dei socket. Se il valore per questa opzione inizia con un carattere `/`, sostituisce qualsiasi percorso di connessione per il client REST, altrimenti il valore viene aggiunto al percorso di connessione per il client REST."
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.display_name": {
+          "source": "Ping Path",
+          "message": "Percorso ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGluZ19wYXRo.short_desc": {
+          "source": "The URI path to use for pings",
+          "message": "Il percorso URI da utilizzare per i ping"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.desc": {
+          "source": "If `true` then all URI paths in URLs are assumed to be already [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and any unencoded characters are sent in a URL with a new request, an exception is raised",
+          "message": "Se `true`, si presuppone che tutti i percorsi URI negli URL siano già [codificati in percentuale](https://en.wikipedia.org/wiki/Percent-encoding); se questo flag è impostato e vengono inviati caratteri non codificati in un URL con una nuova richiesta, viene generata un'eccezione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.display_name": {
+          "source": "Pre-Encoded URLs",
+          "message": "URL precodificati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJlX2VuY29kZWRfdXJscw.short_desc": {
+          "source": "If true then URLs are assumed to be preencoded",
+          "message": "Se vero, si presuppone che gli URL siano precodificati"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.desc": {
+          "source": "The HTTP proxy URL to use",
+          "message": "L'URL del proxy HTTP da utilizzare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.display_name": {
+          "source": "HTTP Proxy",
+          "message": "Proxy HTTP"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cHJveHk.short_desc": {
+          "source": "The HTTP proxy to use",
+          "message": "Il proxy HTTP da utilizzare"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Any query to include in the request; these will be added to the URI path in the request",
+          "message": "Eventuale query da includere nella richiesta; questi elementi verranno aggiunti al percorso URI nella richiesta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Any query to include in the request",
+          "message": "Eventuale query da includere nella richiesta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.desc": {
+          "source": "If `True` then redirect responses will be passed to the caller instead of processed",
+          "message": "Se `True`, le risposte di reindirizzamento verranno passate al chiamante anziché essere elaborate"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.display_name": {
+          "source": "Redirect Passthrough",
+          "message": "Passthrough reindirizzamento"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVkaXJlY3RfcGFzc3RocnU.short_desc": {
+          "source": "If true then redirect responses are returned to the caller",
+          "message": "Se vero, le risposte di reindirizzamento vengono restituite al chiamante"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.desc": {
+          "source": "A hash to check all deserialized bodies from the server to check for authentication errors",
+          "message": "Un hash per verificare tutti i corpi deserializzati dal server per il controllo di errori di autenticazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
+          "source": "REST Body Auth Error Check",
+          "message": "Controllo errori autenticazione corpo REST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors",
+          "message": "Un hash per verificare tutti i corpi deserializzati nelle risposte del server 200 OK per il controllo di errori di autenticazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
+          "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
+          "message": "Eventuale token di autorizzazione da utilizzare per la connessione; verrà passato come `Authorization: Bearer ...` (supponendo che `token_type` sia `Bearer`) nelle intestazioni di richiesta; questa opzione non può essere utilizzata con le opzioni di nome utente e password o informazioni di autenticazione nell'URL; se questa opzione è impostata, la maggior parte delle opzioni OAuth2 viene ignorata per i login"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.display_name": {
+          "source": "Authorization Token",
+          "message": "Token di autorizzazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.short_desc": {
+          "source": "Set an authorization token to be included in requests",
+          "message": "Imposta un token di autorizzazione da includere nelle richieste"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.desc": {
+          "source": "The name of the HTTP header where `token` will be sent as an API key; this option is incompatible with OAuth2 options",
+          "message": "Il nome dell'intestazione HTTP in cui `token` verrà inviato come chiave API; questa opzione non è compatibile con le opzioni OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.display_name": {
+          "source": "API Key Header",
+          "message": "Intestazione chiave API"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fYXBpX2tleV9oZWFkZXI.short_desc": {
+          "source": "The name of the HTTP header where the token will be sent as an API key",
+          "message": "Il nome dell'intestazione HTTP in cui il token verrà inviato come chiave API"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.desc": {
+          "source": "The type of `token` to use for the `Authorization` header; ignored if no `token` option is set",
+          "message": "Il tipo di `token` da utilizzare per l'intestazione `Authorization`; ignorato se non è impostata alcuna opzione `token`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.display_name": {
+          "source": "Authorization Token Type",
+          "message": "Tipo di token di autorizzazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW5fdHlwZQ.short_desc": {
+          "source": "The type of authorization token",
+          "message": "Il tipo di token di autorizzazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.desc": {
+          "source": "The transfer timeout to use in milliseconds (default: 45 seconds)",
+          "message": "Il timeout di trasferimento da utilizzare in millisecondi (predefinito: 45 secondi)"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.display_name": {
+          "source": "I/O Timeout",
+          "message": "Timeout di I/O"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dGltZW91dA.short_desc": {
+          "source": "The maximum time an individual I/O operation can take in milliseconds",
+          "message": "Il tempo massimo che una singola operazione di I/O può richiedere in millisecondi"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.desc": {
+          "source": "The username for authentication; only used if no username or password is set in the URL; conflicts with the `token` option",
+          "message": "Il nome utente per l'autenticazione; utilizzato solo se non è impostato alcun nome utente o password nell'URL; è in conflitto con l'opzione `token`"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.display_name": {
+          "source": "Username",
+          "message": "Nome utente"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dXNlcm5hbWU.short_desc": {
+          "source": "Sets the username for authentication",
+          "message": "Imposta il nome utente per l'autenticazione"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.short_desc": {
+          "source": "Make a call to a REST server or webhook",
+          "message": "Effettua una chiamata a un server REST o webhook"
+        },
+        "app.R2VuZXJpY1Jlc3Q.desc": {
+          "source": "Generic REST server",
+          "message": "Server REST generico"
+        },
+        "app.R2VuZXJpY1Jlc3Q.display_name": {
+          "source": "REST Server",
+          "message": "Server REST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.short_desc": {
+          "source": "Generic REST server",
+          "message": "Server REST generico"
+        }
+      }
+    }
+  }
+}

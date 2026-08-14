@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
+          "message": "Реагувати на файли, завантажені на FTP-сервер; конфігурація дії визначає, чи містить подія самі дані файлу або посилання на розташування файлу в локальній файловій системі. У будь-якому разі подія вказує на те, що дані файлу вже завантажено і вони доступні локально"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
+          "source": "FTP File Received",
+          "message": "Отримано файл FTP"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.desc": {
+          "source": "Use an atomic transfer mechanism with `local_dir` where remote files are first moved to a temporary location (specified by `tempfile_template`) and then moved to the final location when they have been fully transferred.\n\nThis ensures that files will never be read until they are fully transferred",
+          "message": "Використовувати механізм атомарного перенесення з `local_dir`, за якого віддалені файли спочатку переміщуються в тимчасове розташування (вказане в `tempfile_template`), а потім переміщуються до остаточного розташування після їхнього повного передавання.\n\nЦе гарантує, що файли ніколи не будуть прочитані до повного завершення їхнього передавання"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.display_name": {
+          "source": "Atomic File Transfer",
+          "message": "Атомарна передача файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.short_desc": {
+          "source": "Use an atomic file transfer mechanism",
+          "message": "Використовувати механізм атомарної передачі файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
+          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "Кількість секунд очікування перед повторним опитуванням після помилки FTP; помилка записується в журнал на рівні error, після чого опитування продовжується після цієї затримки.\n\nТимчасові проблеми, такі як збій мережі або перезапуск сервера, є звичайним явищем для FTP; низьке значення забезпечує швидке відновлення після таких проблем, тоді як високе значення зменшує навантаження на сервер із постійними збоями.\n\n**ПРИМІТКА**: під час дії цієї затримки файли не опитуються"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.display_name": {
+          "source": "Error Retry Delay",
+          "message": "Затримка повторної спроби після помилки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.short_desc": {
+          "source": "The delay in seconds before retrying after an FTP error",
+          "message": "Затримка в секундах перед повторною спробою після помилки FTP"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Локальний каталог, який використовуватиметься для отримання файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.display_name": {
+          "source": "Local Directory",
+          "message": "Локальний каталог"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.short_desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Локальний каталог, який використовуватиметься для отримання файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.desc": {
+          "source": "The glob mask to use to match files to poll; will be treated as a regex if `regex` is `true`",
+          "message": "Маска glob для збігу файлів під час опитування; оброблятиметься як регулярний вираз, якщо `regex` має значення `true`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
+          "source": "Glob Mask",
+          "message": "Маска Glob"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.short_desc": {
+          "source": "The glob mask to use to match files to poll",
+          "message": "Маска glob для збігу файлів під час опитування"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "Ціле число, що задає мінімальний вік файлу в секундах перед його опитуванням; це призначено для обходу неатомарних операцій передачі файлів.\n\nЯкщо цей параметр необхідний, встановіть значення, більше за найдовший час, який може знадобитися для передачі файлу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "Мінімальний вік опитування"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "Мінімальний вік файлів для опитування в секундах"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "Або `name`, або `date` для даних, які використовуються для сортування"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "Тип сортування"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "Поле для сортування файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "Сортувати за спаданням; якщо не вказано, припускається сортування за зростанням, якщо вказано `sort_type`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "Сортувати за спаданням"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "Сортувати файли за спаданням"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "Інтервал у секундах між опитуваннями файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "Якщо `true`, то `mask` розглядається як регулярний вираз замість шаблону glob"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "Збіг за регулярним виразом"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "Якщо true, аргумент 'mask' розглядається як регулярний вираз"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.desc": {
+          "source": "Move the remote file after processing; in this case `remote_file_move_target` must be set",
+          "message": "Перемістити віддалений файл після обробки; у цьому випадку має бути встановлено `remote_file_move_target`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.display_name": {
+          "source": "MOVE",
+          "message": "MOVE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.short_desc": {
+          "source": "Move the remote file after processing",
+          "message": "Перемістити віддалений файл після обробки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "Leave the file untouched after processing; the file must be moved or deleted manually during post-processing, or the file will appear in subsequent polls as well",
+          "message": "Залишити файл без змін після обробки; файл потрібно перемістити або видалити вручну під час постобробки, інакше він з’являтиметься і в наступних опитуваннях"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "NONE",
+          "message": "NONE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Leave the file untouched after processing",
+          "message": "Залишити файл без змін після обробки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Видалити віддалений файл після обробки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Видалити віддалений файл після обробки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.desc": {
+          "source": "Delete or move remote file after processing? If `MOVE`, `remote_file_move_target` must also be set",
+          "message": "Видалити чи перемістити віддалений файл після обробки? Якщо `MOVE`, також має бути встановлено `remote_file_move_target`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.display_name": {
+          "source": "Remote File Disposition",
+          "message": "Дія з віддаленим файлом"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.short_desc": {
+          "source": "Delete or move remote file after processing?",
+          "message": "Видалити чи перемістити віддалений файл після обробки?"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.desc": {
+          "source": "The target template for the remote file after processing; use `%s` for the original file name. This option is only used when `remote_file_disposition` is `MOVE`, otherwise it is ignored",
+          "message": "Цільовий шаблон для віддаленого файлу після обробки; використовуйте `%s` для початкового імені файлу. Цей параметр використовується лише тоді, коли `remote_file_disposition` має значення `MOVE`, інакше він ігнорується"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.display_name": {
+          "source": "Remote File Move Target",
+          "message": "Ціль переміщення віддаленого файлу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.short_desc": {
+          "source": "The target template for the remote file after processing",
+          "message": "Цільовий шаблон для віддаленого файлу після обробки"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "Бітове поле параметрів регулярного виразу (`1` = ігнорувати регістр, `2` = вважати EOL звичайним символом); ігнорується, якщо `regex` не є `true`"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "Параметри регулярного виразу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "Бітове поле параметрів регулярного виразу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.desc": {
+          "source": "The template for temporary filenames; use `%s` for the original filename",
+          "message": "Шаблон для тимчасових імен файлів; використовуйте `%s` для початкового імені файлу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.display_name": {
+          "source": "Temporary Filename Template",
+          "message": "Шаблон тимчасового імені файлу"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.short_desc": {
+          "source": "The template for temporary filenames",
+          "message": "Шаблон для тимчасових імен файлів"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {
+          "source": "A file is uploaded to an FTP server",
+          "message": "Файл завантажено на FTP-сервер"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP-сервер"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Універсальний FTP-сервер для обміну файлами через FTP та FTPS"
+        }
+      }
+    }
+  }
+}

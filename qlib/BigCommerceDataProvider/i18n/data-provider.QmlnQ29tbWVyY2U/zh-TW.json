@@ -1,0 +1,3181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.desc": {
+          "source": "Fires when a cart is abandoned. Uses polling to detect incomplete orders (status Incomplete).",
+          "message": "在購物車被放棄時觸發。使用輪詢偵測未完成的訂單（狀態為 Incomplete）。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.display_name": {
+          "source": "Watch Abandoned Cart",
+          "message": "監控已放棄的購物車"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1hYmFuZG9uZWQ.short_desc": {
+          "source": "Trigger when a cart is abandoned",
+          "message": "當購物車被放棄時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.desc": {
+          "source": "Fires when a new cart is created. Uses polling to detect new incomplete orders.",
+          "message": "在建立新購物車時觸發。使用輪詢偵測新的未完成訂單。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.display_name": {
+          "source": "Watch New Cart",
+          "message": "監控新購物車"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y2FydC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new cart is created",
+          "message": "當建立新購物車時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Create a new blog post in BigCommerce",
+          "message": "在 BigCommerce 中建立新的部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Create a Blog Post",
+          "message": "建立部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.desc": {
+          "source": "Author name of the blog post",
+          "message": "部落格文章的作者姓名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "作者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.short_desc": {
+          "source": "Author name",
+          "message": "作者姓名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.desc": {
+          "source": "Body content of the blog post (HTML)",
+          "message": "部落格文章的內文內容 (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.Ym9keQ.short_desc": {
+          "source": "Blog post content (HTML)",
+          "message": "部落格文章內容 (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.desc": {
+          "source": "Whether the blog post is published and visible",
+          "message": "部落格文章是否已發布並可見"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "是否已發布"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Publish the post",
+          "message": "發布文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.desc": {
+          "source": "SEO meta description",
+          "message": "SEO Meta 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Meta Description",
+          "message": "Meta 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "SEO description",
+          "message": "SEO 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.desc": {
+          "source": "SEO meta keywords",
+          "message": "SEO Meta 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.display_name": {
+          "source": "Meta Keywords",
+          "message": "Meta 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.short_desc": {
+          "source": "SEO keywords",
+          "message": "SEO 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Date/time the blog post was published",
+          "message": "部落格文章的發布日期/時間"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Published Date",
+          "message": "發布日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Publication date",
+          "message": "發布日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.desc": {
+          "source": "Array of tag strings for categorization",
+          "message": "用於分類的標籤字串陣列"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGFncw.short_desc": {
+          "source": "Tags for categorization",
+          "message": "分類標籤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.desc": {
+          "source": "Path to the thumbnail image",
+          "message": "縮圖圖片的路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.display_name": {
+          "source": "Thumbnail Path",
+          "message": "縮圖路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.short_desc": {
+          "source": "Thumbnail image path",
+          "message": "縮圖圖片路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.desc": {
+          "source": "Title of the blog post",
+          "message": "部落格文章的標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dGl0bGU.short_desc": {
+          "source": "Blog post title",
+          "message": "部落格文章標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.desc": {
+          "source": "URL slug for the blog post",
+          "message": "部落格文章的 URL 別名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.option.dXJs.short_desc": {
+          "source": "URL slug",
+          "message": "URL 別名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Create a new blog post",
+          "message": "建立新的部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in BigCommerce",
+          "message": "在 BigCommerce 中建立新客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "建立客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.desc": {
+          "source": "The customer's company name",
+          "message": "客戶的公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.desc": {
+          "source": "ID of the customer group to assign",
+          "message": "要指派的客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Customer group ID",
+          "message": "客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The customer's email address",
+          "message": "客戶的電子郵件地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The customer's first name",
+          "message": "客戶的名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "客戶名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.desc": {
+          "source": "The customer's last name",
+          "message": "客戶的姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "客戶姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.desc": {
+          "source": "Admin notes about the customer",
+          "message": "關於客戶的管理員備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備忘錄"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZXM.short_desc": {
+          "source": "Admin notes",
+          "message": "管理員備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The customer's phone number",
+          "message": "客戶的電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "建立新客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Create a new address for a customer in BigCommerce",
+          "message": "在 BigCommerce 中為客戶建立新地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Create a Customer Address",
+          "message": "建立客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g., US, GB, DE)",
+          "message": "ISO 3166-1 alpha-2 國家/地區代碼（例如 US、GB、DE）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "國家/地區代碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Country code (ISO 3166-1)",
+          "message": "國家/地區代碼 (ISO 3166-1)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name for the address",
+          "message": "此地址的公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "ID of the customer to add the address to",
+          "message": "要新增地址的客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add address to",
+          "message": "要新增地址的客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOmNvbW1lcmNpYWw.desc": {
+          "source": "Commercial address",
+          "message": "商業地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOnJlc2lkZW50aWFs.desc": {
+          "source": "Residential address",
+          "message": "住宅地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.desc": {
+          "source": "Type of address",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.display_name": {
+          "source": "Address Type",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.short_desc": {
+          "source": "Type of address",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.desc": {
+          "source": "First line of the street address",
+          "message": "街道地址第一行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "地址第 1 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address line 1",
+          "message": "街道地址第 1 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.desc": {
+          "source": "Second line of the street address",
+          "message": "街道地址第二行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "地址第 2 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.short_desc": {
+          "source": "Street address line 2",
+          "message": "街道地址第 2 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the address recipient",
+          "message": "地址收件人的名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Recipient first name",
+          "message": "收件人名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the address recipient",
+          "message": "地址收件人的姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Recipient last name",
+          "message": "收件人姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.desc": {
+          "source": "State or province name",
+          "message": "州或省名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.display_name": {
+          "source": "State/Province",
+          "message": "州/省"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.short_desc": {
+          "source": "State or province",
+          "message": "州或省"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number for the address",
+          "message": "此地址的電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Create a new address for a customer",
+          "message": "為客戶建立新地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in BigCommerce",
+          "message": "在 BigCommerce 中建立新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "建立產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New product",
+          "message": "全新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished product",
+          "message": "整新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used product",
+          "message": "二手產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.desc": {
+          "source": "Product condition",
+          "message": "產品狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Product condition",
+          "message": "產品狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.desc": {
+          "source": "Cost price of the product",
+          "message": "產品成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.display_name": {
+          "source": "Cost Price",
+          "message": "成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.short_desc": {
+          "source": "Cost price",
+          "message": "成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "Array of category IDs this product belongs to",
+          "message": "此產品所屬的類別 ID 陣列"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "類別"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Category IDs",
+          "message": "類別 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.desc": {
+          "source": "ID of the product brand",
+          "message": "產品品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Brand ID",
+          "message": "品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Product description (HTML allowed)",
+          "message": "產品描述（允許 HTML）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Product description",
+          "message": "產品描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.desc": {
+          "source": "Current inventory level",
+          "message": "目前庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.display_name": {
+          "source": "Inventory Level",
+          "message": "庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.short_desc": {
+          "source": "Inventory level",
+          "message": "庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No inventory tracking",
+          "message": "不追蹤庫存"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnByb2R1Y3Q.desc": {
+          "source": "Track inventory at the product level",
+          "message": "在產品層級追蹤庫存"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnZhcmlhbnQ.desc": {
+          "source": "Track inventory at the variant level",
+          "message": "在變體層級追蹤庫存"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.desc": {
+          "source": "Inventory tracking method",
+          "message": "庫存追蹤方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.display_name": {
+          "source": "Inventory Tracking",
+          "message": "庫存追蹤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.short_desc": {
+          "source": "Inventory tracking method",
+          "message": "庫存追蹤方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.desc": {
+          "source": "Whether the product is visible on the storefront",
+          "message": "產品是否在店面顯示"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "是否可見"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Storefront visibility",
+          "message": "店面可見性"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name",
+          "message": "產品名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Product name",
+          "message": "產品名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
+          "source": "Sale price (overrides price when set)",
+          "message": "特價（設定時會覆蓋價格）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.display_name": {
+          "source": "Sale Price",
+          "message": "特價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.short_desc": {
+          "source": "Sale price",
+          "message": "特價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Stock Keeping Unit identifier",
+          "message": "庫存單位 (SKU) 識別碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "SKU identifier",
+          "message": "SKU 識別碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.desc": {
+          "source": "Product price",
+          "message": "產品價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cHJpY2U.short_desc": {
+          "source": "Product price",
+          "message": "產品價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.desc": {
+          "source": "Retail price (MSRP)",
+          "message": "零售價 (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.display_name": {
+          "source": "Retail Price",
+          "message": "零售價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.short_desc": {
+          "source": "Retail price (MSRP)",
+          "message": "零售價 (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Product weight",
+          "message": "商品重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "商品重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmRpZ2l0YWw.desc": {
+          "source": "Digital product",
+          "message": "數位產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnBoeXNpY2Fs.desc": {
+          "source": "Physical product",
+          "message": "實體產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Product type",
+          "message": "商品類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Product type",
+          "message": "商品類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "建立新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment for an order in BigCommerce",
+          "message": "在 BigCommerce 中為訂單建立新貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create a Shipment",
+          "message": "建立貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.desc": {
+          "source": "Comments about the shipment",
+          "message": "有關貨件的備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.Y29tbWVudHM.short_desc": {
+          "source": "Shipment comments",
+          "message": "貨件備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.desc": {
+          "source": "Array of items to ship, each with `order_product_id` and `quantity`",
+          "message": "要運送的品項陣列，各包含 `order_product_id` 和 `quantity`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.aXRlbXM.short_desc": {
+          "source": "Items to ship",
+          "message": "要運送的品項"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.desc": {
+          "source": "ID of the shipping address for this shipment",
+          "message": "此貨件的運送地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.display_name": {
+          "source": "Order Address ID",
+          "message": "訂單地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.short_desc": {
+          "source": "Shipping address ID",
+          "message": "運送地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to create a shipment for",
+          "message": "要為其建立貨件的訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to ship",
+          "message": "要運送的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Name of the shipping method",
+          "message": "運送方式名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "運送方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method",
+          "message": "運送方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "Name of the shipping provider",
+          "message": "物流服務業者名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "物流服務業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "Shipping provider",
+          "message": "物流服務業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.desc": {
+          "source": "Carrier name for tracking",
+          "message": "用於追蹤的承運業者名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.display_name": {
+          "source": "Tracking Carrier",
+          "message": "追蹤承運業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.short_desc": {
+          "source": "Tracking carrier",
+          "message": "追蹤承運業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the shipment",
+          "message": "貨件的追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number",
+          "message": "追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment for an order",
+          "message": "為訂單建立新貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in BigCommerce. Uses polling to detect new records.",
+          "message": "在 BigCommerce 中建立新客戶時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "Watch New Customer",
+          "message": "監看新客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "在建立新客戶時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.desc": {
+          "source": "Fires when a customer address is updated in BigCommerce. Uses polling to detect changes.",
+          "message": "在 BigCommerce 中客戶地址更新時觸發。使用輪詢偵測變更。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.display_name": {
+          "source": "Watch Updated Customer Address",
+          "message": "監看已更新的客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy11cGRhdGVk.short_desc": {
+          "source": "Trigger when a customer address is updated",
+          "message": "在客戶地址更新時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.desc": {
+          "source": "Fires when a new customer address is created in BigCommerce. Uses polling to detect new records.",
+          "message": "在 BigCommerce 中建立新客戶地址時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.display_name": {
+          "source": "Watch New Customer Address",
+          "message": "監看新客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItYWRkcmVzcy1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new customer address is created",
+          "message": "在建立新客戶地址時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer is updated in BigCommerce. Uses polling to detect changes.",
+          "message": "在 BigCommerce 中客戶更新時觸發。使用輪詢偵測變更。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Watch Updated Customer",
+          "message": "監看已更新的客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a customer is updated",
+          "message": "在客戶更新時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from BigCommerce",
+          "message": "從 BigCommerce 依 ID 擷取單一訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "取得訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to retrieve",
+          "message": "要擷取的訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to retrieve",
+          "message": "要擷取的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "依 ID 取得單一訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.desc": {
+          "source": "Retrieve a single blog post by ID from BigCommerce",
+          "message": "從 BigCommerce 依 ID 擷取單篇部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.display_name": {
+          "source": "Get a Blog Post",
+          "message": "取得部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to retrieve",
+          "message": "要擷取的部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to retrieve",
+          "message": "要擷取的部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWJsb2ctcG9zdA.short_desc": {
+          "source": "Get a single blog post by ID",
+          "message": "依 ID 取得單篇部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from BigCommerce",
+          "message": "從 BigCommerce 依 ID 擷取單一客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "取得客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to retrieve",
+          "message": "要擷取的客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to retrieve",
+          "message": "要擷取的客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "依 ID 取得單一客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from BigCommerce",
+          "message": "從 BigCommerce 依 ID 擷取單項商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "取得商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to retrieve",
+          "message": "要擷取的商品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to retrieve",
+          "message": "要擷取的商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "依 ID 取得單項商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve a single shipment by order ID and shipment ID from BigCommerce",
+          "message": "從 BigCommerce 依訂單 ID 與貨件 ID 擷取單一貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get a Shipment",
+          "message": "取得貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "該貨件所屬訂單的 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "該貨件所屬的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to retrieve",
+          "message": "要擷取的貨件 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "貨件 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to retrieve",
+          "message": "要擷取的貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Get a single shipment by ID",
+          "message": "依 ID 取得單一貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Delete a blog post from BigCommerce",
+          "message": "從 BigCommerce 刪除部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Delete a Blog Post",
+          "message": "刪除部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to delete",
+          "message": "要刪除的部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to delete",
+          "message": "要刪除的部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Delete a blog post",
+          "message": "刪除部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from BigCommerce",
+          "message": "從 BigCommerce 刪除客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "刪除客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "要刪除的客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "要刪除的客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "刪除客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Delete a customer address from BigCommerce",
+          "message": "從 BigCommerce 刪除客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Delete a Customer Address",
+          "message": "刪除客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "The ID of the customer address to delete",
+          "message": "要刪除的客戶地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "The address to delete",
+          "message": "要刪除的地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Delete a customer address",
+          "message": "刪除客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.desc": {
+          "source": "Delete a product from BigCommerce",
+          "message": "從 BigCommerce 刪除產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.display_name": {
+          "source": "Delete a Product",
+          "message": "刪除產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to delete",
+          "message": "要刪除的產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to delete",
+          "message": "要刪除的產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Delete a product",
+          "message": "刪除產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.desc": {
+          "source": "Delete a shipment from BigCommerce",
+          "message": "從 BigCommerce 刪除貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.display_name": {
+          "source": "Delete a Shipment",
+          "message": "刪除貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "該貨件所屬訂單的 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "該貨件所屬的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to delete",
+          "message": "要刪除的貨件 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "貨件 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to delete",
+          "message": "要刪除的貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.ZGVsZXRlLXNoaXBtZW50.short_desc": {
+          "source": "Delete a shipment",
+          "message": "刪除貨件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created from the storefront. Uses polling to detect new records (V2 Orders API).",
+          "message": "當店面建立新訂單時觸發。使用輪詢偵測新記錄（V2 Orders API）。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Watch New Order",
+          "message": "監控新訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "當建立新訂單時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when the order status has changed in BigCommerce. Uses polling to detect status changes (V2 Orders API).",
+          "message": "當 BigCommerce 中的訂單狀態變更時觸發。使用輪詢偵測狀態變更（V2 Orders API）。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Watch Updated Order Status",
+          "message": "監控更新的訂單狀態"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when an order status changes",
+          "message": "當訂單狀態變更時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is updated in BigCommerce. Uses polling to detect changes (V2 Orders API).",
+          "message": "當 BigCommerce 中的訂單更新時觸發。使用輪詢偵測變更（V2 Orders API）。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Watch Updated Order",
+          "message": "監控更新的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is updated",
+          "message": "當訂單更新時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **BigCommerce** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **BigCommerce** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n對於尚未在此應用程式中作為主要動作公開的端點，請使用此動作。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to BigCommerce",
+          "message": "向 BigCommerce 發出自訂 API 呼叫"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for specific orders or list all orders in BigCommerce",
+          "message": "在 BigCommerce 中搜尋特定訂單或列出所有訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "搜尋訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "依客戶篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.aXNfZGVsZXRlZA.display_name": {
+          "source": "Is Deleted",
+          "message": "是否已刪除"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.aXNfZGVsZXRlZA.short_desc": {
+          "source": "Filter by deletion status",
+          "message": "依刪除狀態篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "依訂單 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X2RhdGVfY3JlYXRlZA.display_name": {
+          "source": "Max Date Created",
+          "message": "最大建立日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X2RhdGVfY3JlYXRlZA.short_desc": {
+          "source": "Maximum creation date",
+          "message": "最晚建立日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X3RvdGFs.display_name": {
+          "source": "Max Total",
+          "message": "最高總額"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWF4X3RvdGFs.short_desc": {
+          "source": "Maximum order total",
+          "message": "最高訂單總金額"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfY3JlYXRlZA.display_name": {
+          "source": "Min Date Created",
+          "message": "最小建立日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfY3JlYXRlZA.short_desc": {
+          "source": "Minimum creation date",
+          "message": "最早建立日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfbW9kaWZpZWQ.display_name": {
+          "source": "Min Date Modified",
+          "message": "最小修改日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX2RhdGVfbW9kaWZpZWQ.short_desc": {
+          "source": "Minimum modification date",
+          "message": "最早修改日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX3RvdGFs.display_name": {
+          "source": "Min Total",
+          "message": "最低總額"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.bWluX3RvdGFs.short_desc": {
+          "source": "Minimum order total",
+          "message": "最低訂單總金額"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2lk.desc": {
+          "source": "Sort by customer ID",
+          "message": "依客戶 ID 排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZA.desc": {
+          "source": "Sort by creation date",
+          "message": "依建立日期排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ.desc": {
+          "source": "Sort by modification date",
+          "message": "依修改日期排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Sort by order ID",
+          "message": "依訂單 ID 排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c29ydA.short_desc": {
+          "source": "Sort field",
+          "message": "排序欄位"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjA.desc": {
+          "source": "Incomplete",
+          "message": "未完成"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjE.desc": {
+          "source": "Pending",
+          "message": "等待中"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjE0.desc": {
+          "source": "Partially Refunded",
+          "message": "部分退款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEw.desc": {
+          "source": "Completed",
+          "message": "已完成"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEx.desc": {
+          "source": "Awaiting Fulfillment",
+          "message": "待履約"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEy.desc": {
+          "source": "Manual Verification Required",
+          "message": "需要手動驗證"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjEz.desc": {
+          "source": "Disputed",
+          "message": "爭議中"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjI.desc": {
+          "source": "Shipped",
+          "message": "已發貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjM.desc": {
+          "source": "Partially Shipped",
+          "message": "部分出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjQ.desc": {
+          "source": "Refunded",
+          "message": "已退款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjU.desc": {
+          "source": "Cancelled",
+          "message": "已取消"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50OjY.desc": {
+          "source": "Declined",
+          "message": "已拒絕"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojc.desc": {
+          "source": "Awaiting Payment",
+          "message": "待付款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojg.desc": {
+          "source": "Awaiting Pickup",
+          "message": "待取貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.allowed-value.aW50Ojk.desc": {
+          "source": "Awaiting Shipment",
+          "message": "待出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter orders by status ID",
+          "message": "依狀態 ID 篩選訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "狀態 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by status",
+          "message": "按狀態篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "付款方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Filter by payment method",
+          "message": "依付款方式篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders or list all",
+          "message": "搜尋訂單或列出全部"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.desc": {
+          "source": "Search for specific blog posts or list all blog posts in BigCommerce",
+          "message": "在 BigCommerce 中搜尋特定部落格文章或列出所有部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.display_name": {
+          "source": "Search Blog Posts",
+          "message": "搜尋部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "是否已發布"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Filter by published status",
+          "message": "依發布狀態篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.option.dGFn.short_desc": {
+          "source": "Filter by tag",
+          "message": "依標籤篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWJsb2ctcG9zdHM.short_desc": {
+          "source": "Search for blog posts or list all",
+          "message": "搜尋部落格文章或列出全部"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.desc": {
+          "source": "Search for specific customer addresses or list them all in BigCommerce",
+          "message": "在 BigCommerce 中搜尋特定客戶地址或列出全部地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.display_name": {
+          "source": "Search Customer Addresses",
+          "message": "搜尋客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Filter by company",
+          "message": "依公司篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Filter by address ID",
+          "message": "依地址 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "依名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVyLWFkZHJlc3Nlcw.short_desc": {
+          "source": "Search for customer addresses or list all",
+          "message": "搜尋客戶地址或列出全部"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.desc": {
+          "source": "Search for specific customers or list all customers in BigCommerce",
+          "message": "在 BigCommerce 中搜尋特定客戶或列出所有客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.display_name": {
+          "source": "Search Customers",
+          "message": "搜尋客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y29tcGFueQ.short_desc": {
+          "source": "Filter by company name",
+          "message": "依公司名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Filter by customer group",
+          "message": "依客戶群組篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9jcmVhdGVkX21pbg.display_name": {
+          "source": "Date Created (Min)",
+          "message": "建立日期 (最小值)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9jcmVhdGVkX21pbg.short_desc": {
+          "source": "Minimum creation date",
+          "message": "最早建立日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9tb2RpZmllZF9taW4.display_name": {
+          "source": "Date Modified (Min)",
+          "message": "修改日期 (最小值)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZGF0ZV9tb2RpZmllZF9taW4.short_desc": {
+          "source": "Minimum modification date",
+          "message": "最早修改日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "按電子郵件篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZQ.short_desc": {
+          "source": "Filter by exact name",
+          "message": "依完整名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZV9saWtl.display_name": {
+          "source": "Name (Like)",
+          "message": "名稱 (相似)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.bmFtZV9saWtl.short_desc": {
+          "source": "Filter by partial name",
+          "message": "依部分名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZDphc2M.desc": {
+          "source": "Sort by creation date ascending",
+          "message": "依建立日期遞增排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfY3JlYXRlZDpkZXNj.desc": {
+          "source": "Sort by creation date descending",
+          "message": "依建立日期遞減排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ6YXNj.desc": {
+          "source": "Sort by modification date ascending",
+          "message": "依修改日期遞增排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ6ZGVzYw.desc": {
+          "source": "Sort by modification date descending",
+          "message": "依修改日期遞減排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RfbmFtZTphc2M.desc": {
+          "source": "Sort by last name ascending",
+          "message": "依姓氏遞增排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RfbmFtZTpkZXNj.desc": {
+          "source": "Sort by last name descending",
+          "message": "依姓氏遞減排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.c29ydA.short_desc": {
+          "source": "Sort order",
+          "message": "排序順序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLWN1c3RvbWVycw.short_desc": {
+          "source": "Search for customers or list all",
+          "message": "搜尋客戶或列出全部"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.desc": {
+          "source": "Search for specific products or list all products in BigCommerce",
+          "message": "在 BigCommerce 中搜尋特定商品或列出所有商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.display_name": {
+          "source": "Search Products",
+          "message": "搜尋產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New products",
+          "message": "全新商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished products",
+          "message": "整新品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used products",
+          "message": "二手商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Filter by condition",
+          "message": "依商品狀況篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "類別"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Filter by category IDs",
+          "message": "依分類 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Filter by brand",
+          "message": "依品牌篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGF0ZV9tb2RpZmllZF9taW4.display_name": {
+          "source": "Date Modified (Min)",
+          "message": "修改日期 (最小值)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGF0ZV9tb2RpZmllZF9taW4.short_desc": {
+          "source": "Minimum modification date",
+          "message": "最早修改日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Ascending order",
+          "message": "遞增排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Descending order",
+          "message": "遞減排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "排序方向"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "搜尋關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "是否可見"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Filter by visibility",
+          "message": "依可見性篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZQ.short_desc": {
+          "source": "Filter by exact name",
+          "message": "依完整名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZV9saWtl.display_name": {
+          "source": "Name (Like)",
+          "message": "名稱 (相似)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.bmFtZV9saWtl.short_desc": {
+          "source": "Filter by partial name",
+          "message": "依部分名稱篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by product name",
+          "message": "依商品名稱排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU6YXNj.desc": {
+          "source": "Sort by name ascending",
+          "message": "依名稱遞增排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOm5hbWU6ZGVzYw.desc": {
+          "source": "Sort by name descending",
+          "message": "依名稱遞減排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbGFzdF9pbXBvcnRlZA.desc": {
+          "source": "Sort by last import date",
+          "message": "依上次匯入日期排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmRhdGVfbW9kaWZpZWQ.desc": {
+          "source": "Sort by modification date",
+          "message": "依修改日期排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Sort by product ID",
+          "message": "依商品 ID 排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmludmVudG9yeV9sZXZlbA.desc": {
+          "source": "Sort by inventory level",
+          "message": "依庫存量排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOmlzX3Zpc2libGU.desc": {
+          "source": "Sort by visibility",
+          "message": "依可見性排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOnByaWNl.desc": {
+          "source": "Sort by price",
+          "message": "依價格排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.allowed-value.c3RyaW5nOnNrdQ.desc": {
+          "source": "Sort by SKU",
+          "message": "依 SKU 排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c29ydA.short_desc": {
+          "source": "Sort field",
+          "message": "排序欄位"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "依 SKU 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "依商品 ID 篩選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXByb2R1Y3Rz.short_desc": {
+          "source": "Search for products or list all",
+          "message": "搜尋商品或列出全部"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.desc": {
+          "source": "List shipments for a specific order in BigCommerce",
+          "message": "在 BigCommerce 中列出特定訂單的出貨資訊"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
+          "source": "Search Shipments",
+          "message": "搜尋出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to list shipments for",
+          "message": "要列出出貨資訊的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
+          "source": "Search for shipments by order",
+          "message": "依訂單搜尋出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.desc": {
+          "source": "Fires when a new shipment is created in BigCommerce. Uses polling to detect new records (V2 Orders API).",
+          "message": "在 BigCommerce 中建立新出貨時觸發。使用輪詢偵測新記錄 (V2 Orders API)。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.display_name": {
+          "source": "Watch New Shipment",
+          "message": "監看新出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.c2hpcG1lbnQtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new shipment is created",
+          "message": "建立新出貨時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new product is created in BigCommerce. Uses polling to detect new records.",
+          "message": "在 BigCommerce 中建立新商品時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
+          "source": "Watch New Product",
+          "message": "監看新商品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new product is created",
+          "message": "建立新商品時觸發"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in BigCommerce (e.g., change status, add notes)",
+          "message": "在 BigCommerce 中更新現有訂單 (例如：更改狀態、新增備註)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update an Order",
+          "message": "更新訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.desc": {
+          "source": "Message from the customer",
+          "message": "客戶的留言訊息"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.display_name": {
+          "source": "Customer Message",
+          "message": "客戶留言"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.Y3VzdG9tZXJfbWVzc2FnZQ.short_desc": {
+          "source": "Customer message",
+          "message": "客戶留言"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.desc": {
+          "source": "Billing address object for the order",
+          "message": "訂單的帳單地址物件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.display_name": {
+          "source": "Billing Address",
+          "message": "帳單地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.YmlsbGluZ19hZGRyZXNz.short_desc": {
+          "source": "Billing address",
+          "message": "帳單地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order to update",
+          "message": "要更新的訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to update",
+          "message": "要更新的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.desc": {
+          "source": "Internal staff notes for the order",
+          "message": "訂單的內部員工備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.display_name": {
+          "source": "Staff Notes",
+          "message": "員工備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhZmZfbm90ZXM.short_desc": {
+          "source": "Internal staff notes",
+          "message": "內部員工備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjA.desc": {
+          "source": "Incomplete",
+          "message": "未完成"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjE.desc": {
+          "source": "Pending",
+          "message": "等待中"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjE0.desc": {
+          "source": "Partially Refunded",
+          "message": "部分退款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEw.desc": {
+          "source": "Completed",
+          "message": "已完成"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEx.desc": {
+          "source": "Awaiting Fulfillment",
+          "message": "待履約"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEy.desc": {
+          "source": "Manual Verification Required",
+          "message": "需要手動驗證"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjEz.desc": {
+          "source": "Disputed",
+          "message": "爭議中"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjI.desc": {
+          "source": "Shipped",
+          "message": "已發貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjM.desc": {
+          "source": "Partially Shipped",
+          "message": "部分出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjQ.desc": {
+          "source": "Refunded",
+          "message": "已退款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjU.desc": {
+          "source": "Cancelled",
+          "message": "已取消"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50OjY.desc": {
+          "source": "Declined",
+          "message": "已拒絕"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojc.desc": {
+          "source": "Awaiting Payment",
+          "message": "待付款"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojg.desc": {
+          "source": "Awaiting Pickup",
+          "message": "待取貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.allowed-value.aW50Ojk.desc": {
+          "source": "Awaiting Shipment",
+          "message": "待出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.desc": {
+          "source": "The new order status ID",
+          "message": "新的訂單狀態 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "狀態 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.option.c3RhdHVzX2lk.short_desc": {
+          "source": "New order status ID",
+          "message": "新訂單狀態 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "更新現有訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.desc": {
+          "source": "Update an existing blog post in BigCommerce",
+          "message": "更新 BigCommerce 中的現有部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.display_name": {
+          "source": "Update a Blog Post",
+          "message": "更新部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.desc": {
+          "source": "Author name of the blog post",
+          "message": "部落格文章的作者姓名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "作者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YXV0aG9y.short_desc": {
+          "source": "Author name",
+          "message": "作者姓名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.desc": {
+          "source": "Body content of the blog post (HTML)",
+          "message": "部落格文章的內文內容 (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.Ym9keQ.short_desc": {
+          "source": "Blog post content (HTML)",
+          "message": "部落格文章內容 (HTML)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.desc": {
+          "source": "The ID of the blog post to update",
+          "message": "要更新的部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.display_name": {
+          "source": "Blog Post ID",
+          "message": "部落格文章 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.YmxvZ19wb3N0X2lk.short_desc": {
+          "source": "The blog post to update",
+          "message": "要更新的部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.desc": {
+          "source": "Whether the blog post is published and visible",
+          "message": "部落格文章是否已發布並可見"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.display_name": {
+          "source": "Is Published",
+          "message": "是否已發布"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.aXNfcHVibGlzaGVk.short_desc": {
+          "source": "Publish the post",
+          "message": "發布文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.desc": {
+          "source": "SEO meta description",
+          "message": "SEO Meta 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Meta Description",
+          "message": "Meta 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "SEO description",
+          "message": "SEO 描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.desc": {
+          "source": "SEO meta keywords",
+          "message": "SEO Meta 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.display_name": {
+          "source": "Meta Keywords",
+          "message": "Meta 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.bWV0YV9rZXl3b3Jkcw.short_desc": {
+          "source": "SEO keywords",
+          "message": "SEO 關鍵字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Date/time the blog post was published",
+          "message": "部落格文章的發布日期/時間"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Published Date",
+          "message": "發布日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.cHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Publication date",
+          "message": "發布日期"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.desc": {
+          "source": "Array of tag strings for categorization",
+          "message": "用於分類的標籤字串陣列"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGFncw.short_desc": {
+          "source": "Tags for categorization",
+          "message": "分類標籤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.desc": {
+          "source": "Path to the thumbnail image",
+          "message": "縮圖圖片的路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.display_name": {
+          "source": "Thumbnail Path",
+          "message": "縮圖路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGh1bWJuYWlsX3BhdGg.short_desc": {
+          "source": "Thumbnail image path",
+          "message": "縮圖圖片路徑"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.desc": {
+          "source": "Title of the blog post",
+          "message": "部落格文章的標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dGl0bGU.short_desc": {
+          "source": "Blog post title",
+          "message": "部落格文章標題"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.desc": {
+          "source": "URL slug for the blog post",
+          "message": "部落格文章的 URL 別名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.option.dXJs.short_desc": {
+          "source": "URL slug",
+          "message": "URL 別名"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWJsb2ctcG9zdA.short_desc": {
+          "source": "Update an existing blog post",
+          "message": "更新現有部落格文章"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in BigCommerce",
+          "message": "更新 BigCommerce 中的現有客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "更新客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.desc": {
+          "source": "The customer's company name",
+          "message": "客戶的公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.desc": {
+          "source": "ID of the customer group to assign",
+          "message": "要指派的客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.display_name": {
+          "source": "Customer Group ID",
+          "message": "客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfZ3JvdXBfaWQ.short_desc": {
+          "source": "Customer group ID",
+          "message": "客戶群組 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The customer's email address",
+          "message": "客戶的電子郵件地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "客戶電子郵件地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The customer's first name",
+          "message": "客戶的名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "客戶名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "要更新的客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "要更新的客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.desc": {
+          "source": "The customer's last name",
+          "message": "客戶的姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "客戶姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.desc": {
+          "source": "Admin notes about the customer",
+          "message": "關於客戶的管理員備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備忘錄"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZXM.short_desc": {
+          "source": "Admin notes",
+          "message": "管理員備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.desc": {
+          "source": "The customer's phone number",
+          "message": "客戶的電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "更新現有客戶"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.desc": {
+          "source": "Update an existing customer address in BigCommerce",
+          "message": "更新 BigCommerce 中的現有客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.display_name": {
+          "source": "Update a Customer Address",
+          "message": "更新客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g., US, GB, DE)",
+          "message": "ISO 3166-1 alpha-2 國家/地區代碼（例如 US、GB、DE）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "國家/地區代碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Country code (ISO 3166-1)",
+          "message": "國家/地區代碼 (ISO 3166-1)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name for the address",
+          "message": "此地址的公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOmNvbW1lcmNpYWw.desc": {
+          "source": "Commercial address",
+          "message": "商業地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.allowed-value.c3RyaW5nOnJlc2lkZW50aWFs.desc": {
+          "source": "Residential address",
+          "message": "住宅地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.desc": {
+          "source": "Type of address",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.display_name": {
+          "source": "Address Type",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzc190eXBl.short_desc": {
+          "source": "Type of address",
+          "message": "地址類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.desc": {
+          "source": "First line of the street address",
+          "message": "街道地址第一行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "地址第 1 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address line 1",
+          "message": "街道地址第 1 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.desc": {
+          "source": "Second line of the street address",
+          "message": "街道地址第二行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "地址第 2 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.YWRkcmVzczI.short_desc": {
+          "source": "Street address line 2",
+          "message": "街道地址第 2 行"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the address recipient",
+          "message": "地址收件人的名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Recipient first name",
+          "message": "收件人名字"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.desc": {
+          "source": "The ID of the address to update",
+          "message": "要更新的地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.display_name": {
+          "source": "Address ID",
+          "message": "地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.aWQ.short_desc": {
+          "source": "The address to update",
+          "message": "要更新的地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the address recipient",
+          "message": "地址收件人的姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Recipient last name",
+          "message": "收件人姓氏"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.desc": {
+          "source": "State or province name",
+          "message": "州或省名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.display_name": {
+          "source": "State/Province",
+          "message": "州/省"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.c3RhdGVfb3JfcHJvdmluY2U.short_desc": {
+          "source": "State or province",
+          "message": "州或省"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number for the address",
+          "message": "此地址的電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLWN1c3RvbWVyLWFkZHJlc3M.short_desc": {
+          "source": "Update an existing customer address",
+          "message": "更新現有客戶地址"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in BigCommerce",
+          "message": "更新 BigCommerce 中的現有產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "更新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOk5ldw.desc": {
+          "source": "New product",
+          "message": "全新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlJlZnVyYmlzaGVk.desc": {
+          "source": "Refurbished product",
+          "message": "整新產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.allowed-value.c3RyaW5nOlVzZWQ.desc": {
+          "source": "Used product",
+          "message": "二手產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.desc": {
+          "source": "Product condition",
+          "message": "產品狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.display_name": {
+          "source": "Condition",
+          "message": "狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29uZGl0aW9u.short_desc": {
+          "source": "Product condition",
+          "message": "產品狀況"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.desc": {
+          "source": "Cost price of the product",
+          "message": "產品成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.display_name": {
+          "source": "Cost Price",
+          "message": "成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y29zdF9wcmljZQ.short_desc": {
+          "source": "Cost price",
+          "message": "成本價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "Array of category IDs this product belongs to",
+          "message": "此產品所屬的類別 ID 陣列"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "類別"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Category IDs",
+          "message": "類別 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOmF2YWlsYWJsZQ.desc": {
+          "source": "Available for purchase",
+          "message": "可供購買"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled",
+          "message": "已停用"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.allowed-value.c3RyaW5nOnByZW9yZGVy.desc": {
+          "source": "Available for pre-order",
+          "message": "可供預購"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.desc": {
+          "source": "Product availability",
+          "message": "產品供貨狀態"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.display_name": {
+          "source": "Availability",
+          "message": "供貨狀態"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Product availability",
+          "message": "產品供貨狀態"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.desc": {
+          "source": "ID of the product brand",
+          "message": "產品品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnJhbmRfaWQ.short_desc": {
+          "source": "Product brand ID",
+          "message": "產品品牌 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Product description (HTML allowed)",
+          "message": "產品描述（允許 HTML）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Product description",
+          "message": "產品描述"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.desc": {
+          "source": "Current inventory level",
+          "message": "目前庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.display_name": {
+          "source": "Inventory Level",
+          "message": "庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X2xldmVs.short_desc": {
+          "source": "Inventory level",
+          "message": "庫存量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No inventory tracking",
+          "message": "不追蹤庫存"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnByb2R1Y3Q.desc": {
+          "source": "Track at product level",
+          "message": "在產品層級追蹤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.allowed-value.c3RyaW5nOnZhcmlhbnQ.desc": {
+          "source": "Track at variant level",
+          "message": "在規格層級追蹤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.desc": {
+          "source": "Inventory tracking method",
+          "message": "庫存追蹤方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.display_name": {
+          "source": "Inventory Tracking",
+          "message": "庫存追蹤"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aW52ZW50b3J5X3RyYWNraW5n.short_desc": {
+          "source": "Inventory tracking method",
+          "message": "庫存追蹤方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.desc": {
+          "source": "Whether the product is featured",
+          "message": "產品是否為精選產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.display_name": {
+          "source": "Is Featured",
+          "message": "是否為精選"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfZmVhdHVyZWQ.short_desc": {
+          "source": "Featured product",
+          "message": "精選產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.desc": {
+          "source": "Whether the product is visible on the storefront",
+          "message": "產品是否在店面顯示"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.display_name": {
+          "source": "Is Visible",
+          "message": "是否可見"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.aXNfdmlzaWJsZQ.short_desc": {
+          "source": "Storefront visibility",
+          "message": "店面可見性"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name",
+          "message": "產品名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Product name",
+          "message": "產品名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
+          "source": "Sale price (overrides price when set)",
+          "message": "特價（設定時會覆蓋價格）"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.display_name": {
+          "source": "Sale Price",
+          "message": "特價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.short_desc": {
+          "source": "Sale price",
+          "message": "特價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Stock Keeping Unit identifier",
+          "message": "庫存單位 (SKU) 識別碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "SKU identifier",
+          "message": "SKU 識別碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.desc": {
+          "source": "Product price",
+          "message": "產品價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJpY2U.short_desc": {
+          "source": "Product price",
+          "message": "產品價格"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The ID of the product to update",
+          "message": "要更新的產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to update",
+          "message": "要更新的產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.desc": {
+          "source": "Retail price (MSRP)",
+          "message": "零售價 (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.display_name": {
+          "source": "Retail Price",
+          "message": "零售價"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.cmV0YWlsX3ByaWNl.short_desc": {
+          "source": "Retail price (MSRP)",
+          "message": "零售價 (MSRP)"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Product weight",
+          "message": "商品重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "商品重量"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmRpZ2l0YWw.desc": {
+          "source": "Digital product",
+          "message": "數位產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnBoeXNpY2Fs.desc": {
+          "source": "Physical product",
+          "message": "實體產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Product type",
+          "message": "商品類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Product type",
+          "message": "商品類型"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "更新現有產品"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.desc": {
+          "source": "Update an existing shipment in BigCommerce",
+          "message": "更新 BigCommerce 中的現有出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.display_name": {
+          "source": "Update a Shipment",
+          "message": "更新出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.desc": {
+          "source": "Comments about the shipment",
+          "message": "有關貨件的備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.display_name": {
+          "source": "Comments",
+          "message": "備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.Y29tbWVudHM.short_desc": {
+          "source": "Shipment comments",
+          "message": "貨件備註"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.desc": {
+          "source": "Array of items in the shipment with `order_product_id` and `quantity`",
+          "message": "出貨中的品項陣列，包含 `order_product_id` 與 `quantity`"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.aXRlbXM.short_desc": {
+          "source": "Shipment items",
+          "message": "出貨品項"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.desc": {
+          "source": "ID of the shipping address for this shipment",
+          "message": "此貨件的運送地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.display_name": {
+          "source": "Order Address ID",
+          "message": "訂單地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfYWRkcmVzc19pZA.short_desc": {
+          "source": "Shipping address ID",
+          "message": "運送地址 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order the shipment belongs to",
+          "message": "該貨件所屬訂單的 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order the shipment belongs to",
+          "message": "該貨件所屬的訂單"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The ID of the shipment to update",
+          "message": "要更新的出貨 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "貨件 ID"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment to update",
+          "message": "要更新的出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Name of the shipping method",
+          "message": "運送方式名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "運送方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method",
+          "message": "運送方式"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "Name of the shipping provider",
+          "message": "物流服務業者名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "物流服務業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "Shipping provider",
+          "message": "物流服務業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.desc": {
+          "source": "Carrier name for tracking",
+          "message": "用於追蹤的承運業者名稱"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.display_name": {
+          "source": "Tracking Carrier",
+          "message": "追蹤承運業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfY2Fycmllcg.short_desc": {
+          "source": "Tracking carrier",
+          "message": "追蹤承運業者"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the shipment",
+          "message": "貨件的追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number",
+          "message": "追蹤號碼"
+        },
+        "app.QmlnQ29tbWVyY2U.action.dXBkYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Update an existing shipment",
+          "message": "更新現有出貨"
+        },
+        "app.QmlnQ29tbWVyY2U.desc": {
+          "source": "BigCommerce is a leading e-commerce platform for online stores.\n\nThis integration supports customers, products, orders, carts, shipments, blog posts, and customer addresses.",
+          "message": "BigCommerce 是領先業界的線上商店電子商務平台。\n\n此整合支援客戶、產品、訂單、購物車、出貨、部落格文章和客戶地址。"
+        },
+        "app.QmlnQ29tbWVyY2U.display_name": {
+          "source": "BigCommerce",
+          "message": "BigCommerce"
+        },
+        "app.QmlnQ29tbWVyY2U.short_desc": {
+          "source": "BigCommerce e-commerce platform",
+          "message": "BigCommerce 電子商務平台"
+        }
+      }
+    }
+  }
+}

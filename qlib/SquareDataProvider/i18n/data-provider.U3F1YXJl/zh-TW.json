@@ -1,0 +1,2245 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.desc": {
+          "source": "Complete a pending payment in Square",
+          "message": "在 Square 中完成待處理付款"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
+          "source": "Complete Payment",
+          "message": "完成付款"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to complete",
+          "message": "要完成的付款"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.display_name": {
+          "source": "Version Token",
+          "message": "版本權杖"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.short_desc": {
+          "source": "Version token for concurrency",
+          "message": "用於並行控制的版本權杖"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
+          "source": "Complete a payment",
+          "message": "完成付款"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.desc": {
+          "source": "Cancel an open order in Square",
+          "message": "在 Square 中取消未完成的訂單"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
+          "source": "Cancel an Order",
+          "message": "取消訂單"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to cancel",
+          "message": "要取消的訂單"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the order (for optimistic concurrency)",
+          "message": "訂單的目前版本（用於開放式並行控制）"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Order version",
+          "message": "訂單版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
+          "source": "Cancel an order",
+          "message": "取消訂單"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.desc": {
+          "source": "Cancel a booking (appointment) in Square",
+          "message": "在 Square 中取消預約（預約活動）"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
+          "source": "Cancel Booking",
+          "message": "取消預約"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.desc": {
+          "source": "The current version of the booking (for optimistic concurrency)",
+          "message": "預約的目前版本（用於開放式並行控制）"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.display_name": {
+          "source": "Booking Version",
+          "message": "預約版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.short_desc": {
+          "source": "Booking version",
+          "message": "預約版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "預約 ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking to cancel",
+          "message": "要取消的預約"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
+          "source": "Cancel a booking",
+          "message": "取消預約"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.desc": {
+          "source": "Cancel a published invoice in Square",
+          "message": "在 Square 中取消已發布的發票"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
+          "source": "Cancel Invoice",
+          "message": "取消發票"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "帳單 ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to cancel",
+          "message": "要取消的發票"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "發票的目前版本（用於開放式並行存取控制）"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "發票版本"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
+          "source": "Cancel an invoice",
+          "message": "取消發票"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.desc": {
+          "source": "Change inventory counts in Square (adjustment or physical count)",
+          "message": "在 Square 中變更庫存數量（調整或盤點）"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
+          "source": "Change Inventory",
+          "message": "變更庫存"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation",
+          "message": "目錄品項規格的 ID"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "目錄物件 ID"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation",
+          "message": "品項規格"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOkFESlVTVE1FTlQ.desc": {
+          "source": "Add or remove stock (delta quantity)",
+          "message": "新增或移除庫存（數量差額）"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOlBIWVNJQ0FMX0NPVU5U.desc": {
+          "source": "Set absolute inventory count",
+          "message": "設定絕對庫存數量"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.desc": {
+          "source": "The type of inventory change to apply",
+          "message": "要套用的庫存變更類型"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.display_name": {
+          "source": "Change Type",
+          "message": "變更類型"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.short_desc": {
+          "source": "Type of change",
+          "message": "變更類型"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state (default)",
+          "message": "無狀態（預設）"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock",
+          "message": "有庫存"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "已售出"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "損耗／損壞"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.desc": {
+          "source": "Starting inventory state for adjustment changes",
+          "message": "調整變更的起始庫存狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.display_name": {
+          "source": "From State",
+          "message": "來源狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.short_desc": {
+          "source": "Starting state",
+          "message": "起始狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "營業地點"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity as a string (e.g. '5'). For ADJUSTMENT: delta. For PHYSICAL_COUNT: absolute count.",
+          "message": "字串格式的數量（例如 '5'）。若為 ADJUSTMENT：差額。若為 PHYSICAL_COUNT：絕對數量。"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "數量"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity",
+          "message": "數量"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state",
+          "message": "無狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock (default)",
+          "message": "有庫存（預設）"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "已售出"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "損耗／損壞"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.desc": {
+          "source": "Ending inventory state for adjustment changes",
+          "message": "調整變更的結束庫存狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.display_name": {
+          "source": "To State",
+          "message": "目的狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.short_desc": {
+          "source": "Ending state",
+          "message": "結束狀態"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
+          "source": "Change inventory counts",
+          "message": "變更庫存數量"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Square",
+          "message": "在 Square 中建立新訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "建立訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "訂單的營業地點"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes: name, quantity (string), base_price_money (hash with amount in cents and currency)",
+          "message": "項目雜湊清單：name、quantity（字串）、base_price_money（包含金額（分）與貨幣的雜湊）"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "訂單明細項目"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "參考 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "外部參考"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "建立新訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.desc": {
+          "source": "Create a new booking (appointment) in Square",
+          "message": "在 Square 中建立新預約"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
+          "source": "Create Appointment",
+          "message": "建立預約"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
+          "source": "Customer Note",
+          "message": "顧客備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.short_desc": {
+          "source": "Note from customer",
+          "message": "來自顧客的備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "營業地點"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.display_name": {
+          "source": "Service Variation ID",
+          "message": "服務規格 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.short_desc": {
+          "source": "Service variation",
+          "message": "服務規格"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.display_name": {
+          "source": "Service Version",
+          "message": "服務版本"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.short_desc": {
+          "source": "Service variation version",
+          "message": "服務規格版本"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.desc": {
+          "source": "Start time of the booking (RFC 3339 format)",
+          "message": "預約開始時間（RFC 3339 格式）"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.display_name": {
+          "source": "Start At",
+          "message": "開始時間"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.short_desc": {
+          "source": "Start time",
+          "message": "開始時間"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "團隊成員 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Team member",
+          "message": "團隊成員"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
+          "source": "Create a new booking",
+          "message": "建立新預約"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Square",
+          "message": "在 Square 中建立新顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "建立客戶"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the customer",
+          "message": "顧客的公司名稱"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the customer",
+          "message": "顧客的名字"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "客戶名字"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address of the customer",
+          "message": "顧客的電子郵件地址"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "顧客電子郵件"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the customer",
+          "message": "顧客的姓氏"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "客戶姓氏"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "A note about the customer",
+          "message": "關於顧客的備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "顧客備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "Phone number of the customer",
+          "message": "顧客的電話號碼"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.desc": {
+          "source": "An external reference ID for the customer",
+          "message": "顧客的外部參考 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "參考 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "外部參考"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "建立新客戶"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Square",
+          "message": "在 Square 中建立新發票"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "建立發票"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOkVNQUlM.desc": {
+          "source": "Send via email",
+          "message": "透過電子郵件傳送"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNIQVJFX01BTlVBTExZ.desc": {
+          "source": "Share manually",
+          "message": "手動分享"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNNUw.desc": {
+          "source": "Send via SMS",
+          "message": "透過簡訊傳送"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.desc": {
+          "source": "How to deliver the invoice to the customer",
+          "message": "發送發票給顧客的方式"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "支用方式"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "How to deliver",
+          "message": "發送方式"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Invoice description",
+          "message": "發票描述"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "Due date in YYYY-MM-DD format",
+          "message": "到期日，格式為 YYYY-MM-DD"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "到期日"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Invoice due date",
+          "message": "發票到期日"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order associated with this invoice",
+          "message": "與此發票關聯的訂單 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "營業地點"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkJBTEFOQ0U.desc": {
+          "source": "Full balance payment",
+          "message": "全額餘額付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkRFUE9TSVQ.desc": {
+          "source": "Deposit payment",
+          "message": "定金付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOklOU1RBTExNRU5U.desc": {
+          "source": "Installment payment",
+          "message": "分期付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.desc": {
+          "source": "The type of payment request for this invoice",
+          "message": "此發票的付款請求類型"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "付款類型"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.short_desc": {
+          "source": "Payment request type",
+          "message": "付款請求類型"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "Invoice title",
+          "message": "發票標題"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "建立新發票"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.desc": {
+          "source": "Create a new order in Square and immediately mark it as paid",
+          "message": "在 Square 中建立新訂單並立即標記為已付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
+          "source": "Create Paid Order",
+          "message": "建立已付款訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "訂單的營業地點"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes",
+          "message": "品項雜湊列表"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "訂單明細項目"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.desc": {
+          "source": "List of payment IDs to apply. If empty, uses external payment.",
+          "message": "要套用的付款 ID 列表。若為空，則使用外部付款。"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.display_name": {
+          "source": "Payment IDs",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.short_desc": {
+          "source": "Existing payment IDs",
+          "message": "現有付款 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
+          "source": "Create and pay an order",
+          "message": "建立並支付訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Create a new payment in Square",
+          "message": "在 Square 中建立新付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create a Payment",
+          "message": "建立付款"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "貨幣代碼（預設：USD）"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "貨幣代碼"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The amount in the smallest currency unit (cents for USD)",
+          "message": "最小貨幣單位的金額（USD 為美分）"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "以分為單位的付款金額"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.desc": {
+          "source": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment.",
+          "message": "若為 `True`（預設），付款將立即完成。若為 `False`，則稍後必須透過 complete-payment 完成。"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.display_name": {
+          "source": "Autocomplete",
+          "message": "自動完成"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.short_desc": {
+          "source": "Complete immediately",
+          "message": "立即完成"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "訂單"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "營業地點"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "付款備註"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.desc": {
+          "source": "The source of funds (payment token, card ID, or 'EXTERNAL')",
+          "message": "資金來源（付款權杖、卡片 ID 或「EXTERNAL」）"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.display_name": {
+          "source": "Source ID",
+          "message": "來源 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.short_desc": {
+          "source": "Payment source",
+          "message": "付款來源"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "參考 ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "外部參考"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "建立新付款"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in Square. Uses polling to detect new records.",
+          "message": "在 Square 中建立新客戶時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "New Customer",
+          "message": "新增客戶"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "在建立新客戶時觸發"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.desc": {
+          "source": "Add a customer to a customer group in Square",
+          "message": "將客戶新增至 Square 中的客戶群組"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
+          "source": "Add Customer to Group",
+          "message": "將客戶新增至群組"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "客戶群組的 ID"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "群組 ID"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to add to",
+          "message": "要新增至的群組"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
+          "source": "Add a customer to a group",
+          "message": "將客戶新增至群組"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Square",
+          "message": "依 ID 從 Square 擷取單一訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "取得訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "依 ID 取得單一訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.desc": {
+          "source": "Retrieve multiple orders by their IDs in a single request",
+          "message": "在單一請求中依多個訂單 ID 擷取多筆訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
+          "source": "Get Orders",
+          "message": "獲取訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.desc": {
+          "source": "List of order ID strings to retrieve",
+          "message": "要擷取的訂單 ID 字串列表"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.short_desc": {
+          "source": "List of order IDs",
+          "message": "訂單 ID 列表"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "依位置篩選"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
+          "source": "Get multiple orders by ID",
+          "message": "依 ID 獲取多筆訂單"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.desc": {
+          "source": "Retrieve a single booking (appointment) by ID from Square",
+          "message": "依 ID 從 Square 擷取單一預訂（預約）"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
+          "source": "Get a Booking",
+          "message": "獲取預訂"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "預約 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking ID",
+          "message": "預訂 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
+          "source": "Get a single booking by ID",
+          "message": "依 ID 獲取單一預訂"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from Square",
+          "message": "依 ID 從 Square 擷取單一客戶"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "取得客戶"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "依 ID 取得單一客戶"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Square",
+          "message": "依 ID 從 Square 擷取單一發票"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "取得發票"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "帳單 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "發票 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "依 ID 取得單一發票"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.desc": {
+          "source": "Get inventory counts for a catalog item variation in Square",
+          "message": "獲取 Square 中目錄品項規格的庫存計數"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
+          "source": "Get Inventory Count",
+          "message": "獲取庫存計數"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation to get counts for",
+          "message": "要獲取計數的目錄品項規格 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "目錄物件 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation ID",
+          "message": "品項規格 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.desc": {
+          "source": "Optional list of location IDs to filter counts by",
+          "message": "用於篩選計數的地點 ID 選填列表"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "按地點篩選"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
+          "source": "Get inventory counts for an item",
+          "message": "獲取品項的庫存計數"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from Square",
+          "message": "依 ID 從 Square 擷取單一付款"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get a Payment",
+          "message": "獲取付款"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment ID",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "依 ID 取得單筆付款"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve a single refund by ID from Square",
+          "message": "依 ID 從 Square 擷取單一退款"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get a Refund",
+          "message": "獲取退款"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "退款 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "The refund ID",
+          "message": "退款 ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Get a single refund by ID",
+          "message": "依 ID 獲取單一退款"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Square",
+          "message": "從 Square 刪除客戶"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "刪除客戶"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "要刪除的客戶"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the customer profile (for optimistic concurrency)",
+          "message": "客戶設定檔的目前版本（用於開放式並行控制）"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Customer version",
+          "message": "客戶版本"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "刪除客戶"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.desc": {
+          "source": "Search for appointment services in the Square catalog",
+          "message": "在 Square 目錄中搜尋預約服務"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
+          "source": "Find Service",
+          "message": "尋找服務"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.desc": {
+          "source": "Filter services by name (partial match)",
+          "message": "依名稱篩選服務（部分符合）"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.short_desc": {
+          "source": "Service name filter",
+          "message": "服務名稱篩選條件"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
+          "source": "Find a service in the catalog",
+          "message": "在目錄中尋找服務"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.desc": {
+          "source": "Fires when an order is created or updated in Square. Uses polling to detect changes.",
+          "message": "當在 Square 中建立或更新訂單時觸發。使用輪詢偵測變更。"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
+          "source": "Order Created/Updated",
+          "message": "訂單已建立/已更新"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "在建立或更新訂單時觸發"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.desc": {
+          "source": "List bookings (appointments) in Square with optional filtering",
+          "message": "列出 Square 中的預訂（預約），並可選用篩選條件"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
+          "source": "List Bookings",
+          "message": "列出預訂"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "依客戶篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "依位置篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.desc": {
+          "source": "Return bookings starting before this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）之前開始的預訂"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.display_name": {
+          "source": "Start At Max",
+          "message": "開始時間上限"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.short_desc": {
+          "source": "Latest start time",
+          "message": "最晚開始時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.desc": {
+          "source": "Return bookings starting at or after this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）或之後開始的預訂"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.display_name": {
+          "source": "Start At Min",
+          "message": "開始時間下限"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.short_desc": {
+          "source": "Earliest start time",
+          "message": "最早開始時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "團隊成員 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Filter by team member",
+          "message": "依團隊成員篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
+          "source": "List bookings",
+          "message": "列出預訂"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List customers in Square with optional filtering",
+          "message": "列出 Square 中的客戶，並可選用篩選條件"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "列出客戶"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "按顧客 ID 篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "要傳回的最大結果數量"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkNSRUFURURfQVQ.desc": {
+          "source": "Sort by creation time",
+          "message": "依建立時間排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkRFRkFVTFQ.desc": {
+          "source": "Default sort order",
+          "message": "預設排序順序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.desc": {
+          "source": "The field to sort results by",
+          "message": "用於排序結果的欄位"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "排序欄位"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "排序欄位"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "遞增排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "遞減排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "結果的排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "排序順序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List all customers",
+          "message": "列出所有客戶"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "List invoices in Square for a location",
+          "message": "列出 Square 中特定地點的發票"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "列出發票"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Filter invoices by location (required by Square API, auto-detected if not provided)",
+          "message": "依地點篩選發票（Square API 必填，若未提供則自動偵測）"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "依位置篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List invoices",
+          "message": "列出發票"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "List payments in Square with optional filtering",
+          "message": "列出 Square 中的付款，並可選用篩選條件"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "列出付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return payments created at or after this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）或之後建立的付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "開始時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "時間範圍起點"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "結束時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "時間範圍終點"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "依位置篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "遞增排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "遞減排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "結果的排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "排序順序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "依付款 ID 篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List payments",
+          "message": "列出付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "List refunds in Square with optional filtering",
+          "message": "列出 Square 中的退款，並可選用篩選條件"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "列出退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return refunds created at or after this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）或之後建立的退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "開始時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "時間範圍起點"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "結束時間"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "時間範圍終點"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "依位置篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkJBTktfQUNDT1VOVA.desc": {
+          "source": "Bank account payment",
+          "message": "銀行帳戶付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBU0g.desc": {
+          "source": "Cash payment",
+          "message": "現金付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkQ.desc": {
+          "source": "Card payment",
+          "message": "卡片付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkVYVEVSTkFM.desc": {
+          "source": "External payment",
+          "message": "外部付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldBTExFVA.desc": {
+          "source": "Digital wallet payment",
+          "message": "數位錢包付款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.desc": {
+          "source": "Filter refunds by payment source type",
+          "message": "依付款來源類型篩選退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "來源類型"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Filter by source type",
+          "message": "依來源類型篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "遞增排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "遞減排序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "結果的排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "排序順序"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "排序方向"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed refunds",
+          "message": "已完成的退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
+          "source": "Failed refunds",
+          "message": "失敗的退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending refunds",
+          "message": "待處理的退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlJFSkVDVEVE.desc": {
+          "source": "Rejected refunds",
+          "message": "已拒絕的退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.desc": {
+          "source": "Filter refunds by status",
+          "message": "依狀態篩選退款"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "按狀態篩選"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "列出退款"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Square** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Square** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選用的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊傳回。\n\n針對此應用程式上尚未公開為頂級動作的端點使用此動作。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Square",
+          "message": "向 Square 發出自訂 API 呼叫"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new booking (appointment) is created in Square. Uses polling to detect new records.",
+          "message": "當在 Square 中建立新預訂（預約）時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "新預約"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new booking is created",
+          "message": "建立新預訂時觸發"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.desc": {
+          "source": "Fires when a new catalog item is created in Square. Uses polling to detect new records.",
+          "message": "當在 Square 中建立新目錄項目時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
+          "source": "New Catalog Item",
+          "message": "新目錄項目"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
+          "source": "Trigger when a new catalog item is added",
+          "message": "新增目錄項目時觸發"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.desc": {
+          "source": "Fires when new events are detected via the Square Events API. Supports filtering by event type. Uses polling with 28-day event retention.",
+          "message": "當透過 Square Events API 偵測到新事件時觸發。支援依事件類型篩選。使用輪詢機制並保留 28 天的事件。"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
+          "source": "New Events",
+          "message": "新事件"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.desc": {
+          "source": "List of Square event types to watch (e.g. 'payment.created'). Defaults to all supported event types.",
+          "message": "要監看之 Square 事件類型的清單（例如 'payment.created'）。預設為所有受支援的事件類型。"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.display_name": {
+          "source": "Event Types",
+          "message": "事件類型"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.short_desc": {
+          "source": "Event types to watch",
+          "message": "要監看的事件類型"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "檢查新事件的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
+          "source": "Trigger when new events occur",
+          "message": "發生新事件時觸發"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Square. Uses polling to detect new records.",
+          "message": "當在 Square 中建立新發票時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "新發票"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "建立新發票時觸發"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for orders in Square with optional filtering",
+          "message": "在 Square 中搜尋訂單，並可選用篩選條件"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "搜尋訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Created Before",
+          "message": "建立時間早於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Created before date",
+          "message": "建立日期早於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.desc": {
+          "source": "Return orders created at or after this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）或之後建立的訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Created After",
+          "message": "建立時間晚於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Created after date",
+          "message": "建立日期晚於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "依訂單 ID 篩選"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.desc": {
+          "source": "List of location IDs to search (auto-detected if not provided)",
+          "message": "要搜尋的地點 ID 清單（若未提供則自動偵測）"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "地點 ID"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "按地點篩選"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.desc": {
+          "source": "Open orders",
+          "message": "未結訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled orders",
+          "message": "已取消的訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed orders",
+          "message": "已完成的訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft orders",
+          "message": "草稿訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.desc": {
+          "source": "Filter orders by state",
+          "message": "依狀態篩選訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "州/省"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by order state",
+          "message": "依訂單狀態篩選"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Updated Before",
+          "message": "更新時間早於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Updated before date",
+          "message": "更新時間早於此日期"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Updated After",
+          "message": "更新時間晚於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Updated after date",
+          "message": "更新時間晚於此日期"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders",
+          "message": "搜尋訂單"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.desc": {
+          "source": "Search for catalog objects (items, variations, categories, etc.) in Square",
+          "message": "在 Square 中搜尋目錄物件（品項、規格變化、類別等）"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
+          "source": "Search Catalog",
+          "message": "搜尋目錄"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return objects updated at or after this timestamp (RFC 3339)",
+          "message": "傳回在此時間戳記（RFC 3339）或之後更新的物件"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "開始時間"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Updated after",
+          "message": "更新晚於"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.desc": {
+          "source": "Filter by catalog object types (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)",
+          "message": "依目錄物件類型篩選（ITEM、ITEM_VARIATION、CATEGORY、DISCOUNT、TAX、MODIFIER、MODIFIER_LIST、IMAGE）"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.display_name": {
+          "source": "Object Types",
+          "message": "物件類型"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.short_desc": {
+          "source": "Filter by object types",
+          "message": "依物件類型篩選"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
+          "source": "Search catalog objects",
+          "message": "搜尋目錄物件"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Publish and send an invoice in Square",
+          "message": "在 Square 中發布並傳送發票"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "傳送發票"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "帳單 ID"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to send",
+          "message": "要傳送的發票"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "發票的目前版本（用於開放式並行存取控制）"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "發票版本"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send (publish) an invoice",
+          "message": "傳送（發布）發票"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a payment is created or updated in Square. Uses polling to detect changes.",
+          "message": "在 Square 中建立或更新付款時觸發。使用輪詢偵測變更。"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
+          "source": "Payment Created/Updated",
+          "message": "付款已建立/已更新"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "檢查新記錄的頻率（至少 30 秒）"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "輪詢間隔（秒）"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a payment is created or updated",
+          "message": "在建立或更新付款時觸發"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.desc": {
+          "source": "Create a refund for a payment in Square",
+          "message": "在 Square 中為付款建立退款"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
+          "source": "Refund Payment",
+          "message": "退還款項"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "貨幣代碼（預設：USD）"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "貨幣代碼"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The refund amount in the smallest currency unit (cents for USD)",
+          "message": "以最小貨幣單位表示的退款金額（例如美元為美分）"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "退款金額 (以分為單位)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to refund",
+          "message": "要退款的付款"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "原因"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.short_desc": {
+          "source": "Reason for refund",
+          "message": "退款原因"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
+          "source": "Refund a payment",
+          "message": "退還付款"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.desc": {
+          "source": "Remove a customer from a customer group in Square",
+          "message": "在 Square 中將客戶從客戶群組中移除"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
+          "source": "Remove Customer From Group",
+          "message": "從群組中移除客戶"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "顧客"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "客戶群組的 ID"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "群組 ID"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to remove from",
+          "message": "要從中移除的群組"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
+          "source": "Remove a customer from a group",
+          "message": "從群組中移除客戶"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Square",
+          "message": "在 Square 中更新現有客戶"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "更新客戶"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "公司名稱"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "要更新的客戶"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "客戶名字"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "顧客電子郵件"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "客戶姓氏"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "備註"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "顧客備註"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "更新現有客戶"
+        },
+        "app.U3F1YXJl.desc": {
+          "source": "Square is a comprehensive commerce platform for payments, online stores, invoicing, and business management.\n\nThis integration supports customers, orders, payments, invoices, bookings, catalog items, inventory, refunds, and events.",
+          "message": "Square 是一個綜合商業平台，適用於付款、線上商店、發票開立與業務管理。\n\n此整合支援客戶、訂單、付款、發票、預訂、目錄品項、庫存、退款和事件。"
+        },
+        "app.U3F1YXJl.display_name": {
+          "source": "Square",
+          "message": "Square"
+        },
+        "app.U3F1YXJl.short_desc": {
+          "source": "Square payments and commerce platform",
+          "message": "Square 付款與商業平台"
+        }
+      }
+    }
+  }
+}

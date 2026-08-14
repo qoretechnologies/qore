@@ -1,0 +1,1053 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.desc": {
+          "source": "Fires when a recipient marks an email as spam. Consider removing the recipient from future mailings to maintain sender reputation.",
+          "message": "Se déclenche lorsqu'un destinataire marque un e-mail comme spam. Envisagez de retirer le destinataire des futurs envois pour préserver la réputation de l'expéditeur."
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
+          "source": "Spam Complaint",
+          "message": "Plainte pour spam"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for spam complaint events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements de plainte pour spam"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {
+          "source": "Trigger when an email is marked as spam",
+          "message": "Se déclenche lorsqu'un e-mail est marqué comme spam"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.desc": {
+          "source": "Fires when a recipient clicks a link in an email. Provides information about the clicked URL, recipient, and client information.",
+          "message": "Se déclenche lorsqu'un destinataire clique sur un lien dans un e-mail. Fournit des informations sur l'URL cliquée, le destinataire et les informations du client."
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "Lien de l'e-mail cliqué"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for click events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements de clic"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
+          "source": "Trigger when a link in an email is clicked",
+          "message": "Se déclenche lorsqu'un lien dans un e-mail est cliqué"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.desc": {
+          "source": "Create a new inbound email route for processing incoming emails. Routes use expressions to match incoming messages and execute actions like forwarding or storing.",
+          "message": "Créer une nouvelle route d'e-mails entrants pour traiter les e-mails reçus. Les routes utilisent des expressions pour faire correspondre les messages entrants et exécuter des actions telles que le transfert ou le stockage."
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
+          "source": "Create Route",
+          "message": "Créer une route"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.desc": {
+          "source": "Actions to execute when the expression matches. Examples:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()",
+          "message": "Actions à exécuter lorsque l'expression correspond. Exemples :\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.display_name": {
+          "source": "Actions",
+          "message": "Actions"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.short_desc": {
+          "source": "Route actions",
+          "message": "Actions de la route"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what this route does",
+          "message": "Une description de ce que fait cette route"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Route description",
+          "message": "Description de la route"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.desc": {
+          "source": "The expression used to match incoming messages. Examples:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()",
+          "message": "L'expression utilisée pour faire correspondre les messages entrants. Exemples :\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.display_name": {
+          "source": "Expression",
+          "message": "Expression"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.short_desc": {
+          "source": "Matching expression",
+          "message": "Expression de correspondance"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.desc": {
+          "source": "Priority of the route (lower number = higher priority, default: 0)",
+          "message": "Priorité de la route (numéro plus petit = priorité plus élevée, valeur par défaut : 0)"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorité"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.short_desc": {
+          "source": "Route priority",
+          "message": "Priorité de la route"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
+          "source": "Create an inbound email route",
+          "message": "Créer une route d'e-mails entrants"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
+          "message": "Ajouter un nouveau membre à une liste de diffusion Mailgun. Prend en charge les variables personnalisées et le mode upsert."
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Add Mailing List Member",
+          "message": "Ajouter un membre à la liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.desc": {
+          "source": "The email address of the member to add",
+          "message": "L'adresse e-mail du membre à ajouter"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.display_name": {
+          "source": "Member Email",
+          "message": "E-mail du membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to add",
+          "message": "Adresse e-mail à ajouter"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to add the member to",
+          "message": "Sélectionnez la liste de diffusion à laquelle ajouter le membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to add the member to",
+          "message": "La liste de diffusion à laquelle ajouter le membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.desc": {
+          "source": "The name of the member",
+          "message": "Le nom du membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.short_desc": {
+          "source": "Member's name",
+          "message": "Nom du membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Whether the member is subscribed (default: `True`)",
+          "message": "Indique si le membre est abonné (par défaut : `True`)"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "Abonné"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Subscription status",
+          "message": "Statut de l'abonnement"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.desc": {
+          "source": "If `True`, update the member if they already exist (default: `False`)",
+          "message": "Si `True`, mettre à jour le membre s'il existe déjà (par défaut : `False`)"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.display_name": {
+          "source": "Upsert",
+          "message": "Upsert"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.short_desc": {
+          "source": "Update if exists",
+          "message": "Mettre à jour si existant"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.desc": {
+          "source": "Custom JSON variables to associate with the member",
+          "message": "Variables JSON personnalisées à associer au membre"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.display_name": {
+          "source": "Variables",
+          "message": "Variables"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.short_desc": {
+          "source": "Custom variables",
+          "message": "Variables personnalisées"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Add a member to a mailing list",
+          "message": "Ajouter un membre à une liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Retrieve a specific member from a Mailgun mailing list by their email address.",
+          "message": "Récupérer un membre spécifique d'une liste de diffusion Mailgun par son adresse e-mail."
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Get Mailing List Member",
+          "message": "Obtenir un membre de la liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to get the member from",
+          "message": "Sélectionnez la liste de diffusion dont récupérer le membre"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to get the member from",
+          "message": "La liste de diffusion dont récupérer le membre"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to retrieve",
+          "message": "L'adresse e-mail du membre à récupérer"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "E-mail du membre"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to retrieve",
+          "message": "Adresse e-mail à récupérer"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Get a member from a mailing list",
+          "message": "Obtenir un membre d'une liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Remove a member from a Mailgun mailing list by their email address.",
+          "message": "Supprimer un membre d'une liste de diffusion Mailgun par son adresse e-mail."
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Delete Mailing List Member",
+          "message": "Supprimer un membre de la liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to remove the member from",
+          "message": "Sélectionnez la liste de diffusion de laquelle supprimer le membre"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to remove the member from",
+          "message": "La liste de diffusion de laquelle supprimer le membre"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to remove",
+          "message": "L'adresse e-mail du membre à supprimer"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "E-mail du membre"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to remove",
+          "message": "Adresse e-mail à supprimer"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Remove a member from a mailing list",
+          "message": "Supprimer un membre d'une liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.desc": {
+          "source": "Fires when an email is successfully delivered to the recipient's mail server.",
+          "message": "Se déclenche lorsqu'un e-mail est remis avec succès au serveur de messagerie du destinataire."
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
+          "source": "Email Delivered",
+          "message": "E-mail remis"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for delivery events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements de remise"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
+          "source": "Trigger when an email is delivered",
+          "message": "Déclencher lorsqu'un e-mail est remis"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.desc": {
+          "source": "Fires when a recipient opens an email. Provides information about the recipient and client information.",
+          "message": "Se déclenche lorsqu'un destinataire ouvre un e-mail. Fournit des informations sur le destinataire et le client."
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "E-mail ouvert"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for open events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements d'ouverture"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
+          "source": "Trigger when an email is opened",
+          "message": "Déclencher lorsqu'un e-mail est ouvert"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains configured in your Mailgun account with optional filtering by state.",
+          "message": "Lister tous les domaines configurés dans votre compte Mailgun avec un filtrage optionnel par état."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "Lister les domaines"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of domains to return",
+          "message": "Nombre maximal de domaines à retourner"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active domains",
+          "message": "Domaines actifs"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled domains",
+          "message": "Domaines désactivés"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOnVudmVyaWZpZWQ.desc": {
+          "source": "Unverified domains",
+          "message": "Domaines non vérifiés"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.desc": {
+          "source": "Filter domains by state (`active`, `unverified`, `disabled`)",
+          "message": "Filtrer les domaines par état (`active`, `unverified`, `disabled`)"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "État"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.short_desc": {
+          "source": "Filter by domain state",
+          "message": "Filtrer par état de domaine"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List all sending domains",
+          "message": "Lister tous les domaines d'envoi"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.desc": {
+          "source": "List all members of a Mailgun mailing list with optional filtering by subscription status.",
+          "message": "Lister tous les membres d'une liste de diffusion Mailgun avec un filtrage optionnel par statut d'abonnement."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "List Mailing List Members",
+          "message": "Lister les membres de la liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of members to return",
+          "message": "Nombre maximal de membres à renvoyer"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to list members from",
+          "message": "Sélectionnez la liste de diffusion dont lister les membres"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to list members from",
+          "message": "La liste de diffusion dont lister les membres"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Filter members by subscription status",
+          "message": "Filtrer les membres par statut d'abonnement"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "Abonné"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "Filtrer par statut d'abonnement"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "List members of a mailing list",
+          "message": "Lister les membres d'une liste de diffusion"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.desc": {
+          "source": "List all mailing lists configured in your Mailgun account.",
+          "message": "Lister toutes les listes de diffusion configurées dans votre compte Mailgun."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
+          "source": "List Mailing Lists",
+          "message": "Lister les listes de diffusion"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of mailing lists to return",
+          "message": "Nombre maximal de listes de diffusion à retourner"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
+          "source": "List all mailing lists",
+          "message": "Lister toutes les listes de diffusion"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.desc": {
+          "source": "List all configured inbound email routes for processing incoming emails.",
+          "message": "Lister toutes les routes d'e-mails entrants configurées pour traiter les e-mails entrants."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
+          "source": "List Routes",
+          "message": "Lister les routes"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of routes to return",
+          "message": "Nombre maximal de routes à retourner"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
+          "source": "List all inbound email routes",
+          "message": "Lister toutes les routes d'e-mails entrants"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mailgun** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Passez un appel d'API HTTP / REST personnalisé à **Mailgun** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hachage contenant le code d'état, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mailgun",
+          "message": "Effectuer un appel d'API personnalisé à Mailgun"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send a transactional email through Mailgun. Supports HTML content, text content, tracking options, and custom headers.",
+          "message": "Envoyez un e-mail transactionnel via Mailgun. Prend en charge le contenu HTML, le contenu textuel, les options de suivi et les en-têtes personnalisés."
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send Email",
+          "message": "Envoyer un e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "Carbon copy recipients",
+          "message": "Destinataires en copie conforme (CC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "Destinataires en CC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "Blind carbon copy recipients",
+          "message": "Destinataires en copie conforme invisible (BCC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "BCC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "Destinataires en BCC"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.desc": {
+          "source": "The sender email address. Can include a name: 'Name <email@domain.com>'",
+          "message": "L'adresse e-mail de l'expéditeur. Peut inclure un nom : 'Nom <email@domaine.com>'"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "De"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.short_desc": {
+          "source": "Sender email address",
+          "message": "Adresse e-mail de l'expéditeur"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.desc": {
+          "source": "Email address for replies",
+          "message": "Adresse e-mail pour les réponses"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.display_name": {
+          "source": "Reply-To",
+          "message": "Reply-To"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.short_desc": {
+          "source": "Reply-to address",
+          "message": "Adresse de réponse"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.desc": {
+          "source": "HTML version of the email body",
+          "message": "Version HTML du corps de l'e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.display_name": {
+          "source": "HTML Body",
+          "message": "Corps HTML"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.short_desc": {
+          "source": "HTML body",
+          "message": "Corps HTML"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.desc": {
+          "source": "Tags for message categorization and tracking",
+          "message": "Balises pour la catégorisation et le suivi des messages"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.display_name": {
+          "source": "Tags",
+          "message": "Étiquettes"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.short_desc": {
+          "source": "Message tags",
+          "message": "Balises de message"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.desc": {
+          "source": "Enable tracking for this message",
+          "message": "Activer le suivi pour ce message"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.display_name": {
+          "source": "Enable Tracking",
+          "message": "Activer le suivi"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.short_desc": {
+          "source": "Enable click/open tracking",
+          "message": "Activer le suivi des clics/ouvertures"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.desc": {
+          "source": "Enable click tracking for this message",
+          "message": "Activer le suivi des clics pour ce message"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.display_name": {
+          "source": "Track Clicks",
+          "message": "Suivre les clics"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.short_desc": {
+          "source": "Track link clicks",
+          "message": "Suivre les clics sur les liens"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.desc": {
+          "source": "Enable open tracking for this message",
+          "message": "Activer le suivi des ouvertures pour ce message"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.display_name": {
+          "source": "Track Opens",
+          "message": "Suivre les ouvertures"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.short_desc": {
+          "source": "Track email opens",
+          "message": "Suivre les ouvertures d'e-mails"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The email subject line",
+          "message": "L'objet de l'e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Sujet"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Objet de l'e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more recipient email addresses. Can include names.",
+          "message": "Une ou plusieurs adresses e-mail de destinataires. Peut inclure des noms."
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "À"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Recipient email address(es)",
+          "message": "Adresse(s) e-mail du destinataire"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.desc": {
+          "source": "Plain text version of the email body",
+          "message": "Version texte brut du corps de l'e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.display_name": {
+          "source": "Text Body",
+          "message": "Corps du texte"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.short_desc": {
+          "source": "Plain text body",
+          "message": "Corps en texte brut"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email via Mailgun",
+          "message": "Envoyer un e-mail via Mailgun"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.desc": {
+          "source": "Fires when an email permanently fails to deliver (hard bounce). This typically indicates an invalid email address or blocked domain.",
+          "message": "Se déclenche lorsqu'un e-mail subit un échec de distribution permanent (hard bounce). Cela indique généralement une adresse e-mail non valide ou un domaine bloqué."
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
+          "source": "Permanent Failure",
+          "message": "Échec permanent"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for permanent failure events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements d'échec permanent"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
+          "source": "Trigger on permanent delivery failure (hard bounce)",
+          "message": "Déclencher en cas d'échec de distribution permanent (hard bounce)"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.desc": {
+          "source": "Fires when an email temporarily fails to deliver (soft bounce). Mailgun will retry delivery automatically.",
+          "message": "Se déclenche lorsqu'un e-mail subit un échec de distribution temporaire (soft bounce). Mailgun réessaiera automatiquement la distribution."
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
+          "source": "Temporary Failure",
+          "message": "Échec temporaire"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for temporary failure events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements d'échec temporaire"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
+          "source": "Trigger on temporary delivery failure (soft bounce)",
+          "message": "Déclencher en cas d'échec de distribution temporaire (soft bounce)"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.desc": {
+          "source": "Fires when a recipient clicks an unsubscribe link in an email. Remove the recipient from your mailing list to comply with their preference.",
+          "message": "Se déclenche lorsqu'un destinataire clique sur un lien de désinscription dans un e-mail. Supprimez le destinataire de votre liste de diffusion pour respecter son choix."
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.display_name": {
+          "source": "Unsubscribed",
+          "message": "Désabonné"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for unsubscribe events",
+          "message": "Sélectionnez le domaine à surveiller pour les événements de désinscription"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Domaine"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Le domaine à surveiller pour les événements"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Trigger when a recipient unsubscribes",
+          "message": "Déclencher lorsqu'un destinataire se désinscrit"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.desc": {
+          "source": "Validate an email address using Mailgun's email validation API. Returns information about deliverability, risk assessment, and suggested corrections.",
+          "message": "Validez une adresse e-mail à l'aide de l'API de validation d'e-mails de Mailgun. Renvoie des informations sur la délivrabilité, l'évaluation des risques et les corrections suggérées."
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
+          "source": "Validate Email",
+          "message": "Valider l'e-mail"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.desc": {
+          "source": "The email address to validate",
+          "message": "L'adresse e-mail à valider"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Adresse e-mail"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to validate",
+          "message": "Adresse e-mail à valider"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
+          "source": "Validate an email address",
+          "message": "Valider une adresse e-mail"
+        },
+        "app.TWFpbGd1bg.desc": {
+          "source": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. This integration enables sending transactional emails, managing mailing lists, validating email addresses, and receiving webhooks for email events.\n\n**Features:**\n- Send transactional and marketing emails\n- Email validation to verify addresses\n- Mailing list management\n- Inbound email routing\n- Event tracking via webhooks",
+          "message": "Mailgun est un service d'API d'e-mails performant pour l'envoi, la réception et le suivi d'e-mails. Cette intégration permet d'envoyer des e-mails transactionnels, de gérer des listes de diffusion, de valider des adresses e-mail et de recevoir des webhooks pour les événements d'e-mails.\n\n**Fonctionnalités :**\n- Envoyer des e-mails transactionnels et marketing\n- Validation d'e-mails pour vérifier les adresses\n- Gestion des listes de diffusion\n- Routage des e-mails entrants\n- Suivi des événements via des webhooks"
+        },
+        "app.TWFpbGd1bg.display_name": {
+          "source": "Mailgun",
+          "message": "Mailgun"
+        },
+        "app.TWFpbGd1bg.short_desc": {
+          "source": "Mailgun email delivery and management service",
+          "message": "Service de distribution et de gestion d'e-mails Mailgun"
+        }
+      }
+    }
+  }
+}

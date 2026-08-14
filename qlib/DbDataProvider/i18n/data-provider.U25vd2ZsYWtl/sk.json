@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Vytvárajte a spravujte pripojenia ku cloudovému dátovému skladu Snowflake"
+        },
+        "app.U25vd2ZsYWtl.display_name": {
+          "source": "Snowflake",
+          "message": "Snowflake"
+        },
+        "app.U25vd2ZsYWtl.short_desc": {
+          "source": "Snowflake cloud data warehouse",
+          "message": "Cloudový dátový sklad Snowflake"
+        }
+      }
+    }
+  }
+}

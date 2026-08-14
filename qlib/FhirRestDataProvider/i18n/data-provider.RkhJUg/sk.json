@@ -1,0 +1,3045 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Conditionally update a FHIR `Observation` resource by search criteria.",
+          "message": "Podmienene aktualizovať FHIR zdroj `Observation` podľa kritérií vyhľadávania."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Conditional Update Observation",
+          "message": "Podmienená aktualizácia Observation"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Vyhľadávacie parametre FHIR použité v URL požiadavky na podmienenú aktualizáciu"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Vyhľadávacie parametre podmienenej aktualizácie"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Telo FHIR zdroja `Observation` na podmienenú aktualizáciu. Hash musí obsahovať `resourceType` s pevnou hodnotou `Observation`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Conditionally update a FHIR Observation resource",
+          "message": "Podmienene aktualizovať FHIR zdroj Observation"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Conditionally update a FHIR `Bundle` resource by search criteria.",
+          "message": "Podmienene aktualizovať FHIR zdroj `Bundle` podľa kritérií vyhľadávania."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Conditional Update Bundle",
+          "message": "Podmienená aktualizácia Bundle"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Vyhľadávacie parametre FHIR použité v URL požiadavky na podmienenú aktualizáciu"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Vyhľadávacie parametre podmienenej aktualizácie"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Telo FHIR zdroja `Bundle` na podmienenú aktualizáciu. Hash musí obsahovať `resourceType` s pevnou hodnotou `Bundle`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Conditionally update a FHIR Bundle resource",
+          "message": "Podmienene aktualizovať FHIR zdroj Bundle"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Conditionally update a FHIR `Patient` resource by search criteria.",
+          "message": "Podmienene aktualizovať FHIR zdroj `Patient` podľa kritérií vyhľadávania."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Conditional Update Patient",
+          "message": "Podmienená aktualizácia Patient"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Vyhľadávacie parametre FHIR použité v URL požiadavky na podmienenú aktualizáciu"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Vyhľadávacie parametre podmienenej aktualizácie"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update conditionally. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Telo FHIR zdroja `Patient` na podmienenú aktualizáciu. Hash musí obsahovať `resourceType` s pevnou hodnotou `Patient`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Conditionally update a FHIR Patient resource",
+          "message": "Podmienene aktualizovať FHIR zdroj Patient"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Conditionally update a FHIR resource by type and search parameters.",
+          "message": "Podmienene aktualizovať FHIR zdroj podľa typu a vyhľadávacích parametrov."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Conditional Update Resource",
+          "message": "Podmienená aktualizácia zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.desc": {
+          "source": "FHIR search parameters used in the conditional update request URL",
+          "message": "Vyhľadávacie parametre FHIR použité v URL požiadavky na podmienenú aktualizáciu"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.c2VhcmNoX3BhcmFtcw.short_desc": {
+          "source": "Conditional update search parameters",
+          "message": "Vyhľadávacie parametre podmienenej aktualizácie"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` matching `resource_type`.",
+          "message": "Telo FHIR zdroja ako hash kompatibilný s JSON. Hash musí obsahovať `resourceType` zodpovedajúci `resource_type`."
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update conditionally",
+          "message": "Typ FHIR zdroja na podmienenú aktualizáciu"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.Y29uZGl0aW9uYWwtdXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Conditionally update a FHIR resource",
+          "message": "Podmienene aktualizovať zdroj FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Create a FHIR `Observation` resource with resource-specific action metadata.",
+          "message": "Vytvoriť zdroj FHIR `Observation` s metadátami akcie špecifickými pre daný zdroj."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Create Observation",
+          "message": "Vytvoriť Observation"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Vyhľadávací výraz pre podmienené vytvorenie FHIR odoslaný v hlavičke `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kritériá pre podmienené vytvorenie"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to create. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Observation` na vytvorenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Observation`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Create a FHIR Observation resource",
+          "message": "Vytvoriť zdroj FHIR Observation"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.desc": {
+          "source": "Create a FHIR `Bundle` resource with resource-specific action metadata.",
+          "message": "Vytvoriť zdroj FHIR `Bundle` s metadátami akcie špecifickými pre daný zdroj."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Create Bundle",
+          "message": "Vytvoriť Bundle"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Vyhľadávací výraz pre podmienené vytvorenie FHIR odoslaný v hlavičke `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kritériá pre podmienené vytvorenie"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to create. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Bundle` na vytvorenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Bundle`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Create a FHIR Bundle resource",
+          "message": "Vytvoriť zdroj FHIR Bundle"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.desc": {
+          "source": "Create a FHIR `Patient` resource with resource-specific action metadata.",
+          "message": "Vytvoriť zdroj FHIR `Patient` s metadátami akcie špecifickými pre daný zdroj."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.display_name": {
+          "source": "Create Patient",
+          "message": "Vytvoriť Patient"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Vyhľadávací výraz pre podmienené vytvorenie FHIR odoslaný v hlavičke `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kritériá pre podmienené vytvorenie"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to create. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Patient` na vytvorenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Patient`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Create a FHIR Patient resource",
+          "message": "Vytvoriť zdroj FHIR Patient"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.desc": {
+          "source": "Create a FHIR resource with an optional `If-None-Exist` conditional create header for idempotent writes.",
+          "message": "Vytvoriť zdroj FHIR s voliteľnou hlavičkou podmieneného vytvorenia `If-None-Exist` pre idempotentné zápisy."
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.display_name": {
+          "source": "Create Resource",
+          "message": "Vytvoriť zdroj"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.desc": {
+          "source": "FHIR conditional create search expression sent in the `If-None-Exist` header",
+          "message": "Vyhľadávací výraz pre podmienené vytvorenie FHIR odoslaný v hlavičke `If-None-Exist`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.display_name": {
+          "source": "If-None-Exist",
+          "message": "If-None-Exist"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.aWZfbm9uZV9leGlzdA.short_desc": {
+          "source": "Conditional create criteria",
+          "message": "Kritériá pre podmienené vytvorenie"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`",
+          "message": "Telo zdroja FHIR ako hash kompatibilný s JSON. Hash musí obsahovať `resourceType`.\n\n**Príklad**: `{\"resourceType\": \"Patient\", \"name\": [{\"family\": \"Jones\"}]}`"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to create",
+          "message": "Typ zdroja FHIR na vytvorenie"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.Y3JlYXRlLXJlc291cmNl.short_desc": {
+          "source": "Create a FHIR resource",
+          "message": "Vytvoriť zdroj FHIR"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.desc": {
+          "source": "Read the server `CapabilityStatement` from the FHIR `metadata` endpoint.",
+          "message": "Načítať `CapabilityStatement` zo servera z koncového bodu FHIR `metadata`."
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.display_name": {
+          "source": "Get Capability Statement",
+          "message": "Získať Capability Statement"
+        },
+        "app.RkhJUg.action.Z2V0LWNhcGFiaWxpdHktc3RhdGVtZW50.short_desc": {
+          "source": "Read FHIR server metadata",
+          "message": "Načítať metadáta servera FHIR"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.desc": {
+          "source": "Read the SMART on FHIR discovery document from `.well-known/smart-configuration`.",
+          "message": "Načítať objavovací dokument SMART on FHIR z `.well-known/smart-configuration`."
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.display_name": {
+          "source": "Get SMART Configuration",
+          "message": "Získať konfiguráciu SMART"
+        },
+        "app.RkhJUg.action.Z2V0LXNtYXJ0LWNvbmZpZ3VyYXRpb24.short_desc": {
+          "source": "Read SMART on FHIR discovery metadata",
+          "message": "Načítať metadáta objavovania SMART on FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Delete a FHIR `Observation` resource by logical `id`.",
+          "message": "Odstrániť zdroj FHIR `Observation` podľa logického `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Delete Observation",
+          "message": "Odstrániť Observation"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Delete a FHIR Observation resource",
+          "message": "Odstrániť zdroj FHIR Observation"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.desc": {
+          "source": "Delete a FHIR `Bundle` resource by logical `id`.",
+          "message": "Odstrániť zdroj FHIR `Bundle` podľa logického `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.display_name": {
+          "source": "Delete Bundle",
+          "message": "Odstrániť Bundle"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Delete a FHIR Bundle resource",
+          "message": "Odstrániť zdroj FHIR Bundle"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.desc": {
+          "source": "Delete a FHIR `Patient` resource by logical `id`.",
+          "message": "Odstrániť zdroj FHIR `Patient` podľa logického `id`."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.display_name": {
+          "source": "Delete Patient",
+          "message": "Odstrániť Patient"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXBhdGllbnQ.short_desc": {
+          "source": "Delete a FHIR Patient resource",
+          "message": "Odstrániť zdroj FHIR Patient"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.desc": {
+          "source": "Delete a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Odstrániť zdroj FHIR podľa typu a ID. Zadajte `etag` na odoslanie hlavičky `If-Match` pre optimistický súbeh."
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.display_name": {
+          "source": "Delete Resource",
+          "message": "Odstrániť zdroj"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to delete",
+          "message": "Typ zdroja FHIR na odstránenie"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.ZGVsZXRlLXJlc291cmNl.short_desc": {
+          "source": "Delete a FHIR resource",
+          "message": "Odstrániť zdroj FHIR"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.desc": {
+          "source": "Expand a FHIR ValueSet by delegating to a terminology server. The `path` value is a relative ValueSet path such as `ValueSet/example`.",
+          "message": "Rozšíriť FHIR ValueSet delegovaním na terminologický server. Hodnota `path` je relatívna cesta k ValueSet, napríklad `ValueSet/example`."
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.display_name": {
+          "source": "Expand ValueSet",
+          "message": "Rozšíriť ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ValueSet endpoint",
+          "message": "Relatívna cesta FHIR ku koncovému bodu ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGF0aA.short_desc": {
+          "source": "ValueSet path",
+          "message": "Cesta k ValueSet"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.desc": {
+          "source": "Optional FHIR `$expand` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"filter\": \"smi\"}`",
+          "message": "Voliteľné parametre operácie FHIR `$expand` ako parametre dopytu. Kľúče sú názvy parametrov operácie akceptované serverom.\n\n**Príklad**: `{\"filter\": \"smi\"}`"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parametre"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Parametre operácie"
+        },
+        "app.RkhJUg.action.ZXhwYW5kLXZhbHVlLXNldA.short_desc": {
+          "source": "Call a ValueSet $expand operation",
+          "message": "Zavolať operáciu ValueSet $expand"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.desc": {
+          "source": "Look up code display, designation, and property metadata by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem path such as `CodeSystem/example`.",
+          "message": "Vyhľadať zobrazenie kódu, označenie a metadáta vlastností delegovaním na koncový bod terminológie FHIR. Hodnota `path` je relatívna cesta ku CodeSystem, napríklad `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.display_name": {
+          "source": "Lookup Code",
+          "message": "Vyhľadať kód"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem endpoint",
+          "message": "Relatívna cesta FHIR ku koncovému bodu CodeSystem"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "CodeSystem path",
+          "message": "Cesta ku CodeSystem"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$lookup` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`",
+          "message": "Parametre operácie FHIR `$lookup` ako parametre dopytu. Kľúče sú názvy parametrov operácie akceptované serverom.\n\n**Príklad**: `{\"system\": \"http://loinc.org\", \"code\": \"8867-4\"}`"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parametre"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Parametre operácie"
+        },
+        "app.RkhJUg.action.bG9va3VwLWNvZGU.short_desc": {
+          "source": "Call a terminology $lookup operation",
+          "message": "Zavolať terminologickú operáciu $lookup"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FHIR R4** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Urobiť vlastné volanie HTTP / REST API pre **FHIR R4** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu voči základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako primárne akcie v tejto aplikácii."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.RkhJUg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FHIR R4",
+          "message": "Urobiť vlastné volanie API do FHIR R4"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.desc": {
+          "source": "Search FHIR `Observation` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Vyhľadávať zdroje FHIR `Observation`. Na parametre vyhľadávania FHIR podporované serverom použite `params`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.display_name": {
+          "source": "Search Observation",
+          "message": "Vyhľadať Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Search FHIR Observation resources",
+          "message": "Vyhľadávať zdroje FHIR Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.desc": {
+          "source": "Search FHIR `Bundle` resources and follow Bundle `next` pagination links.",
+          "message": "Vyhľadávať zdroje FHIR `Bundle` a sledovať stránkovacie odkazy Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.display_name": {
+          "source": "Search All Bundle",
+          "message": "Vyhľadať všetky Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximálny počet stránok Bundle na načítanie sledovaním stránkovacích odkazov `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximálny počet stránok"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximálny počet stránok Bundle na načítanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1idW5kbGU.short_desc": {
+          "source": "Search all FHIR Bundle resource pages",
+          "message": "Vyhľadávať všetky stránky zdrojov FHIR Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Search FHIR `Observation` resources and follow Bundle `next` pagination links.",
+          "message": "Vyhľadávať zdroje FHIR `Observation` a sledovať stránkovacie odkazy Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Search All Observation",
+          "message": "Vyhľadať všetky Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximálny počet stránok Bundle na načítanie sledovaním stránkovacích odkazov `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximálny počet stránok"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximálny počet stránok Bundle na načítanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Search all FHIR Observation resource pages",
+          "message": "Vyhľadávať všetky stránky zdrojov FHIR Observation"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.desc": {
+          "source": "Search FHIR `Patient` resources and follow Bundle `next` pagination links.",
+          "message": "Vyhľadávať zdroje FHIR `Patient` a sledovať stránkovacie odkazy Bundle `next`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.display_name": {
+          "source": "Search All Patient",
+          "message": "Vyhľadať všetkých Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximálny počet stránok Bundle na načítanie sledovaním stránkovacích odkazov `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximálny počet stránok"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximálny počet stránok Bundle na načítanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1wYXRpZW50.short_desc": {
+          "source": "Search all FHIR Patient resource pages",
+          "message": "Vyhľadávať všetky stránky zdrojov FHIR Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.desc": {
+          "source": "Search a FHIR resource type and follow Bundle `next` pagination links. The `params` hash remains available for advanced search parameters.",
+          "message": "Vyhľadávať typ zdroja FHIR a sledovať stránkovacie odkazy Bundle `next`. Hash `params` zostáva k dispozícii pre pokročilé parametre vyhľadávania."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.display_name": {
+          "source": "Search All Resources",
+          "message": "Vyhľadať všetky zdroje"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.desc": {
+          "source": "Maximum number of Bundle pages to fetch by following `next` pagination links",
+          "message": "Maximálny počet stránok Bundle na načítanie sledovaním stránkovacích odkazov `next`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.display_name": {
+          "source": "Maximum Pages",
+          "message": "Maximálny počet stránok"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.bWF4X3BhZ2Vz.short_desc": {
+          "source": "Maximum Bundle pages to fetch",
+          "message": "Maximálny počet stránok Bundle na načítanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Typ zdroja FHIR na vyhľadávanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWFsbC1yZXNvdXJjZXM.short_desc": {
+          "source": "Search FHIR resources and follow pagination",
+          "message": "Vyhľadávať zdroje FHIR a sledovať stránkovanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.desc": {
+          "source": "Search FHIR `Bundle` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Vyhľadávať zdroje FHIR `Bundle`. Na parametre vyhľadávania FHIR podporované serverom použite `params`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.display_name": {
+          "source": "Search Bundle",
+          "message": "Vyhľadať Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLWJ1bmRsZQ.short_desc": {
+          "source": "Search FHIR Bundle resources",
+          "message": "Vyhľadávať zdroje FHIR Bundle"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.desc": {
+          "source": "Search FHIR `Patient` resources. Use `params` for server-supported FHIR search parameters.",
+          "message": "Vyhľadávať zdroje FHIR `Patient`. Na parametre vyhľadávania FHIR podporované serverom použite `params`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.display_name": {
+          "source": "Search Patient",
+          "message": "Vyhľadať pacienta"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXBhdGllbnQ.short_desc": {
+          "source": "Search FHIR Patient resources",
+          "message": "Vyhľadať zdroje FHIR Patient"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.desc": {
+          "source": "Search a FHIR resource type. The `params` hash accepts FHIR search parameter names, including modifiers, chained parameters, `_include`, and `_revinclude`.",
+          "message": "Vyhľadať typ zdroja FHIR. Hash `params` akceptuje názvy vyhľadávacích parametrov FHIR, vrátane modifikátorov, reťazených parametrov, `_include` a `_revinclude`."
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.display_name": {
+          "source": "Search Resources",
+          "message": "Vyhľadať zdroje"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_count` page-size search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania veľkosti stránky FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Počet"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y291bnQ.short_desc": {
+          "source": "FHIR `_count` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_count`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.desc": {
+          "source": "Convenience field mapped to the FHIR `_content` full-content search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania celého obsahu FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Obsah"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.Y29udGVudA.short_desc": {
+          "source": "FHIR `_content` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_content`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_include` search parameter; use a list for repeated include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_include`; na opakované hodnoty zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Zahrnúť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_include` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_include`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_id` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.display_name": {
+          "source": "ID Search",
+          "message": "Vyhľadávanie podľa ID"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.aWQ.short_desc": {
+          "source": "FHIR `_id` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_id`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.desc": {
+          "source": "Convenience field mapped to the FHIR `_lastUpdated` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.display_name": {
+          "source": "Last Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.bGFzdF91cGRhdGVk.short_desc": {
+          "source": "FHIR `_lastUpdated` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_lastUpdated`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.desc": {
+          "source": "Convenience field mapped to the FHIR `_sort` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c29ydA.short_desc": {
+          "source": "FHIR `_sort` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_sort`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.desc": {
+          "source": "Convenience field mapped to the FHIR `_security` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.display_name": {
+          "source": "Security",
+          "message": "Bezpečnosť"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.c2VjdXJpdHk.short_desc": {
+          "source": "FHIR `_security` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_security`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.desc": {
+          "source": "FHIR search parameters as a hash. Keys are FHIR parameter names such as `family`, `_include`, or `_revinclude`; list values are sent as repeated query parameters.\n\n**Example**: `{\"family\": \"Smith\"}`",
+          "message": "Parametre vyhľadávania FHIR ako hash. Kľúče sú názvy parametrov FHIR, ako napríklad `family`, `_include` alebo `_revinclude`; hodnoty zoznamu sa odosielajú ako opakované parametre dopytu.\n\n**Príklad**: `{\"family\": \"Smith\"}`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.display_name": {
+          "source": "Search Parameters",
+          "message": "Vyhľadávacie parametre"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cGFyYW1z.short_desc": {
+          "source": "FHIR search parameters",
+          "message": "Parametre vyhľadávania FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_profile` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cHJvZmlsZQ.short_desc": {
+          "source": "FHIR `_profile` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_profile`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.desc": {
+          "source": "Convenience field mapped to the FHIR `_revinclude` search parameter; use a list for repeated reverse include values",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_revinclude`; na opakované hodnoty spätného zahrnutia použite zoznam"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.display_name": {
+          "source": "RevInclude",
+          "message": "RevInclude"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmV2aW5jbHVkZQ.short_desc": {
+          "source": "FHIR `_revinclude` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_revinclude`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to search",
+          "message": "Typ zdroja FHIR na vyhľadávanie"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.desc": {
+          "source": "Convenience field mapped to the FHIR `_tag` search parameter",
+          "message": "Pohodlné pole mapované na parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGFn.short_desc": {
+          "source": "FHIR `_tag` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_tag`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.desc": {
+          "source": "Convenience field mapped to the FHIR `_text` full-text search parameter",
+          "message": "Pohodlné pole mapované na parameter celotextového vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.option.dGV4dA.short_desc": {
+          "source": "FHIR `_text` search parameter",
+          "message": "Parameter vyhľadávania FHIR `_text`"
+        },
+        "app.RkhJUg.action.c2VhcmNoLXJlc291cmNlcw.short_desc": {
+          "source": "Search FHIR resources with query parameters",
+          "message": "Vyhľadať zdroje FHIR pomocou parametrov dopytu"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.desc": {
+          "source": "Submit a FHIR `Bundle` with `type` set to `transaction` or `batch` to the FHIR service base. Use this action when related resource writes must be processed together by the server.",
+          "message": "Odoslať FHIR `Bundle` s `type` nastaveným na `transaction` alebo `batch` do základu služby FHIR. Túto akciu použite, keď sa súvisiace zápisy zdrojov musia spracovať na serveri spoločne."
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.display_name": {
+          "source": "Submit Bundle",
+          "message": "Odoslať Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.desc": {
+          "source": "FHIR `Bundle` resource with `type` set to `transaction` or `batch`. The Bundle is POSTed to the FHIR service base for atomic transaction writes or batch execution.\n\n**Example**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`",
+          "message": "Zdroj FHIR `Bundle` s `type` nastaveným na `transaction` alebo `batch`. Bundle sa odosiela pomocou POST do základu služby FHIR pre atomické transakčné zápisy alebo dávkové vykonávanie.\n\n**Príklad**: `{\"resourceType\": \"Bundle\", \"type\": \"transaction\", \"entry\": [...]}`"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.display_name": {
+          "source": "Bundle",
+          "message": "Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.option.YnVuZGxl.short_desc": {
+          "source": "FHIR transaction or batch Bundle",
+          "message": "Transakčný alebo dávkový FHIR Bundle"
+        },
+        "app.RkhJUg.action.c3VibWl0LWJ1bmRsZQ.short_desc": {
+          "source": "Submit a FHIR transaction or batch Bundle",
+          "message": "Odoslať transakčný alebo dávkový FHIR Bundle"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.desc": {
+          "source": "Patch a FHIR `Bundle` resource by logical `id`.",
+          "message": "Aplikovať patch na zdroj FHIR `Bundle` podľa logického `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.display_name": {
+          "source": "Patch Bundle",
+          "message": "Aplikovať patch na Bundle"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Typ obsahu dokumentu patch; predvolená hodnota je `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Typ obsahu dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Telo dokumentu FHIR patch. Použite `content_type` na výber kódovania JSON Patch, XML Patch alebo FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Telo dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtYnVuZGxl.short_desc": {
+          "source": "Patch a FHIR Bundle resource",
+          "message": "Aplikovať patch na zdroj FHIR Bundle"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.desc": {
+          "source": "Patch a FHIR `Observation` resource by logical `id`.",
+          "message": "Aplikovať patch na zdroj FHIR `Observation` podľa logického `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Patch Observation",
+          "message": "Aplikovať patch na Observation"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Typ obsahu dokumentu patch; predvolená hodnota je `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Typ obsahu dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Telo dokumentu FHIR patch. Použite `content_type` na výber kódovania JSON Patch, XML Patch alebo FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Telo dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Patch a FHIR Observation resource",
+          "message": "Aplikovať patch na zdroj FHIR Observation"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.desc": {
+          "source": "Patch a FHIR `Patient` resource by logical `id`.",
+          "message": "Aplikovať patch na zdroj FHIR `Patient` podľa logického `id`."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.display_name": {
+          "source": "Patch Patient",
+          "message": "Aplikovať patch na Patient"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Typ obsahu dokumentu patch; predvolená hodnota je `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Typ obsahu dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Telo dokumentu FHIR patch. Použite `content_type` na výber kódovania JSON Patch, XML Patch alebo FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Telo dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcGF0aWVudA.short_desc": {
+          "source": "Patch a FHIR Patient resource",
+          "message": "Aplikovať patch na zdroj FHIR Patient"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.desc": {
+          "source": "Patch a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Aplikovať patch na zdroj FHIR podľa typu a ID. Uveďte `etag` pre odoslanie hlavičky `If-Match` pre optimistický súbežný prístup."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.display_name": {
+          "source": "Patch Resource",
+          "message": "Aplikovať patch na zdroj"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.desc": {
+          "source": "Patch document content type; defaults to `application/json-patch+json`",
+          "message": "Typ obsahu dokumentu patch; predvolená hodnota je `application/json-patch+json`"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "Patch document content type",
+          "message": "Typ obsahu dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.desc": {
+          "source": "FHIR patch document body. Use `content_type` to choose JSON Patch, XML Patch, or FHIRPath Patch encoding.",
+          "message": "Telo dokumentu FHIR patch. Použite `content_type` na výber kódovania JSON Patch, XML Patch alebo FHIRPath Patch."
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.display_name": {
+          "source": "Patch",
+          "message": "Patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cGF0Y2g.short_desc": {
+          "source": "Patch document body",
+          "message": "Telo dokumentu patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to patch",
+          "message": "Typ zdroja FHIR, na ktorý sa má aplikovať patch"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.cGF0Y2gtcmVzb3VyY2U.short_desc": {
+          "source": "Patch a FHIR resource",
+          "message": "Aplikovať patch na zdroj FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.desc": {
+          "source": "Read one FHIR `Bundle` resource instance using its logical `id`.",
+          "message": "Načítať jednu inštanciu zdroja FHIR `Bundle` pomocou jej logického `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.display_name": {
+          "source": "Read Bundle",
+          "message": "Načítať Bundle"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1idW5kbGU.short_desc": {
+          "source": "Read a FHIR Bundle resource by ID",
+          "message": "Načítať zdroj FHIR Bundle podľa ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.desc": {
+          "source": "Read one FHIR `Observation` resource instance using its logical `id`.",
+          "message": "Načítať jednu inštanciu zdroja FHIR `Observation` pomocou jej logického `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.display_name": {
+          "source": "Read Observation",
+          "message": "Načítať Observation"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1vYnNlcnZhdGlvbg.short_desc": {
+          "source": "Read a FHIR Observation resource by ID",
+          "message": "Načítať zdroj FHIR Observation podľa ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.desc": {
+          "source": "Read one FHIR `Patient` resource instance using its logical `id`.",
+          "message": "Načítať jednu inštanciu zdroja FHIR `Patient` pomocou jej logického `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.display_name": {
+          "source": "Read Patient",
+          "message": "Načítať pacienta"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1wYXRpZW50.short_desc": {
+          "source": "Read a FHIR Patient resource by ID",
+          "message": "Načítať zdroj FHIR Patient podľa ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.desc": {
+          "source": "Read one FHIR resource instance using its `resource_type` and logical `id`.",
+          "message": "Načítať jednu inštanciu zdroja FHIR pomocou jej `resource_type` a logického `id`."
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.display_name": {
+          "source": "Read Resource",
+          "message": "Načítať zdroj"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type, for example `Patient` or `Observation`",
+          "message": "Typ zdroja FHIR, napríklad `Patient` alebo `Observation`"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.cmVhZC1yZXNvdXJjZQ.short_desc": {
+          "source": "Read a FHIR resource by type and ID",
+          "message": "Načítať zdroj FHIR podľa typu a ID"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.desc": {
+          "source": "Translate a code through a FHIR ConceptMap by delegating to a terminology endpoint. The `path` value is a relative ConceptMap path such as `ConceptMap/example`.",
+          "message": "Preložiť kód prostredníctvom FHIR ConceptMap delegovaním na koncový bod terminológie. Hodnota `path` je relatívna cesta ConceptMap, ako napríklad `ConceptMap/example`."
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.display_name": {
+          "source": "Translate Code",
+          "message": "Preložiť kód"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a ConceptMap endpoint",
+          "message": "Relatívna cesta FHIR ku koncovému bodu ConceptMap"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGF0aA.short_desc": {
+          "source": "ConceptMap path",
+          "message": "Cesta ConceptMap"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.desc": {
+          "source": "FHIR `$translate` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`",
+          "message": "Parametre operácie FHIR `$translate` ako parametre dopytu. Kľúče sú názvy parametrov operácie akceptované serverom.\n\n**Príklad**: `{\"system\": \"http://example.org/local\", \"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parametre"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Parametre operácie"
+        },
+        "app.RkhJUg.action.dHJhbnNsYXRlLWNvZGU.short_desc": {
+          "source": "Call a terminology $translate operation",
+          "message": "Zavolať terminologickú operáciu $translate"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.desc": {
+          "source": "Update a FHIR `Observation` resource by logical `id` with resource-specific action metadata.",
+          "message": "Aktualizovať zdroj FHIR `Observation` podľa logického `id` s metadátami akcie špecifickými pre zdroj."
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.display_name": {
+          "source": "Update Observation",
+          "message": "Aktualizovať Observation"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to update. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Observation`, ktoré sa má aktualizovať. Hash musí obsahovať `resourceType` s pevnou hodnotou `Observation`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLW9ic2VydmF0aW9u.short_desc": {
+          "source": "Update a FHIR Observation resource",
+          "message": "Aktualizovať zdroj FHIR Observation"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.desc": {
+          "source": "Update a FHIR `Bundle` resource by logical `id` with resource-specific action metadata.",
+          "message": "Aktualizovať zdroj FHIR `Bundle` podľa logického `id` s metadátami akcie špecifickými pre zdroj."
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.display_name": {
+          "source": "Update Bundle",
+          "message": "Aktualizovať Bundle"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to update. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Bundle`, ktoré sa má aktualizovať. Hash musí obsahovať `resourceType` s pevnou hodnotou `Bundle`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLWJ1bmRsZQ.short_desc": {
+          "source": "Update a FHIR Bundle resource",
+          "message": "Aktualizovať zdroj FHIR Bundle"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.desc": {
+          "source": "Update a FHIR `Patient` resource by logical `id` with resource-specific action metadata.",
+          "message": "Aktualizovať zdroj FHIR `Patient` podľa logického `id` s metadátami akcie špecifickými pre zdroj."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.display_name": {
+          "source": "Update Patient",
+          "message": "Aktualizovať pacienta"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to update. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Patient`, ktoré sa má aktualizovať. Hash musí obsahovať `resourceType` s pevnou hodnotou `Patient`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXBhdGllbnQ.short_desc": {
+          "source": "Update a FHIR Patient resource",
+          "message": "Aktualizovať zdroj FHIR Patient"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.desc": {
+          "source": "Update a FHIR resource by type and ID. Provide `etag` to send an `If-Match` header for optimistic concurrency.",
+          "message": "Aktualizovať zdroj FHIR podľa typu a ID. Uveďte `etag` pre odoslanie hlavičky `If-Match` pre optimistický súbežný prístup."
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.display_name": {
+          "source": "Update Resource",
+          "message": "Aktualizovať zdroj"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.desc": {
+          "source": "ETag value sent in the `If-Match` header for optimistic concurrency",
+          "message": "Hodnota ETag odoslaná v hlavičke `If-Match` pre optimistický súbeh"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.display_name": {
+          "source": "ETag",
+          "message": "ETag"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.ZXRhZw.short_desc": {
+          "source": "FHIR version ETag",
+          "message": "Verzia ETag pre FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.desc": {
+          "source": "FHIR logical ID of the resource instance",
+          "message": "Logické ID FHIR inštancie zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body as a JSON-compatible hash. The hash must include `resourceType` and should include the logical `id` being updated.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`",
+          "message": "Telo zdroja FHIR ako hash kompatibilný s JSON. Hash musí obsahovať `resourceType` a mal by obsahovať logické `id`, ktoré sa aktualizuje.\n\n**Príklad**: `{\"resourceType\": \"Patient\", \"id\": \"example\", \"active\": True}`"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "FHIR resource type to update",
+          "message": "Typ zdroja FHIR na aktualizáciu"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.dXBkYXRlLXJlc291cmNl.short_desc": {
+          "source": "Update a FHIR resource",
+          "message": "Aktualizovať zdroj FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.desc": {
+          "source": "Validate a code by delegating to a FHIR terminology endpoint. The `path` value is a relative CodeSystem or ValueSet path such as `CodeSystem/example`.",
+          "message": "Overiť kód delegovaním na koncový bod terminológie FHIR. Hodnota `path` je relatívna cesta CodeSystem alebo ValueSet, ako napríklad `CodeSystem/example`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.display_name": {
+          "source": "Validate Code",
+          "message": "Overiť kód"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.desc": {
+          "source": "Relative FHIR path to a CodeSystem or ValueSet endpoint",
+          "message": "Relatívna cesta FHIR ku koncovému bodu CodeSystem alebo ValueSet"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGF0aA.short_desc": {
+          "source": "CodeSystem or ValueSet path",
+          "message": "Cesta CodeSystem alebo ValueSet"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.desc": {
+          "source": "FHIR `$validate-code` operation parameters as query parameters. Keys are operation parameter names accepted by the server.\n\n**Example**: `{\"code\": \"abc\"}`",
+          "message": "Parametre operácie FHIR `$validate-code` ako parametre dotazu. Kľúče sú názvy parametrov operácie akceptované serverom.\n\n**Príklad**: `{\"code\": \"abc\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.display_name": {
+          "source": "Parameters",
+          "message": "Parametre"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.option.cGFyYW1z.short_desc": {
+          "source": "Operation parameters",
+          "message": "Parametre operácie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtY29kZQ.short_desc": {
+          "source": "Call a terminology $validate-code operation",
+          "message": "Zavolať operáciu terminológie $validate-code"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.desc": {
+          "source": "Validate a FHIR `Bundle` resource by delegating to the server's `$validate` operation.",
+          "message": "Overiť zdroj FHIR `Bundle` delegovaním na operáciu servera `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.display_name": {
+          "source": "Validate Bundle",
+          "message": "Overiť Bundle"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Voliteľné logické ID FHIR pre overenie na úrovni inštancie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Bundle` resource body to validate. The hash must include `resourceType` with the fixed value `Bundle`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Bundle` na overenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Bundle`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtYnVuZGxl.short_desc": {
+          "source": "Validate a FHIR Bundle resource",
+          "message": "Overiť zdroj FHIR Bundle"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.desc": {
+          "source": "Validate a FHIR `Observation` resource by delegating to the server's `$validate` operation.",
+          "message": "Overiť zdroj FHIR `Observation` delegovaním na operáciu servera `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.display_name": {
+          "source": "Validate Observation",
+          "message": "Overiť Observation"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Voliteľné logické ID FHIR pre overenie na úrovni inštancie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Observation` resource body to validate. The hash must include `resourceType` with the fixed value `Observation`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Observation` na overenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Observation`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtb2JzZXJ2YXRpb24.short_desc": {
+          "source": "Validate a FHIR Observation resource",
+          "message": "Overiť zdroj FHIR Observation"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.desc": {
+          "source": "Validate a FHIR `Patient` resource by delegating to the server's `$validate` operation.",
+          "message": "Overiť zdroj FHIR `Patient` delegovaním na operáciu servera `$validate`."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.display_name": {
+          "source": "Validate Patient",
+          "message": "Overiť Patient"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Voliteľné logické ID FHIR pre overenie na úrovni inštancie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR `Patient` resource body to validate. The hash must include `resourceType` with the fixed value `Patient`.\n\n**Example**: `null`",
+          "message": "Telo zdroja FHIR `Patient` na overenie. Hash musí obsahovať `resourceType` s pevnou hodnotou `Patient`.\n\n**Príklad**: `null`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcGF0aWVudA.short_desc": {
+          "source": "Validate a FHIR Patient resource",
+          "message": "Overiť zdroj FHIR Patient"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.desc": {
+          "source": "Validate a FHIR resource by delegating to the server's `$validate` operation. Use `resource_type` and `id` for type-level or instance-level validation.",
+          "message": "Overiť zdroj FHIR delegovaním na operáciu servera `$validate`. Použite `resource_type` a `id` pre overenie na úrovni typu alebo inštancie."
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.display_name": {
+          "source": "Validate Resource",
+          "message": "Overiť zdroj"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.desc": {
+          "source": "Optional FHIR logical ID for instance-level validation",
+          "message": "Voliteľné logické ID FHIR pre overenie na úrovni inštancie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.aWQ.short_desc": {
+          "source": "FHIR logical ID",
+          "message": "Logické ID FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.desc": {
+          "source": "FHIR resource body to validate. The hash must include `resourceType`.\n\n**Example**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`",
+          "message": "Telo zdroja FHIR na overenie. Hash musí obsahovať `resourceType`.\n\n**Príklad**: `{\"resourceType\": \"Patient\", \"id\": \"example\"}`"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.display_name": {
+          "source": "Resource",
+          "message": "Zdroj"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2U.short_desc": {
+          "source": "FHIR resource body",
+          "message": "Telo FHIR zdroja"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.desc": {
+          "source": "Optional FHIR resource type for type-level or instance-level validation",
+          "message": "Voliteľný typ zdroja FHIR pre overenie na úrovni typu alebo inštancie"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.display_name": {
+          "source": "Resource Type",
+          "message": "Typ zdroja"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.option.cmVzb3VyY2VfdHlwZQ.short_desc": {
+          "source": "FHIR resource type",
+          "message": "Typ zdroja FHIR"
+        },
+        "app.RkhJUg.action.dmFsaWRhdGUtcmVzb3VyY2U.short_desc": {
+          "source": "Call the FHIR $validate operation",
+          "message": "Zavolať operáciu FHIR $validate"
+        },
+        "app.RkhJUg.desc": {
+          "source": "Connect to HL7 FHIR R4 JSON servers for healthcare interoperability.\n\nSupported operations:\n- **Metadata**: read `CapabilityStatement` and SMART configuration\n- **Resources**: read, search, paginated search, create, submit transaction/batch Bundles, update, conditional update, patch, delete, and validate resources advertised by the server `CapabilityStatement`\n- **Generated R4 resources**: use typed actions for supported `Patient`, `Observation`, and `Bundle` resources\n- **Terminology**: delegate `$validate-code`, `$lookup`, `$translate`, and `$expand` operations to a FHIR server\n\n**Note**: Generic actions validate resource names against the generated R4 catalog and the server `CapabilityStatement`. Structured metadata is included for `Patient`, `Observation`, and `Bundle`.",
+          "message": "Pripojenie k JSON serverom HL7 FHIR R4 pre interoperabilitu v zdravotníctve.\n\nPodporované operácie:\n- **Metaúdaje**: čítanie `CapabilityStatement` a konfigurácie SMART\n- **Zdroje**: čítanie, vyhľadávanie, stránkované vyhľadávanie, vytváranie, odosielanie transakčných/dávkových modulov Bundle, aktualizácia, podmienená aktualizácia, úprava (patch), odstraňovanie a overovanie zdrojov deklarovaných serverom `CapabilityStatement`\n- **Generované zdroje R4**: použitie typovaných akcií pre podporované zdroje `Patient`, `Observation` a `Bundle`\n- **Terminológia**: delegovanie operácií `$validate-code`, `$lookup`, `$translate` a `$expand` na server FHIR\n\n**Poznámka**: Generické akcie overujú názvy zdrojov voči generovanému katalógu R4 a serveru `CapabilityStatement`. Štruktúrované metaúdaje sú zahrnuté pre `Patient`, `Observation` a `Bundle`."
+        },
+        "app.RkhJUg.display_name": {
+          "source": "FHIR R4",
+          "message": "FHIR R4"
+        },
+        "app.RkhJUg.short_desc": {
+          "source": "FHIR R4 JSON server integration",
+          "message": "Integrácia s JSON serverom FHIR R4"
+        }
+      }
+    }
+  }
+}

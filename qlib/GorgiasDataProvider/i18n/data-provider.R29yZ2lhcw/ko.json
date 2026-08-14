@@ -1,0 +1,2125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Add a new message (reply or internal note) to a Gorgias ticket",
+          "message": "Gorgias 티켓에 새 메시지(답장 또는 내부 메모) 추가"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create a Message",
+          "message": "메시지 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "메시지의 채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "메시지 채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "List of file attachments for the message. Each attachment requires a `url` pointing to the file location, and optionally `name`, `content_type`, `size`, and `public` fields",
+          "message": "메시지의 첨부 파일 목록입니다. 각 첨부 파일에는 파일 위치를 가리키는 `url` 필드가 필요하며, 선택적으로 `name`, `content_type`, `size`, `public` 필드를 포함할 수 있습니다."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "첨부 파일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "첨부 파일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the message. Provide either `body_text` or `body_html`",
+          "message": "메시지의 일반 텍스트 본문입니다. `body_text` 또는 `body_html` 중 하나를 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "본문 텍스트"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "일반 텍스트 본문"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the message. Provide either `body_text` or `body_html`",
+          "message": "메시지의 HTML 본문입니다. `body_text` 또는 `body_html` 중 하나를 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "본문 HTML"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML 본문"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "메시지가 상담원(`True`) 또는 고객(`False`)으로부터 온 것인지 여부"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "상담원 발신"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "상담원 발신 여부"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "메시지의 발신자입니다. 상담원의 경우 `id`, 고객의 경우 `email`을 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "발신자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "메시지 발신자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the message (for email channel)",
+          "message": "메시지 제목(이메일 채널용)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "메시지 제목"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "메시지의 수신자입니다. 상담원의 경우 `id`, 고객의 경우 `email`을 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "수신자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "메시지 수신자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to add the message to",
+          "message": "메시지를 추가할 티켓의 ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to add a message to",
+          "message": "메시지를 추가할 티켓"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "헬프데스크"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "메시지가 생성된 방식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "경로"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "메시지 소스"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Add a message to a ticket",
+          "message": "티켓에 메시지 추가"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new Gorgias customer profile",
+          "message": "새 Gorgias 고객 프로필 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "고객 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "고객의 커뮤니케이션 채널 목록입니다. 각 채널에는 `address`, `type` 및 선택적 `preferred` 플래그가 있습니다."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "커뮤니케이션 채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "고객의 기본 이메일 주소"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "고객 이메일 주소"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer from an integrated system",
+          "message": "통합 시스템에서의 고객 외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "고객의 이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "고객 이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "고객의 선호 언어(ISO 639-1 코드)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "선호 언어"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "고객의 성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "고객 성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "고객에 대한 내부 메모"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "메모"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "고객의 전체 이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "전체 이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer (e.g., `America/New_York`)",
+          "message": "고객의 표준 시간대(예: `America/New_York`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "시간대"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "고객 표준 시간대"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "새 고객 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new Gorgias tag for organizing tickets",
+          "message": "티켓 정리를 위한 새 Gorgias 태그 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "태그 만들기"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "태그의 시각적 장식 설정"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "장식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "시각적 장식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "태그에 대한 간단한 설명"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "태그 설명"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag (min 1, max 256 characters)",
+          "message": "태그 이름(최소 1자, 최대 256자)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "태그 이름"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "새 태그 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.desc": {
+          "source": "Create a new Gorgias support ticket with messages, channel, and optional assignment",
+          "message": "메시지, 채널 및 선택적 담당자 배정이 포함된 새 Gorgias 지원 티켓 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
+          "source": "Create a Ticket",
+          "message": "티켓 생성"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the ticket (e.g., `email`, `chat`, `api`)",
+          "message": "티켓의 채널(예: `email`, `chat`, `api`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.short_desc": {
+          "source": "Communication channel",
+          "message": "커뮤니케이션 채널"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "The customer for this ticket. Provide `id` to reference an existing customer, or `email` to match or create by email address",
+          "message": "이 티켓의 고객입니다. 기존 고객을 참조하려면 `id`을 입력하고, 이메일 주소로 일치시키거나 생성하려면 `email`을 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "고객 데이터"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign to this ticket",
+          "message": "이 티켓에 할당할 팀"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "담당 팀"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "할당된 팀"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign to this ticket",
+          "message": "이 티켓에 할당할 상담원"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "담당 사용자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "할당된 상담원"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "티켓의 외부 식별자(최대 255자)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the ticket content",
+          "message": "티켓 콘텐츠의 언어"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Ticket language",
+          "message": "티켓 언어"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.desc": {
+          "source": "List of initial messages for the ticket. Required field. Each message must have `channel`, `from_agent`, and `via`. Provide either `body_text` or `body_html` for message content. Up to 500 messages per ticket",
+          "message": "티켓의 초기 메시지 목록입니다. 필수 필드입니다. 각 메시지에는 `channel`, `from_agent` 및 `via`이(가) 있어야 합니다. 메시지 콘텐츠로 `body_text` 또는 `body_html` 중 하나를 제공하세요. 티켓당 최대 500개의 메시지"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.short_desc": {
+          "source": "Initial messages",
+          "message": "초기 메시지"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam. Default: `False`",
+          "message": "티켓을 스팸으로 표시할지 여부입니다. 기본값: `False`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "스팸"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "스팸으로 표시"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "닫힘"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The initial status of the ticket",
+          "message": "티켓의 초기 상태"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "티켓 상태"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the ticket (max 998 characters)",
+          "message": "티켓의 제목 줄(최대 998자)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject line",
+          "message": "티켓 제목"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "보통"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "긴급"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The priority level of the ticket",
+          "message": "티켓의 우선순위 수준"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "티켓 우선순위"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to apply to the ticket. Each tag must have a `name` field",
+          "message": "티켓에 적용할 태그 목록입니다. 각 태그에는 `name` 필드가 있어야 합니다"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "태그"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to apply",
+          "message": "적용할 태그"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "헬프데스크"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.desc": {
+          "source": "How the ticket was created. Required field",
+          "message": "티켓 생성 방법입니다. 필수 필드입니다"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "경로"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.short_desc": {
+          "source": "Ticket source",
+          "message": "티켓 소스"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
+          "source": "Create a new support ticket",
+          "message": "새 지원 티켓 생성"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a single message from a Gorgias ticket",
+          "message": "Gorgias 티켓에서 단일 메시지 조회"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get a Message",
+          "message": "메시지 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID",
+          "message": "메시지 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "메시지가 포함된 티켓"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a single message by ID",
+          "message": "ID로 단일 메시지 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single Gorgias customer by their ID",
+          "message": "ID로 단일 Gorgias 고객 조회"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "고객 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "ID로 단일 고객 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single Gorgias tag by its ID",
+          "message": "ID로 단일 Gorgias 태그 조회"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "태그 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "태그 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID로 단일 태그 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.desc": {
+          "source": "Retrieve a single Gorgias ticket by its ID",
+          "message": "ID로 단일 Gorgias 티켓 조회"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
+          "source": "Get a Ticket",
+          "message": "티켓 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
+          "source": "Get a single ticket by ID",
+          "message": "ID로 단일 티켓 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single Gorgias user (agent) by their ID",
+          "message": "ID로 단일 Gorgias 사용자(상담원) 조회"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "사용자 가져오기"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "사용자 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "사용자 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "ID로 단일 사용자 가져오기"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently delete a message from a Gorgias ticket",
+          "message": "Gorgias 티켓에서 메시지 영구 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "메시지 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to delete",
+          "message": "삭제할 메시지의 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to delete",
+          "message": "삭제할 메시지"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to delete",
+          "message": "삭제할 메시지가 포함된 티켓의 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "메시지가 포함된 티켓"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Delete an existing message",
+          "message": "기존 메시지 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Permanently delete a Gorgias customer",
+          "message": "Gorgias 고객 영구 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "고객 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "삭제할 고객의 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "삭제할 고객"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete an existing customer",
+          "message": "기존 고객 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Permanently delete a Gorgias tag",
+          "message": "Gorgias 태그 영구 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "태그 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to delete",
+          "message": "삭제할 태그의 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "삭제할 태그"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete an existing tag",
+          "message": "기존 태그 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.desc": {
+          "source": "Permanently delete a Gorgias ticket",
+          "message": "Gorgias 티켓 영구 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
+          "source": "Delete a Ticket",
+          "message": "티켓 삭제"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to delete",
+          "message": "삭제할 티켓의 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to delete",
+          "message": "삭제할 티켓"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
+          "source": "Delete an existing ticket",
+          "message": "기존 티켓 삭제"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.desc": {
+          "source": "List all Gorgias tags",
+          "message": "모든 Gorgias 태그 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "태그 목록"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Get a specific tag",
+          "message": "특정 태그 가져오기"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags",
+          "message": "태그 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.desc": {
+          "source": "List Gorgias support tickets with optional filtering by status, assignee, customer, and channel",
+          "message": "상태, 담당자, 고객 및 채널별 선택적 필터링을 통해 Gorgias 지원 티켓 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
+          "source": "List Tickets",
+          "message": "티켓 목록"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.short_desc": {
+          "source": "Filter by channel",
+          "message": "채널별 필터링"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "고객별 필터링"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.display_name": {
+          "source": "Assignee User ID",
+          "message": "담당 사용자 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned agent",
+          "message": "할당된 상담원별로 필터링"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "닫힘"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "상태별 필터"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.short_desc": {
+          "source": "Get a specific ticket",
+          "message": "특정 티켓 가져오기"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
+          "source": "List support tickets",
+          "message": "지원 티켓 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all Gorgias helpdesk agents (users)",
+          "message": "모든 Gorgias 헬프데스크 상담원(사용자) 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "사용자 목록"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "사용자 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.short_desc": {
+          "source": "Get a specific user",
+          "message": "특정 사용자 가져오기"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List helpdesk agents",
+          "message": "헬프데스크 상담원 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List Gorgias customers with optional filtering",
+          "message": "선택적 필터링을 통해 Gorgias 고객 나열"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "고객 목록 조회"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Get a specific customer",
+          "message": "특정 고객 가져오기"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "이메일로 필터링"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List customers",
+          "message": "고객 목록 조회"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.desc": {
+          "source": "List all messages for a specific Gorgias ticket",
+          "message": "특정 Gorgias 티켓의 모든 메시지 목록 조회"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
+          "source": "List Messages",
+          "message": "메시지 목록 조회"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Get a specific message",
+          "message": "특정 메시지 가져오기"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to list messages for",
+          "message": "메시지 목록을 조회할 티켓"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
+          "source": "List messages for a ticket",
+          "message": "티켓의 메시지 목록 조회"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gorgias** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Gorgias**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gorgias",
+          "message": "Gorgias에 사용자 정의 API 호출 수행"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.desc": {
+          "source": "Fires when a new ticket is created in Gorgias",
+          "message": "Gorgias에서 새 티켓이 생성될 때 실행됩니다"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
+          "source": "New Ticket",
+          "message": "새 티켓"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
+          "source": "Trigger when a new ticket is created",
+          "message": "새 티켓이 생성될 때 트리거"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.desc": {
+          "source": "Fires when a ticket is modified in Gorgias",
+          "message": "Gorgias에서 티켓이 수정될 때 실행됩니다"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
+          "source": "Ticket Updated",
+          "message": "티켓 업데이트됨"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
+          "source": "Trigger when a ticket is updated",
+          "message": "티켓이 업데이트될 때 트리거"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.desc": {
+          "source": "Update the body, channel, or other properties of a message on a ticket",
+          "message": "티켓에 있는 메시지의 본문, 채널 또는 기타 속성 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Update a Message",
+          "message": "메시지 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "메시지의 채널"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "메시지 채널"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "Updated list of file attachments for the message",
+          "message": "메시지에 대한 업데이트된 첨부 파일 목록"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "첨부 파일"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "첨부 파일"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The updated plain text body of the message",
+          "message": "메시지의 업데이트된 일반 텍스트 본문"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "본문 텍스트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "일반 텍스트 본문"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The updated HTML body of the message",
+          "message": "메시지의 업데이트된 HTML 본문"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "본문 HTML"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML 본문"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the message",
+          "message": "메시지의 외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "메시지가 상담원(`True`) 또는 고객(`False`)으로부터 온 것인지 여부"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "상담원 발신"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "상담원 발신 여부"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to update",
+          "message": "업데이트할 메시지의 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to update",
+          "message": "업데이트할 메시지"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "메시지의 발신자입니다. 상담원의 경우 `id`, 고객의 경우 `email`을 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "발신자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "메시지 발신자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The updated subject line of the message",
+          "message": "메시지의 업데이트된 제목"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "메시지 제목"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "메시지의 수신자입니다. 상담원의 경우 `id`, 고객의 경우 `email`을 입력하세요."
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "수신자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "메시지 수신자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to update",
+          "message": "업데이트할 메시지가 포함된 티켓의 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "메시지가 포함된 티켓"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "채팅"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "문의 양식"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "고객센터"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "헬프데스크"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "메시지가 생성된 방식"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "경로"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "메시지 소스"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Update an existing message",
+          "message": "기존 메시지 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the name, email, or other properties of a customer",
+          "message": "고객의 이름, 이메일 또는 기타 속성 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "고객 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "고객의 커뮤니케이션 채널 목록입니다. 각 채널에는 `address`, `type` 및 선택적 `preferred` 플래그가 있습니다."
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "채널"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "커뮤니케이션 채널"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "업데이트할 고객의 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "업데이트할 고객"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "고객의 기본 이메일 주소"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "고객 이메일 주소"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer",
+          "message": "고객의 외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "고객의 이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "고객 이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "고객의 선호 언어(ISO 639-1 코드)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "선호 언어"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "고객의 성"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "고객 성"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "고객에 대한 내부 메모"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "메모"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "내부 메모"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "고객의 전체 이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "전체 이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer",
+          "message": "고객의 표준 시간대"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "시간대"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "고객 표준 시간대"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "기존 고객 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name or decoration of a tag",
+          "message": "태그의 이름 또는 장식 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "태그 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "태그의 시각적 장식 설정"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "장식"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "시각적 장식"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "태그에 대한 간단한 설명"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "태그 설명"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag (min 1, max 256 characters)",
+          "message": "태그의 새 이름(최소 1자, 최대 256자)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "태그 이름"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to update",
+          "message": "업데이트할 태그의 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "업데이트할 태그"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "기존 태그 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.desc": {
+          "source": "Update the status, priority, assignment, or other properties of a ticket",
+          "message": "티켓의 상태, 우선순위, 담당자 또는 기타 속성 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
+          "source": "Update a Ticket",
+          "message": "티켓 업데이트"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "Update the customer associated with this ticket. Provide `id` to reference an existing customer, or `email` to match by email address",
+          "message": "이 티켓과 연결된 고객을 업데이트합니다. 기존 고객을 참조하려면 `id`을(를) 제공하고, 이메일 주소로 일치시키려면 `email`을(를) 제공하세요"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "고객 데이터"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign, or `NOTHING` to unassign",
+          "message": "지정할 팀, 또는 할당을 취소하려면 `NOTHING`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "담당 팀"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "할당된 팀"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign, or `NOTHING` to unassign",
+          "message": "지정할 상담원, 또는 할당을 취소하려면 `NOTHING`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "담당 사용자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "할당된 상담원"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "티켓의 외부 식별자(최대 255자)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "외부 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "외부 식별자"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.desc": {
+          "source": "ISO 8601 timestamp until which to snooze the ticket",
+          "message": "티켓을 스누즈할 ISO 8601 타임스탬프"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.display_name": {
+          "source": "Snooze Until",
+          "message": "스누즈 기한"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.short_desc": {
+          "source": "Snooze datetime",
+          "message": "스누즈 일시"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam",
+          "message": "티켓을 스팸으로 표시할지 여부"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "스팸"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "스팸으로 표시"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "열림"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "닫힘"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The new status of the ticket",
+          "message": "티켓의 새 상태"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "티켓 상태"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The new subject line (max 998 characters)",
+          "message": "새 제목(최대 998자)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject",
+          "message": "티켓 제목"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "보통"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "긴급"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority level",
+          "message": "새 우선순위 수준"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "티켓 우선순위"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to set on the ticket. Replaces existing tags. Each tag must have a `name` field",
+          "message": "티켓에 설정할 태그 목록입니다. 기존 태그를 대체합니다. 각 태그에는 `name` 필드가 있어야 합니다"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "태그"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to set",
+          "message": "설정할 태그"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to update",
+          "message": "업데이트할 티켓의 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "티켓 ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to update",
+          "message": "업데이트할 티켓"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
+          "source": "Update an existing ticket",
+          "message": "기존 티켓 업데이트"
+        },
+        "app.R29yZ2lhcw.desc": {
+          "source": "Gorgias is a customer support and helpdesk platform for e-commerce and SaaS businesses.\n\nThis integration supports managing tickets, customers, tags, messages, and monitoring ticket events.",
+          "message": "Gorgias는 전자상거래 및 SaaS 비즈니스를 위한 고객 지원 및 헬프데스크 플랫폼입니다.\n\n이 연동은 티켓, 고객, 태그, 메시지 관리 및 티켓 이벤트 모니터링을 지원합니다."
+        },
+        "app.R29yZ2lhcw.display_name": {
+          "source": "Gorgias",
+          "message": "Gorgias"
+        },
+        "app.R29yZ2lhcw.short_desc": {
+          "source": "Gorgias customer support and helpdesk platform",
+          "message": "Gorgias 고객 지원 및 헬프데스크 플랫폼"
+        }
+      }
+    }
+  }
+}

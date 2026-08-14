@@ -1,0 +1,1269 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.desc": {
+          "source": "Concatenates up to 32 objects into a single new object, entirely within Google Cloud Storage and without transferring any content through the caller.\n\nEvery source and the destination must be in the same bucket. The destination may be one of the sources, which is how content is appended to an existing object. Set `content_type` explicitly: Google Cloud Storage does not infer it from the sources.",
+          "message": "Zlúči až 32 objektov do jedného nového objektu, a to výlučne v rámci úložiska Google Cloud Storage a bez prenosu akéhokoľvek obsahu cez volajúceho.\n\nKaždý zdroj aj cieľ sa musia nachádzať v rovnakom buckete. Cieľ môže byť jedným zo zdrojov, čo predstavuje spôsob pridania obsahu k existujúcemu objektu. Nastavte parameter `content_type` explicitne: Google Cloud Storage ho neodvodzuje zo zdrojov."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
+          "source": "Compose Objects",
+          "message": "Zložiť objekty"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the composed object should have.  Google Cloud Storage does not infer it from the sources, so it should be set explicitly",
+          "message": "Typ MIME, ktorý má zložený objekt mať. Google Cloud Storage ho neodvodzuje zo zdrojov, preto by mal byť nastavený explicitne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the destination",
+          "message": "Typ MIME pre cieľ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket; every source and the destination must be in the same bucket, which is a Google Cloud Storage restriction on compose",
+          "message": "Názov bucketu; každý zdroj aj cieľ sa musia nachádzať v rovnakom buckete, čo je obmedzenie služby Google Cloud Storage pre skladanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the sources and the destination",
+          "message": "Bucket obsahujúci zdroje a cieľ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name of the object the sources are concatenated into, used verbatim; it may be one of the sources, which is how content is appended",
+          "message": "Názov objektu, do ktorého sa zdroje zlučujú, použitý doslovne; môže to byť jeden zo zdrojov, čím sa obsah pripojí"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Názov cieľového objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The object to write the concatenation to",
+          "message": "Objekt, do ktorého sa má zapísať výsledok zlúčenia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the composed object as key/value pairs",
+          "message": "Používateľom definované metaúdaje pre zložený objekt vo forme párov kľúč/hodnota"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Vlastné metaúdaje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the destination",
+          "message": "Používateľom definované metaúdaje pre cieľ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.desc": {
+          "source": "The names of the objects to concatenate, in the order they should appear; between 1 and 32 names, used verbatim",
+          "message": "Názvy objektov na zlúčenie v poradí, v akom sa majú objaviť; 1 až 32 názvov, použité doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.display_name": {
+          "source": "Source Object Names",
+          "message": "Názvy zdrojových objektov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.short_desc": {
+          "source": "The objects to concatenate, in order",
+          "message": "Objekty na zlúčenie v požadovanom poradí"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
+          "source": "Concatenate objects into one object",
+          "message": "Zlúčiť objekty do jedného objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object to another name or bucket entirely within Google Cloud Storage, without transferring the content through the caller.\n\nHandles an object of any size and a copy between different locations, storage classes, or encryption keys. Copying an object onto itself with a new `destination_storage_class` is how an object's storage class is changed.",
+          "message": "Skopíruje objekt pod iným názvom alebo do iného bucketu výlučne v rámci úložiska Google Cloud Storage bez prenosu obsahu cez volajúceho.\n\nSpracuje objekt akejkoľvek veľkosti a kopírovanie medzi rôznymi lokalitami, triedami úložiska alebo šifrovacími kľúčmi. Skopírovanie objektu na samého seba s novou hodnotou `destination_storage_class` slúži na zmenu triedy úložiska objektu."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "Skopírovať objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the copy should have; when omitted the source's is kept",
+          "message": "Typ MIME, ktorý má kópia mať; ak sa vynechá, zachová sa typ zo zdroja"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the copy",
+          "message": "Typ MIME pre kópiu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.desc": {
+          "source": "The name of the bucket to copy the object into; may be the same as the source bucket",
+          "message": "Názov bucketu, do ktorého sa má objekt skopírovať; môže byť rovnaký ako zdrojový bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.display_name": {
+          "source": "Destination Bucket",
+          "message": "Cieľový bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "Bucket, do ktorého sa má objekt skopírovať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name the copy should have, used verbatim",
+          "message": "Názov, ktorý má kópia mať, použitý doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Názov cieľového objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The name to copy the object to",
+          "message": "Názov, pod ktorým sa má objekt skopírovať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class the copy should have: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the destination bucket's default is used.  Rewriting an object onto itself with a new storage class is how an object's class is changed",
+          "message": "Trieda úložiska, ktorú má kópia mať: `STANDARD`, `NEARLINE`, `COLDLINE` alebo `ARCHIVE`. Ak sa vynechá, použije sa predvolená hodnota cieľového bucketu. Prepísanie objektu na samého seba s novou triedou úložiska slúži na zmenu triedy objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Destination Storage Class",
+          "message": "Cieľová trieda úložiska"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "Trieda úložiska pre kópiu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the copy as key/value pairs; when omitted the source's metadata is kept",
+          "message": "Používateľom definované metaúdaje pre kópiu vo forme párov kľúč/hodnota; ak sa vynechajú, zachovajú sa metaúdaje zo zdroja"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Vlastné metaúdaje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the copy",
+          "message": "Používateľom definované metaúdaje pre kópiu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.desc": {
+          "source": "The name of the object to copy, used verbatim",
+          "message": "Názov objektu na kopírovanie, použitý doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.display_name": {
+          "source": "Source Object Name",
+          "message": "Názov zdrojového objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.short_desc": {
+          "source": "The object to copy",
+          "message": "Objekt na kopírovanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The name of the bucket holding the object to copy",
+          "message": "Názov bucketu, ktorý obsahuje objekt na kopírovanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Zdrojový bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the source object",
+          "message": "Bucket obsahujúci zdrojový objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.desc": {
+          "source": "The content generation of the source to copy; when omitted the live version is copied",
+          "message": "Generácia obsahu zdroja, ktorá sa má skopírovať; ak sa vynechá, skopíruje sa aktuálna verzia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.display_name": {
+          "source": "Source Generation",
+          "message": "Zdrojová generácia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.short_desc": {
+          "source": "A specific source content generation to copy",
+          "message": "Konkrétna generácia zdrojového obsahu na skopírovanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object without downloading it",
+          "message": "Skopírovať objekt bez jeho sťahovania"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.desc": {
+          "source": "Creates a V4 signed URL granting access to a single object for a single HTTP method until it expires. Anyone holding the URL can use it with no credentials, which is how content is handed to a browser or to a third party with no Google account.\n\nSigning is performed by the IAM Service Account Credentials API, so it also works when the credential is Application Default Credentials or a workload identity and there is no private key on the host. The caller needs the `iam.serviceAccounts.signBlob` permission on the signing service account (the `roles/iam.serviceAccountTokenCreator` role) and that API must be enabled on the project.",
+          "message": "Vytvorí podpísanú adresu URL verzie V4, ktorá udeľuje prístup k jednému objektu pre jednu metódu HTTP až do vypršania platnosti. Ktokoľvek s touto adresou URL ju môže použiť bez poverení, čo slúži na poskytnutie obsahu prehliadaču alebo tretej strane bez účtu Google.\n\nPodpisovanie vykonáva rozhranie IAM Service Account Credentials API, takže to funguje aj vtedy, keď sú povereniami Application Default Credentials alebo identita workloadu a na hostiteľovi nie je žiadny súkromný kľúč. Volajúci potrebuje oprávnenie `iam.serviceAccounts.signBlob` na podpisujúcom servisnom účte (rola `roles/iam.serviceAccountTokenCreator`) a toto API musí byť v projekte povolené."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
+          "source": "Create Signed URL",
+          "message": "Vytvoriť podpísanú URL"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.desc": {
+          "source": "The name of the bucket the signed URL should address",
+          "message": "Názov bucketu, na ktorý má podpísaná adresa URL odkazovať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Bucket obsahujúci objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.desc": {
+          "source": "The lifetime of the signed URL in seconds; Google Cloud Storage allows at most 604800 (7 days) for a V4 signature",
+          "message": "Životnosť podpísanej adresy URL v sekundách; Google Cloud Storage povoľuje najviac 604800 (7 dní) pre podpis V4"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
+          "source": "Expires In (Seconds)",
+          "message": "Platnosť vyprší o (sekundy)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL stays valid",
+          "message": "Ako dlho zostáva adresa URL platná"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.desc": {
+          "source": "The name of the object the signed URL should address, used verbatim",
+          "message": "Názov objektu, na ktorý má podpísaná adresa URL odkazovať, použitý doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Grants deleting the object",
+          "message": "Udeľuje povolenie na vymazanie objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Grants deleting the object",
+          "message": "Udeľuje povolenie na vymazanie objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "Grants reading the object's content",
+          "message": "Udeľuje povolenie na čítanie obsahu objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET (download)",
+          "message": "GET (stiahnutie)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "Grants reading the object",
+          "message": "Udeľuje povolenie na čítanie objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "Grants reading the object's response headers without its content",
+          "message": "Udeľuje povolenie na čítanie hlavičiek odpovede objektu bez jeho obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD (metadata)",
+          "message": "HEAD (metaúdaje)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "Grants reading the object's metadata",
+          "message": "Udeľuje povolenie na čítanie metaúdajov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "Grants writing the object's content",
+          "message": "Udeľuje povolenie na zápis obsahu objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT (upload)",
+          "message": "PUT (nahranie)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "Grants writing the object",
+          "message": "Udeľuje povolenie na zápis objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.desc": {
+          "source": "The HTTP method the URL should be valid for.  A URL signed for `GET` grants read access only; sign for `PUT` to grant an upload",
+          "message": "Metóda HTTP, pre ktorú má byť adresa URL platná. Adresa URL podpísaná pre `GET` udeľuje iba prístup na čítanie; podpis pre `PUT` udelí prístup na nahranie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to sign for",
+          "message": "Metóda HTTP na podpísanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.desc": {
+          "source": "The service account whose key should sign the URL.  When omitted the connection's `gcp_signer_email` is used, and failing that the `client_email` from the service-account key",
+          "message": "Servisný účet, ktorého kľúč má podpísať adresu URL. Ak sa vynechá, použije sa `gcp_signer_email` pripojenia, a ak to zlyhá, hodnota `client_email` z kľúča servisného účtu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.display_name": {
+          "source": "Signer Email",
+          "message": "E-mail podpisovateľa"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.short_desc": {
+          "source": "The service account to sign with",
+          "message": "Servisný účet na podpísanie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {
+          "source": "Create a time-limited URL granting access to one object",
+          "message": "Vytvoriť časovo obmedzenú adresu URL udeľujúcu prístup k jednému objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves an object's metadata — size, content type, checksums, storage class, generation, and user-defined metadata — without transferring its content.",
+          "message": "Získa metaúdaje objektu – veľkosť, typ obsahu, kontrolné súčty, triedu úložiska, generáciu a používateľom definované metaúdaje – bez prenosu jeho obsahu."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Object Metadata",
+          "message": "Získať metaúdaje objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Názov bucketu obsahujúceho objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Bucket obsahujúci objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to retrieve; when omitted the live version is used",
+          "message": "Generácia obsahu, ktorá sa má načítať; ak je vynechaná, použije sa živá verzia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generácia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Konkrétna generácia obsahu, na ktorú sa má odkázať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object.  Object names are a flat key space in which `/` is an ordinary character, so the value is used verbatim: it is not split, normalized, or resolved against anything",
+          "message": "Názov objektu. Názvy objektov predstavujú plochý priestor kľúčov, v ktorom je `/` bežným znakom, takže hodnota sa použije doslovne: nerozdeľuje sa, nenormalizuje ani sa voči ničomu nevyhodnocuje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get an object's metadata without its content",
+          "message": "Získať metadáta objektu bez jeho obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.desc": {
+          "source": "Retrieves a bucket's metadata: its location, storage class, versioning and uniform bucket-level access settings, labels, and timestamps.",
+          "message": "Získa metadáta bucketu: jeho umiestnenie, triedu úložiska, nastavenia verziovania a jednotného prístupu na úrovni bucketu, štítky a časové pečiatky."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
+          "source": "Get Bucket",
+          "message": "Získať bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose metadata should be retrieved",
+          "message": "Názov bucketu, ktorého metadáta sa majú načítať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to retrieve",
+          "message": "Bucket, ktorý sa má načítať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
+          "source": "Get a bucket's metadata",
+          "message": "Získať metadáta bucketu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.desc": {
+          "source": "Downloads an object's content and returns it as raw bytes in `content`, together with the content type, size, and the checksums Google Cloud Storage reports.\n\n`object` is used verbatim. Set `generation` to download a specific version of an object in a bucket with versioning enabled.",
+          "message": "Stiahne obsah objektu a vráti ho ako nespracované bajty v `content` spolu s typom obsahu, veľkosťou a kontrolnými súčtami, ktoré hlási Google Cloud Storage.\n\n`object` sa použije doslovne. Nastavte `generation` na stiahnutie konkrétnej verzie objektu v buckete s povoleným verziovaním."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
+          "source": "Download Object",
+          "message": "Stiahnuť objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Názov bucketu obsahujúceho objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Bucket obsahujúci objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to download; when omitted the live version is used",
+          "message": "Generácia obsahu, ktorá sa má stiahnuť; ak je vynechaná, použije sa živá verzia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generácia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to download",
+          "message": "Konkrétna generácia obsahu na stiahnutie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.desc": {
+          "source": "The name of the object to download, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so the value is not split or normalized",
+          "message": "Názov objektu na stiahnutie použitý doslovne: `/` je bežný znak v názve objektu v Google Cloud Storage, takže hodnota sa nerozdeľuje ani nenormalizuje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
+          "source": "Download an object's content",
+          "message": "Stiahnuť obsah objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object.\n\nIn a bucket with versioning enabled, deleting without a `generation` removes the live version and retains the earlier generations; naming a `generation` removes that version permanently.",
+          "message": "Odstráni objekt.\n\nV buckete s povoleným verziovaním odstránenie bez `generation` odstráni živú verziu a zachová staršie generácie; zadaním `generation` sa táto verzia odstráni natrvalo."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Odstrániť objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Názov bucketu obsahujúceho objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Bucket obsahujúci objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to delete; when omitted the live version is deleted.  In a bucket with versioning enabled, deleting the live version leaves the earlier generations in place, and a specific generation must be named to remove it permanently",
+          "message": "Generácia obsahu, ktorá sa má odstrániť; ak je vynechaná, odstráni sa živá verzia. V buckete s povoleným verziovaním odstránenie živej verzie ponechá staršie generácie a na jej trvalé odstránenie je potrebné uviesť konkrétnu generáciu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generácia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to delete",
+          "message": "Konkrétna generácia obsahu na odstránenie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name of the object to delete, used verbatim",
+          "message": "Názov objektu na odstránenie použitý doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "Odstrániť objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists the buckets in the connection's GCP project.\n\nA listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Zobrazí zoznam bucketov v projekte GCP daného pripojenia.\n\nZoznam je obmedzený na `1000` bucketov; ak sa vráti `next_page_token`, pošlite ho späť v `page_token` na načítanie nasledujúcej stránky."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "Zoznam bucketov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of buckets to return in one page (max `1000`)",
+          "message": "Maximálny počet bucketov, ktoré sa majú vrátiť na jednej stránke (max `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum buckets to return per page",
+          "message": "Maximálny počet bucketov na vrátenie na stránku"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "`next_page_token` z predchádzajúceho volania na načítanie nasledujúcej stránky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Token identifikujúci stránku, ktorá sa má vrátiť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Vypísať iba buckety, ktorých názov sa začína týmto reťazcom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Titul pred menom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.short_desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Vypísať iba buckety, ktorých názov sa začína týmto reťazcom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets in the project",
+          "message": "Zoznam bucketov v projekte"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nObject names are a flat key space, so `prefix` is how a subset is selected; it is matched literally. Set `delimiter` to `/` as well to list one level at a time, which makes a bucket browsable as though it had folders — the rolled-up names are returned in `prefixes` and are not objects.\n\nA listing is capped at `1000` objects; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Zobrazí zoznam objektov v buckete.\n\nNázvy objektov tvoria plochý priestor kľúčov, takže podmnožina sa vyberá pomocou `prefix`; porovnáva sa doslovne. Nastavte tiež `delimiter` na `/` na zobrazenie po jednej úrovni, čo umožňuje prehľadávať bucket, akoby obsahoval priečinky — zbalené názvy sa vrátia v `prefixes` a nie sú objektmi.\n\nZoznam je obmedzený na `1000` objektov; ak sa vráti `next_page_token`, pošlite ho späť v `page_token` na načítanie nasledujúcej stránky."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "Zoznam objektov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose objects should be listed",
+          "message": "Názov bucketu, ktorého objekty sa majú zobraziť v zozname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to list",
+          "message": "Bucket na zobrazenie zoznamu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Objects whose name contains this string after `prefix` are omitted from `objects` and rolled up into `prefixes` instead.  Setting it to `/` together with `prefix` makes a bucket browsable one level at a time, as though it had folders — which it does not",
+          "message": "Objekty, ktorých názov obsahuje tento reťazec za `prefix`, sú vynechané z `objects` a namiesto toho sú zbalené do `prefixes`. Nastavenie na `/` spolu s `prefix` umožňuje prehľadávať bucket po jednej úrovni, akoby obsahoval priečinky — ktoré v skutočnosti nemá"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Oddeľovač"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Roll up names containing this delimiter into common prefixes",
+          "message": "Zbaliť názvy obsahujúce tento oddeľovač do spoločných predpôn"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.desc": {
+          "source": "List only objects whose name is lexicographically less than this value",
+          "message": "Vypísať iba objekty, ktorých názov je lexikograficky menší ako táto hodnota"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.display_name": {
+          "source": "End Offset",
+          "message": "Koncový posun"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.short_desc": {
+          "source": "List only objects before this name",
+          "message": "Vypísať iba objekty pred týmto názvom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.desc": {
+          "source": "When set, objects whose name ends with `delimiter` are returned in `objects` as well as being rolled up into `prefixes`; this is how the zero-byte folder placeholder objects written by some tools become visible",
+          "message": "Ak je nastavené, objekty, ktorých názov sa končí na `delimiter`, sa vrátia v `objects` a zároveň sa zbalia do `prefixes`; takto sa zviditeľnia nulové zástupné objekty priečinkov zapisované niektorými nástrojmi"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.display_name": {
+          "source": "Include Trailing Delimiter",
+          "message": "Zahrnúť koncový oddeľovač"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.short_desc": {
+          "source": "Also return objects whose name ends with the delimiter",
+          "message": "Vrátiť aj objekty, ktorých názov sa končí oddeľovačom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of objects to return in one page (max `1000`)",
+          "message": "Maximálny počet objektov, ktoré sa majú vrátiť na jednej stránke (max `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum objects to return per page",
+          "message": "Maximálny počet objektov na vrátenie na stránku"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.desc": {
+          "source": "List only objects whose name is lexicographically greater than or equal to this value",
+          "message": "Vypísať iba objekty, ktorých názov je lexikograficky väčší alebo rovný tejto hodnote"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.display_name": {
+          "source": "Start Offset",
+          "message": "Počiatočný posun"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.short_desc": {
+          "source": "List only objects at or after this name",
+          "message": "Vypísať iba objekty od tohto názvu vrátane"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "`next_page_token` z predchádzajúceho volania na načítanie nasledujúcej stránky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Token identifikujúci stránku, ktorá sa má vrátiť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "List only objects whose name begins with this string.  Because object names are a flat key space, a prefix is how a subset is selected; it is matched literally and byte for byte",
+          "message": "Vypísať iba objekty, ktorých názov sa začína týmto reťazcom. Keďže názvy objektov tvoria plochý priestor kľúčov, predpona slúži na výber podmnožiny; porovnáva sa doslovne a bajt po bajte"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Titul pred menom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "List only objects whose name begins with this string",
+          "message": "Vypísať iba objekty, ktorých názov sa začína týmto reťazcom"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.desc": {
+          "source": "Include noncurrent generations of objects, which exist only in a bucket with versioning enabled; each generation is returned as a separate entry",
+          "message": "Zahrnúť neaktuálne generácie objektov, ktoré existujú iba v buckete s povoleným verziovaním; každá generácia sa vráti ako samostatná položka"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.display_name": {
+          "source": "Include Versions",
+          "message": "Zahrnúť verzie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.short_desc": {
+          "source": "Include noncurrent object generations",
+          "message": "Zahrnúť neaktuálne generácie objektov"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "Vypísať objekty v buckete"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Cloud Storage** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Google Cloud Storage** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API daného pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú v tejto aplikácii sprístupnené ako plnohodnotné akcie."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Cloud Storage",
+          "message": "Vykonať vlastné volanie API do Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Updates an object's metadata in place, without re-uploading its content: the content type, the cache and content headers served with it, a custom timestamp, and user-defined metadata.\n\nThe update is a merge, so only the fields supplied are changed; set a `metadata` key to `null` to remove that key.",
+          "message": "Aktualizuje metadáta objektu priamo na mieste bez opätovného nahrania jeho obsahu: typ obsahu, hlavičky vyrovnávacej pamäte a obsahu odosielané spolu s ním, vlastnú časovú pečiatku a používateľsky definované metadáta.\n\nAktualizácia prebieha zlúčením, takže sa zmenia iba zadané polia; nastavením kľúča `metadata` na `null` tento kľúč odstránite."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Update Object Metadata",
+          "message": "Aktualizovať metadáta objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type served with the object's content",
+          "message": "Typ MIME odosielaný s obsahom objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to set",
+          "message": "Typ MIME, ktorý sa má nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header served with the object's content",
+          "message": "Hlavička `Content-Disposition` odosielaná s obsahom objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to set",
+          "message": "Hlavička Content-Disposition, ktorá sa má nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header served with the object's content (e.g. `gzip`)",
+          "message": "Hlavička `Content-Encoding` odosielaná s obsahom objektu (napr. `gzip`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to set",
+          "message": "Hlavička Content-Encoding, ktorá sa má nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header served with the object's content",
+          "message": "Hlavička `Content-Language` odosielaná s obsahom objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to set",
+          "message": "Hlavička Content-Language, ktorá sa má nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header served with the object's content",
+          "message": "Hlavička `Cache-Control` odosielaná s obsahom objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to set",
+          "message": "Hlavička Cache-Control, ktorú chcete nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Používateľom zadaný dátum a čas na objekte, použiteľný v pravidlách životného cyklu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Vlastný čas"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to set",
+          "message": "Používateľom zadaná časová pečiatka, ktorú chcete nastaviť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Názov bucketu obsahujúceho objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Bucket obsahujúci objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation whose metadata should be updated; when omitted the live version is used",
+          "message": "Generácia obsahu, ktorej metadáta sa majú aktualizovať; ak je vynechaná, použije sa živá verzia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generácia"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Konkrétna generácia obsahu, na ktorú sa má odkázať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object, used verbatim",
+          "message": "Názov objektu, použitý doslovne"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata as key/value pairs.  A `PATCH` merges these with the existing metadata; set a key to `null` to remove it",
+          "message": "Používateľom definované metadáta ako páry kľúč/hodnota. `PATCH` ich zlúči s existujúcimi metadátami; ak chcete kľúč odstrániť, nastavte ho na `null`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Vlastné metaúdaje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to set",
+          "message": "Používateľom definované metadáta na nastavenie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Update an object's metadata without rewriting it",
+          "message": "Aktualizovať metadáta objektu bez jeho prepísania"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.desc": {
+          "source": "Uploads content to a bucket as an object of any size.\n\nLarge content, and any upload that also sets metadata, is sent as a resumable upload in chunks that Google Cloud Storage commits as they arrive, so a large transfer does not have to restart from the beginning if a chunk fails. Small content is sent in a single request.\n\n`object` is used verbatim, so `reports/2026/q1.csv` is one key rather than a path. Set `if_generation_match` to `0` to create the object only if it does not already exist, rather than overwriting it.",
+          "message": "Nahrá obsah do bucketu ako objekt ľubovoľnej veľkosti.\n\nVeľký obsah a akékoľvek nahrávanie, ktoré zároveň nastavuje metadáta, sa odosiela ako obnoviteľné nahrávanie v častiach, ktoré Google Cloud Storage potvrdzuje pri ich príchode, takže veľký prenos nemusí začínať od začiatku, ak časť zlyhá. Malý obsah sa odosiela v jednej požiadavke.\n\n`object` sa používa doslovne, takže `reports/2026/q1.csv` je jeden kľúč a nie cesta. Nastavte `if_generation_match` na `0`, aby sa objekt vytvoril iba vtedy, ak ešte neexistuje, namiesto jeho prepísania."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
+          "source": "Upload Object",
+          "message": "Nahrať objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store the object with.  When omitted the file's MIME type is used; if that is unset or `auto`, it is derived from the object name, falling back to `application/octet-stream`",
+          "message": "Typ MIME, s ktorým sa má objekt uložiť. Ak je vynechaný, použije sa typ MIME súboru; ak nie je nastavený alebo je `auto`, odvodí sa z názvu objektu, s predvolenou hodnotou `application/octet-stream`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Typ obsahu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store",
+          "message": "Typ MIME na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header to serve the object's content with",
+          "message": "Hlavička `Content-Disposition`, s ktorou sa má poskytovať obsah objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to store",
+          "message": "Hlavička Content-Disposition na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header to serve the object's content with (e.g. `gzip`).  This declares how the bytes being uploaded are already encoded; it does not compress them",
+          "message": "Hlavička `Content-Encoding`, s ktorou sa má poskytovať obsah objektu (napr. `gzip`). Deklaruje, ako sú už nahrávané bajty kódované; nekomprimuje ich"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to store",
+          "message": "Hlavička Content-Encoding na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header to serve the object's content with",
+          "message": "Hlavička `Content-Language`, s ktorou sa má poskytovať obsah objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to store",
+          "message": "Hlavička Content-Language na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header to serve the object's content with",
+          "message": "Hlavička `Cache-Control`, s ktorou sa má poskytovať obsah objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to store",
+          "message": "Hlavička Cache-Control na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Používateľom zadaný dátum a čas na objekte, použiteľný v pravidlách životného cyklu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Vlastný čas"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to store",
+          "message": "Používateľom zadaná časová pečiatka na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to upload the object into",
+          "message": "Názov bucketu, do ktorého sa má objekt nahrať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to upload into",
+          "message": "Bucket, do ktorého sa má nahrávať"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.desc": {
+          "source": "The content to upload, including the file name, the content, and the MIME type",
+          "message": "Obsah na nahratie vrátane názvu súboru, obsahu a typu MIME"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Súbor"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.short_desc": {
+          "source": "The content to upload",
+          "message": "Obsah na nahratie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.desc": {
+          "source": "Only perform the write if the object's current generation matches this value; pass `0` to write only if the object does not exist yet, which makes the upload a safe create rather than an overwrite",
+          "message": "Zápis vykonajte iba vtedy, ak sa aktuálna generácia objektu zhoduje s touto hodnotou; odovzdajte `0` pre zápis iba v prípade, že objekt ešte neexistuje, čo z nahrávania urobí bezpečné vytvorenie namiesto prepísania"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.display_name": {
+          "source": "If Generation Match",
+          "message": "Ak sa generácia zhoduje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.short_desc": {
+          "source": "Only write if the live generation matches",
+          "message": "Zapisovať iba v prípade, že sa živá generácia zhoduje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name to store the object under, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so `reports/2026/q1.csv` is a single key and not a path.  When omitted the file's name is used",
+          "message": "Názov, pod ktorým sa má objekt uložiť, použitý doslovne: `/` je bežný znak v názve objektu Google Cloud Storage, takže `reports/2026/q1.csv` je jeden kľúč a nie cesta. Ak je vynechaný, použije sa názov súboru"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Názov objektu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object name to write",
+          "message": "Názov objektu na zápis"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store on the object as key/value pairs",
+          "message": "Používateľom definované metadáta, ktoré sa majú uložiť na objekte ako páry kľúč/hodnota"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Vlastné metaúdaje"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store",
+          "message": "Používateľom definované metadáta na uloženie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the bucket's default is used",
+          "message": "Trieda úložiska pre nový objekt: `STANDARD`, `NEARLINE`, `COLDLINE` alebo `ARCHIVE`. Ak je vynechaná, použije sa predvolená hodnota bucketu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Trieda úložiska"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class to store the object with",
+          "message": "Trieda úložiska, s ktorou sa má objekt uložiť"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
+          "source": "Upload content to a bucket",
+          "message": "Nahrať obsah do bucketu"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.desc": {
+          "source": "Provides access to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service — through its [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Common use cases**:\n- **Object storage**: upload, download, copy, and delete objects, with resumable uploads for large content\n- **Bucket browsing**: list buckets and list objects by prefix, optionally rolled up into synthetic folders with a delimiter\n- **Metadata management**: read and update content type, cache headers, and user-defined metadata\n- **Sharing**: generate time-limited signed URLs that grant access to a single object with no credentials\n- **Concatenation**: compose up to 32 objects into one without downloading them\n\nThis application is also a file-location target, so a `conn://` location can read and write objects through a Google Cloud Storage connection, and it can supply the `gs://` inputs and outputs that the Vertex AI and Google Document AI applications take.\n\n**Object names are a flat key space**: `/` is an ordinary character in an object name and not a path separator, so names are used verbatim and are never split or normalized. `dir/`, `a//b` and `/leading` are all valid, distinct object names.\n\nAuthentication uses a GCP service account or Application Default Credentials.\n\nGoogle Cloud and Google Cloud Storage are trademarks of Google LLC",
+          "message": "Poskytuje prístup k [Google Cloud Storage](https://cloud.google.com/storage) — službe ukladania objektov od spoločnosti Google — prostredníctvom jej [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Bežné prípady použitia**:\n- **Ukladanie objektov**: nahrávanie, sťahovanie, kopírovanie a odstraňovanie objektov s obnoviteľnými nahrávaniami pre veľký obsah\n- **Prehľadávanie bucketov**: výpis bucketov a zoznam objektov podľa prefixu, voliteľne zbalených do syntetických priečinkov s oddeľovačom\n- **Správa metadát**: čítanie a aktualizácia typu obsahu, hlavičiek vyrovnávacej pamäte a používateľom definovaných metadát\n- **Zdieľanie**: generovanie časovo obmedzených podpísaných adries URL, ktoré udeľujú prístup k jednému objektu bez prihlasovacích údajov\n- **Zreťazenie**: zloženie až 32 objektov do jedného bez ich sťahovania\n\nTáto aplikácia je tiež cieľom umiestnenia súborov, takže umiestnenie `conn://` môže čítať a zapisovať objekty prostredníctvom pripojenia Google Cloud Storage a môže dodávať vstupy a výstupy `gs://`, ktoré prijímajú aplikácie Vertex AI a Google Document AI.\n\n**Názvy objektov predstavujú plochý priestor kľúčov**: `/` je bežný znak v názve objektu a nie oddeľovač cesty, takže názvy sa používajú doslovne a nikdy sa nerozdeľujú ani nenormalizujú. `dir/`, `a//b` a `/leading` sú všetky platné, odlišné názvy objektov.\n\nAutentifikácia využíva servisný účet GCP alebo Application Default Credentials.\n\nGoogle Cloud a Google Cloud Storage sú ochranné známky spoločnosti Google LLC"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.display_name": {
+          "source": "Google Cloud Storage",
+          "message": "Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.short_desc": {
+          "source": "Google Cloud Storage object storage",
+          "message": "Úložisko objektov Google Cloud Storage"
+        }
+      }
+    }
+  }
+}

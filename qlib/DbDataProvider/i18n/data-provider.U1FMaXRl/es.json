@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "Cree y gestione conexiones a una base de datos integrada de SQLite"
+        },
+        "app.U1FMaXRl.display_name": {
+          "source": "SQLite",
+          "message": "SQLite"
+        },
+        "app.U1FMaXRl.short_desc": {
+          "source": "SQLite embedded database",
+          "message": "Base de datos integrada de SQLite"
+        }
+      }
+    }
+  }
+}

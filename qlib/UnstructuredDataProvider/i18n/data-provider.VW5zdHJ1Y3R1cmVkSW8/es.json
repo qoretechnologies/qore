@@ -1,0 +1,441 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unstructured.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada personalizada a la API HTTP / REST a **Unstructured.io** utilizando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtilice esta acción para extremos que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unstructured.io",
+          "message": "Realizar una llamada personalizada a la API de Unstructured.io"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.desc": {
+          "source": "Submits raw text to Unstructured.io for partitioning.  Returns the document as a list of typed elements (Title, NarrativeText, ListItem, Table, etc.).\n\nFor PDFs and other binary formats, use the lower-level @ref UnstructuredRestClient::UnstructuredRestClientIo::partitionFile() method directly.",
+          "message": "Envía texto sin formato a Unstructured.io para su particionamiento. Devuelve el documento como una lista de elementos con tipo (Title, NarrativeText, ListItem, Table, etc.).\n\nPara archivos PDF y otros formatos binarios, use directamente el método de nivel inferior @ref UnstructuredRestClient::UnstructuredRestClientIo::partitionFile()."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.display_name": {
+          "source": "Partition Text",
+          "message": "Particionar texto"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y29vcmRpbmF0ZXM.desc": {
+          "source": "When `True`, each element includes layout coordinates in its metadata.",
+          "message": "Cuando `True`, cada elemento incluye coordenadas de diseño en sus metadatos."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y29vcmRpbmF0ZXM.display_name": {
+          "source": "Coordinates",
+          "message": "Coordenadas"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y29vcmRpbmF0ZXM.short_desc": {
+          "source": "Include layout coordinates in each element",
+          "message": "Incluir coordenadas de diseño en cada elemento"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y2h1bmtpbmdfc3RyYXRlZ3k.allowed-value.c3RyaW5nOmJ5X3RpdGxl.display_name": {
+          "source": "By Title",
+          "message": "Por título"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y2h1bmtpbmdfc3RyYXRlZ3k.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Básico"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y2h1bmtpbmdfc3RyYXRlZ3k.desc": {
+          "source": "Server-side chunking strategy — `by_title` or `basic`.  When set, Unstructured groups elements into chunks server-side.",
+          "message": "Estrategia de fragmentación en el servidor: `by_title` o `basic`. Cuando se establece, Unstructured agrupa los elementos en fragmentos en el servidor."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y2h1bmtpbmdfc3RyYXRlZ3k.display_name": {
+          "source": "Chunking Strategy",
+          "message": "Estrategia de fragmentación"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.Y2h1bmtpbmdfc3RyYXRlZ3k.short_desc": {
+          "source": "Server-side chunking strategy",
+          "message": "Estrategia de fragmentación en el servidor"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.bGFuZ3VhZ2Vz.desc": {
+          "source": "List of ISO language codes for the document.",
+          "message": "Lista de códigos de idioma ISO para el documento."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.bGFuZ3VhZ2Vz.display_name": {
+          "source": "Languages",
+          "message": "Idiomas"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.bGFuZ3VhZ2Vz.short_desc": {
+          "source": "Document language hints (ISO codes)",
+          "message": "Indicaciones de idioma del documento (códigos ISO)"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOm9jcl9vbmx5.display_name": {
+          "source": "OCR Only",
+          "message": "Solo OCR"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOmZhc3Q.display_name": {
+          "source": "Fast",
+          "message": "Rápido"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOmhpX3Jlcw.display_name": {
+          "source": "Hi-Res",
+          "message": "Alta resolución"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.desc": {
+          "source": "Partitioning strategy — `auto`, `fast`, `hi_res`, or `ocr_only`.",
+          "message": "Estrategia de particionamiento: `auto`, `fast`, `hi_res` o `ocr_only`."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.display_name": {
+          "source": "Strategy",
+          "message": "Estrategia"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.c3RyYXRlZ3k.short_desc": {
+          "source": "Partitioning strategy",
+          "message": "Estrategia de particionamiento"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.dGV4dA.desc": {
+          "source": "Raw text content of the document to partition.",
+          "message": "Contenido de texto sin formato del documento que se va a particionar."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.option.dGV4dA.short_desc": {
+          "source": "Document text content to partition",
+          "message": "Contenido de texto del documento a particionar"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.action.cGFydGl0aW9uLXRleHQ.short_desc": {
+          "source": "Partition raw text into a typed element tree",
+          "message": "Particionar texto sin formato en un árbol de elementos tipados"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.desc": {
+          "source": "Provides access to [Unstructured.io](https://unstructured.io) — a document partitioning service that breaks PDFs, docx, HTML, and images into a typed element tree (Title / NarrativeText / ListItem / Table / ...).\n\nUse the @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" backend for the RAG ingestion path through @ref QoreRagUtils::RagPipeline \"RagPipeline\".",
+          "message": "Proporciona acceso a [Unstructured.io](https://unstructured.io), un servicio de particionamiento de documentos que divide PDF, docx, HTML e imágenes en un árbol de elementos tipados (Title / NarrativeText / ListItem / Table / ...).\n\nUtilice el backend @ref QoreRagUtils::UnstructuredChunker \"UnstructuredChunker\" para la ruta de ingesta RAG a través de @ref QoreRagUtils::RagPipeline \"RagPipeline\"."
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.display_name": {
+          "source": "Unstructured.io",
+          "message": "Unstructured.io"
+        },
+        "app.VW5zdHJ1Y3R1cmVkSW8.short_desc": {
+          "source": "Unstructured.io document partitioning (element-tree extraction)",
+          "message": "Particionamiento de documentos de Unstructured.io (extracción de árbol de elementos)"
+        }
+      }
+    }
+  }
+}

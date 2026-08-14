@@ -1,0 +1,2437 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.desc": {
+          "source": "Fires when a new contract is created in Deel. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Vertrag in Deel erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
+          "source": "Contract Created",
+          "message": "Vertrag erstellt"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new contract is created",
+          "message": "Auslösen, wenn ein neuer Vertrag erstellt wird"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a contract's status is updated in Deel. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn der Status eines Vertrags in Deel aktualisiert wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Contract Status Updated",
+          "message": "Vertragsstatus aktualisiert"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a contract's status changes",
+          "message": "Auslösen, wenn sich der Status eines Vertrags ändert"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.desc": {
+          "source": "Fires when a contract is terminated in Deel. Uses polling to detect terminated contracts.",
+          "message": "Wird ausgelöst, wenn ein Vertrag in Deel gekündigt wird. Verwendet Polling, um gekündigte Verträge zu erkennen."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
+          "source": "Contract Terminated",
+          "message": "Vertrag gekündigt"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
+          "source": "Trigger when a contract is terminated",
+          "message": "Auslösen, wenn ein Vertrag gekündigt wird"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.desc": {
+          "source": "Create a new contractor or employee contract in Deel",
+          "message": "Einen neuen Auftragnehmer- oder Mitarbeitervertrag in Deel erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Create a Contract",
+          "message": "Vertrag erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Der ISO-3166-1-Alpha-2-Ländercode für den Standort der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Land"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.short_desc": {
+          "source": "The worker's country",
+          "message": "Das Land der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)",
+          "message": "Der ISO-4217-Währungscode für Zahlungen (z. B. `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.short_desc": {
+          "source": "The contract currency",
+          "message": "Die Vertragswährung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The monetary amount for the contract (rate or fixed amount)",
+          "message": "Der Geldbetrag für den Vertrag (Satz oder Festbetrag)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "The contract amount",
+          "message": "Der Vertragsbetrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.desc": {
+          "source": "The date the contract ends (YYYY-MM-DD format), if applicable",
+          "message": "Das Datum, an dem der Vertrag endet (Format JJJJ-MM-TT), falls zutreffend"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Enddatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The contract end date",
+          "message": "Das Vertragsenddatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the contractor or employee",
+          "message": "Die Berufsbezeichnung des Auftragnehmers oder Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Berufsbezeichnung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Die Berufsbezeichnung der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "A description of the work to be performed under this contract",
+          "message": "Eine Beschreibung der im Rahmen dieses Vertrags auszuführenden Arbeiten"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Leistungsumfang"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Description of the work",
+          "message": "Beschreibung der Arbeit"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The date the contract starts (YYYY-MM-DD format)",
+          "message": "Das Datum, an dem der Vertrag beginnt (Format JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The contract start date",
+          "message": "Das Vertragsstartdatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly payments",
+          "message": "Monatliche Zahlungen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOmJpd2Vla2x5.desc": {
+          "source": "Biweekly (every two weeks) payments",
+          "message": "Zweiwöchentliche (alle zwei Wochen) Zahlungen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOndlZWtseQ.desc": {
+          "source": "Weekly payments",
+          "message": "Wöchentliche Zahlungen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.desc": {
+          "source": "The payment cycle for this contract",
+          "message": "Der Zahlungszyklus für diesen Vertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.display_name": {
+          "source": "Payment Cycle",
+          "message": "Zahlungszyklus"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.short_desc": {
+          "source": "How often payments are made",
+          "message": "Wie oft Zahlungen geleistet werden"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.desc": {
+          "source": "The email address of the contractor or employee",
+          "message": "Die E-Mail-Adresse des Auftragnehmers oder Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.display_name": {
+          "source": "Worker Email",
+          "message": "E-Mail-Adresse der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.short_desc": {
+          "source": "The worker's email address",
+          "message": "Die E-Mail-Adresse der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A descriptive title for the contract",
+          "message": "Ein beschreibender Titel für den Vertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "The contract title",
+          "message": "Der Vertragstitel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contract",
+          "message": "Meilensteinbasierter Vertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contract",
+          "message": "Mitarbeitervertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contract",
+          "message": "Festpreisvertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contract",
+          "message": "Nutzungsbasierter, zeitbezogener Vertrag (Pay-as-you-go)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.desc": {
+          "source": "The type of contract to create",
+          "message": "Der Typ des zu erstellenden Vertrags"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Vertragstyp"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.short_desc": {
+          "source": "The type of contract",
+          "message": "Der Vertragstyp"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Create a new contract in Deel",
+          "message": "Einen neuen Vertrag in Deel erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel",
+          "message": "Eine neue Rechnungsanpassung (Bonus, Erstattung oder Abzug) in Deel erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Create an Invoice Adjustment",
+          "message": "Rechnungsanpassung erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this adjustment belongs to",
+          "message": "Die eindeutige Kennung des Vertrags, zu dem diese Anpassung gehört"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Der zugehörige Vertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code (e.g., `USD`, `EUR`)",
+          "message": "Der ISO-4217-Währungscode (z. B. `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.short_desc": {
+          "source": "The adjustment currency",
+          "message": "Die Anpassungswährung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The monetary amount for this invoice adjustment",
+          "message": "Der Geldbetrag für diese Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The adjustment amount",
+          "message": "Der Anpassungsbetrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this adjustment entry (YYYY-MM-DD format)",
+          "message": "Das Datum für diesen Anpassungseintrag (Format JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Übermittlungsdatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The adjustment date",
+          "message": "Das Anpassungsdatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An explanation for why this invoice adjustment is being created",
+          "message": "Eine Erklärung, warum diese Rechnungsanpassung erstellt wird"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The reason for the adjustment",
+          "message": "Der Grund für die Anpassung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmJvbnVz.desc": {
+          "source": "Bonus payment",
+          "message": "Bonuszahlung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmRlZHVjdGlvbg.desc": {
+          "source": "Payment deduction",
+          "message": "Zahlungsabzug"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlaW1idXJzZW1lbnQ.desc": {
+          "source": "Expense reimbursement",
+          "message": "Auslagenerstattung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.desc": {
+          "source": "The type of invoice adjustment",
+          "message": "Der Typ der Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.display_name": {
+          "source": "Adjustment Type",
+          "message": "Anpassungstyp"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.short_desc": {
+          "source": "The type of adjustment",
+          "message": "Der Anpassungstyp"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new invoice adjustment",
+          "message": "Eine neue Rechnungsanpassung erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Create a new time-off request for a worker in Deel",
+          "message": "Einen neuen Abwesenheitsantrag für einen Mitarbeiter in Deel erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Create a Time-Off Request",
+          "message": "Abwesenheitsantrag erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract for this time-off request",
+          "message": "Die eindeutige Kennung des Vertrags für diesen Abwesenheitsantrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Der zugehörige Vertrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.desc": {
+          "source": "The last day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Der letzte Tag des beantragten Abwesenheitszeitraums (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Enddatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The time-off end date",
+          "message": "Das Enddatum der Abwesenheit"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.desc": {
+          "source": "Optional notes or reason for the time-off request",
+          "message": "Optionale Notizen oder Begründung für den Abwesenheitsantrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Notizen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the request",
+          "message": "Notizen zum Antrag"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The first day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Der erste Tag des beantragten Abwesenheitszeitraums (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The time-off start date",
+          "message": "Das Startdatum der Abwesenheit"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.desc": {
+          "source": "The ID of the time-off type (entitlement) to use for this request",
+          "message": "Die ID der Abwesenheitsart (Anspruch), die für diesen Antrag verwendet werden soll"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.display_name": {
+          "source": "Time-Off Type ID",
+          "message": "Abwesenheitsart-ID"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.short_desc": {
+          "source": "The time-off type",
+          "message": "Die Abwesenheitsart"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Create a new time-off request",
+          "message": "Einen neuen Abwesenheitsantrag erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.desc": {
+          "source": "Create a new worker or person record in Deel",
+          "message": "Einen neuen Mitarbeiter- oder Personendatensatz in Deel erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
+          "source": "Create a Worker",
+          "message": "Mitarbeiter erstellen"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Der ISO-3166-1-Alpha-2-Ländercode für den Standort der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Ländercode"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "The worker's country",
+          "message": "Das Land der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the worker",
+          "message": "Die E-Mail-Adresse des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.short_desc": {
+          "source": "The worker's email address",
+          "message": "Die E-Mail-Adresse der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The given (first) name of the worker",
+          "message": "Der Vorname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Der Vorname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the worker",
+          "message": "Die Berufsbezeichnung des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Berufsbezeichnung"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Die Berufsbezeichnung der Arbeitskraft"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The family (last) name of the worker",
+          "message": "Der Nachname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Der Nachname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Mid-Level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Junior-Level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Lead-Level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Senior-Level"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The seniority level of the worker",
+          "message": "Die Erfahrungsstufe des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Erfahrungsstufe"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Die Erfahrungsstufe des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.desc": {
+          "source": "The worker's phone number in international format",
+          "message": "Die Telefonnummer des Mitarbeiters im internationalen Format"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.short_desc": {
+          "source": "The worker's phone number",
+          "message": "Die Telefonnummer des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
+          "source": "Create a new worker/person in Deel",
+          "message": "Einen neuen Mitarbeiter/eine neue Person in Deel erstellen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.desc": {
+          "source": "Approve a pending time-off request for a worker in Deel",
+          "message": "Einen ausstehenden Abwesenheitsantrag für einen Mitarbeiter in Deel genehmigen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
+          "source": "Approve a Time-Off Request",
+          "message": "Abwesenheitsantrag genehmigen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to approve",
+          "message": "Die eindeutige Kennung des zu genehmigenden Abwesenheitsantrags"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "Anfrage-ID"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to approve",
+          "message": "Der zu genehmigende Abwesenheitsantrag"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
+          "source": "Approve a time-off request",
+          "message": "Einen Abwesenheitsantrag genehmigen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.desc": {
+          "source": "Approve a timesheet entry in Deel",
+          "message": "Einen Zeiterfassungseintrag in Deel genehmigen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
+          "source": "Approve a Timesheet",
+          "message": "Zeiterfassung genehmigen"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to approve",
+          "message": "Die eindeutige Kennung des zu genehmigenden Zeiterfassungseintrags"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to approve",
+          "message": "Die zu genehmigende Zeiterfassung"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
+          "source": "Approve a timesheet entry",
+          "message": "Einen Zeiterfassungseintrag genehmigen"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.desc": {
+          "source": "Retrieve a single contract by ID from Deel",
+          "message": "Einen einzelnen Vertrag nach ID aus Deel abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
+          "source": "Get a Contract",
+          "message": "Vertrag abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract",
+          "message": "Die eindeutige Kennung des Vertrags"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract ID",
+          "message": "Die Vertrags-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
+          "source": "Get a single contract by ID",
+          "message": "Einen einzelnen Vertrag nach ID abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Deel",
+          "message": "Eine einzelne Rechnung nach ID aus Deel abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Rechnung abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The unique identifier of the invoice",
+          "message": "Die eindeutige Kennung der Rechnung"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Rechnungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "Die Rechnungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Einzelne Rechnung nach ID abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve a single invoice adjustment by ID from Deel",
+          "message": "Eine einzelne Rechnungsanpassung nach ID aus Deel abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Get an Invoice Adjustment",
+          "message": "Rechnungsanpassung abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment",
+          "message": "Die eindeutige Kennung der Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Anpassungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment ID",
+          "message": "Die Anpassungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Get a single invoice adjustment by ID",
+          "message": "Eine einzelne Rechnungsanpassung nach ID abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.desc": {
+          "source": "Retrieve a single timesheet entry by ID from Deel",
+          "message": "Einen einzelnen Zeiterfassungseintrag nach ID aus Deel abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
+          "source": "Get a Timesheet",
+          "message": "Zeiterfassung abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry",
+          "message": "Die eindeutige Kennung des Zeiterfassungseintrags"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet ID",
+          "message": "Die Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
+          "source": "Get a single timesheet by ID",
+          "message": "Eine einzelne Zeiterfassung nach ID abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.desc": {
+          "source": "Retrieve a single worker or person record by ID from Deel",
+          "message": "Einen einzelnen Mitarbeiter- oder Personendatensatz nach ID aus Deel abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
+          "source": "Get a Worker",
+          "message": "Mitarbeiter abrufen"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker",
+          "message": "Die eindeutige Kennung des Mitarbeiters"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Mitarbeiter-ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker ID",
+          "message": "Die Mitarbeiter-ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
+          "source": "Get a single worker by ID",
+          "message": "Einen einzelnen Mitarbeiter anhand der ID abrufen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Delete an invoice adjustment in Deel",
+          "message": "Eine Rechnungsanpassung in Deel löschen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Delete an Invoice Adjustment",
+          "message": "Rechnungsanpassung löschen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to delete",
+          "message": "Die eindeutige Kennung der zu löschenden Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Anpassungs-ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to delete",
+          "message": "Die zu löschende Anpassung"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an invoice adjustment",
+          "message": "Eine Rechnungsanpassung löschen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.desc": {
+          "source": "Delete a timesheet entry in Deel",
+          "message": "Einen Stundenzetteleintrag in Deel löschen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Delete a Timesheet",
+          "message": "Stundenzettel löschen"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Stundenzetteleintrags"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to delete",
+          "message": "Der zu löschende Stundenzettel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Delete a timesheet entry",
+          "message": "Einen Stundenzetteleintrag löschen"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new invoice adjustment is created in Deel. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Rechnungsanpassung in Deel erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
+          "source": "Invoice Adjustment Created",
+          "message": "Rechnungsanpassung erstellt"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new invoice adjustment is created",
+          "message": "Auslösen, wenn eine neue Rechnungsanpassung erstellt wird"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.desc": {
+          "source": "Fires when an invoice adjustment is approved or declined in Deel. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn eine Rechnungsanpassung in Deel genehmigt oder abgelehnt wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
+          "source": "Invoice Adjustment Reviewed",
+          "message": "Rechnungsanpassung überprüft"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when an invoice adjustment is reviewed",
+          "message": "Auslösen, wenn eine Rechnungsanpassung überprüft wird"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.desc": {
+          "source": "List all legal entities (companies) registered in Deel",
+          "message": "Alle in Deel registrierten juristischen Personen (Unternehmen) auflisten"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
+          "source": "List Legal Entities",
+          "message": "Juristische Personen auflisten"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
+          "source": "List legal entities in Deel",
+          "message": "Juristische Personen in Deel auflisten"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Deel** unter Verwendung der Authentifizierung der konfigurierten Verbindung durchführen.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deel",
+          "message": "Einen benutzerdefinierten API-Aufruf an Deel durchführen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.desc": {
+          "source": "List and search contracts in Deel with optional filtering",
+          "message": "Verträge in Deel mit optionaler Filterung auflisten und suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
+          "source": "Search Contracts",
+          "message": "Verträge suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Get a specific contract by its ID",
+          "message": "Einen bestimmten Vertrag anhand seiner ID abrufen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract ID",
+          "message": "Nach Vertrags-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contracts",
+          "message": "Meilensteinbasierte Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contracts",
+          "message": "Mitarbeiterverträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contracts",
+          "message": "Festpreisverträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contracts",
+          "message": "Zeitbasierte Pay-as-you-go-Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.desc": {
+          "source": "Filter contracts by type",
+          "message": "Verträge nach Typ filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Vertragstyp"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.short_desc": {
+          "source": "Filter by contract type",
+          "message": "Nach Vertragstyp filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contracts",
+          "message": "Aktive Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended contracts",
+          "message": "Beendete Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending contracts",
+          "message": "Ausstehende Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlcm1pbmF0ZWQ.desc": {
+          "source": "Terminated contracts",
+          "message": "Gekündigte Verträge"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contracts by status",
+          "message": "Verträge nach Status filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contract status",
+          "message": "Nach Vertragsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
+          "source": "Search for contracts in Deel",
+          "message": "Nach Verträgen in Deel suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.desc": {
+          "source": "List and search invoice adjustments in Deel with optional filtering",
+          "message": "Rechnungsanpassungen in Deel mit optionaler Filterung auflisten und suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
+          "source": "Search Invoice Adjustments",
+          "message": "Rechnungsanpassungen suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter adjustments by associated contract ID",
+          "message": "Anpassungen nach zugehöriger Vertrags-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Nach Vertrag filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "Get a specific adjustment by its ID",
+          "message": "Eine bestimmte Anpassung anhand ihrer ID abrufen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Anpassungs-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "Filter by adjustment ID",
+          "message": "Nach Anpassungs-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved adjustments",
+          "message": "Genehmigte Anpassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Declined adjustments",
+          "message": "Abgelehnte Anpassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending adjustments",
+          "message": "Ausstehende Anpassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.desc": {
+          "source": "Filter adjustments by status",
+          "message": "Anpassungen nach Status filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by adjustment status",
+          "message": "Nach Anpassungsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
+          "source": "Search for invoice adjustments",
+          "message": "Nach Rechnungsanpassungen suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "List and search invoices in Deel with optional filtering",
+          "message": "Rechnungen in Deel mit optionaler Filterung auflisten und suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Rechnungen suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter invoices by associated contract ID",
+          "message": "Rechnungen nach zugehöriger Vertrags-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Nach Vertrag filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.desc": {
+          "source": "Filter invoices up to this date (YYYY-MM-DD format)",
+          "message": "Rechnungen bis zu diesem Datum filtern (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Datum bis"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Ende des Datumsbereichs"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter invoices from this date (YYYY-MM-DD format)",
+          "message": "Rechnungen ab diesem Datum filtern (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Datum von"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Beginn des Datumsbereichs"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.desc": {
+          "source": "Get a specific invoice by its ID",
+          "message": "Bestimmte Rechnung anhand ihrer ID abrufen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Rechnungs-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Nach Rechnungs-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled invoices",
+          "message": "Stornierte Rechnungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Bezahlte Rechnungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending invoices",
+          "message": "Ausstehende Rechnungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Rechnungen nach Status filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Nach Rechnungsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Deel",
+          "message": "Nach Rechnungen in Deel suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.desc": {
+          "source": "List available time-off types and entitlements in Deel",
+          "message": "Verfügbare Abwesenheitsarten und -ansprüche in Deel auflisten"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
+          "source": "Search Time-Off Types",
+          "message": "Abwesenheitsarten suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter time-off types by associated contract ID",
+          "message": "Abwesenheitsarten nach zugehöriger Vertrags-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Nach Vertrag filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
+          "source": "List available time-off types/entitlements",
+          "message": "Verfügbare Abwesenheitsarten/-ansprüche auflisten"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.desc": {
+          "source": "List and search timesheet entries in Deel with optional filtering",
+          "message": "Zeiterfassungseinträge in Deel mit optionaler Filterung auflisten und suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
+          "source": "Search Timesheets",
+          "message": "Zeiterfassungen suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter timesheets by associated contract ID",
+          "message": "Zeiterfassungen nach zugehöriger Vertrags-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Nach Vertrag filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.desc": {
+          "source": "Filter timesheets up to this date (YYYY-MM-DD format)",
+          "message": "Zeiterfassungen bis zu diesem Datum filtern (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Datum bis"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Ende des Datumsbereichs"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter timesheets from this date (YYYY-MM-DD format)",
+          "message": "Zeiterfassungen ab diesem Datum filtern (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Datum von"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Beginn des Datumsbereichs"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved timesheets",
+          "message": "Genehmigte Zeiterfassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending timesheets",
+          "message": "Ausstehende Zeiterfassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.desc": {
+          "source": "Rejected timesheets",
+          "message": "Abgelehnte Zeiterfassungen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.desc": {
+          "source": "Filter timesheets by status",
+          "message": "Zeiterfassungen nach Status filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by timesheet status",
+          "message": "Nach Zeiterfassungsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "Get a specific timesheet by its ID",
+          "message": "Bestimmte Zeiterfassung anhand ihrer ID abrufen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "Filter by timesheet ID",
+          "message": "Nach Zeiterfassungs-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
+          "source": "Search for timesheets in Deel",
+          "message": "Nach Zeiterfassungen in Deel suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.desc": {
+          "source": "List and search workers/people in Deel with optional filtering",
+          "message": "Mitarbeiter/Personen in Deel mit optionaler Filterung auflisten und suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
+          "source": "Search Workers",
+          "message": "Mitarbeiter suchen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "Filter workers by country code (ISO 3166-1 alpha-2)",
+          "message": "Mitarbeiter nach Ländercode filtern (ISO 3166-1 Alpha-2)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Ländercode"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Filter by country",
+          "message": "Nach Land filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active workers",
+          "message": "Aktive Mitarbeiter"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive workers",
+          "message": "Inaktive Mitarbeiter"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending workers",
+          "message": "Ausstehende Mitarbeiter"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.desc": {
+          "source": "Filter workers by employment status",
+          "message": "Mitarbeiter nach Beschäftigungsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.display_name": {
+          "source": "Employment Status",
+          "message": "Beschäftigungsstatus"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.short_desc": {
+          "source": "Filter by employment status",
+          "message": "Nach Beschäftigungsstatus filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Anzahl der zu überspringenden Ergebnisse (für manuelle Paginierung)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.desc": {
+          "source": "Get a specific worker by their ID",
+          "message": "Bestimmten Mitarbeiter anhand seiner ID abrufen"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Mitarbeiter-ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.short_desc": {
+          "source": "Filter by worker ID",
+          "message": "Nach Mitarbeiter-ID filtern"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
+          "source": "Search for workers in Deel",
+          "message": "Nach Mitarbeitern in Deel suchen"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.desc": {
+          "source": "Sign a contract in Deel on behalf of the organization",
+          "message": "Einen Vertrag in Deel im Namen der Organisation unterzeichnen"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
+          "source": "Sign a Contract",
+          "message": "Vertrag unterzeichnen"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to sign",
+          "message": "Die eindeutige Kennung des zu unterzeichnenden Vertrags"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to sign",
+          "message": "Der zu unterzeichnende Vertrag"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
+          "source": "Sign a contract in Deel",
+          "message": "Einen Vertrag in Deel unterzeichnen"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.desc": {
+          "source": "Submit a new timesheet entry for a contract in Deel",
+          "message": "Einen neuen Zeiterfassungseintrag für einen Vertrag in Deel einreichen"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
+          "source": "Submit a Timesheet",
+          "message": "Zeiterfassung einreichen"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this timesheet belongs to",
+          "message": "Die eindeutige Kennung des Vertrags, zu dem diese Zeiterfassung gehört"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Der zugehörige Vertrag"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this timesheet entry (YYYY-MM-DD format)",
+          "message": "Das Datum für diesen Zeiterfassungseintrag (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Übermittlungsdatum"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The timesheet date",
+          "message": "Das Zeiterfassungsdatum"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the work performed",
+          "message": "Eine Beschreibung der geleisteten Arbeit"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Work description",
+          "message": "Arbeitsbeschreibung"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The number of hours worked for this timesheet entry",
+          "message": "Die Anzahl der geleisteten Arbeitsstunden für diesen Zeiterfassungseintrag"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Stunden (Menge)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The number of hours worked",
+          "message": "Die Anzahl der geleisteten Arbeitsstunden"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
+          "source": "Submit a timesheet entry in Deel",
+          "message": "Einen Zeiterfassungseintrag in Deel einreichen"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Approve or decline an invoice adjustment in Deel",
+          "message": "Eine Rechnungsanpassung in Deel genehmigen oder ablehnen"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Review an Invoice Adjustment",
+          "message": "Rechnungsanpassung prüfen"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to review",
+          "message": "Die eindeutige Kennung der zu prüfenden Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Anpassungs-ID"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to review",
+          "message": "Die zu prüfende Anpassung"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approve the adjustment",
+          "message": "Die Anpassung genehmigen"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Decline the adjustment",
+          "message": "Die Anpassung ablehnen"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.desc": {
+          "source": "The review decision for the invoice adjustment",
+          "message": "Die Prüfentscheidung für die Rechnungsanpassung"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.display_name": {
+          "source": "Review Status",
+          "message": "Prüfstatus"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.short_desc": {
+          "source": "The review decision",
+          "message": "Die Prüfentscheidung"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Approve or decline an invoice adjustment",
+          "message": "Eine Rechnungsanpassung genehmigen oder ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Reject a pending time-off request for a worker in Deel",
+          "message": "Ausstehenden Urlaubs-/Abwesenheitsantrag für eine Arbeitskraft in Deel ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Reject a Time-Off Request",
+          "message": "Urlaubs-/Abwesenheitsantrag ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the time-off request was rejected",
+          "message": "Eine Erklärung, warum der Urlaubs-/Abwesenheitsantrag abgelehnt wurde"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Ablehnungsgrund"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Der Grund für die Ablehnung"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to reject",
+          "message": "Die eindeutige Kennung des abzulehnenden Urlaubs-/Abwesenheitsantrags"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "Anfrage-ID"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to reject",
+          "message": "Der abzulehnende Urlaubs-/Abwesenheitsantrag"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Reject a time-off request",
+          "message": "Einen Urlaubs-/Abwesenheitsantrag ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.desc": {
+          "source": "Reject a timesheet entry in Deel with an optional rejection reason",
+          "message": "Einen Zeiterfassungseintrag in Deel mit einem optionalen Ablehnungsgrund ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
+          "source": "Reject a Timesheet",
+          "message": "Zeiterfassung ablehnen"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the timesheet entry was rejected",
+          "message": "Eine Erklärung, warum der Zeiterfassungseintrag abgelehnt wurde"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Ablehnungsgrund"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Der Grund für die Ablehnung"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to reject",
+          "message": "Die eindeutige Kennung des abzulehnenden Zeiterfassungseintrags"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to reject",
+          "message": "Die abzulehnende Zeiterfassung"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
+          "source": "Reject a timesheet entry",
+          "message": "Einen Zeiterfassungseintrag ablehnen"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.desc": {
+          "source": "Terminate an existing contractor or employee contract in Deel",
+          "message": "Bestehenden Vertrag eines freien Mitarbeiters oder Angestellten in Deel kündigen"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Terminate a Contract",
+          "message": "Vertrag kündigen"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to terminate",
+          "message": "Die eindeutige Kennung des zu kündigenden Vertrags"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to terminate",
+          "message": "Der zu kündigende Vertrag"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.desc": {
+          "source": "The last day the worker will be active (YYYY-MM-DD format)",
+          "message": "Der letzte Tag, an dem die Arbeitskraft aktiv sein wird (Format: JJJJ-MM-TT)"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.display_name": {
+          "source": "Last Day of Work",
+          "message": "Letzter Arbeitstag"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.short_desc": {
+          "source": "The worker's last working day",
+          "message": "Der letzte Arbeitstag der Arbeitskraft"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.desc": {
+          "source": "The reason for terminating the contract",
+          "message": "Der Grund für die Kündigung des Vertrags"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.display_name": {
+          "source": "Termination Reason",
+          "message": "Kündigungsgrund"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.short_desc": {
+          "source": "The reason for termination",
+          "message": "Der Grund für die Kündigung"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Terminate an existing contract",
+          "message": "Einen bestehenden Vertrag kündigen"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.desc": {
+          "source": "Fires when a new time-off request is created in Deel. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Urlaubs-/Abwesenheitsantrag in Deel erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
+          "source": "Time-Off Request Created",
+          "message": "Urlaubs-/Abwesenheitsantrag erstellt"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new time-off request is created",
+          "message": "Auslösen, wenn ein neuer Urlaubs-/Abwesenheitsantrag erstellt wird"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.desc": {
+          "source": "Fires when a time-off request is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn ein Urlaubs-/Abwesenheitsantrag in Deel genehmigt oder abgelehnt wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
+          "source": "Time-Off Request Reviewed",
+          "message": "Urlaubs-/Abwesenheitsantrag überprüft"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {
+          "source": "Trigger when a time-off request is approved or rejected",
+          "message": "Auslösen, wenn ein Urlaubs-/Abwesenheitsantrag genehmigt oder abgelehnt wird"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.desc": {
+          "source": "Fires when a time-off request is updated in Deel. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn ein Urlaubs-/Abwesenheitsantrag in Deel aktualisiert wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
+          "source": "Time-Off Request Updated",
+          "message": "Urlaubs-/Abwesenheitsantrag aktualisiert"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a time-off request is updated",
+          "message": "Auslösen, wenn ein Urlaubs-/Abwesenheitsantrag aktualisiert wird"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new timesheet entry is submitted in Deel. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Zeiterfassungseintrag in Deel übermittelt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
+          "source": "Timesheet Submitted",
+          "message": "Zeiterfassung übermittelt"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new timesheet is submitted",
+          "message": "Auslösen, wenn eine neue Zeiterfassung übermittelt wird"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.desc": {
+          "source": "Fires when a timesheet entry is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn ein Zeiterfassungseintrag in Deel genehmigt oder abgelehnt wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
+          "source": "Timesheet Reviewed",
+          "message": "Zeiterfassung überprüft"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Nur Ereignisse erkennen, die nach diesem Datum bzw. dieser Uhrzeit erstellt oder aktualisiert wurden. Wenn nicht festgelegt, beginnt das Polling ab der aktuellen Uhrzeit."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Startdatum"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Ereignisse nur nach diesem Datum erkennen"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when a timesheet is approved or rejected",
+          "message": "Auslösen, wenn eine Zeiterfassung genehmigt oder abgelehnt wird"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.desc": {
+          "source": "Update the details of an existing contract in Deel",
+          "message": "Details eines bestehenden Vertrags in Deel aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Update a Contract",
+          "message": "Vertrag aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Vertrags"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "Vertrags-ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to update",
+          "message": "Der zu aktualisierende Vertrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The updated monetary amount for the contract",
+          "message": "Der aktualisierte Geldbetrag für den Vertrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "Updated contract amount",
+          "message": "Aktualisierter Vertragsbetrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title for the contract",
+          "message": "Die aktualisierte Berufsbezeichnung für den Vertrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Berufsbezeichnung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "Updated job title",
+          "message": "Aktualisierte Berufsbezeichnung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "Updated description of the work to be performed",
+          "message": "Aktualisierte Beschreibung der auszuführenden Arbeiten"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Leistungsumfang"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Updated scope of work",
+          "message": "Aktualisierter Arbeitsumfang"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A new descriptive title for the contract",
+          "message": "Ein neuer beschreibender Titel für den Vertrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "Updated contract title",
+          "message": "Aktualisierter Vertragstitel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Update an existing contract",
+          "message": "Einen bestehenden Vertrag aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Update an existing invoice adjustment in Deel",
+          "message": "Bestehende Rechnungskorrektur in Deel aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Update an Invoice Adjustment",
+          "message": "Rechnungskorrektur aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The new monetary amount for this invoice adjustment",
+          "message": "Der neue Geldbetrag für diese Rechnungskorrektur"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The updated adjustment amount",
+          "message": "Der aktualisierte Korrekturbetrag"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to update",
+          "message": "Die eindeutige Kennung der zu aktualisierenden Rechnungskorrektur"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "Anpassungs-ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to update",
+          "message": "Die zu aktualisierende Korrektur"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated explanation for this invoice adjustment",
+          "message": "Die aktualisierte Erklärung für diese Rechnungskorrektur"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The updated description",
+          "message": "Die aktualisierte Beschreibung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Update an existing invoice adjustment",
+          "message": "Eine bestehende Rechnungskorrektur aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.desc": {
+          "source": "Update an existing timesheet entry in Deel",
+          "message": "Bestehenden Zeiterfassungseintrag in Deel aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Update a Timesheet",
+          "message": "Zeiterfassung aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated description of the work performed",
+          "message": "Die aktualisierte Beschreibung der ausgeführten Arbeit"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated work description",
+          "message": "Aktualisierte Arbeitsbeschreibung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The new number of hours worked",
+          "message": "Die neue Anzahl der geleisteten Arbeitsstunden"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Stunden (Menge)"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The updated number of hours",
+          "message": "Die aktualisierte Anzahl der Stunden"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Zeiterfassungseintrags"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "Zeiterfassungs-ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to update",
+          "message": "Die zu aktualisierende Zeiterfassung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Update an existing timesheet entry",
+          "message": "Einen vorhandenen Zeiterfassungseintrag aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.desc": {
+          "source": "Update an existing worker or person record in Deel",
+          "message": "Einen vorhandenen Mitarbeiter- oder Personendatensatz in Deel aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
+          "source": "Update a Worker",
+          "message": "Einen Mitarbeiter aktualisieren"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The updated given (first) name of the worker",
+          "message": "Der aktualisierte Vorname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Der Vorname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title of the worker",
+          "message": "Die aktualisierte Berufsbezeichnung des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Berufsbezeichnung"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Die Berufsbezeichnung der Arbeitskraft"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The updated family (last) name of the worker",
+          "message": "Der aktualisierte Nachname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Der Nachname des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Mid-Level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Junior-Level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Lead-Level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Senior-Level"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The updated seniority level of the worker",
+          "message": "Die aktualisierte Erfahrungsstufe (Seniority) des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Erfahrungsstufe"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Die Erfahrungsstufe des Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker to update",
+          "message": "Die eindeutige Kennung des zu aktualisierenden Mitarbeiters"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "Mitarbeiter-ID"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker to update",
+          "message": "Der zu aktualisierende Mitarbeiter"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
+          "source": "Update an existing worker's information",
+          "message": "Informationen eines vorhandenen Mitarbeiters aktualisieren"
+        },
+        "app.RGVlbA.desc": {
+          "source": "Deel is a global workforce management and HR platform for hiring, managing, and paying contractors and full-time employees worldwide.\n\nThis integration supports contracts, timesheets, invoice adjustments, workers, time-off requests, legal entities, invoices, and polling-based event triggers.",
+          "message": "Deel ist eine globale Plattform für Personalverwaltung und HR zur Einstellung, Verwaltung und Bezahlung von Auftragnehmern und Festangestellten weltweit.\n\nDiese Integration unterstützt Verträge, Zeiterfassungen, Rechnungskorrekturen, Mitarbeiter, Urlaubsanträge, juristische Personen, Rechnungen und pollingbasierte Ereignisauslöser."
+        },
+        "app.RGVlbA.display_name": {
+          "source": "Deel",
+          "message": "Deel"
+        },
+        "app.RGVlbA.short_desc": {
+          "source": "Deel global workforce management platform",
+          "message": "Deel globale Personalverwaltungsplattform"
+        }
+      }
+    }
+  }
+}

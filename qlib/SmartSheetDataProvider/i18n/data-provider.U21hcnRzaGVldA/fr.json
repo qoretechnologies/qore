@@ -1,0 +1,1253 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in the home location",
+          "message": "Créer un nouveau dossier à l'emplacement d'accueil"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create a Folder",
+          "message": "Créer un dossier"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name for the new folder",
+          "message": "Le nom du nouveau dossier"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "Nom du dossier"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "Name for the new folder",
+          "message": "Nom du nouveau dossier"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "Créer un nouveau dossier"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.desc": {
+          "source": "Create a new Smartsheet group with optional initial members",
+          "message": "Créer un nouveau groupe Smartsheet avec des membres initiaux facultatifs"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
+          "source": "Create a Group",
+          "message": "Créer un groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the new group",
+          "message": "Description du nouveau groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Description du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.desc": {
+          "source": "A list of members to add to the group. Each member requires an `email` address",
+          "message": "Une liste de membres à ajouter au groupe. Chaque membre nécessite une adresse `email`"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.display_name": {
+          "source": "Members",
+          "message": "Membres"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.short_desc": {
+          "source": "Initial group members",
+          "message": "Membres initiaux du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The name for the new group",
+          "message": "Nom du nouveau groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Nom du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "Name for the new group",
+          "message": "Nom du nouveau groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
+          "source": "Create a new group",
+          "message": "Créer un nouveau groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.desc": {
+          "source": "Create a new row in a Smartsheet sheet with values for the sheet's columns. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Créer une nouvelle ligne dans une feuille Smartsheet avec des valeurs pour les colonnes de la feuille. Les champs de colonne sont déterminés dynamiquement à partir des définitions de colonnes de la feuille sélectionnée"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
+          "source": "Create Row",
+          "message": "Créer une ligne"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where the new row will be created",
+          "message": "Sélectionnez la feuille Smartsheet dans laquelle la nouvelle ligne sera créée"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to create a row in",
+          "message": "Feuille Smartsheet dans laquelle créer une ligne"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
+          "source": "Create a row in a sheet",
+          "message": "Créer une ligne dans une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.desc": {
+          "source": "Create a new Smartsheet sheet with the given name and column definitions",
+          "message": "Créer une nouvelle feuille Smartsheet avec le nom et les définitions de colonnes indiqués"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
+          "source": "Create a Sheet",
+          "message": "Créer une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.desc": {
+          "source": "A list of column definitions. Each column requires a `title` and `type`. The first column must be the primary column with `\"primary\": True`",
+          "message": "Une liste de définitions de colonnes. Chaque colonne nécessite un `title` et un `type`. La première colonne doit être la colonne principale avec `\"primary\": True`"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "Colonnes"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.short_desc": {
+          "source": "Column definitions",
+          "message": "Définitions de colonnes"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.desc": {
+          "source": "The name for the new sheet",
+          "message": "Nom de la nouvelle feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.display_name": {
+          "source": "Sheet Name",
+          "message": "Nom de la feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.short_desc": {
+          "source": "Name for the new sheet",
+          "message": "Nom de la nouvelle feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
+          "source": "Create a new sheet",
+          "message": "Créer une nouvelle feuille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.desc": {
+          "source": "Add a new user to the Smartsheet organization",
+          "message": "Ajouter un nouvel utilisateur à l'organisation Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
+          "source": "Add a User",
+          "message": "Ajouter un utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.desc": {
+          "source": "Whether the user should be a system admin",
+          "message": "Indique si l'utilisateur doit être un administrateur système"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.display_name": {
+          "source": "Admin",
+          "message": "Admin"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.short_desc": {
+          "source": "Whether user is admin",
+          "message": "Indique si l'utilisateur est admin"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.desc": {
+          "source": "Whether the user should be a group admin",
+          "message": "Indique si l'utilisateur doit être un administrateur de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.display_name": {
+          "source": "Group Admin",
+          "message": "Admin de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.short_desc": {
+          "source": "Whether user is group admin",
+          "message": "Indique si l'utilisateur est admin de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.desc": {
+          "source": "The email address for the new user",
+          "message": "Adresse e-mail du nouvel utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Adresse e-mail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the new user",
+          "message": "Prénom du nouvel utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "User's first name",
+          "message": "Prénom de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the new user",
+          "message": "Nom de famille du nouvel utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.short_desc": {
+          "source": "User's last name",
+          "message": "Nom de famille de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.desc": {
+          "source": "Whether the user should be a licensed sheet creator",
+          "message": "Indique si l'utilisateur doit être un créateur de feuilles sous licence"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.display_name": {
+          "source": "Licensed Sheet Creator",
+          "message": "Créateur de feuilles sous licence"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.short_desc": {
+          "source": "Whether user can create sheets",
+          "message": "Indique si l'utilisateur peut créer des feuilles"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.desc": {
+          "source": "Whether the user should be a resource viewer",
+          "message": "Indique si l'utilisateur doit être un observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.display_name": {
+          "source": "Resource Viewer",
+          "message": "Observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.short_desc": {
+          "source": "Whether user is resource viewer",
+          "message": "Indique si l'utilisateur est observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
+          "source": "Add a user to the organization",
+          "message": "Ajouter un utilisateur à l'organisation"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Create a new Smartsheet workspace",
+          "message": "Créer un nouvel espace de travail Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Create a Workspace",
+          "message": "Créer un espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The name for the new workspace",
+          "message": "Nom du nouvel espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Workspace Name",
+          "message": "Nom de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Name for the new workspace",
+          "message": "Nom du nouvel espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Create a new workspace",
+          "message": "Créer un nouvel espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.desc": {
+          "source": "Permanently delete a Smartsheet folder",
+          "message": "Supprimer définitivement un dossier Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
+          "source": "Delete a Folder",
+          "message": "Supprimer un dossier"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.desc": {
+          "source": "The unique identifier of the folder to delete",
+          "message": "Identifiant unique du dossier à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID du dossier"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.short_desc": {
+          "source": "ID of the folder to delete",
+          "message": "ID du dossier à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
+          "source": "Delete a folder",
+          "message": "Supprimer un dossier"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.desc": {
+          "source": "Permanently delete a Smartsheet group",
+          "message": "Supprimer définitivement un groupe Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
+          "source": "Delete a Group",
+          "message": "Supprimer un groupe"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.desc": {
+          "source": "The unique identifier of the group to delete",
+          "message": "L'identifiant unique du groupe à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.short_desc": {
+          "source": "ID of the group to delete",
+          "message": "ID du groupe à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
+          "source": "Delete a group",
+          "message": "Supprimer un groupe"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.desc": {
+          "source": "Delete matching rows from a Smartsheet sheet",
+          "message": "Supprimer les lignes correspondantes d'une feuille Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
+          "source": "Delete Rows",
+          "message": "Supprimer des lignes"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where rows will be deleted",
+          "message": "Sélectionnez la feuille Smartsheet dans laquelle les lignes seront supprimées"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to delete rows from",
+          "message": "La feuille Smartsheet de laquelle supprimer des lignes"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
+          "source": "Delete rows from a sheet",
+          "message": "Supprimer des lignes d'une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.desc": {
+          "source": "Permanently delete a Smartsheet sheet",
+          "message": "Supprimer définitivement une feuille Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
+          "source": "Delete a Sheet",
+          "message": "Supprimer une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.desc": {
+          "source": "The unique identifier of the sheet to delete",
+          "message": "L'identifiant unique de la feuille à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID de la feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.short_desc": {
+          "source": "ID of the sheet to delete",
+          "message": "ID de la feuille à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
+          "source": "Delete a sheet",
+          "message": "Supprimer une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.desc": {
+          "source": "Remove a user from the Smartsheet organization",
+          "message": "Supprimer un utilisateur de l'organisation Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
+          "source": "Remove a User",
+          "message": "Supprimer un utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.desc": {
+          "source": "If `True`, removes the user from your organization and revokes their access to all organization and plan assets",
+          "message": "Si `True`, supprime l'utilisateur de votre organisation et révoque son accès à tous les actifs de l'organisation et du forfait"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.display_name": {
+          "source": "Remove From Sharing",
+          "message": "Supprimer des partages"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.short_desc": {
+          "source": "Revoke access to shared assets",
+          "message": "Révoquer l'accès aux actifs partagés"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.desc": {
+          "source": "If `True`, transfers ownership of all the removed user's assets and groups to the user specified in `transferTo`",
+          "message": "Si `True`, transfère la propriété de tous les actifs et groupes de l'utilisateur supprimé à l'utilisateur spécifié dans `transferTo`"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.display_name": {
+          "source": "Transfer Sheets",
+          "message": "Transférer les feuilles"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.short_desc": {
+          "source": "Transfer sheets to the target user",
+          "message": "Transférer les feuilles à l'utilisateur cible"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.desc": {
+          "source": "The ID of the user to whom ownership of groups (and optionally sheets) will be transferred. If omitted, group ownership is transferred to the organization's main contact",
+          "message": "L'ID de l'utilisateur auquel la propriété des groupes (et éventuellement des feuilles) sera transférée. En cas d'omission, la propriété des groupes est transférée au contact principal de l'organisation"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.display_name": {
+          "source": "Transfer To",
+          "message": "Transférer à"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.short_desc": {
+          "source": "User ID to transfer ownership to",
+          "message": "ID de l'utilisateur auquel transférer la propriété"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.desc": {
+          "source": "The unique identifier of the user to delete",
+          "message": "L'identifiant unique de l'utilisateur à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.short_desc": {
+          "source": "ID of the user to delete",
+          "message": "ID de l'utilisateur à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
+          "source": "Remove a user from the organization",
+          "message": "Supprimer un utilisateur de l'organisation"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Permanently delete a Smartsheet workspace",
+          "message": "Supprimer définitivement un espace de travail Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Delete a Workspace",
+          "message": "Supprimer un espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The unique identifier of the workspace to delete",
+          "message": "L'identifiant unique de l'espace de travail à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "ID of the workspace to delete",
+          "message": "ID de l'espace de travail à supprimer"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Delete a workspace",
+          "message": "Supprimer un espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.desc": {
+          "source": "Search for rows in a Smartsheet sheet by column values. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Rechercher des lignes dans une feuille Smartsheet par valeurs de colonnes. Les champs de colonnes sont déterminés dynamiquement à partir des définitions de colonnes de la feuille sélectionnée"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
+          "source": "Find Rows",
+          "message": "Rechercher des lignes"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet to search for rows",
+          "message": "Sélectionnez la feuille Smartsheet dans laquelle rechercher des lignes"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Feuille"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to search",
+          "message": "La feuille Smartsheet dans laquelle effectuer la recherche"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
+          "source": "Find rows in a sheet",
+          "message": "Rechercher des lignes dans une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all users in the Smartsheet organization",
+          "message": "Lister tous les utilisateurs de l'organisation Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Lister les utilisateurs"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrer par e-mail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.dXNlcklk.short_desc": {
+          "source": "Get a specific user",
+          "message": "Obtenir un utilisateur spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List all users",
+          "message": "Lister tous les utilisateurs"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.desc": {
+          "source": "List all workspaces accessible to the authenticated user",
+          "message": "Lister tous les espaces de travail accessibles à l'utilisateur authentifié"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
+          "source": "List Workspaces",
+          "message": "Lister les espaces de travail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "Get a specific workspace",
+          "message": "Obtenir un espace de travail spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
+          "source": "List all workspaces",
+          "message": "Lister tous les espaces de travail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.desc": {
+          "source": "List all folders in the home location",
+          "message": "Lister tous les dossiers dans l'emplacement d'accueil"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
+          "source": "List Folders",
+          "message": "Lister les dossiers"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID du dossier"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.option.Zm9sZGVySWQ.short_desc": {
+          "source": "Get a specific folder",
+          "message": "Obtenir un dossier spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
+          "source": "List home folders",
+          "message": "Lister les dossiers d'accueil"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.desc": {
+          "source": "List all groups in the Smartsheet organization",
+          "message": "Lister tous les groupes de l'organisation Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
+          "source": "List Groups",
+          "message": "Lister les groupes"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.option.Z3JvdXBJZA.short_desc": {
+          "source": "Get a specific group",
+          "message": "Obtenir un groupe spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
+          "source": "List all groups",
+          "message": "Lister tous les groupes"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.desc": {
+          "source": "List all reports accessible to the authenticated user (read-only)",
+          "message": "Lister tous les rapports accessibles à l'utilisateur authentifié (lecture seule)"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
+          "source": "List Reports",
+          "message": "Lister les rapports"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.option.cmVwb3J0SWQ.display_name": {
+          "source": "Report ID",
+          "message": "ID de rapport"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.option.cmVwb3J0SWQ.short_desc": {
+          "source": "Get a specific report",
+          "message": "Obtenir un rapport spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
+          "source": "List all reports",
+          "message": "Lister tous les rapports"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.desc": {
+          "source": "List all sheets accessible to the authenticated user",
+          "message": "Lister toutes les feuilles accessibles à l'utilisateur authentifié"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
+          "source": "List Sheets",
+          "message": "Lister les feuilles"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID de la feuille"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.option.c2hlZXRJZA.short_desc": {
+          "source": "Get a specific sheet",
+          "message": "Obtenir une feuille spécifique"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
+          "source": "List all sheets",
+          "message": "Lister toutes les feuilles"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Smartsheet** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Passez un appel d'API HTTP / REST personnalisé à **Smartsheet** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hash contenant le code d'état, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés comme des actions de premier ordre sur cette application."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Smartsheet",
+          "message": "Effectuer un appel d'API personnalisé à Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.desc": {
+          "source": "Fires when a sheet is updated in the Smartsheet account",
+          "message": "Se déclenche lorsqu'une feuille est mise à jour dans le compte Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
+          "source": "Sheet Updated",
+          "message": "Feuille mise à jour"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a sheet is updated",
+          "message": "Déclencher lorsqu'une feuille est mise à jour"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new row is created in a Smartsheet sheet",
+          "message": "Se déclenche lorsqu'une nouvelle ligne est créée dans une feuille Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
+          "source": "Row Created",
+          "message": "Ligne créée"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new row is created",
+          "message": "Déclencher lorsqu'une nouvelle ligne est créée"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.desc": {
+          "source": "Fires when a row is deleted from a Smartsheet sheet",
+          "message": "Se déclenche lorsqu'une ligne est supprimée d'une feuille Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
+          "source": "Row Deleted",
+          "message": "Ligne supprimée"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {
+          "source": "Trigger when a row is deleted",
+          "message": "Se déclenche lorsqu'une ligne est supprimée"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.desc": {
+          "source": "Fires when a row is updated in a Smartsheet sheet",
+          "message": "Se déclenche lorsqu'une ligne est mise à jour dans une feuille Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
+          "source": "Row Updated",
+          "message": "Ligne mise à jour"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a row is updated",
+          "message": "Se déclenche lorsqu'une ligne est mise à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.desc": {
+          "source": "Update a Smartsheet folder's name",
+          "message": "Mettre à jour le nom d'un dossier Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
+          "source": "Update a Folder",
+          "message": "Mettre à jour un dossier"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.desc": {
+          "source": "The unique identifier of the folder to update",
+          "message": "L'identifiant unique du dossier à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID du dossier"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.short_desc": {
+          "source": "ID of the folder to update",
+          "message": "ID du dossier à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The new name for the folder",
+          "message": "Le nouveau nom du dossier"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "New folder name",
+          "message": "Nouveau nom de dossier"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
+          "source": "Update a folder",
+          "message": "Mettre à jour un dossier"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.desc": {
+          "source": "Update a Smartsheet group's name or description",
+          "message": "Mettre à jour le nom ou la description d'un groupe Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
+          "source": "Update a Group",
+          "message": "Mettre à jour un groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.desc": {
+          "source": "The unique identifier of the group to update",
+          "message": "L'identifiant unique du groupe à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.short_desc": {
+          "source": "ID of the group to update",
+          "message": "ID du groupe à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the group",
+          "message": "La nouvelle description du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "New group description",
+          "message": "Nouvelle description du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The new name for the group",
+          "message": "Le nouveau nom du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "New group name",
+          "message": "Nouveau nom du groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
+          "source": "Update a group",
+          "message": "Mettre à jour un groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.desc": {
+          "source": "Update matching rows in a Smartsheet sheet with new column values. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Mettre à jour les lignes correspondantes dans une feuille Smartsheet avec de nouvelles valeurs de colonne. Les champs de colonne sont déterminés dynamiquement à partir des définitions de colonne de la feuille sélectionnée"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
+          "source": "Update Rows",
+          "message": "Mettre à jour des lignes"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where rows will be updated",
+          "message": "Sélectionnez la feuille Smartsheet dans laquelle les lignes seront mises à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to update rows in",
+          "message": "La feuille Smartsheet dans laquelle mettre à jour les lignes"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
+          "source": "Update rows in a sheet",
+          "message": "Mettre à jour des lignes dans une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.desc": {
+          "source": "Update a Smartsheet sheet's properties such as its name",
+          "message": "Mettre à jour les propriétés d'une feuille Smartsheet telles que son nom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
+          "source": "Update a Sheet",
+          "message": "Mettre à jour une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.desc": {
+          "source": "The new name for the sheet",
+          "message": "Le nouveau nom de la feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.short_desc": {
+          "source": "New sheet name",
+          "message": "Nouveau nom de feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.desc": {
+          "source": "The unique identifier of the sheet to update",
+          "message": "L'identifiant unique de la feuille à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID de la feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.short_desc": {
+          "source": "ID of the sheet to update",
+          "message": "ID de la feuille à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
+          "source": "Update a sheet's properties",
+          "message": "Mettre à jour les propriétés d'une feuille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.desc": {
+          "source": "Update a Smartsheet user's account settings",
+          "message": "Mettre à jour les paramètres du compte d'un utilisateur Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
+          "source": "Update a User",
+          "message": "Mettre à jour un utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.desc": {
+          "source": "Whether the user should be a system admin",
+          "message": "Indique si l'utilisateur doit être un administrateur système"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.display_name": {
+          "source": "Admin",
+          "message": "Admin"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.short_desc": {
+          "source": "Whether user is admin",
+          "message": "Indique si l'utilisateur est admin"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.desc": {
+          "source": "Whether the user should be a group admin",
+          "message": "Indique si l'utilisateur doit être un administrateur de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.display_name": {
+          "source": "Group Admin",
+          "message": "Admin de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.short_desc": {
+          "source": "Whether user is group admin",
+          "message": "Indique si l'utilisateur est admin de groupe"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.desc": {
+          "source": "The new first name for the user",
+          "message": "Le nouveau prénom de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "User's first name",
+          "message": "Prénom de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.desc": {
+          "source": "The new last name for the user",
+          "message": "Le nouveau nom de famille de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.short_desc": {
+          "source": "User's last name",
+          "message": "Nom de famille de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.desc": {
+          "source": "Whether the user should be a licensed sheet creator",
+          "message": "Indique si l'utilisateur doit être un créateur de feuilles sous licence"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.display_name": {
+          "source": "Licensed Sheet Creator",
+          "message": "Créateur de feuilles sous licence"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.short_desc": {
+          "source": "Whether user can create sheets",
+          "message": "Indique si l'utilisateur peut créer des feuilles"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.desc": {
+          "source": "Whether the user should be a resource viewer",
+          "message": "Indique si l'utilisateur doit être un observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.display_name": {
+          "source": "Resource Viewer",
+          "message": "Observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.short_desc": {
+          "source": "Whether user is resource viewer",
+          "message": "Indique si l'utilisateur est observateur de ressources"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.desc": {
+          "source": "The unique identifier of the user to update",
+          "message": "L'identifiant unique de l'utilisateur à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID de l'utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.short_desc": {
+          "source": "ID of the user to update",
+          "message": "ID de l'utilisateur à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
+          "source": "Update a user's settings",
+          "message": "Mettre à jour les paramètres d'un utilisateur"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Update a Smartsheet workspace's properties",
+          "message": "Mettre à jour les propriétés d'un espace de travail Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Update a Workspace",
+          "message": "Mettre à jour un espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the workspace",
+          "message": "Le nouveau nom de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "New workspace name",
+          "message": "Nouveau nom de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The unique identifier of the workspace to update",
+          "message": "L'identifiant unique de l'espace de travail à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID de l'espace de travail"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "ID of the workspace to update",
+          "message": "ID de l'espace de travail à mettre à jour"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Update a workspace",
+          "message": "Mettre à jour un espace de travail"
+        },
+        "app.U21hcnRzaGVldA.desc": {
+          "source": "Smartsheet is a platform for work execution, providing spreadsheet-like interfaces for managing projects, tasks, and data.\n\nThis integration supports managing sheets, rows, columns, workspaces, folders, reports, users, and groups. Sheets are modeled as dynamic tables with typed columns for structured data access",
+          "message": "Smartsheet est une plateforme d'exécution du travail qui propose des interfaces de type feuille de calcul pour gérer les projets, les tâches et les données.\n\nCette intégration prend en charge la gestion des feuilles, des lignes, des colonnes, des espaces de travail, des dossiers, des rapports, des utilisateurs et des groupes. Les feuilles sont modélisées sous forme de tableaux dynamiques avec des colonnes typées pour un accès structuré aux données"
+        },
+        "app.U21hcnRzaGVldA.display_name": {
+          "source": "Smartsheet",
+          "message": "Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.short_desc": {
+          "source": "Smartsheet spreadsheet and work management platform",
+          "message": "Plateforme de feuilles de calcul et de gestion du travail Smartsheet"
+        }
+      }
+    }
+  }
+}

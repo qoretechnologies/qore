@@ -1,0 +1,2125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Add a new message (reply or internal note) to a Gorgias ticket",
+          "message": "Gorgiasチケットに新しいメッセージ（返信または社内メモ）を追加する"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create a Message",
+          "message": "メッセージを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "メッセージのチャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "メッセージチャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "List of file attachments for the message. Each attachment requires a `url` pointing to the file location, and optionally `name`, `content_type`, `size`, and `public` fields",
+          "message": "メッセージの添付ファイル一覧。各添付ファイルにはファイルの場所を指す `url` が必要で、任意で `name`、`content_type`、`size`、`public` フィールドを指定できます"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "添付ファイル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "添付ファイル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the message. Provide either `body_text` or `body_html`",
+          "message": "メッセージのプレーンテキスト本文。`body_text` または `body_html` のいずれかを指定してください"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "本文テキスト"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "プレーンテキスト本文"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the message. Provide either `body_text` or `body_html`",
+          "message": "メッセージのHTML本文。`body_text` または `body_html` のいずれかを指定してください"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "本文HTML"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML本文"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "メッセージがエージェント（`True`）または顧客（`False`）のどちらから送信されたか"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "エージェントから"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "エージェントからの送信かどうか"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "メッセージの送信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "送信者"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "メッセージ送信者"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the message (for email channel)",
+          "message": "メッセージの件名（メールチャネル用）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "メッセージの件名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "メッセージの受信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "受信者"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "メッセージ受信者"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to add the message to",
+          "message": "メッセージを追加するチケットのID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to add a message to",
+          "message": "メッセージを追加するチケット"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "ヘルプデスク"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "メッセージの作成方法"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "経由"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "メッセージソース"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Add a message to a ticket",
+          "message": "チケットにメッセージを追加"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new Gorgias customer profile",
+          "message": "新しいGorgias顧客プロファイルを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "顧客を作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "顧客の通信チャネル一覧。各チャネルには `address`、`type`、および任意の `preferred` フラグがあります"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "通信チャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "顧客のプライマリメールアドレス"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "顧客のメールアドレス"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer from an integrated system",
+          "message": "統合システムからの顧客の外部識別子"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "外部識別子"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "顧客の名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "顧客の名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "顧客の希望言語（ISO 639-1コード）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "希望言語"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "顧客の姓"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "顧客の姓"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "顧客に関する社内メモ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "顧客の氏名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "氏名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer (e.g., `America/New_York`)",
+          "message": "顧客のタイムゾーン（例: `America/New_York`）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "タイムゾーン"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "顧客のタイムゾーン"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "新しい顧客を作成します"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new Gorgias tag for organizing tickets",
+          "message": "チケットを整理するための新しいGorgiasタグを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "タグを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "タグの視覚的な装飾設定"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "装飾"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "視覚的装飾"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "タグの簡単な説明"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "タグの説明"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag (min 1, max 256 characters)",
+          "message": "タグの名前（最小1文字、最大256文字）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "新しいタグを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.desc": {
+          "source": "Create a new Gorgias support ticket with messages, channel, and optional assignment",
+          "message": "メッセージ、チャネル、任意の割り当てを含む新しいGorgiasサポートチケットを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
+          "source": "Create a Ticket",
+          "message": "チケットを作成"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the ticket (e.g., `email`, `chat`, `api`)",
+          "message": "チケットのチャネル（例: `email`、`chat`、`api`）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.short_desc": {
+          "source": "Communication channel",
+          "message": "通信チャネル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "The customer for this ticket. Provide `id` to reference an existing customer, or `email` to match or create by email address",
+          "message": "このチケットの顧客。既存の顧客を参照するには `id` を指定し、メールアドレスで照合または作成するには `email` を指定してください"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "顧客データ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign to this ticket",
+          "message": "このチケットに割り当てるチーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "担当チーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "割り当てられたチーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign to this ticket",
+          "message": "このチケットに割り当てるエージェント"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "担当ユーザー"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "割り当てられたエージェント"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "チケットの外部識別子（最大255文字）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "外部識別子"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the ticket content",
+          "message": "チケット内容の言語"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Ticket language",
+          "message": "チケットの言語"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.desc": {
+          "source": "List of initial messages for the ticket. Required field. Each message must have `channel`, `from_agent`, and `via`. Provide either `body_text` or `body_html` for message content. Up to 500 messages per ticket",
+          "message": "チケットの初期メッセージ一覧。必須フィールドです。各メッセージには `channel`、`from_agent`、`via` が必要です。メッセージ本文には `body_text` または `body_html` のいずれかを指定してください。1チケットにつき最大500メッセージまでです"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.short_desc": {
+          "source": "Initial messages",
+          "message": "初期メッセージ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam. Default: `False`",
+          "message": "チケットをスパムとしてマークするかどうか。デフォルト: `False`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "スパム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "スパムとしてマーク"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "クローズ済み"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The initial status of the ticket",
+          "message": "チケットの初期ステータス"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "チケットのステータス"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the ticket (max 998 characters)",
+          "message": "チケットの件名（最大998文字）"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject line",
+          "message": "チケットの件名"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "標準"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "緊急"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The priority level of the ticket",
+          "message": "チケットの優先度レベル"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "チケットの優先度"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to apply to the ticket. Each tag must have a `name` field",
+          "message": "チケットに適用するタグのリスト。各タグには `name` フィールドが必要です"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to apply",
+          "message": "適用するタグ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "ヘルプデスク"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.desc": {
+          "source": "How the ticket was created. Required field",
+          "message": "チケットの作成方法。必須フィールド"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "経由"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.short_desc": {
+          "source": "Ticket source",
+          "message": "チケットのソース"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
+          "source": "Create a new support ticket",
+          "message": "新しいサポートチケットを作成"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a single message from a Gorgias ticket",
+          "message": "Gorgiasチケットから単一のメッセージを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get a Message",
+          "message": "メッセージを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID",
+          "message": "メッセージID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "メッセージを含むチケット"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a single message by ID",
+          "message": "IDで単一のメッセージを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single Gorgias customer by their ID",
+          "message": "IDで単一のGorgias顧客を取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "顧客を取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "顧客 ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "IDで単一の顧客を取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single Gorgias tag by its ID",
+          "message": "IDで単一のGorgiasタグを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "タグを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID で単一のタグを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.desc": {
+          "source": "Retrieve a single Gorgias ticket by its ID",
+          "message": "IDで単一のGorgiasチケットを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
+          "source": "Get a Ticket",
+          "message": "チケットの取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
+          "source": "Get a single ticket by ID",
+          "message": "IDで単一のチケットを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single Gorgias user (agent) by their ID",
+          "message": "IDで単一のGorgiasユーザー（エージェント）を取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "ユーザーを取得"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "ユーザーID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "IDで単一のユーザーを取得"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently delete a message from a Gorgias ticket",
+          "message": "Gorgiasチケットからメッセージを完全に削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "メッセージを削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to delete",
+          "message": "削除するメッセージの ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to delete",
+          "message": "削除するメッセージ"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to delete",
+          "message": "削除するメッセージを含むチケットのID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "メッセージを含むチケット"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Delete an existing message",
+          "message": "既存のメッセージを削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Permanently delete a Gorgias customer",
+          "message": "Gorgias顧客を完全に削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "顧客の削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "削除する顧客の ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "削除する顧客"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete an existing customer",
+          "message": "既存の顧客を削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Permanently delete a Gorgias tag",
+          "message": "Gorgiasタグを完全に削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "タグの削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to delete",
+          "message": "削除するタグのID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "削除するタグ"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete an existing tag",
+          "message": "既存のタグを削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.desc": {
+          "source": "Permanently delete a Gorgias ticket",
+          "message": "Gorgiasチケットを完全に削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
+          "source": "Delete a Ticket",
+          "message": "チケットを削除"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to delete",
+          "message": "削除するチケットのID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to delete",
+          "message": "削除するチケット"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
+          "source": "Delete an existing ticket",
+          "message": "既存のチケットを削除"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.desc": {
+          "source": "List all Gorgias tags",
+          "message": "すべてのGorgiasタグを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Get a specific tag",
+          "message": "特定のタグを取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags",
+          "message": "タグを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.desc": {
+          "source": "List Gorgias support tickets with optional filtering by status, assignee, customer, and channel",
+          "message": "ステータス、担当者、顧客、チャネルによるオプションのフィルタリング付きでGorgiasサポートチケットを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
+          "source": "List Tickets",
+          "message": "チケット一覧"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.short_desc": {
+          "source": "Filter by channel",
+          "message": "チャンネルで絞り込み"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "顧客で絞り込み"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.display_name": {
+          "source": "Assignee User ID",
+          "message": "担当者ユーザーID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned agent",
+          "message": "割り当てられたエージェントでフィルタリング"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "クローズ済み"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "ステータスで絞り込み"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.short_desc": {
+          "source": "Get a specific ticket",
+          "message": "特定のチケットを取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
+          "source": "List support tickets",
+          "message": "サポートチケットを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all Gorgias helpdesk agents (users)",
+          "message": "すべてのGorgiasヘルプデスクエージェント（ユーザー）を一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "ユーザー一覧"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.short_desc": {
+          "source": "Get a specific user",
+          "message": "特定のユーザーを取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List helpdesk agents",
+          "message": "ヘルプデスクエージェントを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List Gorgias customers with optional filtering",
+          "message": "オプションのフィルタリング付きでGorgias顧客を一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "顧客の一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Get a specific customer",
+          "message": "特定の顧客を取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List customers",
+          "message": "顧客を一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.desc": {
+          "source": "List all messages for a specific Gorgias ticket",
+          "message": "特定のGorgiasチケットのすべてのメッセージを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
+          "source": "List Messages",
+          "message": "メッセージを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Get a specific message",
+          "message": "特定のメッセージを取得"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to list messages for",
+          "message": "メッセージを一覧表示するチケット"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
+          "source": "List messages for a ticket",
+          "message": "チケットのメッセージを一覧表示"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gorgias** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Gorgias**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gorgias",
+          "message": "GorgiasへのカスタムAPI呼び出しを実行"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.desc": {
+          "source": "Fires when a new ticket is created in Gorgias",
+          "message": "Gorgiasで新しいチケットが作成されたときにトリガー"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
+          "source": "New Ticket",
+          "message": "新規チケット"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
+          "source": "Trigger when a new ticket is created",
+          "message": "新しいチケットが作成されたときにトリガー"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.desc": {
+          "source": "Fires when a ticket is modified in Gorgias",
+          "message": "Gorgiasでチケットが変更されたときにトリガー"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
+          "source": "Ticket Updated",
+          "message": "チケットが更新されました"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
+          "source": "Trigger when a ticket is updated",
+          "message": "チケットが更新されたときにトリガーします"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.desc": {
+          "source": "Update the body, channel, or other properties of a message on a ticket",
+          "message": "チケット上のメッセージの本文、チャネル、またはその他のプロパティを更新します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Update a Message",
+          "message": "メッセージの更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "メッセージのチャネル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "メッセージチャネル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "Updated list of file attachments for the message",
+          "message": "メッセージの添付ファイルの更新されたリスト"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "添付ファイル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "添付ファイル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The updated plain text body of the message",
+          "message": "メッセージの更新されたプレーンテキスト本文"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "本文テキスト"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "プレーンテキスト本文"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The updated HTML body of the message",
+          "message": "メッセージの更新されたHTML本文"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "本文HTML"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML本文"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the message",
+          "message": "メッセージの外部識別子"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "外部識別子"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "メッセージがエージェント（`True`）または顧客（`False`）のどちらから送信されたか"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "エージェントから"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "エージェントからの送信かどうか"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to update",
+          "message": "更新するメッセージのID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "メッセージ ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to update",
+          "message": "更新するメッセージ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "メッセージの送信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "送信者"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "メッセージ送信者"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The updated subject line of the message",
+          "message": "メッセージの更新された件名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "メッセージの件名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "メッセージの受信者。エージェントの場合は `id`、顧客の場合は `email` を指定してください"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "受信者"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "メッセージ受信者"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to update",
+          "message": "更新するメッセージを含むチケットのID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "メッセージを含むチケット"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "お問い合わせフォーム"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "ヘルプセンター"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "ヘルプデスク"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "メッセージの作成方法"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "経由"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "メッセージソース"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Update an existing message",
+          "message": "既存のメッセージを更新します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the name, email, or other properties of a customer",
+          "message": "顧客の名前、メールアドレス、またはその他のプロパティを更新します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "顧客の更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "顧客の通信チャネル一覧。各チャネルには `address`、`type`、および任意の `preferred` フラグがあります"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "チャネル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "通信チャネル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "更新する顧客のID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "更新する顧客"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "顧客のプライマリメールアドレス"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "顧客のメールアドレス"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer",
+          "message": "顧客の外部識別子"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "外部識別子"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "顧客の名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "顧客の名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "顧客の希望言語（ISO 639-1コード）"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "希望言語"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "顧客の姓"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "顧客の姓"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "顧客に関する社内メモ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "社内メモ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "顧客の氏名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "氏名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer",
+          "message": "顧客のタイムゾーン"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "タイムゾーン"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "顧客のタイムゾーン"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "既存の顧客を更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name or decoration of a tag",
+          "message": "タグの名前またはデコレーションを更新します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "タグを更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "タグの視覚的な装飾設定"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "装飾"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "視覚的装飾"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "タグの簡単な説明"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "タグの説明"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag (min 1, max 256 characters)",
+          "message": "タグの新しい名前（最小1文字、最大256文字）"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to update",
+          "message": "更新するタグのID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "更新するタグ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "既存のタグを更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.desc": {
+          "source": "Update the status, priority, assignment, or other properties of a ticket",
+          "message": "チケットのステータス、優先度、割り当て、またはその他のプロパティを更新します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
+          "source": "Update a Ticket",
+          "message": "チケットを更新"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "Update the customer associated with this ticket. Provide `id` to reference an existing customer, or `email` to match by email address",
+          "message": "このチケットに関連付けられている顧客を更新します。既存の顧客を参照するには `id` を指定し、メールアドレスで一致させるには `email` を指定します"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "顧客データ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign, or `NOTHING` to unassign",
+          "message": "割り当てるチーム、または割り当てを解除する場合は `NOTHING`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "担当チーム"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "割り当てられたチーム"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign, or `NOTHING` to unassign",
+          "message": "割り当てるエージェント、または割り当てを解除する場合は `NOTHING`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "担当ユーザー"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "割り当てられたエージェント"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "チケットの外部識別子（最大255文字）"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "外部識別子"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.desc": {
+          "source": "ISO 8601 timestamp until which to snooze the ticket",
+          "message": "チケットをスヌーズする期限のISO 8601形式のタイムスタンプ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.display_name": {
+          "source": "Snooze Until",
+          "message": "スヌーズ期限"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.short_desc": {
+          "source": "Snooze datetime",
+          "message": "スヌーズ日時"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam",
+          "message": "チケットをスパムとしてマークするかどうか"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "スパム"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "スパムとしてマーク"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "オープン"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "クローズ済み"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The new status of the ticket",
+          "message": "チケットの新しいステータス"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "チケットのステータス"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The new subject line (max 998 characters)",
+          "message": "新しい件名（最大998文字）"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject",
+          "message": "チケットの件名"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "標準"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "緊急"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority level",
+          "message": "新しい優先度レベル"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "チケットの優先度"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to set on the ticket. Replaces existing tags. Each tag must have a `name` field",
+          "message": "チケットに設定するタグのリスト。既存のタグを置き換えます。各タグには `name` フィールドが必要です"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to set",
+          "message": "設定するタグ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to update",
+          "message": "更新するチケットのID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "チケットID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to update",
+          "message": "更新するチケット"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
+          "source": "Update an existing ticket",
+          "message": "既存のチケットを更新します"
+        },
+        "app.R29yZ2lhcw.desc": {
+          "source": "Gorgias is a customer support and helpdesk platform for e-commerce and SaaS businesses.\n\nThis integration supports managing tickets, customers, tags, messages, and monitoring ticket events.",
+          "message": "Gorgiasは、eコマースおよびSaaSビジネス向けのカスタマーサポートおよびヘルプデスクプラットフォームです。\n\nこの統合により、チケット、顧客、タグ、メッセージの管理、およびチケットイベントの監視がサポートされます。"
+        },
+        "app.R29yZ2lhcw.display_name": {
+          "source": "Gorgias",
+          "message": "Gorgias"
+        },
+        "app.R29yZ2lhcw.short_desc": {
+          "source": "Gorgias customer support and helpdesk platform",
+          "message": "Gorgiasカスタマーサポートおよびヘルプデスクプラットフォーム"
+        }
+      }
+    }
+  }
+}

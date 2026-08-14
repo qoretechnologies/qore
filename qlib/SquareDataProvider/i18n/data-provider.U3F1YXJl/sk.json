@@ -1,0 +1,2245 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.desc": {
+          "source": "Complete a pending payment in Square",
+          "message": "Dokončiť čakajúcu platbu v Square"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
+          "source": "Complete Payment",
+          "message": "Dokončiť platbu"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to complete",
+          "message": "Platba, ktorá sa má dokončiť"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.display_name": {
+          "source": "Version Token",
+          "message": "Token verzie"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.short_desc": {
+          "source": "Version token for concurrency",
+          "message": "Token verzie pre súbežnosť"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
+          "source": "Complete a payment",
+          "message": "Dokončiť platbu"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.desc": {
+          "source": "Cancel an open order in Square",
+          "message": "Zrušiť otvorenú objednávku v Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
+          "source": "Cancel an Order",
+          "message": "Zrušiť objednávku"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to cancel",
+          "message": "Objednávka, ktorá sa má zrušiť"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the order (for optimistic concurrency)",
+          "message": "Aktuálna verzia objednávky (pre optimistickú súbežnosť)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Verzia"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Order version",
+          "message": "Verzia objednávky"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
+          "source": "Cancel an order",
+          "message": "Zrušiť objednávku"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.desc": {
+          "source": "Cancel a booking (appointment) in Square",
+          "message": "Zrušiť rezerváciu (stretnutie) v Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
+          "source": "Cancel Booking",
+          "message": "Zrušiť rezerváciu"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.desc": {
+          "source": "The current version of the booking (for optimistic concurrency)",
+          "message": "Aktuálna verzia rezervácie (pre optimistickú súbežnosť)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.display_name": {
+          "source": "Booking Version",
+          "message": "Verzia rezervácie"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.short_desc": {
+          "source": "Booking version",
+          "message": "Verzia rezervácie"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "ID rezervácie"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking to cancel",
+          "message": "Rezervácia, ktorá sa má zrušiť"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
+          "source": "Cancel a booking",
+          "message": "Zrušiť rezerváciu"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.desc": {
+          "source": "Cancel a published invoice in Square",
+          "message": "Zrušiť vystavenú faktúru v Square"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
+          "source": "Cancel Invoice",
+          "message": "Zrušiť faktúru"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to cancel",
+          "message": "Faktúra na zrušenie"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "Aktuálna verzia faktúry (pre optimistické súbežné spracovanie)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Verzia"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Verzia faktúry"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
+          "source": "Cancel an invoice",
+          "message": "Zrušiť faktúru"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.desc": {
+          "source": "Change inventory counts in Square (adjustment or physical count)",
+          "message": "Zmeniť stav zásob v Square (úprava alebo fyzická inventúra)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
+          "source": "Change Inventory",
+          "message": "Zmeniť zásoby"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation",
+          "message": "ID variantu položky katalógu"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "ID objektu katalógu"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation",
+          "message": "Variant položky"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOkFESlVTVE1FTlQ.desc": {
+          "source": "Add or remove stock (delta quantity)",
+          "message": "Pridať alebo odobrať zásoby (delta množstvo)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOlBIWVNJQ0FMX0NPVU5U.desc": {
+          "source": "Set absolute inventory count",
+          "message": "Nastaviť absolútny stav zásob"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.desc": {
+          "source": "The type of inventory change to apply",
+          "message": "Typ zmeny zásob, ktorý sa má použiť"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.display_name": {
+          "source": "Change Type",
+          "message": "Typ zmeny"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.short_desc": {
+          "source": "Type of change",
+          "message": "Typ zmeny"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state (default)",
+          "message": "Žiadny stav (predvolené)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock",
+          "message": "Na sklade"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Predané"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Odpad / poškodené"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.desc": {
+          "source": "Starting inventory state for adjustment changes",
+          "message": "Počiatočný stav zásob pre zmeny úpravou"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.display_name": {
+          "source": "From State",
+          "message": "Zo stavu"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.short_desc": {
+          "source": "Starting state",
+          "message": "Počiatočný stav"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Lokalita"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity as a string (e.g. '5'). For ADJUSTMENT: delta. For PHYSICAL_COUNT: absolute count.",
+          "message": "Množstvo ako reťazec (napr. '5'). Pre ADJUSTMENT: delta. Pre PHYSICAL_COUNT: absolútny počet."
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Množstvo"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity",
+          "message": "Množstvo"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state",
+          "message": "Žiadny stav"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock (default)",
+          "message": "Na sklade (predvolené)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Predané"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Odpad / poškodené"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.desc": {
+          "source": "Ending inventory state for adjustment changes",
+          "message": "Konečný stav zásob pre zmeny úpravou"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.display_name": {
+          "source": "To State",
+          "message": "Do stavu"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.short_desc": {
+          "source": "Ending state",
+          "message": "Konečný stav"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
+          "source": "Change inventory counts",
+          "message": "Zmeniť stav zásob"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Square",
+          "message": "Vytvoriť novú objednávku v Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Vytvoriť objednávku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "Lokalita objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes: name, quantity (string), base_price_money (hash with amount in cents and currency)",
+          "message": "Zoznam hashov položiek: name, quantity (reťazec), base_price_money (hash so sumou v centoch a menou)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenčné ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externá referencia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Vytvoriť novú objednávku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.desc": {
+          "source": "Create a new booking (appointment) in Square",
+          "message": "Vytvoriť novú rezerváciu (stretnutie) v Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
+          "source": "Create Appointment",
+          "message": "Vytvoriť schôdzku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
+          "source": "Customer Note",
+          "message": "Poznámka zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.short_desc": {
+          "source": "Note from customer",
+          "message": "Poznámka od zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Lokalita"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.display_name": {
+          "source": "Service Variation ID",
+          "message": "ID variantu služby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.short_desc": {
+          "source": "Service variation",
+          "message": "Variant služby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.display_name": {
+          "source": "Service Version",
+          "message": "Verzia služby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.short_desc": {
+          "source": "Service variation version",
+          "message": "Verzia variantu služby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.desc": {
+          "source": "Start time of the booking (RFC 3339 format)",
+          "message": "Čas začiatku rezervácie (formát RFC 3339)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.display_name": {
+          "source": "Start At",
+          "message": "Čas začiatku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.short_desc": {
+          "source": "Start time",
+          "message": "Čas začiatku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "ID člena tímu"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Team member",
+          "message": "Člen tímu"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
+          "source": "Create a new booking",
+          "message": "Vytvoriť novú rezerváciu"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Square",
+          "message": "Vytvoriť nového zákazníka v Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Vytvoriť zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the customer",
+          "message": "Názov spoločnosti zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Názov spoločnosti"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the customer",
+          "message": "Meno zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Meno zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address of the customer",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the customer",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "A note about the customer",
+          "message": "Poznámka o zákazníkovi"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Poznámka o zákazníkovi"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "Phone number of the customer",
+          "message": "Telefónne číslo zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.desc": {
+          "source": "An external reference ID for the customer",
+          "message": "Externé referenčné ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenčné ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externá referencia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Vytvoriť nového zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Square",
+          "message": "Vytvoriť novú faktúru v Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Vytvoriť faktúru"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOkVNQUlM.desc": {
+          "source": "Send via email",
+          "message": "Odoslať e-mailom"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNIQVJFX01BTlVBTExZ.desc": {
+          "source": "Share manually",
+          "message": "Zdieľať manuálne"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNNUw.desc": {
+          "source": "Send via SMS",
+          "message": "Odoslať prostredníctvom SMS"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.desc": {
+          "source": "How to deliver the invoice to the customer",
+          "message": "Spôsob doručenia faktúry zákazníkovi"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Spôsob doručenia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "How to deliver",
+          "message": "Spôsob doručenia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Invoice description",
+          "message": "Popis faktúry"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "Due date in YYYY-MM-DD format",
+          "message": "Dátum splatnosti vo formáte RRRR-MM-DD"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Termín dokončenia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Invoice due date",
+          "message": "Dátum splatnosti faktúry"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order associated with this invoice",
+          "message": "ID objednávky priradenej k tejto faktúre"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "Objednávka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Lokalita"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkJBTEFOQ0U.desc": {
+          "source": "Full balance payment",
+          "message": "Platba celého zostatku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkRFUE9TSVQ.desc": {
+          "source": "Deposit payment",
+          "message": "Zálohová platba"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOklOU1RBTExNRU5U.desc": {
+          "source": "Installment payment",
+          "message": "Platba na splátky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.desc": {
+          "source": "The type of payment request for this invoice",
+          "message": "Typ žiadosti o platbu pre túto faktúru"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "Typ platby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.short_desc": {
+          "source": "Payment request type",
+          "message": "Typ žiadosti o platbu"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "Invoice title",
+          "message": "Názov faktúry"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Vytvoriť novú faktúru"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.desc": {
+          "source": "Create a new order in Square and immediately mark it as paid",
+          "message": "Vytvoriť novú objednávku v službe Square a okamžite ju označiť ako zaplatenú"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
+          "source": "Create Paid Order",
+          "message": "Vytvoriť zaplatenú objednávku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "Lokalita objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes",
+          "message": "Zoznam hashov položiek riadkov"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Položky objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.desc": {
+          "source": "List of payment IDs to apply. If empty, uses external payment.",
+          "message": "Zoznam ID platieb, ktoré sa majú použiť. Ak je prázdny, použije sa externá platba."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.display_name": {
+          "source": "Payment IDs",
+          "message": "ID platieb"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.short_desc": {
+          "source": "Existing payment IDs",
+          "message": "Existujúce ID platieb"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
+          "source": "Create and pay an order",
+          "message": "Vytvoriť a zaplatiť objednávku"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Create a new payment in Square",
+          "message": "Vytvoriť novú platbu v službe Square"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create a Payment",
+          "message": "Vytvoriť platbu"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Kód meny (predvolené: USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Kód meny"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The amount in the smallest currency unit (cents for USD)",
+          "message": "Suma v najmenšej menej jednotke (centy pre USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Suma platby v centoch"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.desc": {
+          "source": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment.",
+          "message": "Ak je `True` (predvolené), platba sa dokončí okamžite. Ak je `False`, musí sa dokončiť neskôr pomocou complete-payment."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.display_name": {
+          "source": "Autocomplete",
+          "message": "Automaticky dokončiť"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.short_desc": {
+          "source": "Complete immediately",
+          "message": "Dokončiť okamžite"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "Objednávka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Lokalita"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "Poznámka k platbe"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.desc": {
+          "source": "The source of funds (payment token, card ID, or 'EXTERNAL')",
+          "message": "Zdroj finančných prostriedkov (token platby, ID karty alebo 'EXTERNAL')"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.display_name": {
+          "source": "Source ID",
+          "message": "ID zdroja"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.short_desc": {
+          "source": "Payment source",
+          "message": "Zdroj platby"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenčné ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externá referencia"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Vytvoriť novú platbu"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in Square. Uses polling to detect new records.",
+          "message": "Spustí sa pri vytvorení nového zákazníka v službe Square. Na detekciu nových záznamov používa dopytovanie."
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "New Customer",
+          "message": "Nový zákazník"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Spustiť pri vytvorení nového zákazníka"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.desc": {
+          "source": "Add a customer to a customer group in Square",
+          "message": "Pridať zákazníka do skupiny zákazníkov v službe Square"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
+          "source": "Add Customer to Group",
+          "message": "Pridať zákazníka do skupiny"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "ID skupiny zákazníkov"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "ID skupiny"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to add to",
+          "message": "Skupina, do ktorej sa má pridať"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
+          "source": "Add a customer to a group",
+          "message": "Pridať zákazníka do skupiny"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Square",
+          "message": "Získať jednu objednávku podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Získať objednávku"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Získať jednu objednávku podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.desc": {
+          "source": "Retrieve multiple orders by their IDs in a single request",
+          "message": "Získať viacero objednávok podľa ich ID v jednej požiadavke"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
+          "source": "Get Orders",
+          "message": "Získať objednávky"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.desc": {
+          "source": "List of order ID strings to retrieve",
+          "message": "Zoznam reťazcov ID objednávok na získanie"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "ID objednávok"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.short_desc": {
+          "source": "List of order IDs",
+          "message": "Zoznam ID objednávok"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtrovať podľa lokácie"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
+          "source": "Get multiple orders by ID",
+          "message": "Získať viacero objednávok podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.desc": {
+          "source": "Retrieve a single booking (appointment) by ID from Square",
+          "message": "Získať jednu rezerváciu (stretnutie) podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
+          "source": "Get a Booking",
+          "message": "Získať rezerváciu"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "ID rezervácie"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking ID",
+          "message": "ID rezervácie"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
+          "source": "Get a single booking by ID",
+          "message": "Získať jednu rezerváciu podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from Square",
+          "message": "Získať jedného zákazníka podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Získať zákazníka"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Získať jedného zákazníka podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Square",
+          "message": "Získať jednu faktúru podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Získať faktúru"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Získať jednu faktúru podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.desc": {
+          "source": "Get inventory counts for a catalog item variation in Square",
+          "message": "Získať stav zásob pre variant položky katalógu v službe Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
+          "source": "Get Inventory Count",
+          "message": "Získať stav zásob"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation to get counts for",
+          "message": "ID variantu položky katalógu, pre ktorý sa má získať stav zásob"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "ID objektu katalógu"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation ID",
+          "message": "ID variantu položky"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.desc": {
+          "source": "Optional list of location IDs to filter counts by",
+          "message": "Voliteľný zoznam ID lokácií na filtrovanie stavu zásob"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "ID lokácií"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtrovať podľa lokalít"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
+          "source": "Get inventory counts for an item",
+          "message": "Získať stav zásob pre položku"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from Square",
+          "message": "Získať jednu platbu podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get a Payment",
+          "message": "Získať platbu"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment ID",
+          "message": "ID platby"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "Získať jednu platbu podľa ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve a single refund by ID from Square",
+          "message": "Získať jedno vrátenie platby podľa ID zo služby Square"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get a Refund",
+          "message": "Získať vrátenie platby"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "ID refundácie"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "The refund ID",
+          "message": "ID vrátenia platby"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Get a single refund by ID",
+          "message": "Získať jedno vrátenie platby podľa ID"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Square",
+          "message": "Odstrániť zákazníka zo služby Square"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Odstrániť zákazníka"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Zákazník na odstránenie"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the customer profile (for optimistic concurrency)",
+          "message": "Aktuálna verzia profilu zákazníka (pre optimistický súbežný prístup)"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Verzia"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Customer version",
+          "message": "Verzia zákazníka"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Odstrániť zákazníka"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.desc": {
+          "source": "Search for appointment services in the Square catalog",
+          "message": "Vyhľadať rezervačné služby v katalógu Square"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
+          "source": "Find Service",
+          "message": "Nájsť službu"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.desc": {
+          "source": "Filter services by name (partial match)",
+          "message": "Filtrovať služby podľa názvu (čiastočná zhoda)"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.short_desc": {
+          "source": "Service name filter",
+          "message": "Filter názvu služby"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
+          "source": "Find a service in the catalog",
+          "message": "Nájsť službu v katalógu"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.desc": {
+          "source": "Fires when an order is created or updated in Square. Uses polling to detect changes.",
+          "message": "Spustí sa, keď sa v Square vytvorí alebo aktualizuje objednávka. Na zistenie zmien používa cyklické dotazovanie (polling)."
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Objednávka vytvorená/aktualizovaná"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii objednávky"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.desc": {
+          "source": "List bookings (appointments) in Square with optional filtering",
+          "message": "Zoznam rezervácií (stretnutí) v Square s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
+          "source": "List Bookings",
+          "message": "Zoznam rezervácií"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovať podľa zákazníka"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtrovať podľa lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.desc": {
+          "source": "Return bookings starting before this timestamp (RFC 3339)",
+          "message": "Vrátiť rezervácie začínajúce pred touto časovou pečiatkou (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.display_name": {
+          "source": "Start At Max",
+          "message": "Maximálny čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.short_desc": {
+          "source": "Latest start time",
+          "message": "Najneskorší čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.desc": {
+          "source": "Return bookings starting at or after this timestamp (RFC 3339)",
+          "message": "Vrátiť rezervácie začínajúce v čase tejto časovej pečiatky alebo po nej (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.display_name": {
+          "source": "Start At Min",
+          "message": "Minimálny čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.short_desc": {
+          "source": "Earliest start time",
+          "message": "Najskorší čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "ID člena tímu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Filter by team member",
+          "message": "Filtrovať podľa člena tímu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
+          "source": "List bookings",
+          "message": "Zoznam rezervácií"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List customers in Square with optional filtering",
+          "message": "Zoznam zákazníkov v Square s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Zoznam zákazníkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtrovať podľa ID zákazníka"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximálny počet výsledkov na vrátenie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkNSRUFURURfQVQ.desc": {
+          "source": "Sort by creation time",
+          "message": "Zoradiť podľa času vytvorenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkRFRkFVTFQ.desc": {
+          "source": "Default sort order",
+          "message": "Predvolené poradie zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.desc": {
+          "source": "The field to sort results by",
+          "message": "Pole, podľa ktorého sa majú zoradiť výsledky"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Pole radenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Pole na zoradenie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Vzostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Zostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Smer zoradenia výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Poradie zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Smer zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List all customers",
+          "message": "Zoznam všetkých zákazníkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "List invoices in Square for a location",
+          "message": "Zoznam faktúr v Square pre dané miesto"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Zoznam faktúr"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Filter invoices by location (required by Square API, auto-detected if not provided)",
+          "message": "Filtrovať faktúry podľa miesta (vyžadované Square API, automaticky zistené, ak nie je zadané)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtrovať podľa lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List invoices",
+          "message": "Zoznam faktúr"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "List payments in Square with optional filtering",
+          "message": "Zoznam platieb v Square s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Zoznam platieb"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return payments created at or after this timestamp (RFC 3339)",
+          "message": "Vrátiť platby vytvorené v čase tejto časovej pečiatky alebo po nej (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Začiatok časového rozsahu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Čas ukončenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Koniec časového rozsahu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtrovať podľa lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Vzostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Zostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Smer zoradenia výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Poradie zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Smer zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "Filtrovať podľa ID platby"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List payments",
+          "message": "Zoznam platieb"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "List refunds in Square with optional filtering",
+          "message": "Zoznam refundácií v Square s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "Zoznam refundácií"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return refunds created at or after this timestamp (RFC 3339)",
+          "message": "Vrátiť refundácie vytvorené v čase tejto časovej pečiatky alebo po nej (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Čas začiatku"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Začiatok časového rozsahu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Čas ukončenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Koniec časového rozsahu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Filtrovať podľa lokácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkJBTktfQUNDT1VOVA.desc": {
+          "source": "Bank account payment",
+          "message": "Platba bankovým účtom"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBU0g.desc": {
+          "source": "Cash payment",
+          "message": "Platba v hotovosti"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkQ.desc": {
+          "source": "Card payment",
+          "message": "Platba kartou"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkVYVEVSTkFM.desc": {
+          "source": "External payment",
+          "message": "Externá platba"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldBTExFVA.desc": {
+          "source": "Digital wallet payment",
+          "message": "Platba digitálnou peňaženkou"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.desc": {
+          "source": "Filter refunds by payment source type",
+          "message": "Filtrovať refundácie podľa typu zdroja platby"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "Typ zdroja"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Filter by source type",
+          "message": "Filtrovať podľa typu zdroja"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Vzostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Zostupné poradie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Smer zoradenia výsledkov"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Poradie zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Smer zoradenia"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed refunds",
+          "message": "Dokončené refundácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
+          "source": "Failed refunds",
+          "message": "Neúspešné refundácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending refunds",
+          "message": "Čakajúce refundácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlJFSkVDVEVE.desc": {
+          "source": "Rejected refunds",
+          "message": "Odmietnuté refundácie"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.desc": {
+          "source": "Filter refunds by status",
+          "message": "Filtrovať refundácie podľa stavu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "Zoznam refundácií"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Square** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Square** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú v tejto aplikácii sprístupnené ako prvotriedne akcie."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Square",
+          "message": "Vykonať vlastné volanie API do Square"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new booking (appointment) is created in Square. Uses polling to detect new records.",
+          "message": "Spustí sa, keď sa v Square vytvorí nová rezervácia (stretnutie). Na zistenie nových záznamov používa cyklické dotazovanie (polling)."
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "Nová schôdzka"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new booking is created",
+          "message": "Spustiť pri vytvorení novej rezervácie"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.desc": {
+          "source": "Fires when a new catalog item is created in Square. Uses polling to detect new records.",
+          "message": "Spustí sa, keď sa v Square vytvorí nová položka katalógu. Na zistenie nových záznamov používa cyklické dotazovanie (polling)."
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
+          "source": "New Catalog Item",
+          "message": "Nová položka katalógu"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
+          "source": "Trigger when a new catalog item is added",
+          "message": "Spustiť pri pridaní novej položky katalógu"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.desc": {
+          "source": "Fires when new events are detected via the Square Events API. Supports filtering by event type. Uses polling with 28-day event retention.",
+          "message": "Spustí sa, keď sa cez Square Events API zistia nové udalosti. Podporuje filtrovanie podľa typu udalosti. Používa cyklické dotazovanie (polling) s 28-dňovým uchovávaním udalostí."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
+          "source": "New Events",
+          "message": "Nové udalosti"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.desc": {
+          "source": "List of Square event types to watch (e.g. 'payment.created'). Defaults to all supported event types.",
+          "message": "Zoznam typov udalostí Square na sledovanie (napr. 'payment.created'). Predvolene sú vybraté všetky podporované typy udalostí."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.display_name": {
+          "source": "Event Types",
+          "message": "Typy udalostí"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.short_desc": {
+          "source": "Event types to watch",
+          "message": "Typy udalostí na sledovanie"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové udalosti (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
+          "source": "Trigger when new events occur",
+          "message": "Spustiť pri výskyte nových udalostí"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Square. Uses polling to detect new records.",
+          "message": "Spustí sa, keď sa v Square vytvorí nová faktúra. Na zistenie nových záznamov používa cyklické dotazovanie (polling)."
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Nová faktúra"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Spustiť pri vytvorení novej faktúry"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for orders in Square with optional filtering",
+          "message": "Vyhľadávať objednávky v Square s voliteľným filtrovaním"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "Vyhľadať objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Created Before",
+          "message": "Vytvorené pred"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Created before date",
+          "message": "Vytvorené pred dátumom"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.desc": {
+          "source": "Return orders created at or after this timestamp (RFC 3339)",
+          "message": "Vrátiť objednávky vytvorené v čase tejto časovej pečiatky alebo po nej (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Created After",
+          "message": "Vytvorené po"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Created after date",
+          "message": "Vytvorené po dátume"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Filtrovať podľa ID objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.desc": {
+          "source": "List of location IDs to search (auto-detected if not provided)",
+          "message": "Zoznam ID miest na vyhľadávanie (automaticky zistené, ak nie je zadané)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "ID lokácií"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtrovať podľa lokalít"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.desc": {
+          "source": "Open orders",
+          "message": "Otvorené objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled orders",
+          "message": "Zrušené objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed orders",
+          "message": "Dokončené objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft orders",
+          "message": "Koncepty objednávok"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.desc": {
+          "source": "Filter orders by state",
+          "message": "Filtrovať objednávky podľa stavu"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by order state",
+          "message": "Filtrovať podľa stavu objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Updated Before",
+          "message": "Aktualizované pred"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Updated before date",
+          "message": "Aktualizované pred dátumom"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Updated After",
+          "message": "Aktualizované po"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Updated after date",
+          "message": "Aktualizované po dátume"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders",
+          "message": "Hľadať objednávky"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.desc": {
+          "source": "Search for catalog objects (items, variations, categories, etc.) in Square",
+          "message": "Hľadať objekty katalógu (položky, varianty, kategórie atď.) v službe Square"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
+          "source": "Search Catalog",
+          "message": "Prehľadávať katalóg"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return objects updated at or after this timestamp (RFC 3339)",
+          "message": "Vrátiť objekty aktualizované v tomto časovom bode alebo po ňom (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Čas začiatku"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Updated after",
+          "message": "Aktualizované po"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.desc": {
+          "source": "Filter by catalog object types (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)",
+          "message": "Filtrovať podľa typov objektov katalógu (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.display_name": {
+          "source": "Object Types",
+          "message": "Typy objektov"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.short_desc": {
+          "source": "Filter by object types",
+          "message": "Filtrovať podľa typov objektov"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
+          "source": "Search catalog objects",
+          "message": "Hľadať objekty katalógu"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Publish and send an invoice in Square",
+          "message": "Publikovať a odoslať faktúru v službe Square"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "Odoslať faktúru"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID faktúry"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to send",
+          "message": "Faktúra na odoslanie"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "Aktuálna verzia faktúry (pre optimistické súbežné spracovanie)"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Verzia"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Verzia faktúry"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send (publish) an invoice",
+          "message": "Odoslať (publikovať) faktúru"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a payment is created or updated in Square. Uses polling to detect changes.",
+          "message": "Spustí sa pri vytvorení alebo aktualizácii platby v službe Square. Na zistenie zmien používa dopytovanie."
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
+          "source": "Payment Created/Updated",
+          "message": "Platba vytvorená/aktualizovaná"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Ako často kontrolovať nové záznamy (minimálne 30 sekúnd)"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledovania"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dopytovania v sekundách"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a payment is created or updated",
+          "message": "Spustiť pri vytvorení alebo aktualizácii platby"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.desc": {
+          "source": "Create a refund for a payment in Square",
+          "message": "Vytvoriť refundáciu platby v službe Square"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
+          "source": "Refund Payment",
+          "message": "Refundovať platbu"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Kód meny (predvolené: USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Kód meny"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The refund amount in the smallest currency unit (cents for USD)",
+          "message": "Suma refundácie v najmenšej menovej jednotke (centy pre USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množstvo"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "Suma refundácie v centoch"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to refund",
+          "message": "Platba na refundáciu"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Dôvod"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.short_desc": {
+          "source": "Reason for refund",
+          "message": "Dôvod refundácie"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
+          "source": "Refund a payment",
+          "message": "Refundovať platbu"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.desc": {
+          "source": "Remove a customer from a customer group in Square",
+          "message": "Odstrániť zákazníka zo skupiny zákazníkov v službe Square"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
+          "source": "Remove Customer From Group",
+          "message": "Odstrániť zákazníka zo skupiny"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Zákazník"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "ID skupiny zákazníkov"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "ID skupiny"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to remove from",
+          "message": "Skupina, z ktorej sa má odstrániť"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
+          "source": "Remove a customer from a group",
+          "message": "Odstrániť zákazníka zo skupiny"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Square",
+          "message": "Aktualizovať existujúceho zákazníka v službe Square"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Aktualizovať zákazníka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Názov spoločnosti"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Zákazník na aktualizáciu"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Meno zákazníka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "E-mail zákazníka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Poznámka o zákazníkovi"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Telefónne číslo"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aktualizovať existujúceho zákazníka"
+        },
+        "app.U3F1YXJl.desc": {
+          "source": "Square is a comprehensive commerce platform for payments, online stores, invoicing, and business management.\n\nThis integration supports customers, orders, payments, invoices, bookings, catalog items, inventory, refunds, and events.",
+          "message": "Square je komplexná obchodná platforma pre platby, internetové obchody, fakturáciu a riadenie podnikania.\n\nTáto integrácia podporuje zákazníkov, objednávky, platby, faktúry, rezervácie, položky katalógu, inventár, refundácie a udalosti."
+        },
+        "app.U3F1YXJl.display_name": {
+          "source": "Square",
+          "message": "Square"
+        },
+        "app.U3F1YXJl.short_desc": {
+          "source": "Square payments and commerce platform",
+          "message": "Platobná a obchodná platforma Square"
+        }
+      }
+    }
+  }
+}

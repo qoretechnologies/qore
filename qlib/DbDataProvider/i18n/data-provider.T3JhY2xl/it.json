@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "Crea e gestisci connessioni a un server di database Oracle"
+        },
+        "app.T3JhY2xl.display_name": {
+          "source": "Oracle",
+          "message": "Oracle"
+        },
+        "app.T3JhY2xl.short_desc": {
+          "source": "Oracle database server",
+          "message": "Server di database Oracle"
+        }
+      }
+    }
+  }
+}

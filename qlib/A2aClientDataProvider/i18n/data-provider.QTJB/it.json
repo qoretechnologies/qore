@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.desc": {
+          "source": "Cancel a running A2A task by its ID",
+          "message": "Annulla un'attività A2A in esecuzione tramite il relativo ID"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.display_name": {
+          "source": "Cancel Task",
+          "message": "Annulla attività"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to cancel",
+          "message": "L'identificatore univoco dell'attività da annullare"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.Y2FuY2VsLXRhc2s.short_desc": {
+          "source": "Cancel a running task",
+          "message": "Annulla un'attività in esecuzione"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.desc": {
+          "source": "Retrieve the A2A agent's card with its capabilities and skills",
+          "message": "Recupera la scheda dell'agente A2A con le relative funzionalità e competenze"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Agent Card",
+          "message": "Ottieni scheda agente"
+        },
+        "app.QTJB.action.Z2V0LWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get the agent's card",
+          "message": "Ottieni la scheda dell'agente"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.desc": {
+          "source": "Get the authenticated extended agent card with additional details",
+          "message": "Ottieni la scheda dell'agente estesa autenticata con dettagli aggiuntivi"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.display_name": {
+          "source": "Get Extended Agent Card",
+          "message": "Ottieni scheda agente estesa"
+        },
+        "app.QTJB.action.Z2V0LWV4dGVuZGVkLWFnZW50LWNhcmQ.short_desc": {
+          "source": "Get authenticated extended agent card",
+          "message": "Ottieni scheda dell'agente estesa autenticata"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Get the push notification configuration for an A2A task",
+          "message": "Ottieni la configurazione delle notifiche push per un'attività A2A"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Get Push Notification Config",
+          "message": "Ottieni configurazione notifiche push"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "L'ID attività per cui gestire la configurazione delle notifiche push"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.Z2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Get push notification config for a task",
+          "message": "Ottieni la configurazione delle notifiche push per un'attività"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve the current status of an A2A task by its ID",
+          "message": "Recupera lo stato corrente di un'attività A2A tramite il relativo ID"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Ottieni attività"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "L'identificatore univoco dell'attività da recuperare"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get task status by ID",
+          "message": "Ottieni lo stato dell'attività tramite ID"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Delete push notification configuration for an A2A task",
+          "message": "Elimina la configurazione delle notifiche push per un'attività A2A"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Delete Push Notification Config",
+          "message": "Elimina configurazione notifiche push"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to delete push notification config for",
+          "message": "L'ID attività per cui eliminare la configurazione delle notifiche push"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.desc": {
+          "source": "The ID of the push notification config to delete",
+          "message": "L'ID della configurazione delle notifiche push da eliminare"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.display_name": {
+          "source": "Config ID",
+          "message": "ID configurazione"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.cHVzaE5vdGlmaWNhdGlvbkNvbmZpZ0lk.short_desc": {
+          "source": "Push notification config ID",
+          "message": "ID configurazione notifiche push"
+        },
+        "app.QTJB.action.ZGVsZXRlLXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Delete push notification config for a task",
+          "message": "Elimina la configurazione delle notifiche push per un'attività"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.desc": {
+          "source": "List A2A tasks, optionally filtered by context ID",
+          "message": "Elenca le attività A2A, opzionalmente filtrate per ID contesto"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Elenca attività"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID to filter tasks by",
+          "message": "ID contesto opzionale per filtrare le attività"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "ID contesto"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.Y29udGV4dElk.short_desc": {
+          "source": "Filter by context ID",
+          "message": "Filtra per ID contesto"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.desc": {
+          "source": "Optional page size for cursor-based pagination",
+          "message": "Dimensione della pagina opzionale per la paginazione basata su cursore"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Dimensione pagina"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVNpemU.short_desc": {
+          "source": "Number of results per page (v1.0)",
+          "message": "Numero di risultati per pagina (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.desc": {
+          "source": "Optional cursor for retrieving the next page of results",
+          "message": "Cursore opzionale per recuperare la pagina di risultati successiva"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Pagination cursor (v1.0)",
+          "message": "Cursore di paginazione (v1.0)"
+        },
+        "app.QTJB.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks with optional filtering",
+          "message": "Elenca le attività con filtraggio opzionale"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.desc": {
+          "source": "List all push notification configurations for an A2A task",
+          "message": "Elenca tutte le configurazioni delle notifiche push per un'attività A2A"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.display_name": {
+          "source": "List Push Notification Configs",
+          "message": "Elenca configurazioni notifiche push"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.desc": {
+          "source": "The task ID to manage push notification config for",
+          "message": "L'ID attività per cui gestire la configurazione delle notifiche push"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.bGlzdC1wdXNoLW5vdGlmaWNhdGlvbi1jb25maWdz.short_desc": {
+          "source": "List push notification configs for a task",
+          "message": "Elenca le configurazioni delle notifiche push per un'attività"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.desc": {
+          "source": "Set the push notification configuration for an A2A task",
+          "message": "Imposta la configurazione delle notifiche push per un'attività A2A"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.display_name": {
+          "source": "Set Push Notification Config",
+          "message": "Imposta configurazione notifiche push"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.desc": {
+          "source": "The task ID to set push notification config for",
+          "message": "L'ID attività per cui impostare la configurazione delle notifiche push"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.aWQ.short_desc": {
+          "source": "Task identifier",
+          "message": "Identificatore attività"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.desc": {
+          "source": "Optional verification token for the webhook",
+          "message": "Token di verifica opzionale per il webhook"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.display_name": {
+          "source": "Token",
+          "message": "Token"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dG9rZW4.short_desc": {
+          "source": "Verification token",
+          "message": "Token di verifica"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.desc": {
+          "source": "The URL to receive push notifications for task events",
+          "message": "L'URL per ricevere notifiche push per gli eventi dell'attività"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.display_name": {
+          "source": "Webhook URL",
+          "message": "URL webhook"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.option.dXJs.short_desc": {
+          "source": "Push notification webhook URL",
+          "message": "URL webhook della notifica push"
+        },
+        "app.QTJB.action.c2V0LXB1c2gtbm90aWZpY2F0aW9uLWNvbmZpZw.short_desc": {
+          "source": "Set push notification config for a task",
+          "message": "Imposta la configurazione delle notifiche push per un'attività"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Send a message to the A2A agent and get back a task",
+          "message": "Invia un messaggio all'agente A2A e ricevi un'attività"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send Message",
+          "message": "Invia messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.desc": {
+          "source": "Optional v1.0 configuration including `acceptedOutputModes`, `historyLength`, `returnImmediately`",
+          "message": "Configurazione opzionale v1.0 che include `acceptedOutputModes`, `historyLength`, `returnImmediately`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.display_name": {
+          "source": "Configuration",
+          "message": "Configurazione"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29uZmlndXJhdGlvbg.short_desc": {
+          "source": "Send message configuration (v1.0)",
+          "message": "Configurazione per l'invio del messaggio (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.desc": {
+          "source": "Optional context ID for grouping related tasks into a conversation",
+          "message": "ID contesto opzionale per raggruppare le attività correlate in una conversazione"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.display_name": {
+          "source": "Context ID",
+          "message": "ID contesto"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.Y29udGV4dElk.short_desc": {
+          "source": "Context identifier",
+          "message": "Identificativo del contesto"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata for the message",
+          "message": "Metadati opzionali per il messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadati"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWV0YWRhdGE.short_desc": {
+          "source": "Message metadata",
+          "message": "Metadati del messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.desc": {
+          "source": "Optional unique identifier for the message",
+          "message": "Identificativo univoco opzionale per il messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.display_name": {
+          "source": "Message ID",
+          "message": "ID messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.bWVzc2FnZUlk.short_desc": {
+          "source": "Optional message identifier",
+          "message": "Identificativo del messaggio opzionale"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.desc": {
+          "source": "List of message parts (text, file, or data).\n\nEach part is a hash with a `type` key:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`",
+          "message": "Elenco delle parti del messaggio (testo, file o dati).\n\nOgni parte è un hash con una chiave `type`:\n- `text`: `{\"type\": \"text\", \"text\": \"Hello\"}`\n- `file`: `{\"type\": \"file\", \"file\": {\"name\": \"doc.pdf\", \"uri\": \"...\"}}`\n- `data`: `{\"type\": \"data\", \"data\": {\"key\": \"value\"}}`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.display_name": {
+          "source": "Parts",
+          "message": "Parti"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cGFydHM.short_desc": {
+          "source": "Message parts",
+          "message": "Parti del messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.desc": {
+          "source": "A message from the agent",
+          "message": "Un messaggio dall'agente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.display_name": {
+          "source": "Agent",
+          "message": "Agente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOmFnZW50.short_desc": {
+          "source": "Message from agent",
+          "message": "Messaggio dall'agente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "A message from the user",
+          "message": "Un messaggio dall'utente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Utente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "Message from user",
+          "message": "Messaggio dall'utente"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.desc": {
+          "source": "The role of the message sender: `user` or `agent`",
+          "message": "Il ruolo del mittente del messaggio: `user` o `agent`"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Ruolo"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.cm9sZQ.short_desc": {
+          "source": "Message role",
+          "message": "Ruolo del messaggio"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.desc": {
+          "source": "Optional tenant identifier for multi-tenancy support",
+          "message": "Identificativo tenant opzionale per il supporto multi-tenancy"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.display_name": {
+          "source": "Tenant",
+          "message": "Tenant"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.option.dGVuYW50.short_desc": {
+          "source": "Tenant identifier (v1.0)",
+          "message": "Identificativo tenant (v1.0)"
+        },
+        "app.QTJB.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to the agent",
+          "message": "Invia un messaggio all'agente"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.desc": {
+          "source": "Receive a notification when an A2A task artifact is added or modified",
+          "message": "Ricevi una notifica quando un artefatto di un'attività A2A viene aggiunto o modificato"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.display_name": {
+          "source": "Task Artifact Update",
+          "message": "Aggiornamento artefatto attività"
+        },
+        "app.QTJB.action.dGFzay1hcnRpZmFjdC11cGRhdGU.short_desc": {
+          "source": "An A2A task artifact has been updated",
+          "message": "Un artefatto di un'attività A2A è stato aggiornato"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.desc": {
+          "source": "Receive a notification when a new message is added to an A2A task",
+          "message": "Ricevi una notifica quando un nuovo messaggio viene aggiunto a un'attività A2A"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.display_name": {
+          "source": "Task Message Update",
+          "message": "Aggiornamento messaggio attività"
+        },
+        "app.QTJB.action.dGFzay1tZXNzYWdlLXVwZGF0ZQ.short_desc": {
+          "source": "An A2A task has a new message",
+          "message": "Un'attività A2A ha un nuovo messaggio"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.desc": {
+          "source": "Receive a notification when an A2A task status changes",
+          "message": "Ricevi una notifica quando lo stato di un'attività A2A cambia"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.display_name": {
+          "source": "Task Status Update",
+          "message": "Aggiornamento stato attività"
+        },
+        "app.QTJB.action.dGFzay1zdGF0dXMtdXBkYXRl.short_desc": {
+          "source": "An A2A task status has changed",
+          "message": "Lo stato di un'attività A2A è cambiato"
+        },
+        "app.QTJB.desc": {
+          "source": "Connect to A2A agents for agent-to-agent collaboration",
+          "message": "Connettiti agli agenti A2A per la collaborazione agent-to-agent"
+        },
+        "app.QTJB.display_name": {
+          "source": "A2A Agent",
+          "message": "Agente A2A"
+        },
+        "app.QTJB.short_desc": {
+          "source": "Agent-to-Agent protocol",
+          "message": "Protocollo Agent-to-Agent"
+        }
+      }
+    }
+  }
+}

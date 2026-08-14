@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Copiar un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
+          "source": "Copy File",
+          "message": "Copiar archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "¿Deben seguirse los enlaces simbólicos?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
+          "source": "Follow Symlinks",
+          "message": "Seguir enlaces simbólicos"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "¿Deben seguirse los enlaces simbólicos?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "¿Deben sobrescribirse los archivos de destino existentes?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Sobrescribir"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "¿Deben sobrescribirse los archivos de destino existentes?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "La ruta del archivo de origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "La ruta del archivo de origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "La ruta del archivo de destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "La ruta del archivo de destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Copiar un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Crear un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
+          "source": "Create File",
+          "message": "Crear archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.desc": {
+          "source": "The string or binary data for the file",
+          "message": "La cadena o los datos binarios para el archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Datos"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.short_desc": {
+          "source": "The string or binary data for the file",
+          "message": "La cadena o los datos binarios para el archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0664`)",
+          "message": "El modo para el nuevo archivo (por defecto `0664`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Modo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0664')",
+          "message": "El modo para el nuevo archivo (por defecto '0664')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Crear un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Obtener un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
+          "source": "Get File",
+          "message": "Obtener archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "La codificación de cadenas que se usará si `text` = `True` (por defecto: `UTF-8`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Codificación"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "La longitud máxima de los datos devueltos en bytes"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
+          "source": "Max Len",
+          "message": "Longitud máxima"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "La longitud máxima de los datos devueltos en bytes"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.desc": {
+          "source": "The path to the file",
+          "message": "La ruta al archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.short_desc": {
+          "source": "The path to the file",
+          "message": "La ruta al archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Si es `True`, el archivo se devolverá como una cadena; si es `False` (por defecto), como datos binarios"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Si es 'True', el archivo se devolverá como una cadena; si es 'False' (el valor predeterminado), como datos binarios"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Obtener un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Eliminar un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
+          "source": "Delete File",
+          "message": "Eliminar archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Eliminar un archivo en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "Listar archivos y subdirectorios en una carpeta del sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
+          "source": "List Files",
+          "message": "Listar archivos"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "Listar archivos y subdirectorios en una carpeta del sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Mover un archivo o directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
+          "source": "Move File",
+          "message": "Mover archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "¿Deben sobrescribirse los archivos de destino existentes?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Sobrescribir"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "¿Deben sobrescribirse los archivos de destino existentes?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "La ruta del archivo de origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "La ruta del archivo de origen"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "La ruta del archivo de destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "La ruta del archivo de destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Mover un archivo o directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Crear un directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
+          "source": "Create Directory",
+          "message": "Crear directorio"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0775`)",
+          "message": "El modo para el nuevo archivo (predeterminado `0775`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Modo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0775')",
+          "message": "El modo para el nuevo archivo (predeterminado '0775')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Crear un directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Obtener detalles sobre un archivo o directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
+          "source": "Get Info",
+          "message": "Obtener información"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
+          "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "Si es `True`, si la ruta de destino es un enlace simbólico, se devolverá información sobre el enlace en sí en lugar del destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
+          "source": "Symlink",
+          "message": "Enlace simbólico"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "Si es 'True', si la ruta de destino es un enlace simbólico, se devolverá información sobre el enlace en sí en lugar del destino"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "La ruta del archivo"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Obtener detalles sobre un archivo o directorio en el sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "Acceso al sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "Sistema de archivos del servidor"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "Acceso al sistema de archivos del servidor"
+        }
+      }
+    }
+  }
+}

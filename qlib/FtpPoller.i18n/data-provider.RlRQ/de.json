@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.desc": {
+          "source": "React to files uploaded to an FTP server; the action configuration determines if the event contains the file data itself or a link to the location of the file on the local filesystem. In any case, the event indicates that the file data has already been downloaded and is available locally",
+          "message": "Auf Dateien reagieren, die auf einen FTP-Server hochgeladen wurden; die Aktionskonfiguration bestimmt, ob das Ereignis die Dateidaten selbst oder einen Link zum Speicherort der Datei im lokalen Dateisystem enthält. In jedem Fall zeigt das Ereignis an, dass die Dateidaten bereits heruntergeladen wurden und lokal verfügbar sind"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.display_name": {
+          "source": "FTP File Received",
+          "message": "FTP-Datei empfangen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.desc": {
+          "source": "Use an atomic transfer mechanism with `local_dir` where remote files are first moved to a temporary location (specified by `tempfile_template`) and then moved to the final location when they have been fully transferred.\n\nThis ensures that files will never be read until they are fully transferred",
+          "message": "Verwenden Sie einen atomaren Übertragungsmechanismus mit `local_dir`, bei dem entfernte Dateien zuerst an einen temporären Speicherort (angegeben durch `tempfile_template`) verschoben werden und dann an den endgültigen Speicherort verschoben werden, wenn sie vollständig übertragen wurden.\n\nDies stellt sicher, dass Dateien niemals gelesen werden, bevor sie vollständig übertragen sind"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.display_name": {
+          "source": "Atomic File Transfer",
+          "message": "Atomare Dateiübertragung"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.YXRvbWljX3RyYW5zZmVy.short_desc": {
+          "source": "Use an atomic file transfer mechanism",
+          "message": "Einen atomaren Dateiübertragungsmechanismus verwenden"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.desc": {
+          "source": "The number of seconds to wait before polling again after an FTP error; the error is logged at error level, and then polling continues after this delay.\n\nTransient problems such as a network interruption or a server restart are common with FTP; a low value recovers from such problems quickly, while a high value reduces the load on a server that is failing persistently.\n\n**NOTE**: files are not polled while this delay is in effect",
+          "message": "Die Anzahl der Sekunden, die nach einem FTP-Fehler gewartet werden soll, bevor die Abfrage wiederholt wird; der Fehler wird auf Fehlerebene protokolliert und die Abfrage wird nach dieser Verzögerung fortgesetzt.\n\nVorübergehende Probleme wie eine Netzwerkunterbrechung oder ein Server-Neustart treten bei FTP häufig auf; ein niedriger Wert behebt solche Probleme schnell, während ein hoher Wert die Last auf einem dauerhaft fehlschlagenden Server verringert.\n\n**HINWEIS**: Dateien werden nicht abgefragt, solange diese Verzögerung aktiv ist"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.display_name": {
+          "source": "Error Retry Delay",
+          "message": "Wiederholungsverzögerung bei Fehler"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.ZXJyb3JfZGVsYXk.short_desc": {
+          "source": "The delay in seconds before retrying after an FTP error",
+          "message": "Die Verzögerung in Sekunden vor einem erneuten Versuch nach einem FTP-Fehler"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Ein lokales Verzeichnis, das zum Abrufen von Dateien verwendet wird"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.display_name": {
+          "source": "Local Directory",
+          "message": "Lokales Verzeichnis"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bG9jYWxfZGly.short_desc": {
+          "source": "A local directory that will be used to retrieve files",
+          "message": "Ein lokales Verzeichnis, das zum Abrufen von Dateien verwendet wird"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.desc": {
+          "source": "The glob mask to use to match files to poll; will be treated as a regex if `regex` is `true`",
+          "message": "Die Glob-Maske zur Übereinstimmung von abzufragenden Dateien; wird als regulärer Ausdruck behandelt, wenn `regex` `true` ist"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.display_name": {
+          "source": "Glob Mask",
+          "message": "Glob-Maske"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWFzaw.short_desc": {
+          "source": "The glob mask to use to match files to poll",
+          "message": "Die Glob-Maske zur Übereinstimmung von abzufragenden Dateien"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.desc": {
+          "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",
+          "message": "Eine Ganzzahl, die das Mindestalter der Datei in Sekunden angibt, bevor die Datei abgefragt wird; dies dient dazu, nicht-atomare Dateiübertragungsvorgänge zu umgehen.\n\nFalls diese Option erforderlich ist, stellen Sie sie auf einen Wert ein, der größer ist als die längste Dauer, die eine Dateiübertragung in Anspruch nehmen sollte"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.display_name": {
+          "source": "Minimum Polling Age",
+          "message": "Mindestalter für Abfrage"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.bWluYWdl.short_desc": {
+          "source": "The minimum age of files to poll in seconds",
+          "message": "Das Mindestalter abzufragender Dateien in Sekunden"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.desc": {
+          "source": "Either `name` or `date` for the data to use for sorting",
+          "message": "Entweder `name` oder `date` für die zum Sortieren verwendeten Daten"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.display_name": {
+          "source": "Sort Type",
+          "message": "Sortiertyp"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF90eXBl.short_desc": {
+          "source": "Field to sort files on",
+          "message": "Feld zum Sortieren von Dateien"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.desc": {
+          "source": "Sort descending; if not given then an ascending sort is assumed if a `sort_type` is given",
+          "message": "Absteigend sortieren; falls nicht angegeben, wird bei Angabe von `sort_type` eine aufsteigende Sortierung angenommen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.display_name": {
+          "source": "Sort Descending",
+          "message": "Absteigend sortieren"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.c29ydF9kZXNj.short_desc": {
+          "source": "Sort files in descending order",
+          "message": "Dateien in absteigender Reihenfolge sortieren"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "The interval in seconds between polling for files",
+          "message": "Das Intervall in Sekunden zwischen den Dateiabfragen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "The poll interval in seconds",
+          "message": "Das Abfrageintervall in Sekunden"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.desc": {
+          "source": "If `true` then `mask` is treated as a regular expression instead of a glob pattern",
+          "message": "Wenn `true`, wird `mask` als regulärer Ausdruck anstelle eines Glob-Musters behandelt"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.display_name": {
+          "source": "Regular Expression Match",
+          "message": "Übereinstimmung mit regulärem Ausdruck"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVnZXg.short_desc": {
+          "source": "If true then the 'mask' argument is treated as a regular expression",
+          "message": "Wenn true, wird das Argument 'mask' als regulärer Ausdruck behandelt"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.desc": {
+          "source": "Move the remote file after processing; in this case `remote_file_move_target` must be set",
+          "message": "Die Remote-Datei nach der Verarbeitung verschieben; in diesem Fall muss `remote_file_move_target` gesetzt sein"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.display_name": {
+          "source": "MOVE",
+          "message": "MOVE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk1PVkU.short_desc": {
+          "source": "Move the remote file after processing",
+          "message": "Die Remote-Datei nach der Verarbeitung verschieben"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "Leave the file untouched after processing; the file must be moved or deleted manually during post-processing, or the file will appear in subsequent polls as well",
+          "message": "Die Datei nach der Verarbeitung unverändert lassen; die Datei muss bei der Nachbearbeitung manuell verschoben oder gelöscht werden, da sie sonst auch bei nachfolgenden Abfragen erscheint"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "NONE",
+          "message": "NONE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Leave the file untouched after processing",
+          "message": "Die Datei nach der Verarbeitung unverändert lassen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Die Remote-Datei nach der Verarbeitung löschen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Delete the remote file after processing",
+          "message": "Die Remote-Datei nach der Verarbeitung löschen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.desc": {
+          "source": "Delete or move remote file after processing? If `MOVE`, `remote_file_move_target` must also be set",
+          "message": "Remote-Datei nach der Verarbeitung löschen oder verschieben? Wenn `MOVE`, muss auch `remote_file_move_target` gesetzt sein"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.display_name": {
+          "source": "Remote File Disposition",
+          "message": "Remote-Dateiverarbeitung"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfZGlzcG9zaXRpb24.short_desc": {
+          "source": "Delete or move remote file after processing?",
+          "message": "Remote-Datei nach der Verarbeitung löschen oder verschieben?"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.desc": {
+          "source": "The target template for the remote file after processing; use `%s` for the original file name. This option is only used when `remote_file_disposition` is `MOVE`, otherwise it is ignored",
+          "message": "Die Zielvorlage für die Remote-Datei nach der Verarbeitung; verwenden Sie `%s` für den ursprünglichen Dateinamen. Diese Option wird nur verwendet, wenn `remote_file_disposition` `MOVE` ist, andernfalls wird sie ignoriert"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.display_name": {
+          "source": "Remote File Move Target",
+          "message": "Ziel für Verschieben der Remote-Datei"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVtb3RlX2ZpbGVfbW92ZV90YXJnZXQ.short_desc": {
+          "source": "The target template for the remote file after processing",
+          "message": "Die Zielvorlage für die Remote-Datei nach der Verarbeitung"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.desc": {
+          "source": "A bitfield of regular expression options (`1` = ignore case, `2` = treat EOL as a regular character); ignored if `regex` is not `true`",
+          "message": "Ein Bitfeld von Optionen für reguläre Ausdrücke (`1` = Groß-/Kleinschreibung ignorieren, `2` = EOL als normales Zeichen behandeln); ignoriert, wenn `regex` nicht `true` ist"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.display_name": {
+          "source": "Regular Expression Options",
+          "message": "Optionen für reguläre Ausdrücke"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.cmVvcHQ.short_desc": {
+          "source": "A bitfield of regular expression options",
+          "message": "Ein Bitfeld von Optionen für reguläre Ausdrücke"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.desc": {
+          "source": "The template for temporary filenames; use `%s` for the original filename",
+          "message": "Die Vorlage für temporäre Dateinamen; verwenden Sie `%s` für den ursprünglichen Dateinamen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.display_name": {
+          "source": "Temporary Filename Template",
+          "message": "Vorlage für temporäre Dateinamen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.option.dGVtcGZpbGVfdGVtcGxhdGU.short_desc": {
+          "source": "The template for temporary filenames",
+          "message": "Die Vorlage für temporäre Dateinamen"
+        },
+        "app.RlRQ.action.ZnRwLWZpbGUtZXZlbnQ.short_desc": {
+          "source": "A file is uploaded to an FTP server",
+          "message": "Eine Datei wird auf einen FTP-Server hochgeladen"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Generischer FTP-Server für den Dateiaustausch über FTP und FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "FTP-Server"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Generischer FTP-Server für den Dateiaustausch über FTP und FTPS"
+        }
+      }
+    }
+  }
+}

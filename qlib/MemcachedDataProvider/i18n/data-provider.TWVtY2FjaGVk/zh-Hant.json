@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.TWVtY2FjaGVk.action.Y2Fz.desc": {
+          "source": "Update a value only if its CAS token matches (optimistic locking)",
+          "message": "僅在其 CAS 權杖相符時更新值（樂觀鎖定）"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.display_name": {
+          "source": "Compare and Swap",
+          "message": "比較並交換"
+        },
+        "app.TWVtY2FjaGVk.action.Y2Fz.short_desc": {
+          "source": "Update value with optimistic locking",
+          "message": "使用樂觀鎖定更新值"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.desc": {
+          "source": "Store a key-value pair in memcached only if the key doesn't already exist",
+          "message": "僅在鍵尚不存在時於 memcached 中儲存鍵值組"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.display_name": {
+          "source": "Add Value",
+          "message": "新增值"
+        },
+        "app.TWVtY2FjaGVk.action.YWRk.short_desc": {
+          "source": "Store a value only if key doesn't exist",
+          "message": "僅在鍵不存在時儲存值"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.desc": {
+          "source": "Retrieve a cached value by key",
+          "message": "依鍵檢索快取值"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.display_name": {
+          "source": "Get Value",
+          "message": "取得值"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0.short_desc": {
+          "source": "Retrieve a value from the cache",
+          "message": "從快取中檢索值"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.desc": {
+          "source": "Retrieve a cached value with its CAS token for optimistic locking",
+          "message": "檢索快取值及其用於樂觀鎖定的 CAS 權杖"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.display_name": {
+          "source": "Get with CAS",
+          "message": "使用 CAS 取得"
+        },
+        "app.TWVtY2FjaGVk.action.Z2V0cw.short_desc": {
+          "source": "Retrieve a value with CAS token",
+          "message": "檢索具有 CAS 權杖的值"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.desc": {
+          "source": "Atomically decrement a numeric value in the cache",
+          "message": "在快取中不可分割地遞減數值"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.display_name": {
+          "source": "Decrement",
+          "message": "遞減"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVjcg.short_desc": {
+          "source": "Decrement a numeric value",
+          "message": "遞減數值"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.desc": {
+          "source": "Remove a key and its value from the cache",
+          "message": "從快取中移除鍵及其值"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.display_name": {
+          "source": "Delete",
+          "message": "刪除"
+        },
+        "app.TWVtY2FjaGVk.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a key from the cache",
+          "message": "從快取中刪除鍵"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.desc": {
+          "source": "Invalidate all items in the cache",
+          "message": "使快取中的所有項目失效"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.display_name": {
+          "source": "Flush All",
+          "message": "清空全部"
+        },
+        "app.TWVtY2FjaGVk.action.Zmx1c2gtYWxs.short_desc": {
+          "source": "Clear all cached data",
+          "message": "清除所有快取資料"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.desc": {
+          "source": "Atomically increment a numeric value in the cache",
+          "message": "在快取中不可分割地遞增數值"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.display_name": {
+          "source": "Increment",
+          "message": "遞增"
+        },
+        "app.TWVtY2FjaGVk.action.aW5jcg.short_desc": {
+          "source": "Increment a numeric value",
+          "message": "遞增數值"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.desc": {
+          "source": "Retrieve multiple cached values in a single batch request",
+          "message": "在單一批次請求中檢索多個快取值"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.display_name": {
+          "source": "Multi-Get",
+          "message": "多重取得"
+        },
+        "app.TWVtY2FjaGVk.action.bXVsdGktZ2V0.short_desc": {
+          "source": "Retrieve multiple values",
+          "message": "檢索多個值"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.desc": {
+          "source": "Store a key-value pair in memcached, overwriting any existing value",
+          "message": "在 memcached 中儲存鍵值組，並覆寫任何現有值"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.display_name": {
+          "source": "Set Value",
+          "message": "設定值"
+        },
+        "app.TWVtY2FjaGVk.action.c2V0.short_desc": {
+          "source": "Store a value in the cache",
+          "message": "在快取中儲存值"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.desc": {
+          "source": "Retrieve general server statistics and metrics",
+          "message": "檢索一般伺服器統計資訊與指標"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.display_name": {
+          "source": "Statistics",
+          "message": "統計資訊"
+        },
+        "app.TWVtY2FjaGVk.action.c3RhdHM.short_desc": {
+          "source": "Get server statistics",
+          "message": "獲取伺服器統計資訊"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.desc": {
+          "source": "Replace a value in memcached only if the key already exists",
+          "message": "僅在鍵已存在時取代 memcached 中的值"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.display_name": {
+          "source": "Replace Value",
+          "message": "取代值"
+        },
+        "app.TWVtY2FjaGVk.action.cmVwbGFjZQ.short_desc": {
+          "source": "Replace an existing value",
+          "message": "取代現有值"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.desc": {
+          "source": "Update the expiration time of an existing key",
+          "message": "更新現有鍵的到期時間"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.display_name": {
+          "source": "Touch",
+          "message": "Touch"
+        },
+        "app.TWVtY2FjaGVk.action.dG91Y2g.short_desc": {
+          "source": "Update expiration time",
+          "message": "更新到期時間"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.desc": {
+          "source": "Retrieve the memcached server version",
+          "message": "檢索 memcached 伺服器版本"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.TWVtY2FjaGVk.action.dmVyc2lvbg.short_desc": {
+          "source": "Get server version",
+          "message": "獲取伺服器版本"
+        },
+        "app.TWVtY2FjaGVk.desc": {
+          "source": "Memcached distributed memory object caching system",
+          "message": "Memcached 分散式記憶體物件快取系統"
+        },
+        "app.TWVtY2FjaGVk.display_name": {
+          "source": "Memcached Server",
+          "message": "Memcached 伺服器"
+        },
+        "app.TWVtY2FjaGVk.short_desc": {
+          "source": "Memcached caching server",
+          "message": "Memcached 快取伺服器"
+        }
+      }
+    }
+  }
+}

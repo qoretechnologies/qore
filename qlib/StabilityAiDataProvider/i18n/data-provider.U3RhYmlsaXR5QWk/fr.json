@@ -1,0 +1,573 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via Stability AI's v2beta `/stable-image/generate/*` endpoints.  The `model` option selects the endpoint (`ultra` / `sd3` / `core`).\n\nReturns raw image bytes — `image` holds the bytes, `content_type` the MIME type, and `finish_reason` flags content-safety blocks (`CONTENT_FILTERED`).",
+          "message": "Génère une image à partir d'une invite de texte via les points de terminaison v2beta `/stable-image/generate/*` de Stability AI. L'option `model` sélectionne le point de terminaison (`ultra` / `sd3` / `core`).\n\nRenvoie les octets bruts de l'image — `image` contient les octets, `content_type` le type MIME et `finish_reason` signale les blocages de sécurité du contenu (`CONTENT_FILTERED`)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Générer une image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE2Ojk.display_name": {
+          "source": "16:9 (Landscape Video)",
+          "message": "16:9 (Vidéo paysage)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjE6MQ.display_name": {
+          "source": "1:1 (Square)",
+          "message": "1:1 (Carré)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjI6Mw.display_name": {
+          "source": "2:3 (Tall Portrait)",
+          "message": "2:3 (Portrait haut)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjIxOjk.display_name": {
+          "source": "21:9 (Cinemascope)",
+          "message": "21:9 (Cinémascope)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6Mg.display_name": {
+          "source": "3:2 (Wide Landscape)",
+          "message": "3:2 (Paysage large)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjM6NA.display_name": {
+          "source": "3:4 (Portrait)",
+          "message": "3:4 (Portrait)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6Mw.display_name": {
+          "source": "4:3 (Standard)",
+          "message": "4:3 (Standard)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjQ6NQ.display_name": {
+          "source": "4:5",
+          "message": "4:5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjU6NA.display_name": {
+          "source": "5:4",
+          "message": "5:4"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MTY.display_name": {
+          "source": "9:16 (Portrait Video)",
+          "message": "9:16 (Vidéo portrait)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.allowed-value.c3RyaW5nOjk6MjE.display_name": {
+          "source": "9:21 (Tall Cinemascope)",
+          "message": "9:21 (Cinémascope haut)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.  Common values: `1:1` (square), `16:9` (landscape video), `9:16` (portrait video), `4:3`, `3:4`, `21:9` (cinemascope).",
+          "message": "Rapport d'aspect de sortie. Valeurs courantes : `1:1` (carré), `16:9` (vidéo paysage), `9:16` (vidéo portrait), `4:3`, `3:4`, `21:9` (cinémascope)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "Format d'image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "Format d'image de sortie"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZWc.display_name": {
+          "source": "JPEG",
+          "message": "JPEG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOndlYnA.display_name": {
+          "source": "WebP",
+          "message": "WebP"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.desc": {
+          "source": "Output image format.",
+          "message": "Format de l'image de sortie."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.display_name": {
+          "source": "Output Format",
+          "message": "Format de sortie"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.b3V0cHV0X2Zvcm1hdA.short_desc": {
+          "source": "Output image format",
+          "message": "Format de l'image de sortie"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmNvcmU.display_name": {
+          "source": "Core (faster, cheaper)",
+          "message": "Core (plus rapide, plus économique)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnNkMw.display_name": {
+          "source": "Stable Diffusion 3 / 3.5",
+          "message": "Stable Diffusion 3 / 3.5"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOnVsdHJh.display_name": {
+          "source": "Ultra (highest quality)",
+          "message": "Ultra (qualité maximale)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "Stability AI model identifier — `ultra` for highest quality (SD3 Ultra), `sd3` for Stable Diffusion 3 / 3.5, or `core` for the faster / cheaper model.",
+          "message": "Identifiant de modèle Stability AI — `ultra` pour la meilleure qualité (SD3 Ultra), `sd3` pour Stable Diffusion 3 / 3.5 ou `core` pour le modèle plus rapide / plus économique."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modèle"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "Stability AI model identifier",
+          "message": "Identifiant du modèle Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image — e.g. `blurry, low quality, text, watermark`.",
+          "message": "Texte décrivant ce qu'il faut éviter dans l'image — par ex. `blurry, low quality, text, watermark`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Prompt négatif"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What you don't want in the image",
+          "message": "Ce que vous ne souhaitez pas dans l'image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed used for generation — passing the same seed + prompt should produce the same image.  `0` (default) uses a random seed.",
+          "message": "Graine aléatoire utilisée pour la génération — transmettre la même graine + invite devrait produire la même image. `0` (par défaut) utilise une graine aléatoire."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Graine"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility (0–4294967294)",
+          "message": "Graine aléatoire pour la reproductibilité (0–4294967294)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOjNkLW1vZGVs.display_name": {
+          "source": "3D Model",
+          "message": "Modèle 3D"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm1vZGVsaW5nLWNvbXBvdW5k.display_name": {
+          "source": "Modeling Compound",
+          "message": "Pâte à modeler"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm5lb24tcHVuaw.display_name": {
+          "source": "Neon Punk",
+          "message": "Neon Punk"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOm9yaWdhbWk.display_name": {
+          "source": "Origami",
+          "message": "Origami"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuYWxvZy1maWxt.display_name": {
+          "source": "Analog Film",
+          "message": "Film argentique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmFuaW1l.display_name": {
+          "source": "Anime",
+          "message": "Anime"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNpbmVtYXRpYw.display_name": {
+          "source": "Cinematic",
+          "message": "Cinématique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmNvbWljLWJvb2s.display_name": {
+          "source": "Comic Book",
+          "message": "Bande dessinée"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmRpZ2l0YWwtYXJ0.display_name": {
+          "source": "Digital Art",
+          "message": "Art numérique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmZhbnRhc3ktYXJ0.display_name": {
+          "source": "Fantasy Art",
+          "message": "Art fantastique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmlzb21ldHJpYw.display_name": {
+          "source": "Isometric",
+          "message": "Isométrique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxpbmUtYXJ0.display_name": {
+          "source": "Line Art",
+          "message": "Dessin au trait"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOmxvdy1wb2x5.display_name": {
+          "source": "Low Poly",
+          "message": "Low Poly"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBob3RvZ3JhcGhpYw.display_name": {
+          "source": "Photographic",
+          "message": "Photographique"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnBpeGVsLWFydA.display_name": {
+          "source": "Pixel Art",
+          "message": "Pixel Art"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.allowed-value.c3RyaW5nOnRpbGUtdGV4dHVyZQ.display_name": {
+          "source": "Tile Texture",
+          "message": "Texture en mosaïque"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.desc": {
+          "source": "Pre-baked style preset.  Only honoured by the `core` model; ignored by `sd3` and `ultra`.",
+          "message": "Préréglage de style prédéfini. Pris en compte uniquement par le modèle `core` ; ignoré par `sd3` et `ultra`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.display_name": {
+          "source": "Style Preset",
+          "message": "Préréglage de style"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
+          "source": "Pre-baked style preset (`core` model only)",
+          "message": "Préréglage de style prédéfini (modèle `core` uniquement)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
+          "message": "Invite de texte décrivant l'image souhaitée. Soyez précis sur le sujet, le style, l'éclairage et la composition pour obtenir les meilleurs résultats."
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "Prompt textuel décrivant l'image"
+        },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt",
+          "message": "Générer une image à partir d'une invite de texte"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Stability AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuez un appel d'API HTTP / REST personnalisé vers **Stability AI** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête facultatifs, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hachage contenant le code de statut, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Stability AI",
+          "message": "Effectuer un appel d'API personnalisé vers Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.desc": {
+          "source": "Provides access to [Stability AI](https://stability.ai) — the company behind Stable Diffusion.  Three model tiers:\n\n- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for marketing artwork, photo-real images, and brand visuals\n- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default balanced quality / speed model\n- **Core** (`core`): faster + cheaper model with preset-driven style transfer for prototyping and bulk work",
+          "message": "Fournit l'accès à [Stability AI](https://stability.ai) — l'entreprise à l'origine de Stable Diffusion. Trois niveaux de modèles :\n\n- **Ultra** (`ultra`) : SD3 Ultra de qualité maximale, idéal pour les visuels marketing, les images photoréalistes et les visuels de marque\n- **SD3** (`sd3`) : Stable Diffusion 3 / 3.5 — le modèle par défaut équilibré en qualité et rapidité\n- **Core** (`core`) : modèle plus rapide et plus économique avec transfert de style basé sur des préréglages pour le prototypage et le travail en masse"
+        },
+        "app.U3RhYmlsaXR5QWk.display_name": {
+          "source": "Stability AI",
+          "message": "Stability AI"
+        },
+        "app.U3RhYmlsaXR5QWk.short_desc": {
+          "source": "Stability AI text-to-image generation (Stable Diffusion)",
+          "message": "Génération de texte en image Stability AI (Stable Diffusion)"
+        }
+      }
+    }
+  }
+}

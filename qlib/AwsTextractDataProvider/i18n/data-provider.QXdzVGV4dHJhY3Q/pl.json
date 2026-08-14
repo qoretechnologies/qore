@@ -1,0 +1,533 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
+          "message": "Wywołuje interfejs API `AnalyzeDocument` usługi Textract w celu wyodrębnienia tekstu oraz cech strukturalnych. Parametr `feature_types` wybiera cechy do wyodrębnienia — przekaż co najmniej jeden z: `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nGdy uwzględniono parametr `QUERIES`, przekaż także listę `queries` — każde zapytanie zawiera pole `Text` z pytaniem do zadania."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "Analizuj dokument"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  See `AwsTextractDetectDocumentTextRequestDataType.document_bytes` for source-selection rules.",
+          "message": "Surowe bajty dokumentu. Zobacz `AwsTextractDetectDocumentTextRequestDataType.document_bytes`, aby poznać reguły wyboru źródła."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "Bajty dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "Surowe bajty dokumentu (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.",
+          "message": "Ścieżka do pliku lokalnego. Plik zostanie odczytany i przesłany jako `Bytes`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "Ścieżka dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "Ścieżka do pliku lokalnego do odczytania i przesłania jako bajty"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms (key/value pairs)",
+          "message": "Formularze (pary klucz/wartość)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout (titles, headers, paragraphs)",
+          "message": "Układ (tytuły, nagłówki, akapity)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries (ask questions of the document)",
+          "message": "Zapytania (zadawanie pytań do dokumentu)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "Podpisy"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "Tabele"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.desc": {
+          "source": "Which structural features to extract.  Pass at least one.",
+          "message": "Cechy strukturalne do wyodrębnienia. Przekaż co najmniej jedną."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.display_name": {
+          "source": "Feature Types",
+          "message": "Typy cech"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.short_desc": {
+          "source": "Which structural features to extract (list)",
+          "message": "Cechy strukturalne do wyodrębnienia (lista)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "Lista obiektów zapytań, gdy parametr `QUERIES` znajduje się w `feature_types`. Każde zapytanie zawiera pole `Text` (pytanie do zadania) oraz opcjonalny filtr `Alias` i `Pages`.\n\n**Przykład**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Zapytania"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with `QUERIES` feature)",
+          "message": "Niestandardowe zapytania do zadania w dokumencie (z funkcją `QUERIES`)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.",
+          "message": "Nazwa zasobnika S3 zawierającego dokument."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "Zasobnik S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "Zasobnik S3 zawierający dokument"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "Klucz obiektu S3 (ścieżka wewnątrz zasobnika)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "Nazwa obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key",
+          "message": "Klucz obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "Opcjonalny identyfikator wersji obiektu S3 dla wersjonowanych zasobników."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "Wersja obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "Opcjonalny identyfikator wersji obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Extract text + tables/forms/signatures/queries from a document",
+          "message": "Wyodrębnij tekst + tabele/formularze/podpisy/zapytania z dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
+          "message": "Wywołuje interfejs API `DetectDocumentText` usługi Textract w celu wyodrębnienia zawartości tekstowej dokumentu jedno- lub wielostronicowego. Zwraca listę obiektów `Block` (`PAGE`, `LINE`, `WORD`) z tekstem, poziomem ufności i geometrią ramki ograniczającej.\n\nPrzekaż dokument za pomocą jednej z opcji:\n- `document_bytes` — surowe bajty (PNG / JPEG / PDF / TIFF, maks. 10 MB)\n- `document_path` — ścieżka do pliku lokalnego (odczytana i przesłana jako bajty)\n- `s3_bucket` + `s3_name` — referencja do obiektu S3 (brak limitu rozmiaru)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
+          "source": "Detect Document Text",
+          "message": "Wykryj tekst dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  Supported formats: PNG, JPEG, PDF, TIFF.  Maximum 10 MB for sync calls.  Mutually exclusive with `document_path` and the `s3_*` fields.",
+          "message": "Surowe bajty dokumentu. Obsługiwane formaty: PNG, JPEG, PDF, TIFF. Maksymalnie 10 MB dla wywołań synchronicznych. Wzajemnie wyklucza się z polem `document_path` oraz polami `s3_*`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "Bajty dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "Surowe bajty dokumentu (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.  Mutually exclusive with `document_bytes` and the `s3_*` fields.",
+          "message": "Ścieżka do pliku lokalnego. Plik zostanie odczytany i przesłany jako `Bytes`. Wzajemnie wyklucza się z polem `document_bytes` oraz polami `s3_*`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "Ścieżka dokumentu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "Ścieżka do pliku lokalnego do odczytania i przesłania jako bajty"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.  Use together with `s3_name`.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "Nazwa zasobnika S3 zawierającego dokument. Używaj razem z `s3_name`. Wyklucza się wzajemnie z `document_bytes` i `document_path`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "Zasobnik S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "Zasobnik S3 zawierający dokument"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "Klucz obiektu S3 (ścieżka wewnątrz zasobnika)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "Nazwa obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key (path within the bucket)",
+          "message": "Klucz obiektu S3 (ścieżka wewnątrz zasobnika)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "Opcjonalny identyfikator wersji obiektu S3 dla wersjonowanych zasobników."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "Wersja obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "Opcjonalny identyfikator wersji obiektu S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
+          "source": "Extract raw text from a document (no structure)",
+          "message": "Wyodrębnij surowy tekst z dokumentu (bez struktury)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Textract** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **AWS Textract** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL interfejsu API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako pierwszorzędne akcje w tej aplikacji."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Textract",
+          "message": "Wykonaj niestandardowe wywołanie API do AWS Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.desc": {
+          "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
+          "message": "Zapewnia dostęp do [AWS Textract](https://aws.amazon.com/textract/) — zarządzanej usługi AI dla dokumentów do wyodrębniania tekstu, struktury i odpowiedzi ze zeskanowanych dokumentów oraz plików PDF.\n\n**Typowe przypadki użycia**:\n- **Przetwarzanie faktur i paragonów**: wyodrębnianie par klucz/wartość z formularzy za pomocą funkcji `FORMS`\n- **Wyodrębnianie tabel**: strukturalne wiersze i kolumny ze zeskanowanych tabel za pomocą funkcji `TABLES`\n- **Pytania i odpowiedzi dotyczące dokumentu**: zadawanie konkretnych pytań dotyczących dokumentu za pomocą funkcji `QUERIES` (np. „Jaka jest suma?”)\n- **Wykrywanie podpisów**: oznaczanie odręcznych podpisów w umowach za pomocą funkcji `SIGNATURES`\n- **OCR zachowujący układ**: wyodrębnianie tekstu pogrupowanego według akapitów, tytułów, nagłówków, stopek za pomocą funkcji `LAYOUT`"
+        },
+        "app.QXdzVGV4dHJhY3Q.display_name": {
+          "source": "AWS Textract",
+          "message": "AWS Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.short_desc": {
+          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
+          "message": "AWS Textract sztuczna inteligencja dla dokumentów (OCR + układ + tabele + formularze + zapytania)"
+        }
+      }
+    }
+  }
+}

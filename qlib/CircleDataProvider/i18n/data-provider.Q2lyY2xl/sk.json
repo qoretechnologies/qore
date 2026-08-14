@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Creates a new comment on a post in Circle",
+          "message": "Vytvorí nový komentár k príspevku v službe Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create a Comment",
+          "message": "Vytvoriť komentár"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`",
+          "message": "Obsah tela komentára vo formáte HTML. Príklad: `<p>Great post!</p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "Comment content",
+          "message": "Obsah komentára"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.desc": {
+          "source": "The ID of the post to add the comment to",
+          "message": "ID príspevku, ku ktorému sa má pridať komentár"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.short_desc": {
+          "source": "Post to comment on",
+          "message": "Príspevok na komentovanie"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Create a new comment",
+          "message": "Vytvoriť nový komentár"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.desc": {
+          "source": "Creates a new post in a Circle space",
+          "message": "Vytvorí nový príspevok v priestore Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
+          "source": "Create a Post",
+          "message": "Vytvoriť príspevok"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "Obsah tela príspevku vo formáte HTML. Príklad: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Obsah príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post. Default: `True`",
+          "message": "Či povoliť komentáre k príspevku. Predvolené: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Komentáre povolené"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Povoliť komentáre k príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post. Default: `True`",
+          "message": "Či povoliť označovanie príspevku Páči sa mi to. Predvolené: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "Označovanie Páči sa mi to povolené"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Povoliť označovanie Páči sa mi to na príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Či pripnúť príspevok na začiatok jeho priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Je pripnuté"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Pripnúť príspevok na začiatok priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "Názov príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Názov príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent to members about this post",
+          "message": "Ak je nastavené na `True`, členom sa o tomto príspevku neodošlú žiadne oznámenia"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Preskočiť oznámenia"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Preskočiť odosielanie oznámení"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to create the post in",
+          "message": "ID priestoru, v ktorom sa má príspevok vytvoriť"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to create the post in",
+          "message": "Priestor, v ktorom sa má príspevok vytvoriť"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Koncept"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publikované"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Naplánované"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "Stav publikovania príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Stav príspevku"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`",
+          "message": "Dátum a čas publikovania príspevku vo formáte ISO 8601. Použite s `status` nastaveným na `scheduled` pre naplánovanie zverejnenia príspevku v budúcnosti. Príklad: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Dátum publikovania"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date for scheduling",
+          "message": "Dátum publikovania na naplánovanie"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
+          "source": "Create a new post",
+          "message": "Vytvoriť nový príspevok"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Creates a new space in a Circle community",
+          "message": "Vytvorí nový priestor v komunite Circle"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create a Space",
+          "message": "Vytvoriť priestor"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "Emoji, ktoré sa použije ako ikona priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Ikona emoji priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Či je priestor úplne skrytý"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Je skrytý"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Či je priestor skrytý"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Či je priestor skrytý pred používateľmi, ktorí nie sú jeho členmi"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Skryté pred nečlenmi"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Či je priestor skrytý pred nečlenmi"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Či je v tomto priestore zakázané pridávanie príspevkov členmi"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Príspevky zakázané"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Či je pridávanie príspevkov zakázané"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private. Default: `False`",
+          "message": "Či má byť priestor súkromný. Predvolené: `False`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Je súkromný"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Či je priestor súkromný"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "Názov priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Názov priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOm1lbWJlcnM.display_name": {
+          "source": "Members",
+          "message": "Členovia"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Základný"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvdXJzZQ.display_name": {
+          "source": "Course",
+          "message": "Kurz"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmV2ZW50.display_name": {
+          "source": "Event",
+          "message": "Udalosť"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmltYWdl.display_name": {
+          "source": "Image",
+          "message": "Obrázok"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "The type of space to create",
+          "message": "Typ priestoru, ktorý sa má vytvoriť"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "Typ priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Type of space",
+          "message": "Typ priestoru"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new space",
+          "message": "Vytvoriť nový priestor"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.desc": {
+          "source": "Adds a member to a certain space in Circle",
+          "message": "Pridá člena do určitého priestoru v Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
+          "source": "Add a Member to a Space",
+          "message": "Pridať člena do priestoru"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space",
+          "message": "E-mailová adresa člena, ktorý sa má pridať do priestoru"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "E-mailová adresa člena"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to add the member to",
+          "message": "ID priestoru, do ktorého sa má člen pridať"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to add the member to",
+          "message": "Priestor, do ktorého sa má člen pridať"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
+          "source": "Add a member to a certain space",
+          "message": "Pridať člena do určitého priestoru"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.desc": {
+          "source": "Adds a member to a specific space group in Circle",
+          "message": "Pridá člena do konkrétnej skupiny priestorov v Circle"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
+          "source": "Add a Member to a Space Group",
+          "message": "Pridať člena do skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space group",
+          "message": "E-mailová adresa člena, ktorý sa má pridať do skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "E-mailová adresa člena"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to add the member to",
+          "message": "ID skupiny priestorov, do ktorej sa má člen pridať"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "ID skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to add the member to",
+          "message": "Skupina priestorov, do ktorej sa má člen pridať"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
+          "source": "Add a member to a specific space group",
+          "message": "Pridať člena do konkrétnej skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.desc": {
+          "source": "Retrieve a single community by its ID",
+          "message": "Získať jednu komunitu podľa jej ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
+          "source": "Get a Community",
+          "message": "Získať komunitu"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID komunity"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.short_desc": {
+          "source": "The community ID",
+          "message": "ID komunity"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
+          "source": "Retrieve a specific community",
+          "message": "Získať konkrétnu komunitu"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.desc": {
+          "source": "Retrieve a single comment by its ID",
+          "message": "Získať jeden komentár podľa jeho ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
+          "source": "Get a Comment",
+          "message": "Získať komentár"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID komentára"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "The comment ID",
+          "message": "ID komentára"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
+          "source": "Retrieve a specific comment",
+          "message": "Získať konkrétny komentár"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieve a single post by its ID",
+          "message": "Získať jeden príspevok podľa jeho ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get a Post",
+          "message": "Získať príspevok"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.short_desc": {
+          "source": "The post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a specific post",
+          "message": "Získať konkrétny príspevok"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve a single space by its ID",
+          "message": "Získať jeden priestor podľa jeho ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get a Space",
+          "message": "Získať priestor"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.short_desc": {
+          "source": "The space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Retrieve a specific space",
+          "message": "Získať konkrétny priestor"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.desc": {
+          "source": "Permanently deletes a comment from Circle",
+          "message": "Natrvalo vymaže komentár zo služby Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
+          "source": "Delete a Comment",
+          "message": "Odstrániť komentár"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the comment to delete",
+          "message": "Jedinečný identifikátor komentára, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID komentára"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "ID of the comment to delete",
+          "message": "ID komentára, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Delete a specific comment",
+          "message": "Odstrániť konkrétny komentár"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Permanently deletes a post from Circle",
+          "message": "Natrvalo vymaže príspevok zo služby Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete a Post",
+          "message": "Odstrániť príspevok"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to delete",
+          "message": "Jedinečný identifikátor príspevku, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to delete",
+          "message": "ID príspevku, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a specific post",
+          "message": "Odstrániť konkrétny príspevok"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Permanently deletes a space from Circle",
+          "message": "Natrvalo vymaže priestor zo služby Circle"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete a Space",
+          "message": "Odstrániť priestor"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to delete",
+          "message": "Jedinečný identifikátor priestoru, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to delete",
+          "message": "ID priestoru, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a specific space",
+          "message": "Odstrániť konkrétny priestor"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.desc": {
+          "source": "Invites a member to a Circle community by email",
+          "message": "Pozve člena do komunity Circle prostredníctvom e-mailu"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
+          "source": "Invite a Member",
+          "message": "Pozvať člena"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the person to invite to the community",
+          "message": "E-mailová adresa osoby, ktorú chcete pozvať do komunity"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.short_desc": {
+          "source": "Email address to invite",
+          "message": "E-mailová adresa na pozvanie"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.desc": {
+          "source": "The headline or tagline for the member's profile",
+          "message": "Titulok alebo podnadpis profilu člena"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.display_name": {
+          "source": "Headline",
+          "message": "Nadpis"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.short_desc": {
+          "source": "Member headline",
+          "message": "Titulok člena"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.desc": {
+          "source": "The name of the person being invited",
+          "message": "Meno pozývanej osoby"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.short_desc": {
+          "source": "Member name",
+          "message": "Meno člena"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.desc": {
+          "source": "If `True`, the member will be added without sending an invitation email",
+          "message": "Ak je nastavené `True`, člen bude pridaný bez odoslania e-mailovej pozvánky"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.display_name": {
+          "source": "Skip Invitation",
+          "message": "Preskočiť pozvánku"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.short_desc": {
+          "source": "Skip sending the invitation email",
+          "message": "Preskočiť odoslanie e-mailovej pozvánky"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.desc": {
+          "source": "List of space IDs to add the member to upon invitation",
+          "message": "Zoznam ID priestorov, do ktorých sa má člen po pozvaní pridať"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.display_name": {
+          "source": "Space IDs",
+          "message": "ID priestorov"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.short_desc": {
+          "source": "Spaces to add the member to",
+          "message": "Priestory, do ktorých sa má člen pridať"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
+          "source": "Invite a member to the community",
+          "message": "Pozvať člena do komunity"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "List comments with optional filtering by post",
+          "message": "Zoznam komentárov s voliteľným filtrovaním podľa príspevku"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "Zoznam komentárov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "ID komentára"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific comment",
+          "message": "Získať konkrétny komentár"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.short_desc": {
+          "source": "Filter by post",
+          "message": "Filtrovať podľa príspevku"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List comments in the community",
+          "message": "Zoznam komentárov v komunite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities accessible to the current API token",
+          "message": "Zoznam komunít prístupných pre aktuálny API token"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "Zoznam komunít"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID komunity"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "Získať konkrétnu komunitu"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities in the account",
+          "message": "Zoznam komunít v účte"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.desc": {
+          "source": "List community members with optional filtering by email",
+          "message": "Zoznam členov komunity s voliteľným filtrovaním podľa e-mailu"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
+          "source": "List Members",
+          "message": "Zoznam členov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovať podľa e-mailu"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.short_desc": {
+          "source": "Get a specific member",
+          "message": "Získať konkrétneho člena"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Všetky"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.display_name": {
+          "source": "Inactive",
+          "message": "Neaktívny"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by member status",
+          "message": "Filtrovať podľa stavu člena"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
+          "source": "List community members",
+          "message": "Zoznam členov komunity"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.desc": {
+          "source": "List posts in the community with optional filtering by space and status",
+          "message": "Zoznam príspevkov v komunite s voliteľným filtrovaním podľa priestoru a stavu"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "Zoznam príspevkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.short_desc": {
+          "source": "Get a specific post",
+          "message": "Získať konkrétny príspevok"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Filter by space",
+          "message": "Filtrovať podľa priestoru"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Koncept"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publikované"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Naplánované"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List posts in the community",
+          "message": "Zoznam príspevkov v komunite"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List spaces in the community with optional sorting",
+          "message": "Zoznam priestorov v komunite s voliteľným radením"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "Zoznam priestorov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.short_desc": {
+          "source": "Get a specific space",
+          "message": "Získať konkrétny priestor"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOm9sZGVzdA.display_name": {
+          "source": "Oldest",
+          "message": "Najstaršie"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Aktívne"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFscGhhYmV0aWNhbA.display_name": {
+          "source": "Alphabetical",
+          "message": "Abecedne"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhdGVzdF91cGRhdGVk.display_name": {
+          "source": "Latest Updated",
+          "message": "Naposledy aktualizované"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort Order",
+          "message": "Poradie zoradenia"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Sort order for spaces",
+          "message": "Poradie zoradenia priestorov"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List spaces in the community",
+          "message": "Zoznam priestorov v komunite"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Circle** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Circle",
+          "message": "Vykonať vlastné volanie API do služby Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.desc": {
+          "source": "Fires when a member accepts an invitation to the Circle community",
+          "message": "Spustí sa, keď člen prijme pozvánku do komunity Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
+          "source": "Member Accepted an Invitation",
+          "message": "Člen prijal pozvánku"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
+          "source": "Trigger when a member accepts an invitation",
+          "message": "Spustiť, keď člen prijme pozvánku"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.desc": {
+          "source": "Fires when a member is tagged in the Circle community",
+          "message": "Spustí sa, keď je člen označený v komunite Circle"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
+          "source": "Member Tagged",
+          "message": "Člen bol označený"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
+          "source": "Trigger when a member is tagged",
+          "message": "Spustiť, keď je člen označený"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.desc": {
+          "source": "Fires when new communities are created in Circle",
+          "message": "Spustí sa, keď sú v službe Circle vytvorené nové komunity"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
+          "source": "New Community",
+          "message": "Nová komunita"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
+          "source": "Trigger when new communities are created",
+          "message": "Spustiť, keď sú vytvorené nové komunity"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.desc": {
+          "source": "Fires when new comments are posted in the Circle community",
+          "message": "Spustí sa, keď sú v komunite Circle zverejnené nové komentáre"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
+          "source": "New Comment",
+          "message": "Nový komentár"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
+          "source": "Trigger when new comments are posted",
+          "message": "Spustiť, keď sú zverejnené nové komentáre"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when new posts are created in the Circle community",
+          "message": "Spustí sa, keď sú v komunite Circle vytvorené nové príspevky"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "Nový príspevok"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Trigger when new posts are created",
+          "message": "Spustiť, keď sú vytvorené nové príspevky"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.desc": {
+          "source": "Fires when new spaces are created in the Circle community",
+          "message": "Spustí sa, keď sú v komunite Circle vytvorené nové priestory"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
+          "source": "New Space",
+          "message": "Nový priestor"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
+          "source": "Trigger when new spaces are created",
+          "message": "Spustiť, keď sú vytvorené nové priestory"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Sends a message to a specific user on behalf of the current user in Circle",
+          "message": "Odošle správu konkrétnemu používateľovi v mene aktuálneho používateľa v službe Circle"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "Odoslať správu"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The body content of the message",
+          "message": "Textový obsah správy"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "Message content",
+          "message": "Obsah správy"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.desc": {
+          "source": "The ID of the community member to send the message to",
+          "message": "ID člena komunity, ktorému sa má správa odoslať"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.display_name": {
+          "source": "Recipient ID",
+          "message": "ID príjemcu"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.short_desc": {
+          "source": "ID of the message recipient",
+          "message": "ID príjemcu správy"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to a specific user",
+          "message": "Odoslať správu konkrétnemu používateľovi"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.desc": {
+          "source": "Removes a member from a Circle community",
+          "message": "Odstráni člena z komunity Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
+          "source": "Remove a Member",
+          "message": "Odstrániť člena"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to remove",
+          "message": "Jedinečný identifikátor člena komunity, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to remove",
+          "message": "ID člena, ktorý sa má odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
+          "source": "Remove a member from the community",
+          "message": "Odstrániť člena z komunity"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.desc": {
+          "source": "Removes a member from a space in Circle",
+          "message": "Odstráni člena z priestoru v službe Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
+          "source": "Remove a Member from a Space",
+          "message": "Odstrániť člena z priestoru"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space",
+          "message": "ID člena komunity, ktorý sa má odstrániť z priestoru"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Člen na odstránenie"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to remove the member from",
+          "message": "ID priestoru, z ktorého sa má člen odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to remove the member from",
+          "message": "Priestor, z ktorého sa má člen odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
+          "source": "Remove a member from a space",
+          "message": "Odstrániť člena z priestoru"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.desc": {
+          "source": "Removes a member from a space group in Circle",
+          "message": "Odstráni člena zo skupiny priestorov v službe Circle"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
+          "source": "Remove a Member from a Space Group",
+          "message": "Odstrániť člena zo skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space group",
+          "message": "ID člena komunity, ktorý sa má odstrániť zo skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "Člen na odstránenie"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to remove the member from",
+          "message": "ID skupiny priestorov, z ktorej sa má člen odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "ID skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to remove the member from",
+          "message": "Skupina priestorov, z ktorej sa má člen odstrániť"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
+          "source": "Remove a member from a space group",
+          "message": "Odstrániť člena zo skupiny priestorov"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.desc": {
+          "source": "Tags a specific community member in Circle",
+          "message": "Priradí štítok konkrétnemu členovi komunity v službe Circle"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
+          "source": "Tag a Member",
+          "message": "Označiť člena štítkom"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to tag",
+          "message": "Jedinečný identifikátor člena komunity, ktorý sa má označiť štítkom"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to tag",
+          "message": "ID člena na označenie štítkom"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.desc": {
+          "source": "The tag to apply to the member",
+          "message": "Štítok, ktorý sa má priradiť členovi"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.short_desc": {
+          "source": "Tag name",
+          "message": "Názov štítka"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
+          "source": "Tag a specific member",
+          "message": "Označiť konkrétneho člena štítkom"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.desc": {
+          "source": "Removes a tag from a specific community member in Circle",
+          "message": "Odstráni štítok konkrétnemu členovi komunity v službe Circle"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
+          "source": "Untag a Member",
+          "message": "Odstrániť štítok členovi"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to untag",
+          "message": "Jedinečný identifikátor člena komunity, ktorému sa má odstrániť štítok"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "ID člena"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.short_desc": {
+          "source": "ID of the member to untag",
+          "message": "ID člena, ktorému sa má odstrániť štítok"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to remove from the member",
+          "message": "ID štítka, ktorý sa má odstrániť členovi"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.short_desc": {
+          "source": "ID of the tag to remove",
+          "message": "ID štítka na odstránenie"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
+          "source": "Untag a specific member",
+          "message": "Odstrániť štítok konkrétnemu členovi"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Updates an existing post in Circle",
+          "message": "Aktualizuje existujúci príspevok v službe Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update a Post",
+          "message": "Aktualizovať príspevok"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "Obsah tela príspevku vo formáte HTML. Príklad: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "Obsah príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to update",
+          "message": "Jedinečný identifikátor príspevku, ktorý sa má aktualizovať"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "ID príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to update",
+          "message": "ID príspevku, ktorý sa má aktualizovať"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.desc": {
+          "source": "Whether to close comments on the post",
+          "message": "Či sa majú uzavrieť komentáre k príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.display_name": {
+          "source": "Comments Closed",
+          "message": "Komentáre uzavreté"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.short_desc": {
+          "source": "Close comments on the post",
+          "message": "Uzavrieť komentáre k príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post",
+          "message": "Či sa majú povoliť komentáre k príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "Komentáre povolené"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "Povoliť komentáre k príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post",
+          "message": "Či sa má povoliť pridávanie páči sa mi to k príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "Označovanie Páči sa mi to povolené"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "Povoliť označovanie Páči sa mi to na príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "Či pripnúť príspevok na začiatok jeho priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "Je pripnuté"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "Pripnúť príspevok na začiatok priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "Názov príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "Názov príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent about this update",
+          "message": "Ak je `True`, o tejto aktualizácii sa neodošlú žiadne oznámenia"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Preskočiť oznámenia"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "Preskočiť odosielanie oznámení"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Koncept"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "Publikované"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Naplánované"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "Stav publikovania príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "Stav príspevku"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`",
+          "message": "Dátum a čas zverejnenia príspevku vo formáte ISO 8601. Príklad: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "Dátum publikovania"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date",
+          "message": "Dátum publikovania"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Update an existing post",
+          "message": "Aktualizovať existujúci príspevok"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Updates an existing space in Circle",
+          "message": "Aktualizuje existujúci priestor v službe Circle"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update a Space",
+          "message": "Aktualizovať priestor"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "Emoji, ktoré sa použije ako ikona priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "Emoji"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "Ikona emoji priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.desc": {
+          "source": "Whether to hide this space from featured areas in the community",
+          "message": "Či sa má tento priestor skryť z odporúčaných oblastí v komunite"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.display_name": {
+          "source": "Hide from Featured Areas",
+          "message": "Skryť z odporúčaných oblastí"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.short_desc": {
+          "source": "Whether to hide from featured areas",
+          "message": "Či skryť z odporúčaných oblastí"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.desc": {
+          "source": "Whether to hide post settings in this space",
+          "message": "Či sa majú v tomto priestore skryť nastavenia príspevkov"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.display_name": {
+          "source": "Hide Post Settings",
+          "message": "Skryť nastavenia príspevkov"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.short_desc": {
+          "source": "Whether post settings are hidden",
+          "message": "Či sú nastavenia príspevkov skryté"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to update",
+          "message": "Jedinečný identifikátor priestoru, ktorý sa má aktualizovať"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "ID priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to update",
+          "message": "ID priestoru na aktualizáciu"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "Či je priestor úplne skrytý"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "Je skrytý"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "Či je priestor skrytý"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "Či je priestor skrytý pred používateľmi, ktorí nie sú jeho členmi"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "Skryté pred nečlenmi"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "Či je priestor skrytý pred nečlenmi"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "Či je v tomto priestore zakázané pridávanie príspevkov členmi"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "Príspevky zakázané"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "Či je pridávanie príspevkov zakázané"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private",
+          "message": "Či má byť priestor súkromný"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "Je súkromný"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "Či je priestor súkromný"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "Názov priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "Názov priestoru"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update an existing space",
+          "message": "Aktualizovať existujúci priestor"
+        },
+        "app.Q2lyY2xl.desc": {
+          "source": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging.",
+          "message": "Circle je komunitná platforma na správu príspevkov, komentárov, členov, priestorov, udalostí a správ.\n\nTáto integrácia podporuje vytváranie a správu komunitného obsahu, správu členov, členstvo v priestoroch, označovanie a priame správy."
+        },
+        "app.Q2lyY2xl.display_name": {
+          "source": "Circle",
+          "message": "Circle"
+        },
+        "app.Q2lyY2xl.short_desc": {
+          "source": "Circle community platform",
+          "message": "Komunitná platforma Circle"
+        }
+      }
+    }
+  }
+}

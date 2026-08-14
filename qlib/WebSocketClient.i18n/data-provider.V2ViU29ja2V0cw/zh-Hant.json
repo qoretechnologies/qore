@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.desc": {
+          "source": "Receive a WebSocket message from a WebSocket server; react to a WebSocket message",
+          "message": "從 WebSocket 伺服器接收 WebSocket 訊息；對 WebSocket 訊息作出回應"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.display_name": {
+          "source": "WebSocket Message Received",
+          "message": "已接收 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.action.bXNnLXJlY2VpdmVk.short_desc": {
+          "source": "A WebSocket message is received",
+          "message": "已接收到 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.desc": {
+          "source": "Send a WebSocket data message to a WebSocket server; the message is serialized for sending",
+          "message": "傳送 WebSocket 資料訊息至 WebSocket 伺服器；訊息將會進行序列化後傳送"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.display_name": {
+          "source": "Send WebSocket Message",
+          "message": "傳送 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "要傳送的資料；將根據序列化選項進行序列化"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.short_desc": {
+          "source": "The data to send; will be serialized according to the serialization option",
+          "message": "要傳送的資料；將根據序列化選項進行序列化"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
+          "source": "Send a WebSocket data message",
+          "message": "傳送 WebSocket 資料訊息"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.desc": {
+          "source": "Send a raw WebSocket message to a WebSocket server",
+          "message": "傳送原始 WebSocket 訊息至 WebSocket 伺服器"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.display_name": {
+          "source": "Send Raw WebSocket Message",
+          "message": "傳送原始 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.desc": {
+          "source": "The data to send; the data will be sent as-is, no data serialization will be performed",
+          "message": "要傳送的資料；資料將原樣傳送，不會執行資料序列化"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.option.ZGF0YQ.short_desc": {
+          "source": "The data to send",
+          "message": "要傳送的資料"
+        },
+        "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctcmF3.short_desc": {
+          "source": "Send a raw WebSocket message",
+          "message": "傳送原始 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "傳送與接收 WebSocket 訊息"
+        },
+        "app.V2ViU29ja2V0cw.display_name": {
+          "source": "WebSocket Messaging",
+          "message": "WebSocket 訊息傳遞"
+        },
+        "app.V2ViU29ja2V0cw.short_desc": {
+          "source": "Send and receive WebSocket messages",
+          "message": "傳送與接收 WebSocket 訊息"
+        }
+      }
+    }
+  }
+}

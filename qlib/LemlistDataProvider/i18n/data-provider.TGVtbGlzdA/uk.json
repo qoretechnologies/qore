@@ -1,0 +1,1565 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new Lemlist campaign with the specified name.",
+          "message": "Створити нову кампанію Lemlist із зазначеною назвою."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Створити кампанію"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "Назва кампанії для створення"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Campaign Name",
+          "message": "Назва кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Name for the new campaign",
+          "message": "Назва нової кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "Створити нову кампанію"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Lemlist.",
+          "message": "Створити новий контакт у Lemlist."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Створити контакт"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the contact works for",
+          "message": "Назва компанії, у якій працює контакт"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Назва компанії контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact (used as the unique identifier)",
+          "message": "Адреса електронної пошти контакту (використовується як унікальний ідентифікатор)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Прізвище контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "URL-адреса профілю LinkedIn контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL-адреса профілю LinkedIn контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "The phone number of the contact",
+          "message": "Номер телефону контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the contact",
+          "message": "URL-адреса вебсайту, пов’язаного з контактом"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Вебсайт контакту або компанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Створити новий контакт"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Add a new lead to a Lemlist campaign. The lead will be enrolled in the campaign's outreach sequence.",
+          "message": "Додати нового ліда до кампанії Lemlist. Ліда буде додано до послідовності взаємодії кампанії."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Add Lead to Campaign",
+          "message": "Додати ліда до кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the lead works for",
+          "message": "Назва компанії, у якій працює лід"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Назва компанії ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to add this lead to",
+          "message": "Ідентифікатор кампанії, до якої слід додати цього ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to add the lead to",
+          "message": "Кампанія для додавання ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead (used as the unique identifier)",
+          "message": "Адреса електронної пошти ліда (використовується як унікальний ідентифікатор)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "Електронна адреса ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the lead",
+          "message": "Ім'я ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Ім'я ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the lead",
+          "message": "Прізвище ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Прізвище ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the lead",
+          "message": "URL-адреса профілю LinkedIn ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL-адреса профілю LinkedIn ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the lead",
+          "message": "Номер телефону ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Номер телефону ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "URL-адреса вебсайту, пов’язаного з лідом"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Вебсайт ліда або компанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Add a lead to a campaign",
+          "message": "Додати ліда до кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new manual task in Lemlist for a lead (e.g., email, LinkedIn message, call).",
+          "message": "Створити нове ручне завдання в Lemlist для ліда (наприклад, електронний лист, повідомлення в LinkedIn, дзвінок)."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "Створити завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign this task belongs to",
+          "message": "Ідентифікатор кампанії, до якої належить це завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to associate the task with",
+          "message": "Кампанія для зв'язування із завданням"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "The email or identifier of the user to assign this task to",
+          "message": "Електронна пошта або ідентифікатор користувача, якому слід призначити це завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Призначено"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Користувач, якому призначається завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Date and time when this task is due",
+          "message": "Дата й час виконання цього завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Task due date",
+          "message": "Кінцевий термін завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.desc": {
+          "source": "The identifier of the lead this task is for",
+          "message": "Ідентифікатор ліда, для якого створено це завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID ліда"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.short_desc": {
+          "source": "Lead to assign the task to",
+          "message": "Лід, якому призначається завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOm1hbnVhbEVtYWls.desc": {
+          "source": "Manual email",
+          "message": "Ручний електронний лист"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmFwaQ.desc": {
+          "source": "API task",
+          "message": "Завдання API"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmNhbGw.desc": {
+          "source": "Phone call",
+          "message": "Телефонний дзвінок"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluSW52aXRl.desc": {
+          "source": "LinkedIn invite",
+          "message": "Запрошення в LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluTWVzc2FnZQ.desc": {
+          "source": "LinkedIn message",
+          "message": "Повідомлення в LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.desc": {
+          "source": "The type of manual task to create",
+          "message": "Тип ручного завдання для створення"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Task Type",
+          "message": "Тип завдання"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Type of task to create",
+          "message": "Тип завдання для створення"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a manual task",
+          "message": "Створити ручне завдання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single Lemlist campaign by its unique identifier.",
+          "message": "Отримати одну кампанію Lemlist за її унікальним ідентифікатором."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Отримати кампанію"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to retrieve",
+          "message": "Унікальний ідентифікатор кампанії для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to retrieve",
+          "message": "ID кампанії для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by ID",
+          "message": "Отримати окрему кампанію за ID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single Lemlist contact by their email address.",
+          "message": "Отримати один контакт Lemlist за його адресою електронної пошти."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Отримати контакт"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve",
+          "message": "Адреса електронної пошти контакту для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by email",
+          "message": "Отримати контакт за електронною поштою"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single Lemlist lead by email address from a specific campaign.",
+          "message": "Отримати одного ліда Lemlist за адресою електронної пошти з певної кампанії."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get Lead",
+          "message": "Отримати ліда"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign the lead belongs to",
+          "message": "Ідентифікатор кампанії, до якої належить лід"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign containing the lead",
+          "message": "Кампанія, що містить ліда"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to retrieve",
+          "message": "Адреса електронної пошти ліда для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "Електронна адреса ліда"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead from a campaign",
+          "message": "Отримати одного ліда з кампанії"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single Lemlist manual task by its unique identifier.",
+          "message": "Отримати одне ручне завдання Lemlist за його унікальним ідентифікатором."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Отримати завдання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "Унікальний ідентифікатор завдання для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to retrieve",
+          "message": "ID завдання для отримання"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Отримати одне завдання за ID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a Lemlist contact by their email address.",
+          "message": "Видалити контакт Lemlist за його адресою електронної пошти."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Видалити контакт"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to delete",
+          "message": "Адреса електронної пошти контакту для видалення"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to delete",
+          "message": "Адреса електронної пошти контакту для видалення"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Видалити контакт"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Remove a lead from a Lemlist campaign. The lead will stop receiving outreach from that campaign.",
+          "message": "Видалити ліда з кампанії Lemlist. Лід перестане отримувати розсилки з цієї кампанії."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Remove Lead from Campaign",
+          "message": "Видалити ліда з кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to remove the lead from",
+          "message": "Ідентифікатор кампанії, з якої слід видалити ліда"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to remove the lead from",
+          "message": "Кампанія, з якої слід видалити ліда"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to remove from the campaign",
+          "message": "Адреса електронної пошти ліда, якого потрібно видалити з кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to delete",
+          "message": "Електронна адреса ліда для видалення"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Remove a lead from a campaign",
+          "message": "Видалити ліда з кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a Lemlist manual task by its unique identifier.",
+          "message": "Видалити завдання Lemlist, створене вручну, за його унікальним ідентифікатором."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "Видалити завдання"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "Унікальний ідентифікатор завдання для видалення"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to delete",
+          "message": "Ідентифікатор завдання для видалення"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a manual task",
+          "message": "Видалити ручне завдання"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Fires when a lead clicks a link in a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Спрацьовує, коли лід переходить за посиланням в електронному листі Lemlist. Надає відомості про кампанію, ліда та крок послідовності."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "Перехід за посиланням у листі"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Trigger when a lead clicks a link",
+          "message": "Спрацьовувати, коли лід переходить за посиланням"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.desc": {
+          "source": "Fires when a Lemlist email bounces. Provides campaign and lead details for follow-up.",
+          "message": "Спрацьовує у разі повернення електронного листа Lemlist. Надає відомості про кампанію та ліда для подальших дій."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Email Bounced",
+          "message": "Лист повернуто через помилку доставки"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Trigger when an email bounces",
+          "message": "Спрацьовувати, коли лист повертається"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.desc": {
+          "source": "Fires when a lead opens a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Спрацьовує, коли лід відкриває електронний лист Lemlist. Надає відомості про кампанію, ліда та крок послідовності."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "Лист відкрито"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Trigger when a lead opens an email",
+          "message": "Спрацьовувати, коли лід відкриває лист"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.desc": {
+          "source": "Fires when a Lemlist email is sent to a lead. Provides campaign, lead, and sequence step details.",
+          "message": "Спрацьовує, коли електронний лист Lemlist надсилається ліду. Надає відомості про кампанію, ліда та крок послідовності."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
+          "source": "Email Sent",
+          "message": "Лист надіслано"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
+          "source": "Trigger when an email is sent",
+          "message": "Спрацьовувати, коли лист надіслано"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.desc": {
+          "source": "Fires when a lead replies to a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Спрацьовує, коли лід відповідає на електронний лист Lemlist. Надає відомості про кампанію, ліда та крок послідовності."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
+          "source": "Email Replied",
+          "message": "Отримано відповідь на лист"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
+          "source": "Trigger when a lead replies to an email",
+          "message": "Спрацьовувати, коли лід відповідає на лист"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.desc": {
+          "source": "Fires when a lead is marked as interested in Lemlist. This is a key engagement signal for sales follow-up.",
+          "message": "Спрацьовує, коли ліда позначено як зацікавленого в Lemlist. Це ключовий сигнал взаємодії для подальшої роботи відділу продажу."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
+          "source": "Lead Marked Interested",
+          "message": "Ліда позначено як зацікавленого"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
+          "source": "Trigger when a lead is marked as interested",
+          "message": "Спрацьовувати, коли ліда позначено як зацікавленого"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.desc": {
+          "source": "Fires when a lead is marked as not interested in Lemlist. Use to suppress future outreach or update CRM records.",
+          "message": "Спрацьовує, коли ліда позначено як незацікавленого в Lemlist. Використовуйте для призупинення подальших контактів або оновлення записів у CRM."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
+          "source": "Lead Marked Not Interested",
+          "message": "Ліда позначено як незацікавленого"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "За потреби фільтрувати події за конкретною кампанією Lemlist"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Фільтрувати події за конкретною кампанією"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {
+          "source": "Trigger when a lead is marked as not interested",
+          "message": "Спрацьовувати, коли ліда позначено як незацікавленого"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.desc": {
+          "source": "Retrieve a list of Lemlist manual tasks.",
+          "message": "Отримати список ручних завдань Lemlist."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Отримати список завдань"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of tasks to return (max 100)",
+          "message": "Максимальна кількість завдань для повернення (макс. 100)"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List manual tasks",
+          "message": "Отримати список ручних завдань"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of Lemlist activities with optional filtering by type, campaign, or lead.",
+          "message": "Отримати список активностей Lemlist із можливістю фільтрації за типом, кампанією або лідом."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "Список дій"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Filter activities by campaign identifier",
+          "message": "Фільтрувати активності за ідентифікатором кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "Фільтрувати за кампанією"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.desc": {
+          "source": "If `True`, only returns the first occurrence of each activity type per lead per campaign",
+          "message": "Якщо `True`, повертає лише першу появу кожного типу активності для кожного ліда в кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.display_name": {
+          "source": "First Occurrence Only",
+          "message": "Лише перша поява"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.short_desc": {
+          "source": "Only return first occurrences",
+          "message": "Повертати лише перші появи"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.desc": {
+          "source": "Filter activities by lead identifier",
+          "message": "Фільтрувати активності за ідентифікатором ліда"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID ліда"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.short_desc": {
+          "source": "Filter by lead",
+          "message": "Фільтрувати за лідом"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOm5vdEludGVyZXN0ZWQ.desc": {
+          "source": "Lead not interested",
+          "message": "Лід не зацікавлений"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc09wZW5lZA.desc": {
+          "source": "Emails opened",
+          "message": "Листи відкрито"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0JvdW5jZWQ.desc": {
+          "source": "Emails bounced",
+          "message": "Листи повернуто"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0NsaWNrZWQ.desc": {
+          "source": "Emails clicked",
+          "message": "Переходи за посиланнями в листах"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1JlcGxpZWQ.desc": {
+          "source": "Emails replied",
+          "message": "Отримано відповідей на листи"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1NlbnQ.desc": {
+          "source": "Emails sent",
+          "message": "Листи надіслано"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmludGVyZXN0ZWQ.desc": {
+          "source": "Lead interested",
+          "message": "Лід зацікавлений"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by their type",
+          "message": "Фільтрувати активності за їхнім типом"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "Тип дії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "Фільтрувати за типом дії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List email and engagement activities",
+          "message": "Отримати список активностей із листами та взаємодіями"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of Lemlist campaigns with optional filtering by status.",
+          "message": "Отримати список кампаній Lemlist із можливістю фільтрації за статусом."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Список кампаній"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived campaigns",
+          "message": "Архівовані кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "Чернетки кампаній"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended campaigns",
+          "message": "Завершені кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVycm9ycw.desc": {
+          "source": "Campaigns with errors",
+          "message": "Кампанії з помилками"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused campaigns",
+          "message": "Призупинені кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJ1bm5pbmc.desc": {
+          "source": "Running campaigns",
+          "message": "Активні кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by their current status",
+          "message": "Фільтрувати кампанії за їхнім поточним статусом"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "Фільтрувати за статусом кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List and search campaigns",
+          "message": "Список та пошук кампаній"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of Lemlist contacts. Optionally filter by email to get a specific contact.",
+          "message": "Отримати список контактів Lemlist. За потреби відфільтруйте за електронною поштою, щоб отримати конкретний контакт."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Список контактів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve. The Lemlist v2 API requires a specific email address to look up contacts.",
+          "message": "Адреса електронної пошти контакту для отримання. Для пошуку контактів Lemlist v2 API вимагає вказання конкретної адреси електронної пошти."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact to retrieve",
+          "message": "Електронна адреса контакту для отримання"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts",
+          "message": "Отримати список контактів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.desc": {
+          "source": "Retrieve a list of leads enrolled in a specific Lemlist campaign.",
+          "message": "Отримати список лідів, доданих до певної кампанії Lemlist."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Список лідів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to retrieve leads from",
+          "message": "Ідентифікатор кампанії, з якої потрібно отримати лідів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to list leads from",
+          "message": "Кампанія для отримання списку лідів"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads in a campaign",
+          "message": "Отримати список лідів у кампанії"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Lemlist** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний HTTP / REST API-виклик до **Lemlist** за допомогою автентифікації налаштованого з'єднання.\n\nУкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається як хеш, що містить код статусу, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для ендпоінтів, які ще не представлені як стандартні дії в цьому додатку."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Lemlist",
+          "message": "Виконати довільний виклик API до Lemlist"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.desc": {
+          "source": "Start or resume a paused Lemlist campaign to begin or continue sending emails.",
+          "message": "Запустити або відновити призупинену кампанію Lemlist, щоб розпочати або продовжити надсилання листів."
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
+          "source": "Start Campaign",
+          "message": "Запустити кампанію"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to start",
+          "message": "Унікальний ідентифікатор кампанії для запуску"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to start",
+          "message": "ID кампанії для запуску"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
+          "source": "Start or resume a campaign",
+          "message": "Запустити або відновити кампанію"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.desc": {
+          "source": "Pause an active Lemlist campaign to temporarily stop sending emails.",
+          "message": "Призупинити активну кампанію Lemlist, щоб тимчасово зупинити надсилання електронних листів."
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
+          "source": "Pause Campaign",
+          "message": "Призупинити кампанію"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to pause",
+          "message": "Унікальний ідентифікатор кампанії для призупинення"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID кампанії"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to pause",
+          "message": "ID кампанії для призупинення"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
+          "source": "Pause a running campaign",
+          "message": "Призупинити запущену кампанію"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update the properties of an existing Lemlist contact by email address.",
+          "message": "Оновити властивості наявного контакту Lemlist за адресою електронної пошти."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Оновити контакт"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the contact",
+          "message": "Оновлена назва компанії для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Назва компанії контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to update (used as the unique identifier)",
+          "message": "Адреса електронної пошти контакту для оновлення (використовується як унікальний ідентифікатор)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to update",
+          "message": "Адреса електронної пошти контакту для оновлення"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the contact",
+          "message": "Оновлене ім'я для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the contact",
+          "message": "Оновлене прізвище для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the contact",
+          "message": "Оновлена URL-адреса профілю LinkedIn для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL-адреса профілю LinkedIn контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the contact",
+          "message": "Оновлений номер телефону для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the contact",
+          "message": "Оновлена URL-адреса вебсайту для контакту"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Вебсайт контакту або компанії"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Оновити існуючий контакт"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update the properties of an existing Lemlist lead by email address.",
+          "message": "Оновити властивості наявного ліда Lemlist за адресою електронної пошти."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update Lead",
+          "message": "Оновити лід"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the lead",
+          "message": "Оновлена назва компанії для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Назва компанії ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to update (used as identifier)",
+          "message": "Адреса електронної пошти ліда для оновлення (використовується як ідентифікатор)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to update",
+          "message": "Адреса електронної пошти ліда для оновлення"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the lead",
+          "message": "Оновлене ім'я для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Ім'я ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.desc": {
+          "source": "Set to `True` to mark this lead as interested in your offer",
+          "message": "Встановіть `True`, щоб позначити цього ліда як зацікавленого у вашій пропозиції"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.display_name": {
+          "source": "Is Interested",
+          "message": "Зацікавлений"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.short_desc": {
+          "source": "Mark the lead as interested or not",
+          "message": "Позначити ліда як зацікавленого чи ні"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.desc": {
+          "source": "Set to `True` to pause outreach to this lead, `False` to resume",
+          "message": "Встановіть `True`, щоб призупинити зв'язок із цим лідом, або `False`, щоб відновити"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.display_name": {
+          "source": "Is Paused",
+          "message": "Призупинено"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.short_desc": {
+          "source": "Pause or resume outreach to this lead",
+          "message": "Призупинити або відновити зв'язок із цим лідом"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the lead",
+          "message": "Оновлене прізвище для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Прізвище ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the lead",
+          "message": "Оновлена URL-адреса профілю LinkedIn для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL-адреса профілю LinkedIn ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the lead",
+          "message": "Оновлений номер телефону для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Номер телефону ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the lead",
+          "message": "Оновлена URL-адреса вебсайту для ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Вебсайт ліда або компанії"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "Оновити наявного ліда"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update a Lemlist manual task, such as marking it as done or changing the assignee.",
+          "message": "Оновити ручне завдання Lemlist, наприклад позначити його як виконане або змінити виконавця."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "Оновити завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "Updated assignee for the task",
+          "message": "Оновлений виконавець завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Призначено"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Користувач, якому призначається завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Updated date and time when this task is due",
+          "message": "Оновлені дата й час терміну виконання завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Кінцевий термін"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Updated task due date",
+          "message": "Оновлений термін виконання завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.desc": {
+          "source": "Task completed",
+          "message": "Завдання виконано"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmlnbm9yZWQ.desc": {
+          "source": "Task ignored",
+          "message": "Завдання проігноровано"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The updated status of the task",
+          "message": "Оновлений статус завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "New task status",
+          "message": "Новий статус завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "Унікальний ідентифікатор завдання для оновлення"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to update",
+          "message": "ID завдання для оновлення"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update a task status",
+          "message": "Оновити статус завдання"
+        },
+        "app.TGVtbGlzdA.desc": {
+          "source": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with email, LinkedIn, and multi-channel automation. This integration enables managing campaigns, leads, activities, tasks, and contacts, plus receiving real-time webhook notifications.\n\n**Features:**\n- Campaign management (create, pause, start)\n- Lead management (add, update, remove leads from campaigns)\n- Activity tracking (emails sent, opened, clicked, replied, bounced)\n- Task management (create and update manual tasks)\n- Contact management\n- Real-time webhooks for email and engagement events",
+          "message": "Lemlist — це платформа для залучення продажів, яка дає змогу проводити персоналізовані інформаційні кампанії за допомогою електронної пошти, LinkedIn та багатоканальної автоматизації. Ця інтеграція дозволяє керувати кампаніями, лідами, активностями, завданнями та контактами, а також отримувати сповіщення вебхуків у реальному часі.\n\n**Можливості:**\n- Керування кампаніями (створення, призупинення, запуск)\n- Керування лідами (додавання, оновлення, видалення лідів із кампаній)\n- Відстеження активності (листи надіслано, відкрито, здійснено перехід, отримано відповідь, відхилено)\n- Керування завданнями (створення й оновлення ручних завдань)\n- Керування контактами\n- Вебхуки в реальному часі для подій електронної пошти та залучення"
+        },
+        "app.TGVtbGlzdA.display_name": {
+          "source": "Lemlist",
+          "message": "Lemlist"
+        },
+        "app.TGVtbGlzdA.short_desc": {
+          "source": "Lemlist sales outreach and email automation platform",
+          "message": "Платформа Lemlist для аутрічу та автоматизації електронної пошти"
+        }
+      }
+    }
+  }
+}

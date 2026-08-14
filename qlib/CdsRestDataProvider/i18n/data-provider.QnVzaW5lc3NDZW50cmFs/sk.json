@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.desc": {
+          "source": "Create a record in a Business Central table using the Business Central REST API",
+          "message": "Vytvoriť záznam v tabuľke Business Central pomocou REST API Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.display_name": {
+          "source": "Create Record",
+          "message": "Vytvoriť záznam"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.Y29tcGFueQ.desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.Y29tcGFueQ.short_desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.desc": {
+          "source": "The name of the Business Central table, ex: `customers`",
+          "message": "Názov tabuľky Business Central, napr.: `customers`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.option.dGFibGU.short_desc": {
+          "source": "The name of the Business Central table",
+          "message": "Názov tabuľky Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.Y3JlYXRlLXJlY29yZA.short_desc": {
+          "source": "Create a record in a Business Central table",
+          "message": "Vytvoriť záznam v tabuľke Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.desc": {
+          "source": "Delete records in a Business Central table using the Business Central REST API",
+          "message": "Odstrániť záznamy v tabuľke Business Central pomocou REST API Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.display_name": {
+          "source": "Delete Records",
+          "message": "Odstrániť záznamy"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.Y29tcGFueQ.desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.Y29tcGFueQ.short_desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.desc": {
+          "source": "The name of the Business Central table, ex: `customers`",
+          "message": "Názov tabuľky Business Central, napr.: `customers`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.option.dGFibGU.short_desc": {
+          "source": "The name of the Business Central table",
+          "message": "Názov tabuľky Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZGVsZXRlLXJlY29yZHM.short_desc": {
+          "source": "Delete records in Business Central",
+          "message": "Odstrániť záznamy v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.desc": {
+          "source": "Find records in a Business Central table using the Business Central REST API",
+          "message": "Nájsť záznamy v tabuľke Business Central pomocou REST API Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.display_name": {
+          "source": "Find Records",
+          "message": "Nájsť záznamy"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.Y29tcGFueQ.desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.Y29tcGFueQ.short_desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.dGFibGU.desc": {
+          "source": "The name of the Business Central table, ex: `customers`",
+          "message": "Názov tabuľky Business Central, napr.: `customers`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.option.dGFibGU.short_desc": {
+          "source": "The name of the Business Central table",
+          "message": "Názov tabuľky Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1yZWNvcmRz.short_desc": {
+          "source": "Find records in Business Central",
+          "message": "Nájsť záznamy v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.desc": {
+          "source": "Find a specific record in a Business Central table using the Business Central REST API",
+          "message": "Nájsť konkrétny záznam v tabuľke Business Central pomocou REST API Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.display_name": {
+          "source": "Find Single Record",
+          "message": "Nájsť jeden záznam"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.Y29tcGFueQ.desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.Y29tcGFueQ.short_desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.desc": {
+          "source": "The name of the Business Central table, ex: `customers`",
+          "message": "Názov tabuľky Business Central, napr.: `customers`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.option.dGFibGU.short_desc": {
+          "source": "The name of the Business Central table",
+          "message": "Názov tabuľky Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.ZmluZC1zaW5nbGUtcmVjb3Jk.short_desc": {
+          "source": "Find a specific record in Business Central",
+          "message": "Nájsť konkrétny záznam v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Microsoft Dynamics 365 Business Central** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Microsoft Dynamics 365 Business Central** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Microsoft Dynamics 365 Business Central",
+          "message": "Vykonať vlastné volanie API do Microsoft Dynamics 365 Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.desc": {
+          "source": "Update records in a Business Central table using the Business Central REST API",
+          "message": "Aktualizovať záznamy v tabuľke Business Central pomocou REST API Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.display_name": {
+          "source": "Update Records",
+          "message": "Aktualizovať záznamy"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.Y29tcGFueQ.desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.Y29tcGFueQ.short_desc": {
+          "source": "The Business Central company ID or name",
+          "message": "ID alebo názov spoločnosti v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.desc": {
+          "source": "The name of the Business Central table, ex: `customers`",
+          "message": "Názov tabuľky Business Central, napr.: `customers`"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.option.dGFibGU.short_desc": {
+          "source": "The name of the Business Central table",
+          "message": "Názov tabuľky Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.action.dXBkYXRlLXJlY29yZHM.short_desc": {
+          "source": "Update records in Business Central",
+          "message": "Aktualizovať záznamy v Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.desc": {
+          "source": "Microsoft Dynamics 365 Business Central is a cloud-based business management solution for small and medium-sized organizations. Microsoft, Microsoft 365, and Microsoft Dynamics 365 are trademarks of the Microsoft group of companies",
+          "message": "Microsoft Dynamics 365 Business Central je cloudové riešenie na riadenie podniku pre malé a stredné organizácie. Microsoft, Microsoft 365 a Microsoft Dynamics 365 sú ochranné známky skupiny spoločností Microsoft"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.display_name": {
+          "source": "Microsoft Dynamics 365 Business Central",
+          "message": "Microsoft Dynamics 365 Business Central"
+        },
+        "app.QnVzaW5lc3NDZW50cmFs.short_desc": {
+          "source": "Microsoft Dynamics 365 Business Central ERP",
+          "message": "Microsoft Dynamics 365 Business Central ERP"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2033 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return request for an order",
+          "message": "Створити новий запит на повернення для замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "Створити повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID from the e-commerce platform (used as `order.external_id` in the API request)",
+          "message": "ID замовлення з платформи електронної комерції (використовується як `order.external_id` у запиті API)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "Зовнішній ID замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "Order ID from e-commerce platform",
+          "message": "ID замовлення з платформи електронної комерції"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.desc": {
+          "source": "List of items to return with quantities, reasons, and resolutions",
+          "message": "Список товарів для повернення із зазначенням кількості, причин та рішень"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.display_name": {
+          "source": "Return Items",
+          "message": "Товари для повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.option.cmV0dXJuX2l0ZW1z.short_desc": {
+          "source": "Items to return",
+          "message": "Товари для повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return request",
+          "message": "Створити новий запит на повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.desc": {
+          "source": "Create a new package tracking by providing a tracking number and optional courier code",
+          "message": "Створити нове відстеження відправлення, вказавши номер відстеження та необов'язковий код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.display_name": {
+          "source": "Create Tracking",
+          "message": "Створити відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.desc": {
+          "source": "Identifier for the courier connection to use for this tracking",
+          "message": "Ідентифікатор підключення кур'єра для використання в цьому відстеженні"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.display_name": {
+          "source": "Courier Connection ID",
+          "message": "ID підключення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y291cmllcl9jb25uZWN0aW9uX2lk.short_desc": {
+          "source": "Courier connection reference",
+          "message": "Посилання на підключення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Користувацькі рядкові пари «ключ-значення» для додаткових даних відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Настроювані поля"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Користувацькі дані «ключ-значення»"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.desc": {
+          "source": "Name of the package recipient",
+          "message": "Ім'я одержувача відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.display_name": {
+          "source": "Customer Name",
+          "message": "Ім'я клієнта"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.Y3VzdG9tZXJfbmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Ім'я одержувача"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Від дверей до дверей"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Самовивіз у кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Самовивіз із магазину"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Тип доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Код країни призначення за стандартом ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Країна призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Код країни призначення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Штат або провінція призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Штат призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Штат або провінція призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Дата оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Дата замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Дата оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Глобальний ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Глобальний ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL-адреса замовлення в системі продавця"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Шлях до ID замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL-адреса замовлення в системі продавця"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Зрозумілий для людини номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Зрозумілий для людини номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Очікувана дата доставки, обіцяна клієнту"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Обіцяна дата доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Очікувана дата доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Код країни відправлення за стандартом ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Країна відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Код країни відправлення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Штат або провінція відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Штат відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Штат або провінція відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID місцезнаходження магазину; автоматично заповнює поля адреси відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID локації"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID місцезнаходження магазину"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Код мови сповіщень за стандартом ISO 639-1"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Мова сповіщень (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "User-provided text notes for this tracking",
+          "message": "Текстові примітки користувача для цього відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Примітка"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Текстові примітки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "List of tags to assign to the shipment for categorization",
+          "message": "Список тегів для присвоєння відправленню з метою категоризації"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Теги відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Tags for the shipment",
+          "message": "Теги для відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Опис типу послуги перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Тип відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Опис послуги перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Спосіб доставки, обраний під час оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Код групи кур'єрів для виявлення за кількома слагами (наприклад, `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Група кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Код групи кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Unique courier code (e.g., `fedex`, `ups`). If not specified, Aftership will auto-detect",
+          "message": "Унікальний код кур'єра (наприклад, `fedex`, `ups`). Якщо не вказано, Aftership визначить автоматично"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Unique courier code",
+          "message": "Унікальний код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Інструкції щодо забору посилки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Примітка до забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Інструкції щодо забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Відомості про місце отримання одержувачем"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Місце забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Відомості про місце забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking; defaults to the tracking number",
+          "message": "Відображуване ім'я для відстеження; за замовчуванням номер відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name for the tracking",
+          "message": "Відображуване ім'я для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Номер облікового запису перевізника для облікових даних відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Номер облікового запису для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Номер облікового запису перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Облікові дані відстеження для певних перевізників"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Ключ відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Облікові дані відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Carrier tracking number (4-100 characters)",
+          "message": "Номер відстеження перевізника (4–100 символів)"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Номер відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "Номер відстеження перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Дата відправлення для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Y3JlYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Create a new tracking",
+          "message": "Створити нове відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.desc": {
+          "source": "Attach a shipping label or tracking number to a return",
+          "message": "Прикріпити етикетку доставки або номер відстеження до повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.display_name": {
+          "source": "Add Return Shipment",
+          "message": "Додати відправлення повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier code for the return shipment (e.g., `fedex`, `ups`)",
+          "message": "Код кур'єра для відправлення повернення (наприклад, `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Return shipment courier",
+          "message": "Кур'єр відправлення повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.desc": {
+          "source": "The Aftership return ID to attach the shipping label/tracking to",
+          "message": "Ідентифікатор повернення Aftership, до якого слід прикріпити етикетку доставки/відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.aWQ.short_desc": {
+          "source": "The return ID to add shipment to",
+          "message": "Ідентифікатор повернення, до якого слід додати відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number for the return shipment",
+          "message": "Номер відстеження для відправлення повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Номер відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Return shipment tracking number",
+          "message": "Номер відстеження відправлення повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YWRkLXJldHVybi1zaGlwbWVudA.short_desc": {
+          "source": "Add a shipment to a return",
+          "message": "Додати відправлення до повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.desc": {
+          "source": "Approve a pending return request",
+          "message": "Схвалити запит на повернення, що очікує на розгляд"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.display_name": {
+          "source": "Approve Return",
+          "message": "Схвалити повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to approve",
+          "message": "Ідентифікатор повернення Aftership для схвалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to approve",
+          "message": "Ідентифікатор повернення для схвалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.YXBwcm92ZS1yZXR1cm4.short_desc": {
+          "source": "Approve a return request",
+          "message": "Схвалити запит на повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.desc": {
+          "source": "Retrieve the most recent checkpoint event for a tracking",
+          "message": "Отримати останню подію контрольної точки для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.display_name": {
+          "source": "Get Last Checkpoint",
+          "message": "Отримати останню контрольну точку"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to get the last checkpoint for",
+          "message": "Ідентифікатор відстеження Aftership для отримання останньої контрольної точки"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.option.aWQ.short_desc": {
+          "source": "The tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LWxhc3QtY2hlY2twb2ludA.short_desc": {
+          "source": "Get the last checkpoint of a tracking",
+          "message": "Отримати останню контрольну точку відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve a single return record by its ID or RMA number",
+          "message": "Отримати один запис повернення за його ідентифікатором або номером RMA"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "Отримати повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID or RMA number to retrieve",
+          "message": "Ідентифікатор повернення Aftership або номер RMA для отримання"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to retrieve",
+          "message": "Ідентифікатор повернення для отримання"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a return by ID",
+          "message": "Отримати повернення за ідентифікатором"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.desc": {
+          "source": "Retrieve a single tracking record by its Aftership tracking ID",
+          "message": "Отримати один запис відстеження за його ідентифікатором відстеження Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.display_name": {
+          "source": "Get Tracking",
+          "message": "Отримати відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrieve",
+          "message": "Ідентифікатор відстеження Aftership для отримання"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrieve",
+          "message": "ID відстеження для отримання"
+        },
+        "app.QWZ0ZXJzaGlw.action.Z2V0LXRyYWNraW5n.short_desc": {
+          "source": "Get a tracking by ID",
+          "message": "Отримати відстеження за ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.desc": {
+          "source": "Automatically detect the courier for a given tracking number",
+          "message": "Автоматично визначати кур'єра за вказаним номером відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.display_name": {
+          "source": "Detect Courier",
+          "message": "Визначити кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code to improve detection accuracy",
+          "message": "Код країни призначення ISO Alpha-3 для підвищення точності визначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Країна призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Код країни призначення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination to improve detection accuracy",
+          "message": "Штат або провінція призначення для підвищення точності визначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Штат призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Штат або провінція призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Destination postal code to improve detection accuracy",
+          "message": "Поштовий індекс призначення для підвищення точності визначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code to improve detection accuracy",
+          "message": "Код країни відправлення ISO Alpha-3 для підвищення точності визначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Країна відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Код країни відправлення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.desc": {
+          "source": "Courier group code for multi-slug detection (e.g., `fedex-group`)",
+          "message": "Код групи кур'єрів для виявлення за кількома слагами (наприклад, `fedex-group`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.display_name": {
+          "source": "Courier Group",
+          "message": "Група кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Z19ncm91cA.short_desc": {
+          "source": "Courier group code",
+          "message": "Код групи кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.desc": {
+          "source": "List of courier codes to narrow detection (e.g., `fedex`, `ups`)",
+          "message": "Список кодів кур'єрів для звуження визначення (наприклад, `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.display_name": {
+          "source": "Courier Slugs",
+          "message": "Слаги кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier codes",
+          "message": "Фільтрувати за кодами кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number to help narrow courier detection",
+          "message": "Номер облікового запису перевізника для звуження визначення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Номер облікового запису для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Номер облікового запису перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential to help narrow courier detection",
+          "message": "Облікові дані відстеження для звуження визначення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Ключ відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Облікові дані відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to identify the courier for",
+          "message": "Номер відстеження для визначення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "Номер відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Tracking number to identify",
+          "message": "Номер відстеження для визначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date to help narrow courier detection",
+          "message": "Дата відправлення для звуження визначення кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGV0ZWN0LWNvdXJpZXI.short_desc": {
+          "source": "Auto-detect courier from tracking number",
+          "message": "Автоматично визначати кур'єра за номером відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.desc": {
+          "source": "Delete an existing tracking by its Aftership tracking ID",
+          "message": "Видалити наявне відстеження за його Aftership tracking ID"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.display_name": {
+          "source": "Delete Tracking",
+          "message": "Видалити відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to delete",
+          "message": "Aftership tracking ID для видалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to delete",
+          "message": "ID відстеження для видалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.ZGVsZXRlLXRyYWNraW5n.short_desc": {
+          "source": "Delete a tracking",
+          "message": "Видалити відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "Retrieve a list of all couriers supported by Aftership",
+          "message": "Отримати список усіх кур'єрів, яких підтримує Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Список кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List all supported couriers",
+          "message": "Отримати список усіх підтримуваних кур'єрів"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Aftership** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Aftership**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як повноцінні дії в цьому додатку."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Aftership",
+          "message": "Виконати довільний виклик API до Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.desc": {
+          "source": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+          "message": "Позначити відстеження як завершене із зазначенням причини (доставлено, втрачено або повернено відправнику)"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.display_name": {
+          "source": "Mark as Completed",
+          "message": "Позначити як завершене"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.desc": {
+          "source": "Timestamp of when the completion event occurred. If not provided, the current time is used",
+          "message": "Мітка часу події завершення. Якщо не вказано, використовується поточний час"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.display_name": {
+          "source": "Event Date/Time",
+          "message": "Дата/час події"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.ZXZlbnRfZGF0ZXRpbWU.short_desc": {
+          "source": "When the event occurred",
+          "message": "Коли відбулася подія"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to mark as completed",
+          "message": "Aftership tracking ID для позначення як завершеного"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.aWQ.short_desc": {
+          "source": "The tracking ID to mark as completed",
+          "message": "ID відстеження для позначення як завершеного"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkRFTElWRVJFRA.display_name": {
+          "source": "Delivered",
+          "message": "Доставлено"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOkxPU1Q.display_name": {
+          "source": "Lost",
+          "message": "Програна"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.allowed-value.c3RyaW5nOlJFVFVSTkVEX1RPX1NFTkRFUg.display_name": {
+          "source": "Returned to Sender",
+          "message": "Повернено відправнику"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.desc": {
+          "source": "Reason for marking the tracking as completed",
+          "message": "Причина позначення відстеження як завершеного"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Причина"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.option.cmVhc29u.short_desc": {
+          "source": "Completion reason",
+          "message": "Причина завершення"
+        },
+        "app.QWZ0ZXJzaGlw.action.bWFyay1hcy1jb21wbGV0ZWQ.short_desc": {
+          "source": "Mark a tracking as completed",
+          "message": "Позначити відстеження як завершене"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.desc": {
+          "source": "Search and list returns with optional filters for status, email, outcome, and date range",
+          "message": "Шукати та переглядати повернення з необов'язковими фільтрами за статусом, електронною поштою, результатом і діапазоном дат"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.display_name": {
+          "source": "Search Returns",
+          "message": "Пошук повернень"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter returns created before this date",
+          "message": "Фільтрувати повернення, створені до цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Створено до"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Фільтрувати за максимальною датою створення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter returns created after this date",
+          "message": "Фільтрувати повернення, створені після цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Створено після"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Фільтрувати за мінімальною датою створення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.desc": {
+          "source": "Filter returns by customer email address",
+          "message": "Фільтрувати повернення за адресою електронної пошти клієнта"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.display_name": {
+          "source": "Customer Email",
+          "message": "Електронна пошта клієнта"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.Y3VzdG9tZXJfZW1haWw.short_desc": {
+          "source": "Filter by customer email",
+          "message": "Фільтрувати за електронною поштою клієнта"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.display_name": {
+          "source": "Approved",
+          "message": "Схвалено"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.display_name": {
+          "source": "Done",
+          "message": "Виконано"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Минув термін дії"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.display_name": {
+          "source": "Rejected",
+          "message": "Відхилено"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.allowed-value.c3RyaW5nOnN1Ym1pdHRlZA.display_name": {
+          "source": "Submitted",
+          "message": "Подано"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.desc": {
+          "source": "Filter returns by approval status",
+          "message": "Фільтрувати повернення за статусом схвалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.display_name": {
+          "source": "Approval Status",
+          "message": "Статус схвалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.YXBwcm92YWxfc3RhdHVz.short_desc": {
+          "source": "Filter by approval status",
+          "message": "Фільтрувати за статусом схвалення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.desc": {
+          "source": "Filter by order name (e.g., `#1001`)",
+          "message": "Фільтрувати за назвою замовлення (наприклад, `#1001`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.display_name": {
+          "source": "Order Name",
+          "message": "Назва замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3JkZXJfbmFtZQ.short_desc": {
+          "source": "Filter by order name",
+          "message": "Фільтрувати за назвою замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOmV4Y2hhbmdl.display_name": {
+          "source": "Exchange",
+          "message": "Обмін"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnJlZnVuZA.display_name": {
+          "source": "Refund",
+          "message": "Повернення коштів"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnN0b3JlX2NyZWRpdA.display_name": {
+          "source": "Store Credit",
+          "message": "Кредит магазину"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.allowed-value.c3RyaW5nOnVwc2VsbA.display_name": {
+          "source": "Upsell",
+          "message": "Допродаж"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.desc": {
+          "source": "Filter returns by outcome type",
+          "message": "Фільтрувати повернення за типом результату"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.display_name": {
+          "source": "Outcome",
+          "message": "Результат"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.b3V0Y29tZQ.short_desc": {
+          "source": "Filter by return outcome",
+          "message": "Фільтрувати за результатом повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.desc": {
+          "source": "Number of returns per page (1-50, default `10`)",
+          "message": "Кількість повернень на сторінку (1-50, за замовчуванням `10`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Кількість результатів на сторінку"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (1-200, default `1`)",
+          "message": "Номер сторінки для пагінації (1-200, за замовчуванням `1`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Сторінка"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Номер сторінки"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmN1c3RvbWVyX2NvdXJpZXI.display_name": {
+          "source": "Customer Courier",
+          "message": "Кур'єр клієнта"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfZHJvcG9mZg.display_name": {
+          "source": "Carrier Dropoff",
+          "message": "Здача перевізнику"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmNhcnJpZXJfcGlja3Vw.display_name": {
+          "source": "Carrier Pickup",
+          "message": "Забір перевізником"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmdyZWVuX3JldHVybg.display_name": {
+          "source": "Green Return",
+          "message": "Green Return"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmhhcHB5X3JldHVybnM.display_name": {
+          "source": "Happy Returns",
+          "message": "Happy Returns"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOmluX3N0b3Jl.display_name": {
+          "source": "In Store",
+          "message": "У магазині"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbF9yZXdvcmtz.display_name": {
+          "source": "Retail Reworks",
+          "message": "Retail Reworks"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.allowed-value.c3RyaW5nOnJldGFpbGVyX2xhYmVs.display_name": {
+          "source": "Retailer Label",
+          "message": "Етикетка ритейлера"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.desc": {
+          "source": "Filter returns by shipping method",
+          "message": "Фільтрувати повернення за способом доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.display_name": {
+          "source": "Return Method",
+          "message": "Спосіб повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.option.cmV0dXJuX21ldGhvZA.short_desc": {
+          "source": "Filter by return method",
+          "message": "Фільтрувати за способом повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXJldHVybnM.short_desc": {
+          "source": "Search and list returns",
+          "message": "Пошук і перегляд списку повернень"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.desc": {
+          "source": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+          "message": "Пошук і перегляд списку відстежень із додатковими фільтрами за ключовим словом, кур'єром, статусом і діапазоном дат"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.display_name": {
+          "source": "Search Trackings",
+          "message": "Пошук відстежень"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings created before this date",
+          "message": "Фільтрувати відстеження, створені до цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.display_name": {
+          "source": "Created Before",
+          "message": "Створено до"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum creation date",
+          "message": "Фільтрувати за максимальною датою створення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings created after this date",
+          "message": "Фільтрувати відстеження, створені після цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.display_name": {
+          "source": "Created After",
+          "message": "Створено після"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3JlYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum creation date",
+          "message": "Фільтрувати за мінімальною датою створення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.desc": {
+          "source": "Cursor for pagination; use the value from the previous response to get the next page",
+          "message": "Курсор для пагінації; використовуйте значення з попередньої відповіді, щоб отримати наступну сторінку"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.Y3Vyc29y.short_desc": {
+          "source": "Pagination cursor",
+          "message": "Курсор розбиття на сторінки"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.desc": {
+          "source": "ISO Alpha-3 destination country code(s), comma-separated",
+          "message": "Код(и) країни призначення за стандартом ISO Alpha-3, розділені комами"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Країна призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Filter by destination country",
+          "message": "Фільтрувати за країною призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.desc": {
+          "source": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+          "message": "Ключове слово для пошуку та фільтрації відстежень за номером відстеження, назвою, ідентифікатором замовлення тощо"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Ключове слово"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.a2V5d29yZA.short_desc": {
+          "source": "Search keyword",
+          "message": "Ключове слово для пошуку"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.desc": {
+          "source": "Filter trackings by the order ID",
+          "message": "Фільтрувати відстеження за ідентифікатором замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Фільтрувати за ідентифікатором замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.desc": {
+          "source": "ISO Alpha-3 origin country code(s), comma-separated",
+          "message": "Код(и) країни відправлення за стандартом ISO Alpha-3, розділені комами"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.display_name": {
+          "source": "Origin Country",
+          "message": "Країна відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.b3JpZ2lu.short_desc": {
+          "source": "Filter by origin country",
+          "message": "Фільтрувати за країною відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.desc": {
+          "source": "Number of trackings per page (max 200)",
+          "message": "Кількість відстежень на сторінку (максимум 200)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Number of results per page",
+          "message": "Кількість результатів на сторінку"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.desc": {
+          "source": "Comma-separated shipment tags to filter by",
+          "message": "Теги відправлення через кому для фільтрації"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.display_name": {
+          "source": "Shipment Tags",
+          "message": "Теги відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2hpcG1lbnRfdGFncw.short_desc": {
+          "source": "Filter by shipment tags",
+          "message": "Фільтрувати за тегами відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.desc": {
+          "source": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+          "message": "Фільтрувати відстеження за кодом кур'єра (наприклад, `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.c2x1Zw.short_desc": {
+          "source": "Filter by courier code",
+          "message": "Фільтрувати за кодом кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.desc": {
+          "source": "Filter trackings by return-to-sender status. Set to `True` to show only return-to-sender shipments, `False` to exclude them",
+          "message": "Фільтрувати відстеження за статусом повернення відправнику. Установіть `True`, щоб показувати лише відправлення з поверненням відправнику, або `False`, щоб виключити їх"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.display_name": {
+          "source": "Return to Sender",
+          "message": "Повернення відправнику"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.cmV0dXJuX3RvX3NlbmRlcg.short_desc": {
+          "source": "Filter return-to-sender shipments",
+          "message": "Фільтрувати відправлення з поверненням відправнику"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOk91dEZvckRlbGl2ZXJ5.display_name": {
+          "source": "Out for Delivery",
+          "message": "На доставці"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF0dGVtcHRGYWls.display_name": {
+          "source": "Attempt Failed",
+          "message": "Невдала спроба доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkF2YWlsYWJsZUZvclBpY2t1cA.display_name": {
+          "source": "Available for Pickup",
+          "message": "Доступно для отримання"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "Доставлено"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4Y2VwdGlvbg.display_name": {
+          "source": "Exception",
+          "message": "Виняток"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkV4cGlyZWQ.display_name": {
+          "source": "Expired",
+          "message": "Минув термін дії"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluVHJhbnNpdA.display_name": {
+          "source": "In Transit",
+          "message": "У дорозі"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOkluZm9SZWNlaXZlZA.display_name": {
+          "source": "Info Received",
+          "message": "Інформацію отримано"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.allowed-value.c3RyaW5nOlBlbmRpbmc.display_name": {
+          "source": "Pending",
+          "message": "В очікуванні"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.desc": {
+          "source": "Filter trackings by delivery status",
+          "message": "Фільтрувати відстеження за статусом доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.display_name": {
+          "source": "Status Tag",
+          "message": "Тег статусу"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dGFn.short_desc": {
+          "source": "Filter by status tag",
+          "message": "Фільтрувати за тегом статусу"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.desc": {
+          "source": "Comma-separated tracking numbers to filter by (up to 50)",
+          "message": "Номери відстеження через кому для фільтрації (до 50)"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.display_name": {
+          "source": "Tracking Numbers",
+          "message": "Номери відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dHJhY2tpbmdfbnVtYmVycw.short_desc": {
+          "source": "Filter by tracking numbers",
+          "message": "Фільтрувати за номерами відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.desc": {
+          "source": "Filter trackings updated before this date",
+          "message": "Фільтрувати відстеження, оновлені до цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.display_name": {
+          "source": "Updated Before",
+          "message": "Оновлено до"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
+          "source": "Filter by maximum update date",
+          "message": "Фільтрувати за максимальною датою оновлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.desc": {
+          "source": "Filter trackings updated after this date",
+          "message": "Фільтрувати відстеження, оновлені після цієї дати"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.display_name": {
+          "source": "Updated After",
+          "message": "Оновлено після"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
+          "source": "Filter by minimum update date",
+          "message": "Фільтрувати за мінімальною датою оновлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.c2VhcmNoLXRyYWNraW5ncw.short_desc": {
+          "source": "Search and list trackings",
+          "message": "Пошук і перегляд списку відстежень"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.desc": {
+          "source": "Reactivate tracking for an expired shipment",
+          "message": "Повторно активувати відстеження для простроченого відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.display_name": {
+          "source": "Retrack",
+          "message": "Відстежити повторно"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to retrack (reactivates expired trackings)",
+          "message": "Ідентифікатор відстеження Aftership для повторного відстеження (повторно активує прострочені відстеження)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.option.aWQ.short_desc": {
+          "source": "The tracking ID to retrack",
+          "message": "Ідентифікатор відстеження для повторного відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmV0cmFjaw.short_desc": {
+          "source": "Retrack an expired tracking",
+          "message": "Повторно активувати прострочене відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.desc": {
+          "source": "Reject a pending return request with an optional reason",
+          "message": "Відхилити очікуваний запит на повернення з необов'язковою причиною"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.display_name": {
+          "source": "Reject Return",
+          "message": "Відхилити повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.desc": {
+          "source": "The Aftership return ID to reject",
+          "message": "Ідентифікатор повернення Aftership для відхилення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "The return ID to reject",
+          "message": "Ідентифікатор повернення для відхилення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Reason for rejecting the return",
+          "message": "Причина відхилення повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Причина"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Rejection reason",
+          "message": "Причина відхилення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVqZWN0LXJldHVybg.short_desc": {
+          "source": "Reject a return request",
+          "message": "Відхилити запит на повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.desc": {
+          "source": "Mark a return as resolved (completed processing)",
+          "message": "Позначити повернення як вирішене (обробку завершено)"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.display_name": {
+          "source": "Resolve Return",
+          "message": "Вирішити повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.desc": {
+          "source": "The Aftership return ID to mark as resolved",
+          "message": "Ідентифікатор повернення Aftership для позначення як вирішеного"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.option.aWQ.short_desc": {
+          "source": "The return ID to resolve",
+          "message": "Ідентифікатор повернення для вирішення"
+        },
+        "app.QWZ0ZXJzaGlw.action.cmVzb2x2ZS1yZXR1cm4.short_desc": {
+          "source": "Resolve a return",
+          "message": "Вирішити повернення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+          "message": "Опитує Aftership API та запускає подію при зміні статусу доставки відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Tracking Status Changed",
+          "message": "Статус відстеження змінено"
+        },
+        "app.QWZ0ZXJzaGlw.action.dHJhY2tpbmctc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Watch for tracking status changes",
+          "message": "Стежити за змінами статусу відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.desc": {
+          "source": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+          "message": "Оновити метадані наявного відстеження (назву, ID замовлення, примітки тощо)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.display_name": {
+          "source": "Update Tracking",
+          "message": "Оновити відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "Custom key-value string pairs for additional tracking data",
+          "message": "Користувацькі рядкові пари «ключ-значення» для додаткових даних відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Настроювані поля"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom key-value data",
+          "message": "Користувацькі дані «ключ-значення»"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOmRvb3JfdG9fZG9vcg.display_name": {
+          "source": "Door to Door",
+          "message": "Від дверей до дверей"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9jb3VyaWVy.display_name": {
+          "source": "Pickup at Courier",
+          "message": "Самовивіз у кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.allowed-value.c3RyaW5nOnBpY2t1cF9hdF9zdG9yZQ.display_name": {
+          "source": "Pickup at Store",
+          "message": "Самовивіз із магазину"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.display_name": {
+          "source": "Delivery Type",
+          "message": "Тип доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVsaXZlcnlfdHlwZQ.short_desc": {
+          "source": "Delivery method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.desc": {
+          "source": "ISO Alpha-3 destination country code",
+          "message": "Код країни призначення за стандартом ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.display_name": {
+          "source": "Destination Country",
+          "message": "Країна призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY291bnRyeV9yZWdpb24.short_desc": {
+          "source": "Destination country code (ISO Alpha-3)",
+          "message": "Код країни призначення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.desc": {
+          "source": "City of destination",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.display_name": {
+          "source": "Destination City",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fY2l0eQ.short_desc": {
+          "source": "Destination city",
+          "message": "Місто призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.desc": {
+          "source": "State or province of destination",
+          "message": "Штат або провінція призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.display_name": {
+          "source": "Destination State",
+          "message": "Штат призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fc3RhdGU.short_desc": {
+          "source": "Destination state or province",
+          "message": "Штат або провінція призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code of destination",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.display_name": {
+          "source": "Destination Postal Code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.ZGVzdGluYXRpb25fcG9zdGFsX2NvZGU.short_desc": {
+          "source": "Destination postal code",
+          "message": "Поштовий індекс призначення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.desc": {
+          "source": "The Aftership tracking ID to update",
+          "message": "ID відстеження Aftership для оновлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.display_name": {
+          "source": "Tracking ID",
+          "message": "Ідентифікатор відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.aWQ.short_desc": {
+          "source": "The tracking ID to update",
+          "message": "ID відстеження для оновлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.desc": {
+          "source": "Date when the order was placed",
+          "message": "Дата оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.display_name": {
+          "source": "Order Date",
+          "message": "Дата замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfZGF0ZQ.short_desc": {
+          "source": "Order placement date",
+          "message": "Дата оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.desc": {
+          "source": "Global order identifier",
+          "message": "Глобальний ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Global order identifier",
+          "message": "Глобальний ідентифікатор замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.desc": {
+          "source": "URL to the order in the merchant's system",
+          "message": "URL-адреса замовлення в системі продавця"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.display_name": {
+          "source": "Order ID Path",
+          "message": "Шлях до ID замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfaWRfcGF0aA.short_desc": {
+          "source": "URL to order in merchant system",
+          "message": "URL-адреса замовлення в системі продавця"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Human-readable order number",
+          "message": "Зрозумілий для людини номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "Номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Human-readable order number",
+          "message": "Зрозумілий для людини номер замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.desc": {
+          "source": "Expected delivery date promised to the customer",
+          "message": "Очікувана дата доставки, обіцяна клієнту"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Promised Delivery Date",
+          "message": "Обіцяна дата доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JkZXJfcHJvbWlzZWRfZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "Очікувана дата доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.desc": {
+          "source": "City of origin",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.display_name": {
+          "source": "Origin City",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NpdHk.short_desc": {
+          "source": "Origin city",
+          "message": "Місто відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.desc": {
+          "source": "ISO Alpha-3 origin country code",
+          "message": "Код країни відправлення за стандартом ISO Alpha-3"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.display_name": {
+          "source": "Origin Country",
+          "message": "Країна відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX2NvdW50cnlfcmVnaW9u.short_desc": {
+          "source": "Origin country code (ISO Alpha-3)",
+          "message": "Код країни відправлення (ISO Alpha-3)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.desc": {
+          "source": "Postal code of origin",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.display_name": {
+          "source": "Origin Postal Code",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3Bvc3RhbF9jb2Rl.short_desc": {
+          "source": "Origin postal code",
+          "message": "Поштовий індекс відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.desc": {
+          "source": "State or province of origin",
+          "message": "Штат або провінція відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.display_name": {
+          "source": "Origin State",
+          "message": "Штат відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.b3JpZ2luX3N0YXRl.short_desc": {
+          "source": "Origin state or province",
+          "message": "Штат або провінція відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Store location ID; auto-populates origin address fields",
+          "message": "ID місцезнаходження магазину; автоматично заповнює поля адреси відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ID локації"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Store location ID",
+          "message": "ID місцезнаходження магазину"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.desc": {
+          "source": "ISO 639-1 language code for notifications",
+          "message": "Код мови сповіщень за стандартом ISO 639-1"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Notification language (ISO 639-1)",
+          "message": "Мова сповіщень (ISO 639-1)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.desc": {
+          "source": "Text notes for this tracking",
+          "message": "Текстові примітки для цього відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Примітка"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.bm90ZQ.short_desc": {
+          "source": "Text notes",
+          "message": "Текстові примітки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.desc": {
+          "source": "Carrier service type description",
+          "message": "Опис типу послуги перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.display_name": {
+          "source": "Shipment Type",
+          "message": "Тип відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcG1lbnRfdHlwZQ.short_desc": {
+          "source": "Carrier service description",
+          "message": "Опис послуги перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Shipping service method chosen at checkout",
+          "message": "Спосіб доставки, обраний під час оформлення замовлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping service method",
+          "message": "Спосіб доставки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.desc": {
+          "source": "Update the courier code for this tracking (e.g., `fedex`, `ups`)",
+          "message": "Оновити код кур'єра для цього відстеження (наприклад, `fedex`, `ups`)"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.c2x1Zw.short_desc": {
+          "source": "Update the courier code",
+          "message": "Оновити код кур'єра"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.desc": {
+          "source": "Instructions for package pickup",
+          "message": "Інструкції щодо забору посилки"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.display_name": {
+          "source": "Pickup Note",
+          "message": "Примітка до забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX25vdGU.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Інструкції щодо забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.desc": {
+          "source": "Location details for receiver pickup",
+          "message": "Відомості про місце отримання одержувачем"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.display_name": {
+          "source": "Pickup Location",
+          "message": "Місце забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.cGlja3VwX2xvY2F0aW9u.short_desc": {
+          "source": "Pickup site details",
+          "message": "Відомості про місце забору"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.desc": {
+          "source": "Display name for the tracking",
+          "message": "Відображуване ім'я для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dGl0bGU.short_desc": {
+          "source": "Display name",
+          "message": "Відображуване ім'я"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.desc": {
+          "source": "Carrier account number for tracking credentials",
+          "message": "Номер облікового запису перевізника для облікових даних відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.display_name": {
+          "source": "Tracking Account Number",
+          "message": "Номер облікового запису для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfYWNjb3VudF9udW1iZXI.short_desc": {
+          "source": "Carrier account number",
+          "message": "Номер облікового запису перевізника"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.desc": {
+          "source": "Tracking credential for certain carriers",
+          "message": "Облікові дані відстеження для певних перевізників"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.display_name": {
+          "source": "Tracking Key",
+          "message": "Ключ відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfa2V5.short_desc": {
+          "source": "Tracking credential",
+          "message": "Облікові дані відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.desc": {
+          "source": "Ship date for the tracking",
+          "message": "Дата відправлення для відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.display_name": {
+          "source": "Ship Date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.option.dHJhY2tpbmdfc2hpcF9kYXRl.short_desc": {
+          "source": "Ship date",
+          "message": "Дата відправлення"
+        },
+        "app.QWZ0ZXJzaGlw.action.dXBkYXRlLXRyYWNraW5n.short_desc": {
+          "source": "Update a tracking",
+          "message": "Оновити відстеження"
+        },
+        "app.QWZ0ZXJzaGlw.desc": {
+          "source": "Aftership package tracking and returns management services providing access to tracking, courier detection, and returns APIs",
+          "message": "Сервіси відстеження посилок і керування поверненнями Aftership, що надають доступ до API відстеження, виявлення кур'єрів та повернень"
+        },
+        "app.QWZ0ZXJzaGlw.display_name": {
+          "source": "Aftership",
+          "message": "Aftership"
+        },
+        "app.QWZ0ZXJzaGlw.short_desc": {
+          "source": "Aftership package tracking and returns",
+          "message": "Відстеження посилок і повернення Aftership"
+        }
+      }
+    }
+  }
+}

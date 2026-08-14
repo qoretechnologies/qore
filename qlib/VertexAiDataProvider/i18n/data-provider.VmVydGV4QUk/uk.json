@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate a Gemini response via Vertex AI's regional `:generateContent` endpoint. The model name in the request is resolved into the URL path (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); the body is otherwise identical to the native Gemini `:generateContent` shape — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`.",
+          "message": "Згенерувати відповідь Gemini через регіональну кінцеву точку `:generateContent` Vertex AI. Назва моделі в запиті підставляється в шлях URL-адреси (`/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`); в іншому тіло ідентичне нативній структурі Gemini `:generateContent` — `contents`, `systemInstruction`, `generationConfig`, `tools`, `safetySettings`, `cachedContent`."
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Згенерувати вміст"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "Gemini conversation history; each entry is a hash with `role` (`user` / `model`) and `parts` (list of `{text: \"...\"}`, `{inlineData: {mimeType, data}}`, or `{functionCall: ...}` / `{functionResponse: ...}` parts)",
+          "message": "Історія діалогу Gemini; кожен запис є хешем із `role` (`user` / `model`) та `parts` (список частин `{text: \"...\"}`, `{inlineData: {mimeType, data}}` або `{functionCall: ...}` / `{functionResponse: ...}`)"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Вміст"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "Gemini conversation contents",
+          "message": "Вміст діалогу Gemini"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "Reference to a previously-created cached-content resource (e.g. `projects/{project}/locations/{region}/cachedContents/{id}`); major cost reduction for repeated system prompts",
+          "message": "Посилання на раніше створений кешований ресурс вмісту (наприклад, `projects/{project}/locations/{region}/cachedContents/{id}`); значне зниження витрат для повторюваних системних підказок"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Кешований вміст"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "Vertex context-caching reference",
+          "message": "Посилання на кешування контексту Vertex"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Generation parameters: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`",
+          "message": "Параметри генерації: `temperature`, `topP`, `topK`, `maxOutputTokens`, `responseMimeType`, `responseSchema`, `thinkingConfig.thinkingBudget`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Конфігурація генерації"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Generation knobs",
+          "message": "Параметри генерації"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The Gemini publisher model name (e.g. `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); becomes the `{model}` segment in the Vertex URL path",
+          "message": "Назва моделі видавця Gemini (наприклад, `gemini-2.0-flash`, `gemini-2.5-pro`, `gemini-1.5-pro-002`); стає сегментом `{model}` у шляху URL-адреси Vertex"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "Gemini publisher model name",
+          "message": "Назва моделі видавця Gemini"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "Per-category safety-filter thresholds; list of `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`",
+          "message": "Пороги фільтрів безпеки за категоріями; список `{category: HARM_CATEGORY_*, threshold: BLOCK_*}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Налаштування безпеки"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety-filter thresholds",
+          "message": "Пороги фільтрів безпеки"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system-instruction block: `{parts: ({text: \"...\"},)}`",
+          "message": "Необов'язковий блок системних інструкцій: `{parts: ({text: \"...\"},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Системна інструкція"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "Optional system-instruction block",
+          "message": "Необов'язковий блок системних інструкцій"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool selection policy: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`",
+          "message": "Політика вибору інструментів: `{functionCallingConfig: {mode: \"AUTO\"|\"ANY\"|\"NONE\"}}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "Конфігурація інструментів"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool-selection policy",
+          "message": "Політика вибору інструментів"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.desc": {
+          "source": "Function-calling tools: list of `{functionDeclarations: ({name, description, parameters},)}`",
+          "message": "Інструменти виклику функцій: список `{functionDeclarations: ({name, description, parameters},)}`"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Інструменти"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.option.dG9vbHM.short_desc": {
+          "source": "Tool / function-calling definitions",
+          "message": "Визначення інструментів / виклику функцій"
+        },
+        "app.VmVydGV4QUk.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate a Gemini response via Vertex AI",
+          "message": "Згенерувати відповідь Gemini через Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings via Vertex AI's regional `:predict` endpoint on a Gecko / Text-Embedding publisher model. Accepts a batch of `{content: \"...\"}` instances in a single request; supports the `outputDimensionality` parameter on `text-embedding-005` for shorter vectors.",
+          "message": "Генерація щільних векторних ембедингів через регіональну кінцеву точку `:predict` Vertex AI на моделі видавця Gecko / Text-Embedding. Приймає пакет екземплярів `{content: \"...\"}` в одному запиті; підтримує параметр `outputDimensionality` на `text-embedding-005` для коротших векторів."
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "Створити ембединги тексту"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.desc": {
+          "source": "List of `{content: \"<text>\"}` hashes; one instance per text to embed (Vertex predict accepts batches)",
+          "message": "Список хешів `{content: \"<text>\"}`; один екземпляр на кожен текст для ембедингу (Vertex predict приймає пакети)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.display_name": {
+          "source": "Instances",
+          "message": "Екземпляри"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.aW5zdGFuY2Vz.short_desc": {
+          "source": "Texts to embed",
+          "message": "Тексти для ембедингу"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "Vertex AI embedding publisher model (e.g. `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)",
+          "message": "Модель видавця ембедингів Vertex AI (наприклад, `text-embedding-005`, `textembedding-gecko@003`, `text-multilingual-embedding-002`)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "Vertex AI embedding publisher model",
+          "message": "Модель видавця ембедингів Vertex AI"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.desc": {
+          "source": "Model-specific parameters: `autoTruncate` (bool), `outputDimensionality` (int)",
+          "message": "Параметри моделі: `autoTruncate` (bool), `outputDimensionality` (int)"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.display_name": {
+          "source": "Parameters",
+          "message": "Параметри"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.option.cGFyYW1ldGVycw.short_desc": {
+          "source": "Model-specific parameters",
+          "message": "Параметри моделі"
+        },
+        "app.VmVydGV4QUk.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via Vertex AI :predict",
+          "message": "Генерація текстових ембедингів через Vertex AI :predict"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Vertex AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати користувацький виклик HTTP / REST API до **Google Vertex AI**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається як хеш, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не реалізовано як окремі дії в цій програмі."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.VmVydGV4QUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Vertex AI",
+          "message": "Виконати користувацький виклик API до Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.desc": {
+          "source": "**Google Vertex AI** is Google Cloud's managed platform for generative model access, exposing the Gemini family + publisher partner models (Claude on Vertex, Llama on Vertex) and Google's Gecko text-embedding models through a single regional REST API.\n\n- **Gemini :generateContent** — same body shape as the native Gemini REST API but routed through `{region}-aiplatform.googleapis.com` with GCP auth\n- **Gecko :predict embeddings** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` via the batch-capable `:predict` endpoint\n- **Vertex Context Caching** — major cost reduction for repeated system prompts (referenced via `cachedContent`)\n- **Application Default Credentials** — explicit service-account JSON, `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud` user creds, or the GCE/GKE/Cloud-Run metadata server are all honored\n- **Per-region endpoints** — pick `us-central1`, `europe-west4`, `asia-east1`, etc. for data residency\n\nTokens are cached and refreshed transparently by `GcpAuth`.\n\nProject: <https://cloud.google.com/vertex-ai>",
+          "message": "**Google Vertex AI** — це керована платформа Google Cloud для доступу до генеративних моделей, що надає доступ до сімейства Gemini + партнерських моделей видавців (Claude on Vertex, Llama on Vertex) та моделей текстових ембедингів Gecko від Google через єдиний регіональний REST API.\n\n- **Gemini :generateContent** — така сама структура тіла, як у нативного REST API Gemini, але з маршрутизацією через `{region}-aiplatform.googleapis.com` з автентифікацією GCP\n- **Gecko :predict embeddings** — `text-embedding-005`, `text-multilingual-embedding-002`, `textembedding-gecko@003` через кінцеву точку `:predict` із підтримкою пакетної обробки\n- **Vertex Context Caching** — значне зниження витрат для повторюваних системних підказок (посилання через `cachedContent`)\n- **Application Default Credentials** — підтримуються явний JSON облікового запису служби, `GOOGLE_APPLICATION_CREDENTIALS`, облікові дані користувача `gcloud` або сервер метаданих GCE/GKE/Cloud-Run\n- **Регіональні кінцеві точки** — вибирайте `us-central1`, `europe-west4`, `asia-east1` тощо для забезпечення резидентності даних\n\nТокени кешуються та прозоро оновлюються за допомогою `GcpAuth`.\n\nПроєкт: <https://cloud.google.com/vertex-ai>"
+        },
+        "app.VmVydGV4QUk.display_name": {
+          "source": "Google Vertex AI",
+          "message": "Google Vertex AI"
+        },
+        "app.VmVydGV4QUk.short_desc": {
+          "source": "Google Vertex AI generative-model platform",
+          "message": "Платформа генеративних моделей Google Vertex AI"
+        }
+      }
+    }
+  }
+}

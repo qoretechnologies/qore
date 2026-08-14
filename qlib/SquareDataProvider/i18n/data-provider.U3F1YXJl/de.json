@@ -1,0 +1,2245 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.desc": {
+          "source": "Complete a pending payment in Square",
+          "message": "Eine ausstehende Zahlung in Square abschließen"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.display_name": {
+          "source": "Complete Payment",
+          "message": "Zahlung abschließen"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to complete",
+          "message": "Die abzuschließende Zahlung"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.display_name": {
+          "source": "Version Token",
+          "message": "Versions-Token"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.option.dmVyc2lvbl90b2tlbg.short_desc": {
+          "source": "Version token for concurrency",
+          "message": "Versions-Token für Nebenläufigkeit"
+        },
+        "app.U3F1YXJl.action.Y29tcGxldGUtcGF5bWVudA.short_desc": {
+          "source": "Complete a payment",
+          "message": "Eine Zahlung abschließen"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.desc": {
+          "source": "Cancel an open order in Square",
+          "message": "Eine offene Bestellung in Square stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.display_name": {
+          "source": "Cancel an Order",
+          "message": "Eine Bestellung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to cancel",
+          "message": "Die zu stornierende Bestellung"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the order (for optimistic concurrency)",
+          "message": "Die aktuelle Version der Bestellung (für optimistische Nebenläufigkeit)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Order version",
+          "message": "Bestellversion"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLW9yZGVy.short_desc": {
+          "source": "Cancel an order",
+          "message": "Eine Bestellung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.desc": {
+          "source": "Cancel a booking (appointment) in Square",
+          "message": "Eine Buchung (Termin) in Square stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.display_name": {
+          "source": "Cancel Booking",
+          "message": "Buchung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.desc": {
+          "source": "The current version of the booking (for optimistic concurrency)",
+          "message": "Die aktuelle Version der Buchung (für optimistische Nebenläufigkeit)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.display_name": {
+          "source": "Booking Version",
+          "message": "Buchungsversion"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ192ZXJzaW9u.short_desc": {
+          "source": "Booking version",
+          "message": "Buchungsversion"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "Buchungs-ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking to cancel",
+          "message": "Die zu stornierende Buchung"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWJvb2tpbmc.short_desc": {
+          "source": "Cancel a booking",
+          "message": "Buchung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.desc": {
+          "source": "Cancel a published invoice in Square",
+          "message": "Veröffentlichte Rechnung in Square stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.display_name": {
+          "source": "Cancel Invoice",
+          "message": "Rechnung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Rechnungs-ID"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to cancel",
+          "message": "Die zu stornierende Rechnung"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "Die aktuelle Version der Rechnung (für optimistische Nebenläufigkeit)"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Rechnungsversion"
+        },
+        "app.U3F1YXJl.action.Y2FuY2VsLWludm9pY2U.short_desc": {
+          "source": "Cancel an invoice",
+          "message": "Rechnung stornieren"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.desc": {
+          "source": "Change inventory counts in Square (adjustment or physical count)",
+          "message": "Bestandsmengen in Square ändern (Anpassung oder Inventurzählung)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.display_name": {
+          "source": "Change Inventory",
+          "message": "Bestand ändern"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation",
+          "message": "Die ID der Katalogartikel-Variante"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "Katalogobjekt-ID"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation",
+          "message": "Artikelvariante"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOkFESlVTVE1FTlQ.desc": {
+          "source": "Add or remove stock (delta quantity)",
+          "message": "Bestand hinzufügen oder entfernen (Delta-Menge)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.allowed-value.c3RyaW5nOlBIWVNJQ0FMX0NPVU5U.desc": {
+          "source": "Set absolute inventory count",
+          "message": "Absoluten Lagerbestand festlegen"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.desc": {
+          "source": "The type of inventory change to apply",
+          "message": "Der Typ der anzuwendenden Bestandsänderung"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.display_name": {
+          "source": "Change Type",
+          "message": "Änderungstyp"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.Y2hhbmdlX3R5cGU.short_desc": {
+          "source": "Type of change",
+          "message": "Art der Änderung"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state (default)",
+          "message": "Kein Status (Standard)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock",
+          "message": "Auf Lager"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Verkauft"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Ausschuss / Beschädigt"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.desc": {
+          "source": "Starting inventory state for adjustment changes",
+          "message": "Ausgangs-Bestandsstatus für Anpassungsänderungen"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.display_name": {
+          "source": "From State",
+          "message": "Ausgangsstatus"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.ZnJvbV9zdGF0ZQ.short_desc": {
+          "source": "Starting state",
+          "message": "Ausgangsstatus"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Der Standort"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.desc": {
+          "source": "The quantity as a string (e.g. '5'). For ADJUSTMENT: delta. For PHYSICAL_COUNT: absolute count.",
+          "message": "Die Menge als Zeichenkette (z. B. '5'). Für ADJUSTMENT: Delta. Für PHYSICAL_COUNT: absolute Anzahl."
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Menge"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "The quantity",
+          "message": "Die Menge"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "No state",
+          "message": "Kein Status"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOklOX1NUT0NL.desc": {
+          "source": "In stock (default)",
+          "message": "Auf Lager (Standard)"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOlNPTEQ.desc": {
+          "source": "Sold",
+          "message": "Verkauft"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.allowed-value.c3RyaW5nOldBU1RF.desc": {
+          "source": "Waste / damaged",
+          "message": "Ausschuss / Beschädigt"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.desc": {
+          "source": "Ending inventory state for adjustment changes",
+          "message": "Ziel-Bestandsstatus für Anpassungsänderungen"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.display_name": {
+          "source": "To State",
+          "message": "Zielstatus"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.option.dG9fc3RhdGU.short_desc": {
+          "source": "Ending state",
+          "message": "Zielstatus"
+        },
+        "app.U3F1YXJl.action.Y2hhbmdlLWludmVudG9yeQ.short_desc": {
+          "source": "Change inventory counts",
+          "message": "Bestandsmengen ändern"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Square",
+          "message": "Neue Bestellung in Square erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Bestellung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "Der Standort für die Bestellung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes: name, quantity (string), base_price_money (hash with amount in cents and currency)",
+          "message": "Liste von Rechnungspositions-Hashes: name, quantity (Zeichenkette), base_price_money (Hash mit Betrag in Cent und Währung)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Bestell-Einzelposten"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenz-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externe Referenz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Neue Bestellung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.desc": {
+          "source": "Create a new booking (appointment) in Square",
+          "message": "Neue Buchung (Termin) in Square erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.display_name": {
+          "source": "Create Appointment",
+          "message": "Termin erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.display_name": {
+          "source": "Customer Note",
+          "message": "Kundennotiz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.Y3VzdG9tZXJfbm90ZQ.short_desc": {
+          "source": "Note from customer",
+          "message": "Notiz vom Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Der Standort"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.display_name": {
+          "source": "Service Variation ID",
+          "message": "Dienstleistungsvarianten-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25faWQ.short_desc": {
+          "source": "Service variation",
+          "message": "Dienstleistungsvariante"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.display_name": {
+          "source": "Service Version",
+          "message": "Dienstleistungsversion"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c2VydmljZV92YXJpYXRpb25fdmVyc2lvbg.short_desc": {
+          "source": "Service variation version",
+          "message": "Dienstleistungsvarianten-Version"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.desc": {
+          "source": "Start time of the booking (RFC 3339 format)",
+          "message": "Startzeit der Buchung (RFC-3339-Format)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.display_name": {
+          "source": "Start At",
+          "message": "Startzeitpunkt"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.c3RhcnRfYXQ.short_desc": {
+          "source": "Start time",
+          "message": "Startzeit"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "Teammitglieds-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Team member",
+          "message": "Teammitglied"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWJvb2tpbmc.short_desc": {
+          "source": "Create a new booking",
+          "message": "Neue Buchung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Square",
+          "message": "Neuen Kunden in Square erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Kunden erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the customer",
+          "message": "Firmenname des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Unternehmen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Unternehmensname"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the customer",
+          "message": "Vorname des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Vorname des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address of the customer",
+          "message": "E-Mail-Adresse des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "Kunden-E-Mail"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the customer",
+          "message": "Nachname des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Nachname des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "A note about the customer",
+          "message": "Eine Notiz über den Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notiz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Kundennotiz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "Phone number of the customer",
+          "message": "Telefonnummer des Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonnummer"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.desc": {
+          "source": "An external reference ID for the customer",
+          "message": "Eine externe Referenz-ID für den Kunden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenz-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externe Referenz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Einen neuen Kunden erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Square",
+          "message": "Neue Rechnung in Square erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Rechnung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOkVNQUlM.desc": {
+          "source": "Send via email",
+          "message": "Per E-Mail senden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNIQVJFX01BTlVBTExZ.desc": {
+          "source": "Share manually",
+          "message": "Manuell teilen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.allowed-value.c3RyaW5nOlNNUw.desc": {
+          "source": "Send via SMS",
+          "message": "Per SMS senden"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.desc": {
+          "source": "How to deliver the invoice to the customer",
+          "message": "Wie die Rechnung an den Kunden zugestellt werden soll"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Auslieferungsmethode"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "How to deliver",
+          "message": "Zustellungsart"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Invoice description",
+          "message": "Rechnungsbeschreibung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.desc": {
+          "source": "Due date in YYYY-MM-DD format",
+          "message": "Fälligkeitsdatum im Format JJJJ-MM-TT"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "Fälligkeitsdatum"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Invoice due date",
+          "message": "Rechnungsfälligkeitsdatum"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.desc": {
+          "source": "The ID of the order associated with this invoice",
+          "message": "Die ID der mit dieser Rechnung verknüpften Bestellung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "Die Bestellung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Der Standort"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkJBTEFOQ0U.desc": {
+          "source": "Full balance payment",
+          "message": "Zahlung des Gesamtbetrags"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOkRFUE9TSVQ.desc": {
+          "source": "Deposit payment",
+          "message": "Anzahlungszahlung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.allowed-value.c3RyaW5nOklOU1RBTExNRU5U.desc": {
+          "source": "Installment payment",
+          "message": "Ratenzahlung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.desc": {
+          "source": "The type of payment request for this invoice",
+          "message": "Die Art der Zahlungsanforderung für diese Rechnung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "Zahlungstyp"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9yZXF1ZXN0X3R5cGU.short_desc": {
+          "source": "Payment request type",
+          "message": "Zahlungsanforderungstyp"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.option.dGl0bGU.short_desc": {
+          "source": "Invoice title",
+          "message": "Rechnungstitel"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Eine neue Rechnung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.desc": {
+          "source": "Create a new order in Square and immediately mark it as paid",
+          "message": "Eine neue Bestellung in Square erstellen und sofort als bezahlt markieren"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.display_name": {
+          "source": "Create Paid Order",
+          "message": "Bezahlte Bestellung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location for the order",
+          "message": "Der Standort für die Bestellung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line item hashes",
+          "message": "Liste von Rechnungsposition-Hashes"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "Positionen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order line items",
+          "message": "Bestell-Einzelposten"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.desc": {
+          "source": "List of payment IDs to apply. If empty, uses external payment.",
+          "message": "Liste der anzuwendenden Zahlungs-IDs. Wenn leer, wird externe Zahlung verwendet."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.display_name": {
+          "source": "Payment IDs",
+          "message": "Zahlungs-IDs"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.option.cGF5bWVudF9pZHM.short_desc": {
+          "source": "Existing payment IDs",
+          "message": "Bestehende Zahlungs-IDs"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBhaWQtb3JkZXI.short_desc": {
+          "source": "Create and pay an order",
+          "message": "Eine Bestellung erstellen und bezahlen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Create a new payment in Square",
+          "message": "Eine neue Zahlung in Square erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create a Payment",
+          "message": "Zahlung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Der Währungscode (Standard: USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Währungscode"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The amount in the smallest currency unit (cents for USD)",
+          "message": "Der Betrag in der kleinsten Währungseinheit (Cents für USD)"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Zahlungsbetrag in Cent"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.desc": {
+          "source": "If `True` (default), payment completes immediately. If `False`, must be completed later with complete-payment.",
+          "message": "Wenn `True` (Standard), wird die Zahlung sofort abgeschlossen. Wenn `False`, muss sie später mit complete-payment abgeschlossen werden."
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.display_name": {
+          "source": "Autocomplete",
+          "message": "Automatisch abschließen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.YXV0b2NvbXBsZXRl.short_desc": {
+          "source": "Complete immediately",
+          "message": "Sofort abschließen"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order",
+          "message": "Die Bestellung"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The location",
+          "message": "Der Standort"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notiz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "Zahlungsnotiz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.desc": {
+          "source": "The source of funds (payment token, card ID, or 'EXTERNAL')",
+          "message": "Die Zahlungsquelle (Zahlungstoken, Karten-ID oder 'EXTERNAL')"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.display_name": {
+          "source": "Source ID",
+          "message": "Quell-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.c291cmNlX2lk.short_desc": {
+          "source": "Payment source",
+          "message": "Zahlungsquelle"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.display_name": {
+          "source": "Reference ID",
+          "message": "Referenz-ID"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.option.cmVmZXJlbmNlX2lk.short_desc": {
+          "source": "External reference",
+          "message": "Externe Referenz"
+        },
+        "app.U3F1YXJl.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Create a new payment",
+          "message": "Eine neue Zahlung erstellen"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new customer is created in Square. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Kunde in Square erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "New Customer",
+          "message": "Neuer Kunde"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new customer is created",
+          "message": "Auslösen, wenn ein neuer Kunde erstellt wird"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.desc": {
+          "source": "Add a customer to a customer group in Square",
+          "message": "Einen Kunden zu einer Kundengruppe in Square hinzufügen"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.display_name": {
+          "source": "Add Customer to Group",
+          "message": "Kunde zu Gruppe hinzufügen"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "Die ID der Kundengruppe"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "Gruppen-ID"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to add to",
+          "message": "Die Gruppe, zu der hinzugefügt werden soll"
+        },
+        "app.U3F1YXJl.action.YWRkLWN1c3RvbWVyLXRvLWdyb3Vw.short_desc": {
+          "source": "Add a customer to a group",
+          "message": "Einen Kunden zu einer Gruppe hinzufügen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Square",
+          "message": "Eine einzelne Bestellung anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Bestellung abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "Die Bestell-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Einzelne Bestellung nach ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.desc": {
+          "source": "Retrieve multiple orders by their IDs in a single request",
+          "message": "Mehrere Bestellungen anhand ihrer IDs in einer einzelnen Anfrage abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.display_name": {
+          "source": "Get Orders",
+          "message": "Bestellungen abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.desc": {
+          "source": "List of order ID strings to retrieve",
+          "message": "Liste der abzurufenden Bestellungs-ID-Zeichenfolgen"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "Bestell-IDs"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.b3JkZXJfaWRz.short_desc": {
+          "source": "List of order IDs",
+          "message": "Liste der Bestellungs-IDs"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Nach Standort filtern"
+        },
+        "app.U3F1YXJl.action.Z2V0LW9yZGVycw.short_desc": {
+          "source": "Get multiple orders by ID",
+          "message": "Mehrere Bestellungen anhand der ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.desc": {
+          "source": "Retrieve a single booking (appointment) by ID from Square",
+          "message": "Eine einzelne Buchung (Termin) anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.display_name": {
+          "source": "Get a Booking",
+          "message": "Buchung abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.display_name": {
+          "source": "Booking ID",
+          "message": "Buchungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.option.Ym9va2luZ19pZA.short_desc": {
+          "source": "The booking ID",
+          "message": "Die Buchungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWJvb2tpbmc.short_desc": {
+          "source": "Get a single booking by ID",
+          "message": "Eine einzelne Buchung anhand der ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single customer by ID from Square",
+          "message": "Einen einzelnen Kunden anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Kunden abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Die Kunden-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Einzelnen Kunden anhand der ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Square",
+          "message": "Eine einzelne Rechnung anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Rechnung abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Rechnungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "Die Rechnungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Einzelne Rechnung nach ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.desc": {
+          "source": "Get inventory counts for a catalog item variation in Square",
+          "message": "Lagerbestände für eine Katalogartikel-Variation in Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.display_name": {
+          "source": "Get Inventory Count",
+          "message": "Lagerbestand abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.desc": {
+          "source": "The ID of the catalog item variation to get counts for",
+          "message": "Die ID der Katalogartikel-Variation, für die Bestände abgerufen werden sollen"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.display_name": {
+          "source": "Catalog Object ID",
+          "message": "Katalogobjekt-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.Y2F0YWxvZ19vYmplY3RfaWQ.short_desc": {
+          "source": "Item variation ID",
+          "message": "Artikelvariations-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.desc": {
+          "source": "Optional list of location IDs to filter counts by",
+          "message": "Optionale Liste von Standort-IDs zum Filtern der Bestände"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "Standort-IDs"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Nach Standorten filtern"
+        },
+        "app.U3F1YXJl.action.Z2V0LWludmVudG9yeS1jb3VudA.short_desc": {
+          "source": "Get inventory counts for an item",
+          "message": "Lagerbestände für einen Artikel abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from Square",
+          "message": "Eine einzelne Zahlung anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get a Payment",
+          "message": "Zahlung abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment ID",
+          "message": "Die Zahlungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "Eine einzelne Zahlung anhand der ID abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve a single refund by ID from Square",
+          "message": "Eine einzelne Erstattung anhand der ID aus Square abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get a Refund",
+          "message": "Erstattung abrufen"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "Rückerstattungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "The refund ID",
+          "message": "Die Erstattungs-ID"
+        },
+        "app.U3F1YXJl.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Get a single refund by ID",
+          "message": "Eine einzelne Erstattung anhand der ID abrufen"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Square",
+          "message": "Einen Kunden aus Square löschen"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Kunden löschen"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Der zu löschende Kunde"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the customer profile (for optimistic concurrency)",
+          "message": "Die aktuelle Version des Kundenprofils (für optimistische Parallelität)"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.option.dmVyc2lvbg.short_desc": {
+          "source": "Customer version",
+          "message": "Kundenversion"
+        },
+        "app.U3F1YXJl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Einen Kunden löschen"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.desc": {
+          "source": "Search for appointment services in the Square catalog",
+          "message": "Nach Termindienstleistungen im Square-Katalog suchen"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.display_name": {
+          "source": "Find Service",
+          "message": "Dienstleistung suchen"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.desc": {
+          "source": "Filter services by name (partial match)",
+          "message": "Dienstleistungen nach Name filtern (Teilübereinstimmung)"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.option.bmFtZQ.short_desc": {
+          "source": "Service name filter",
+          "message": "Filter für Dienstleistungsname"
+        },
+        "app.U3F1YXJl.action.ZmluZC1zZXJ2aWNl.short_desc": {
+          "source": "Find a service in the catalog",
+          "message": "Eine Dienstleistung im Katalog suchen"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.desc": {
+          "source": "Fires when an order is created or updated in Square. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn eine Bestellung in Square erstellt oder aktualisiert wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.display_name": {
+          "source": "Order Created/Updated",
+          "message": "Bestellung erstellt/aktualisiert"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.b3JkZXItY3JlYXRlZC1vci11cGRhdGVk.short_desc": {
+          "source": "Trigger when an order is created or updated",
+          "message": "Auslösen, wenn eine Bestellung erstellt oder aktualisiert wird"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.desc": {
+          "source": "List bookings (appointments) in Square with optional filtering",
+          "message": "Buchungen (Termine) in Square mit optionaler Filterung auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.display_name": {
+          "source": "List Bookings",
+          "message": "Buchungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Nach Kunde filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Nach Standort filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.desc": {
+          "source": "Return bookings starting before this timestamp (RFC 3339)",
+          "message": "Buchungen zurückgeben, die vor diesem Zeitstempel (RFC 3339) beginnen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.display_name": {
+          "source": "Start At Max",
+          "message": "Maximaler Startzeitpunkt"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWF4.short_desc": {
+          "source": "Latest start time",
+          "message": "Späteste Startzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.desc": {
+          "source": "Return bookings starting at or after this timestamp (RFC 3339)",
+          "message": "Buchungen zurückgeben, die an oder nach diesem Zeitstempel (RFC 3339) beginnen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.display_name": {
+          "source": "Start At Min",
+          "message": "Minimaler Startzeitpunkt"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.c3RhcnRfYXRfbWlu.short_desc": {
+          "source": "Earliest start time",
+          "message": "Früheste Startzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.display_name": {
+          "source": "Team Member ID",
+          "message": "Teammitglieds-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.option.dGVhbV9tZW1iZXJfaWQ.short_desc": {
+          "source": "Filter by team member",
+          "message": "Nach Teammitglied filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1ib29raW5ncw.short_desc": {
+          "source": "List bookings",
+          "message": "Buchungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List customers in Square with optional filtering",
+          "message": "Kunden in Square mit optionaler Filterung auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Kunden auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Nach Kunden-ID filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximale Anzahl der zurückzugebenden Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkNSRUFURURfQVQ.desc": {
+          "source": "Sort by creation time",
+          "message": "Nach Erstellungszeitpunkt sortieren"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.allowed-value.c3RyaW5nOkRFRkFVTFQ.desc": {
+          "source": "Default sort order",
+          "message": "Standard-Sortierreihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.desc": {
+          "source": "The field to sort results by",
+          "message": "Das Feld, nach dem die Ergebnisse sortiert werden sollen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "Sortierfeld"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "Feld zum Sortieren"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Aufsteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Absteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Die Sortierrichtung für Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List all customers",
+          "message": "Alle Kunden auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "List invoices in Square for a location",
+          "message": "Rechnungen in Square für einen Standort auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "Rechnungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.desc": {
+          "source": "Filter invoices by location (required by Square API, auto-detected if not provided)",
+          "message": "Rechnungen nach Standort filtern (von der Square-API erforderlich, wird automatisch erkannt, falls nicht angegeben)"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Nach Standort filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List invoices",
+          "message": "Rechnungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.desc": {
+          "source": "List payments in Square with optional filtering",
+          "message": "Zahlungen in Square mit optionaler Filterung auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.display_name": {
+          "source": "List Payments",
+          "message": "Zahlungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return payments created at or after this timestamp (RFC 3339)",
+          "message": "Zahlungen zurückgeben, die an oder nach diesem Zeitstempel (RFC 3339) erstellt wurden"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Startzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Beginn des Zeitbereichs"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Endzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Ende des Zeitbereichs"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Nach Standort filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Aufsteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Absteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Die Sortierrichtung für Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "Nach Zahlungs-ID filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1wYXltZW50cw.short_desc": {
+          "source": "List payments",
+          "message": "Zahlungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "List refunds in Square with optional filtering",
+          "message": "Rückerstattungen in Square mit optionaler Filterung auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "Rückerstattungen auflisten"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return refunds created at or after this timestamp (RFC 3339)",
+          "message": "Rückerstattungen zurückgeben, die an oder nach diesem Zeitstempel (RFC 3339) erstellt wurden"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Startzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Start of time range",
+          "message": "Beginn des Zeitbereichs"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.display_name": {
+          "source": "End Time",
+          "message": "Endzeit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.ZW5kX3RpbWU.short_desc": {
+          "source": "End of time range",
+          "message": "Ende des Zeitbereichs"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "Standort-ID"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "Filter by location",
+          "message": "Nach Standort filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkJBTktfQUNDT1VOVA.desc": {
+          "source": "Bank account payment",
+          "message": "Bankkontozahlung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBU0g.desc": {
+          "source": "Cash payment",
+          "message": "Barzahlung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkQ.desc": {
+          "source": "Card payment",
+          "message": "Kartenzahlung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkVYVEVSTkFM.desc": {
+          "source": "External payment",
+          "message": "Externe Zahlung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldBTExFVA.desc": {
+          "source": "Digital wallet payment",
+          "message": "Digitale Wallet-Zahlung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.desc": {
+          "source": "Filter refunds by payment source type",
+          "message": "Rückerstattungen nach Zahlungsquellentyp filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "Quelltyp"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Filter by source type",
+          "message": "Nach Quellentyp filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkFTQw.desc": {
+          "source": "Ascending order",
+          "message": "Aufsteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOkRFU0M.desc": {
+          "source": "Descending order",
+          "message": "Absteigende Reihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.desc": {
+          "source": "The sort direction for results",
+          "message": "Die Sortierrichtung für Ergebnisse"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed refunds",
+          "message": "Abgeschlossene Rückerstattungen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOkZBSUxFRA.desc": {
+          "source": "Failed refunds",
+          "message": "Fehlgeschlagene Rückerstattungen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlBFTkRJTkc.desc": {
+          "source": "Pending refunds",
+          "message": "Ausstehende Rückerstattungen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.allowed-value.c3RyaW5nOlJFSkVDVEVE.desc": {
+          "source": "Rejected refunds",
+          "message": "Abgelehnte Rückerstattungen"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.desc": {
+          "source": "Filter refunds by status",
+          "message": "Rückerstattungen nach Status filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Nach Status filtern"
+        },
+        "app.U3F1YXJl.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "Rückerstattungen auflisten"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Square** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Square** unter Verwendung der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.U3F1YXJl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Square",
+          "message": "Einen benutzerdefinierten API-Aufruf an Square durchführen"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new booking (appointment) is created in Square. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Buchung (Termin) in Square erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "Neuer Termin"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new booking is created",
+          "message": "Auslösen, wenn eine neue Buchung erstellt wird"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.desc": {
+          "source": "Fires when a new catalog item is created in Square. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn ein neuer Katalogartikel in Square erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.display_name": {
+          "source": "New Catalog Item",
+          "message": "Neuer Katalogartikel"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.bmV3LWNhdGFsb2ctaXRlbQ.short_desc": {
+          "source": "Trigger when a new catalog item is added",
+          "message": "Auslösen, wenn ein neuer Katalogartikel hinzugefügt wird"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.desc": {
+          "source": "Fires when new events are detected via the Square Events API. Supports filtering by event type. Uses polling with 28-day event retention.",
+          "message": "Wird ausgelöst, wenn neue Ereignisse über die Square-Events-API erkannt werden. Unterstützt das Filtern nach Ereignistyp. Verwendet Polling mit einer 28-tägigen Ereignisaufbewahrung."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.display_name": {
+          "source": "New Events",
+          "message": "Neue Ereignisse"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.desc": {
+          "source": "List of Square event types to watch (e.g. 'payment.created'). Defaults to all supported event types.",
+          "message": "Liste der zu überwachenden Square-Ereignistypen (z. B. 'payment.created'). Standardmäßig alle unterstützten Ereignistypen."
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.display_name": {
+          "source": "Event Types",
+          "message": "Ereignistypen"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.ZXZlbnRfdHlwZXM.short_desc": {
+          "source": "Event types to watch",
+          "message": "Zu überwachende Ereignistypen"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Ereignissen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.bmV3LWV2ZW50cw.short_desc": {
+          "source": "Trigger when new events occur",
+          "message": "Auslösen, wenn neue Ereignisse auftreten"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Square. Uses polling to detect new records.",
+          "message": "Wird ausgelöst, wenn eine neue Rechnung in Square erstellt wird. Verwendet Polling, um neue Datensätze zu erkennen."
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "Neue Rechnung"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "Auslösen, wenn eine neue Rechnung erstellt wird"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.desc": {
+          "source": "Search for orders in Square with optional filtering",
+          "message": "Nach Bestellungen in Square mit optionaler Filterung suchen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.display_name": {
+          "source": "Search Orders",
+          "message": "Bestellungen suchen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Created Before",
+          "message": "Erstellt vor"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Created before date",
+          "message": "Erstellt vor Datum"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.desc": {
+          "source": "Return orders created at or after this timestamp (RFC 3339)",
+          "message": "Bestellungen zurückgeben, die an oder nach diesem Zeitstempel (RFC 3339) erstellt wurden"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Created After",
+          "message": "Erstellt nach"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.Y3JlYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Created after date",
+          "message": "Erstellt nach Datum"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Bestell-ID"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Nach Bestell-ID filtern"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.desc": {
+          "source": "List of location IDs to search (auto-detected if not provided)",
+          "message": "Liste der zu durchsuchenden Standort-IDs (wird automatisch erkannt, falls nicht angegeben)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.display_name": {
+          "source": "Location IDs",
+          "message": "Standort-IDs"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bG9jYXRpb25faWRz.short_desc": {
+          "source": "Filter by locations",
+          "message": "Nach Standorten filtern"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.desc": {
+          "source": "Open orders",
+          "message": "Offene Bestellungen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNBTkNFTEVE.desc": {
+          "source": "Canceled orders",
+          "message": "Stornierte Bestellungen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkNPTVBMRVRFRA.desc": {
+          "source": "Completed orders",
+          "message": "Abgeschlossene Bestellungen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.allowed-value.c3RyaW5nOkRSQUZU.desc": {
+          "source": "Draft orders",
+          "message": "Bestellentwürfe"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.desc": {
+          "source": "Filter orders by state",
+          "message": "Bestellungen nach Status filtern"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Bundesstaat"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by order state",
+          "message": "Nach Bestellstatus filtern"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.display_name": {
+          "source": "Updated Before",
+          "message": "Aktualisiert vor"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9lbmQ.short_desc": {
+          "source": "Updated before date",
+          "message": "Aktualisiert vor dem Datum"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.display_name": {
+          "source": "Updated After",
+          "message": "Aktualisiert nach"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.option.dXBkYXRlZF9hdF9zdGFydA.short_desc": {
+          "source": "Updated after date",
+          "message": "Aktualisiert nach dem Datum"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLW9yZGVycw.short_desc": {
+          "source": "Search for orders",
+          "message": "Nach Bestellungen suchen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.desc": {
+          "source": "Search for catalog objects (items, variations, categories, etc.) in Square",
+          "message": "Nach Katalogobjekten (Artikel, Varianten, Kategorien usw.) in Square suchen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.display_name": {
+          "source": "Search Catalog",
+          "message": "Katalog durchsuchen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.desc": {
+          "source": "Return objects updated at or after this timestamp (RFC 3339)",
+          "message": "Objekte zurückgeben, die zu oder nach diesem Zeitstempel aktualisiert wurden (RFC 3339)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.display_name": {
+          "source": "Begin Time",
+          "message": "Startzeit"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.YmVnaW5fdGltZQ.short_desc": {
+          "source": "Updated after",
+          "message": "Aktualisiert nach"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.desc": {
+          "source": "Filter by catalog object types (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)",
+          "message": "Nach Katalogobjekttypen filtern (ITEM, ITEM_VARIATION, CATEGORY, DISCOUNT, TAX, MODIFIER, MODIFIER_LIST, IMAGE)"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.display_name": {
+          "source": "Object Types",
+          "message": "Objekttypen"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.b2JqZWN0X3R5cGVz.short_desc": {
+          "source": "Filter by object types",
+          "message": "Nach Objekttypen filtern"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.U3F1YXJl.action.c2VhcmNoLWNhdGFsb2c.short_desc": {
+          "source": "Search catalog objects",
+          "message": "Katalogobjekte suchen"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.desc": {
+          "source": "Publish and send an invoice in Square",
+          "message": "Eine Rechnung in Square veröffentlichen und senden"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.display_name": {
+          "source": "Send Invoice",
+          "message": "Rechnung senden"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "Rechnungs-ID"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to send",
+          "message": "Die zu sendende Rechnung"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.desc": {
+          "source": "The current version of the invoice (for optimistic concurrency)",
+          "message": "Die aktuelle Version der Rechnung (für optimistische Nebenläufigkeit)"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Version"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.option.dmVyc2lvbg.short_desc": {
+          "source": "Invoice version",
+          "message": "Rechnungsversion"
+        },
+        "app.U3F1YXJl.action.c2VuZC1pbnZvaWNl.short_desc": {
+          "source": "Send (publish) an invoice",
+          "message": "Eine Rechnung senden (veröffentlichen)"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a payment is created or updated in Square. Uses polling to detect changes.",
+          "message": "Wird ausgelöst, wenn eine Zahlung in Square erstellt oder aktualisiert wird. Verwendet Polling, um Änderungen zu erkennen."
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.display_name": {
+          "source": "Payment Created/Updated",
+          "message": "Zahlung erstellt/aktualisiert"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Wie oft nach neuen Datensätzen gesucht werden soll (mindestens 30 Sekunden)"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Abfrageintervall"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Abfrageintervall in Sekunden"
+        },
+        "app.U3F1YXJl.action.cGF5bWVudC1jcmVhdGVkLW9yLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a payment is created or updated",
+          "message": "Auslösen, wenn eine Zahlung erstellt oder aktualisiert wird"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.desc": {
+          "source": "Create a refund for a payment in Square",
+          "message": "Eine Rückerstattung für eine Zahlung in Square erstellen"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.display_name": {
+          "source": "Refund Payment",
+          "message": "Zahlung erstatten"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code (default: USD)",
+          "message": "Der Währungscode (Standard: USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Währung"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "Currency code",
+          "message": "Währungscode"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "The refund amount in the smallest currency unit (cents for USD)",
+          "message": "Der Rückerstattungsbetrag in der kleinsten Währungseinheit (Cent für USD)"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Betrag"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "Erstattungsbetrag in Cent"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.display_name": {
+          "source": "Payment ID",
+          "message": "Zahlungs-ID"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cGF5bWVudF9pZA.short_desc": {
+          "source": "The payment to refund",
+          "message": "Die zu erstattende Zahlung"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "Grund"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.option.cmVhc29u.short_desc": {
+          "source": "Reason for refund",
+          "message": "Grund für die Rückerstattung"
+        },
+        "app.U3F1YXJl.action.cmVmdW5kLXBheW1lbnQ.short_desc": {
+          "source": "Refund a payment",
+          "message": "Eine Zahlung erstatten"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.desc": {
+          "source": "Remove a customer from a customer group in Square",
+          "message": "Einen Kunden aus einer Kundengruppe in Square entfernen"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.display_name": {
+          "source": "Remove Customer From Group",
+          "message": "Kunden aus Gruppe entfernen"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer",
+          "message": "Der Kunde"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.desc": {
+          "source": "The ID of the customer group",
+          "message": "Die ID der Kundengruppe"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Group ID",
+          "message": "Gruppen-ID"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The group to remove from",
+          "message": "Die Gruppe, aus der entfernt werden soll"
+        },
+        "app.U3F1YXJl.action.cmVtb3ZlLWN1c3RvbWVyLWZyb20tZ3JvdXA.short_desc": {
+          "source": "Remove a customer from a group",
+          "message": "Einen Kunden aus einer Gruppe entfernen"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Square",
+          "message": "Einen bestehenden Kunden in Square aktualisieren"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Einen Kunden aktualisieren"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company",
+          "message": "Unternehmen"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name",
+          "message": "Unternehmensname"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Der zu aktualisierende Kunde"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Vorname des Kunden"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Customer email",
+          "message": "Kunden-E-Mail"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Nachname des Kunden"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notiz"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Customer note",
+          "message": "Kundennotiz"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonnummer"
+        },
+        "app.U3F1YXJl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Einen vorhandenen Kunden aktualisieren"
+        },
+        "app.U3F1YXJl.desc": {
+          "source": "Square is a comprehensive commerce platform for payments, online stores, invoicing, and business management.\n\nThis integration supports customers, orders, payments, invoices, bookings, catalog items, inventory, refunds, and events.",
+          "message": "Square ist eine umfassende Handelsplattform für Zahlungen, Online-Shops, Rechnungsstellung und Unternehmensverwaltung.\n\nDiese Integration unterstützt Kunden, Bestellungen, Zahlungen, Rechnungen, Buchungen, Katalogartikel, Inventar, Rückerstattungen und Ereignisse."
+        },
+        "app.U3F1YXJl.display_name": {
+          "source": "Square",
+          "message": "Square"
+        },
+        "app.U3F1YXJl.short_desc": {
+          "source": "Square payments and commerce platform",
+          "message": "Square-Zahlungs- und Handelsplattform"
+        }
+      }
+    }
+  }
+}

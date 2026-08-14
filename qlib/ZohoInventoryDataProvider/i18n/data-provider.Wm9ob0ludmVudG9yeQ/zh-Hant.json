@@ -1,0 +1,3277 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "建立聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "公司名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "聯絡人的公司名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "客戶聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "廠商聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "聯絡人姓名"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "聯絡人姓名"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VycmVuY3lfaWQ.short_desc": {
+          "source": "Currency for the contact",
+          "message": "聯絡人的貨幣"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "關於聯絡人的備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "付款條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "付款條件（天數）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "聯絡人的網站 URL"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "建立新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Create a new contact person for a contact in Zoho Inventory",
+          "message": "在 Zoho Inventory 中為聯絡人建立新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Create Contact Person",
+          "message": "建立聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "母聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "職稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "職稱或頭銜"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "聯絡人的名字"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "聯絡人的姓氏"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Create a new contact person",
+          "message": "建立新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new item in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "建立項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Sales Account",
+          "message": "銷售帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Sales account",
+          "message": "銷售帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "項目描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.display_name": {
+          "source": "Inventory Account",
+          "message": "庫存帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5X2FjY291bnRfaWQ.short_desc": {
+          "source": "Inventory account",
+          "message": "庫存帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory item",
+          "message": "庫存項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase item",
+          "message": "採購項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales item",
+          "message": "銷售項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase item",
+          "message": "銷售與採購項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.desc": {
+          "source": "The type of the item",
+          "message": "項目類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "項目類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.aXRlbV90eXBl.short_desc": {
+          "source": "Type of item",
+          "message": "項目類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "項目名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "庫存單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.display_name": {
+          "source": "Purchase Account",
+          "message": "採購帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfYWNjb3VudF9pZA.short_desc": {
+          "source": "Purchase account",
+          "message": "採購帳戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "採購價格"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "品項成本價"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "品項售價"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "度量單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "建立新項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Create a new inventory adjustment in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新的庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Create Item Adjustment",
+          "message": "建立品項調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnF1YW50aXR5.desc": {
+          "source": "Quantity adjustment",
+          "message": "數量調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.allowed-value.c3RyaW5nOnZhbHVl.desc": {
+          "source": "Value adjustment",
+          "message": "價值調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.desc": {
+          "source": "The type of inventory adjustment",
+          "message": "庫存調整類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.display_name": {
+          "source": "Adjustment Type",
+          "message": "調整類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.YWRqdXN0bWVudF90eXBl.short_desc": {
+          "source": "Type of adjustment",
+          "message": "調整類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGF0ZQ.short_desc": {
+          "source": "Adjustment date",
+          "message": "調整日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Adjustment description",
+          "message": "調整說明"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, quantity_adjusted, etc.",
+          "message": "包含 item_id、quantity_adjusted 等的明細項目清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Adjustment line items",
+          "message": "調整明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "原因"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVhc29u.short_desc": {
+          "source": "Reason for the adjustment",
+          "message": "調整原因"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number for the adjustment",
+          "message": "調整參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new inventory adjustment",
+          "message": "建立新的庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Create a new item group in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新的品項群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Create Item Group",
+          "message": "建立品項群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "品牌"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "品牌名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "群組名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "品項群組名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "群組描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.desc": {
+          "source": "List of items in the group with attributes",
+          "message": "群組中帶有屬性的品項清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "群組中的品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "製造商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "製造商名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "度量單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Create a new item group",
+          "message": "建立新的品項群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "建立發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "此發票的客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "發票日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "折扣金額或百分比"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "到期日"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "付款到期日"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "發票號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Custom invoice number",
+          "message": "自訂發票號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of line items with item_id, rate, quantity, etc.",
+          "message": "包含 item_id、rate、quantity 等的明細項目清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "發票明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "發票備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Associated sales order",
+          "message": "關聯的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "付款條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "付款條件（天數）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "條款與條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "建立新發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Create a new purchase order in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新的採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Create Purchase Order",
+          "message": "建立採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "採購單日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "交貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "預計送達日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "採購單明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "採購單備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.display_name": {
+          "source": "Purchase Order Number",
+          "message": "採購單編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom purchase order number",
+          "message": "自訂採購單號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "廠商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "此採購單的供應商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Create a new purchase order",
+          "message": "建立新採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.desc": {
+          "source": "Create a new package for a sales order in Zoho Inventory",
+          "message": "在 Zoho Inventory 中為銷售訂單建立新包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.display_name": {
+          "source": "Create Package",
+          "message": "建立包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "包裹日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.desc": {
+          "source": "List of items with so_line_item_id and quantity",
+          "message": "包含 so_line_item_id 和 quantity 的品項清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "包裹明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "包裹備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this package",
+          "message": "此包裹的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "包裹號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Custom package number",
+          "message": "自訂包裹編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Create a new package",
+          "message": "建立新包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Create a new sales order in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Create Sales Order",
+          "message": "建立銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "此銷售訂單的客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "銷售訂單日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "銷售訂單明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "銷售訂單備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.display_name": {
+          "source": "Sales Order Number",
+          "message": "銷售訂單編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9udW1iZXI.short_desc": {
+          "source": "Custom sales order number",
+          "message": "自訂銷售訂單編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "發貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "預計發貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "條款與條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Create a new sales order",
+          "message": "建立新銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Create a new shipment order in Zoho Inventory",
+          "message": "在 Zoho Inventory 中建立新的發貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Create Shipment Order",
+          "message": "建立發貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "出貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "放送方式"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "配送方式"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "發貨備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order for this shipment",
+          "message": "此發貨的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "發貨單號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "發貨單編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "運費"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "運費金額"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.desc": {
+          "source": "List of package IDs to include",
+          "message": "要包含的包裹 ID 清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.display_name": {
+          "source": "Package IDs",
+          "message": "包裹 ID"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.cGFja2FnZV9pZHM.short_desc": {
+          "source": "Packages to include in shipment",
+          "message": "發貨中包含的包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追蹤號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "發貨追蹤號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Y3JlYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Create a new shipment order",
+          "message": "建立新的發貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve details of a specific contact from Zoho Inventory",
+          "message": "從 Zoho Inventory 擷取特定聯絡人的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "取得聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to retrieve",
+          "message": "要擷取的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get contact details",
+          "message": "取得聯絡人詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Retrieve details of a specific contact person from Zoho Inventory",
+          "message": "從 Zoho Inventory 擷取特定聯絡人的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Get Contact Person",
+          "message": "取得聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to retrieve",
+          "message": "要檢索的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Get contact person details",
+          "message": "取得聯絡人詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve details of a specific item from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定項目的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "取得項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to retrieve",
+          "message": "要檢索的項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get item details",
+          "message": "取得項目詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve details of a specific inventory adjustment from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定庫存調整的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Get Item Adjustment",
+          "message": "取得庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to retrieve",
+          "message": "要檢索的庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Get inventory adjustment details",
+          "message": "取得庫存調整詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Retrieve details of a specific item group from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定項目群組的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Get Item Group",
+          "message": "取得項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to retrieve",
+          "message": "要檢索的項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Get item group details",
+          "message": "取得項目群組詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve details of a specific invoice from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定發票的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "取得發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to retrieve",
+          "message": "要擷取的發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get invoice details",
+          "message": "取得發票詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific purchase order from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定採購單的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Get Purchase Order",
+          "message": "取得採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to retrieve",
+          "message": "要擷取的採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Get purchase order details",
+          "message": "取得採購單詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.desc": {
+          "source": "Retrieve details of a specific package from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定包裹的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.display_name": {
+          "source": "Get Package",
+          "message": "取得包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to retrieve",
+          "message": "要檢索的包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXBhY2thZ2U.short_desc": {
+          "source": "Get package details",
+          "message": "取得包裹詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.desc": {
+          "source": "Retrieve details of a specific sales order from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定銷售訂單的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.display_name": {
+          "source": "Get Sales Order",
+          "message": "取得銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to retrieve",
+          "message": "要擷取的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Get sales order details",
+          "message": "取得銷售訂單詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Retrieve details of a specific shipment order from Zoho Inventory",
+          "message": "從 Zoho Inventory 檢索特定出貨單的詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Get Shipment Order",
+          "message": "取得出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to retrieve",
+          "message": "要檢索的出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.Z2V0LXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Get shipment order details",
+          "message": "取得出貨單詳細資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "要刪除的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Delete a contact person from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Delete Contact Person",
+          "message": "刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to delete",
+          "message": "要刪除的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Delete a contact person",
+          "message": "刪除聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Delete an item from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "刪除項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to delete",
+          "message": "要刪除的項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "刪除品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Delete an inventory adjustment from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "Delete Item Adjustment",
+          "message": "刪除庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.display_name": {
+          "source": "Inventory Adjustment",
+          "message": "庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.aW52ZW50b3J5X2FkanVzdG1lbnRfaWQ.short_desc": {
+          "source": "The inventory adjustment to delete",
+          "message": "要刪除的庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an inventory adjustment",
+          "message": "刪除庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Delete an item group from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Delete Item Group",
+          "message": "刪除項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to delete",
+          "message": "要刪除的項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Delete an item group",
+          "message": "刪除項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "刪除發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to delete",
+          "message": "要刪除的發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "刪除發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Delete a purchase order from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Delete Purchase Order",
+          "message": "刪除採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to delete",
+          "message": "要刪除的採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Delete a purchase order",
+          "message": "刪除採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.desc": {
+          "source": "Delete a package from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.display_name": {
+          "source": "Delete Package",
+          "message": "刪除包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to delete",
+          "message": "要刪除的包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXBhY2thZ2U.short_desc": {
+          "source": "Delete a package",
+          "message": "刪除包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Delete a sales order from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Delete Sales Order",
+          "message": "刪除銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to delete",
+          "message": "要刪除的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Delete a sales order",
+          "message": "刪除銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Delete a shipment order from Zoho Inventory",
+          "message": "從 Zoho Inventory 刪除出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Delete Shipment Order",
+          "message": "刪除出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to delete",
+          "message": "要刪除的出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.ZGVsZXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Delete a shipment order",
+          "message": "刪除出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.desc": {
+          "source": "Retrieve a list of contact persons for a specific contact in Zoho Inventory",
+          "message": "檢索 Zoho Inventory 中特定聯絡人的聯絡人清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.display_name": {
+          "source": "List Contact Persons",
+          "message": "列出聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The parent contact",
+          "message": "母聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0LXBlcnNvbnM.short_desc": {
+          "source": "List contact persons for a contact",
+          "message": "列出聯絡人的聯絡人清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Search and retrieve a list of contacts from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 搜尋並檢索聯絡人清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "Search Contacts",
+          "message": "搜尋聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "客戶聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "廠商聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Filter by contact type",
+          "message": "依聯絡人類型篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "聯絡人姓名"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Filter by contact name",
+          "message": "按聯絡人名稱篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "依電子郵件地址篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "有效聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive contacts",
+          "message": "未啟用的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "按聯絡人狀態篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.option.cGhvbmU.short_desc": {
+          "source": "Filter by phone number",
+          "message": "按電話號碼篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "Search and list contacts",
+          "message": "搜尋並列出聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取發票清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.display_name": {
+          "source": "List Invoices",
+          "message": "列出發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "依客戶篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "依發票 ID 篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm92ZXJkdWU.desc": {
+          "source": "Overdue invoices",
+          "message": "逾期發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft invoices",
+          "message": "草稿發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "已付款的發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhcnRpYWxseV9wYWlk.desc": {
+          "source": "Partially paid invoices",
+          "message": "部分付款發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent invoices",
+          "message": "已發送發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVucGFpZA.desc": {
+          "source": "Unpaid invoices",
+          "message": "未付款發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void invoices",
+          "message": "作廢發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "依發票狀態篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pbnZvaWNlcw.short_desc": {
+          "source": "List and search invoices",
+          "message": "列出並搜尋發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.desc": {
+          "source": "Retrieve a list of inventory adjustments from Zoho Inventory",
+          "message": "從 Zoho Inventory 擷取庫存調整清單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.display_name": {
+          "source": "List Item Adjustments",
+          "message": "列製品項調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWFkanVzdG1lbnRz.short_desc": {
+          "source": "List inventory adjustments",
+          "message": "列出庫存調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.desc": {
+          "source": "Retrieve a list of item groups from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取品項群組清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.display_name": {
+          "source": "List Item Groups",
+          "message": "列製品項群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "群組名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Filter by group name",
+          "message": "依群組名稱篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtLWdyb3Vwcw.short_desc": {
+          "source": "List and search item groups",
+          "message": "列出並搜尋品項群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.desc": {
+          "source": "Retrieve a list of items from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取品項清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.display_name": {
+          "source": "List Items",
+          "message": "列出項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOmludmVudG9yeQ.desc": {
+          "source": "Inventory items",
+          "message": "庫存品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnB1cmNoYXNlcw.desc": {
+          "source": "Purchase items",
+          "message": "採購品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVz.desc": {
+          "source": "Sales items",
+          "message": "銷售品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.allowed-value.c3RyaW5nOnNhbGVzX2FuZF9wdXJjaGFzZXM.desc": {
+          "source": "Sales and purchase items",
+          "message": "銷售與採購品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.display_name": {
+          "source": "Item Type",
+          "message": "項目類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.aXRlbV90eXBl.short_desc": {
+          "source": "Filter by item type",
+          "message": "依品項類型篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.bmFtZQ.short_desc": {
+          "source": "Filter by item name",
+          "message": "依項目名稱篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.option.c2t1.short_desc": {
+          "source": "Filter by SKU",
+          "message": "依 SKU 篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1pdGVtcw.short_desc": {
+          "source": "List and search items",
+          "message": "列出並搜尋品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.desc": {
+          "source": "Retrieve a list of packages from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取包裹清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.display_name": {
+          "source": "List Packages",
+          "message": "列出包裹類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "依銷售訂單篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "包裹號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Filter by package number",
+          "message": "依包裹編號篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wYWNrYWdlcw.short_desc": {
+          "source": "List packages",
+          "message": "列出包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.desc": {
+          "source": "Retrieve a list of purchase orders from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取採購訂單清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.display_name": {
+          "source": "List Purchase Orders",
+          "message": "列出採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open purchase orders",
+          "message": "未結採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.desc": {
+          "source": "Billed purchase orders",
+          "message": "已開立帳單的採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled purchase orders",
+          "message": "已取消的採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.desc": {
+          "source": "Closed purchase orders",
+          "message": "已結案採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmlzc3VlZA.desc": {
+          "source": "Issued purchase orders",
+          "message": "已發出採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "依採購單狀態篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "廠商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dmVuZG9yX2lk.short_desc": {
+          "source": "Filter by vendor",
+          "message": "依廠商篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
+          "source": "List and search purchase orders",
+          "message": "列出並搜尋採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.desc": {
+          "source": "Retrieve a list of sales orders from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取銷售訂單清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.display_name": {
+          "source": "List Sales Orders",
+          "message": "列出銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "依客戶篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.desc": {
+          "source": "Open sales orders",
+          "message": "未結銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbmZpcm1lZA.desc": {
+          "source": "Confirmed sales orders",
+          "message": "已確認銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1bGZpbGxlZA.desc": {
+          "source": "Fulfilled sales orders",
+          "message": "已履約銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWQ.desc": {
+          "source": "Void sales orders",
+          "message": "作廢銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by sales order status",
+          "message": "依銷售訂單狀態篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
+          "source": "List and search sales orders",
+          "message": "列出並搜尋銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of shipment orders from Zoho Inventory with optional filtering",
+          "message": "從 Zoho Inventory 擷取發貨訂單清單（可選篩選）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.display_name": {
+          "source": "List Shipment Orders",
+          "message": "列出發貨訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "Filter by sales order",
+          "message": "依銷售訂單篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by shipment status",
+          "message": "依發貨狀態篩選"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bGlzdC1zaGlwbWVudC1vcmRlcnM.short_desc": {
+          "source": "List and search shipment orders",
+          "message": "列出並搜尋發貨訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Zoho Inventory** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Zoho Inventory** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭和請求主體。回應會以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n將此動作運用於尚未在此應用程式中公開為頂級動作的端點。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Zoho Inventory",
+          "message": "對 Zoho Inventory 發出自訂 API 呼叫"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.desc": {
+          "source": "Mark a contact as active or inactive in Zoho Inventory",
+          "message": "在 Zoho Inventory 中將聯絡人標記為有效或停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.display_name": {
+          "source": "Mark Contact Active/Inactive",
+          "message": "標記聯絡人為有效/停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to mark",
+          "message": "要標記的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.desc": {
+          "source": "`True` to mark active, `False` to mark inactive",
+          "message": "`True` 標記為有效，`False` 標記為停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "作用中"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "啟用狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LWFjdGl2ZQ.short_desc": {
+          "source": "Mark a contact as active or inactive",
+          "message": "將聯絡人標記為有效或停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.desc": {
+          "source": "Mark a contact person as the primary contact person in Zoho Inventory",
+          "message": "在 Zoho Inventory 中將聯絡人設為主要聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.display_name": {
+          "source": "Mark Contact Person Primary",
+          "message": "標記主要聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to mark as primary",
+          "message": "要標記為主要的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1jb250YWN0LXBlcnNvbi1wcmltYXJ5.short_desc": {
+          "source": "Mark a contact person as primary",
+          "message": "將聯絡人標記為主要"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.desc": {
+          "source": "Mark an item as active or inactive in Zoho Inventory",
+          "message": "在 Zoho Inventory 中將品項標記為有效或停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.display_name": {
+          "source": "Mark Item Active/Inactive",
+          "message": "標記品項為有效/停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.display_name": {
+          "source": "Active",
+          "message": "作用中"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.YWN0aXZl.short_desc": {
+          "source": "Active status",
+          "message": "啟用狀態"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to mark",
+          "message": "要標記的品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1pdGVtLWFjdGl2ZQ.short_desc": {
+          "source": "Mark an item as active or inactive",
+          "message": "將品項標記為有效或停用"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.desc": {
+          "source": "Mark a shipment order as delivered in Zoho Inventory",
+          "message": "在 Zoho Inventory 中將發貨訂單標記為已送達"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.display_name": {
+          "source": "Mark Shipment Delivered",
+          "message": "標記發貨為已送達"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to mark as delivered",
+          "message": "要標記為已送達的發貨訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bWFyay1zaGlwbWVudC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Mark a shipment as delivered",
+          "message": "將發貨標記為已送達"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新聯絡人時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new contacts (seconds)",
+          "message": "檢查新聯絡人的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "在建立新聯絡人時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.desc": {
+          "source": "Fires when a new item is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新品項時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.display_name": {
+          "source": "New Item",
+          "message": "新項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new items (seconds)",
+          "message": "檢查新項目的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0.short_desc": {
+          "source": "Trigger when a new item is created",
+          "message": "建立新項目時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.desc": {
+          "source": "Fires when a new item adjustment is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新品項調整時觸發。使用輪詢偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.display_name": {
+          "source": "New Item Adjustment",
+          "message": "新品項調整"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item adjustments (seconds)",
+          "message": "檢查新品項調整的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tYWRqdXN0bWVudA.short_desc": {
+          "source": "Trigger when a new item adjustment is created",
+          "message": "建立新的項目調整時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.desc": {
+          "source": "Fires when a new item group is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新的項目群組時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.display_name": {
+          "source": "New Item Group",
+          "message": "新項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new item groups (seconds)",
+          "message": "檢查新項目群組的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Trigger when a new item group is created",
+          "message": "建立新的項目群組時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.desc": {
+          "source": "Fires when a new invoice is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新的發票時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.display_name": {
+          "source": "New Invoice",
+          "message": "新發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new invoices (seconds)",
+          "message": "檢查新發票的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LWludm9pY2U.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "建立新發票時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Fires when a new purchase order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新的採購單時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "新增採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new purchase orders (seconds)",
+          "message": "檢查新採購單的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Trigger when a new purchase order is created",
+          "message": "建立新採購單時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.desc": {
+          "source": "Fires when a new package is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新的包裹時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.display_name": {
+          "source": "New Package",
+          "message": "新包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new packages (seconds)",
+          "message": "檢查新包裹的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXBhY2thZ2U.short_desc": {
+          "source": "Trigger when a new package is created",
+          "message": "建立新的包裹時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.desc": {
+          "source": "Fires when a new sales order is created in Zoho Inventory. Uses polling to detect new records.",
+          "message": "在 Zoho Inventory 中建立新的銷售訂單時觸發。使用輪詢來偵測新記錄。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.display_name": {
+          "source": "New Sales Order",
+          "message": "新增銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "輪詢間隔"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "How often to check for new sales orders (seconds)",
+          "message": "檢查新銷售訂單的頻率（秒）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.bmV3LXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Trigger when a new sales order is created",
+          "message": "建立新銷售訂單時觸發"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "更新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "公司名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Company name for the contact",
+          "message": "聯絡人的公司名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOmN1c3RvbWVy.desc": {
+          "source": "Customer contact",
+          "message": "客戶聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.allowed-value.c3RyaW5nOnZlbmRvcg.desc": {
+          "source": "Vendor contact",
+          "message": "廠商聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.desc": {
+          "source": "The type of contact",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.display_name": {
+          "source": "Contact Type",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF90eXBl.short_desc": {
+          "source": "Type of contact",
+          "message": "聯絡人類型"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "要更新的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.display_name": {
+          "source": "Contact Name",
+          "message": "聯絡人姓名"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9uYW1l.short_desc": {
+          "source": "Name of the contact",
+          "message": "聯絡人姓名"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the contact",
+          "message": "關於聯絡人的備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "付款條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "付款條件（天數）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL of the contact",
+          "message": "聯絡人的網站 URL"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "更新現有聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.desc": {
+          "source": "Update an existing contact person in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.display_name": {
+          "source": "Update Contact Person",
+          "message": "更新聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.display_name": {
+          "source": "Contact Person",
+          "message": "聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Y29udGFjdF9wZXJzb25faWQ.short_desc": {
+          "source": "The contact person to update",
+          "message": "要更新的聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.display_name": {
+          "source": "Designation",
+          "message": "職稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZGVzaWduYXRpb24.short_desc": {
+          "source": "Job title or designation",
+          "message": "職稱或頭銜"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "First name of the contact person",
+          "message": "聯絡人的名字"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Last name of the contact person",
+          "message": "聯絡人的姓氏"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWNvbnRhY3QtcGVyc29u.short_desc": {
+          "source": "Update an existing contact person",
+          "message": "更新現有聯絡人"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "更新項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "項目描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.display_name": {
+          "source": "Item",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.aXRlbV9pZA.short_desc": {
+          "source": "The item to update",
+          "message": "要更新的項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "項目名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "庫存單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.display_name": {
+          "source": "Purchase Rate",
+          "message": "採購價格"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cHVyY2hhc2VfcmF0ZQ.short_desc": {
+          "source": "Cost price of the item",
+          "message": "品項成本價"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.cmF0ZQ.short_desc": {
+          "source": "Selling price of the item",
+          "message": "品項售價"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "度量單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "更新現有品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.desc": {
+          "source": "Update an existing item group in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.display_name": {
+          "source": "Update Item Group",
+          "message": "更新項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "品牌"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.YnJhbmQ.short_desc": {
+          "source": "Brand name",
+          "message": "品牌名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.display_name": {
+          "source": "Item Group",
+          "message": "項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfaWQ.short_desc": {
+          "source": "The item group to update",
+          "message": "要更新的項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "群組名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.Z3JvdXBfbmFtZQ.short_desc": {
+          "source": "Name of the item group",
+          "message": "品項群組名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "群組描述"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.aXRlbXM.short_desc": {
+          "source": "Items in the group",
+          "message": "群組中的品項"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "製造商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "製造商名稱"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.display_name": {
+          "source": "Unit",
+          "message": "單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.option.dW5pdA.short_desc": {
+          "source": "Unit of measurement",
+          "message": "度量單位"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWl0ZW0tZ3JvdXA.short_desc": {
+          "source": "Update an existing item group",
+          "message": "更新現有項目群組"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "更新發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this invoice",
+          "message": "此發票的客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGF0ZQ.short_desc": {
+          "source": "Invoice date",
+          "message": "發票日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnQ.short_desc": {
+          "source": "Discount amount or percentage",
+          "message": "折扣金額或百分比"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.display_name": {
+          "source": "Due Date",
+          "message": "到期日"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.ZHVlX2RhdGU.short_desc": {
+          "source": "Payment due date",
+          "message": "付款到期日"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice to update",
+          "message": "要更新的發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Invoice line items",
+          "message": "發票明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Invoice notes",
+          "message": "發票備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.display_name": {
+          "source": "Payment Terms",
+          "message": "付款條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF90ZXJtcw.short_desc": {
+          "source": "Payment terms in days",
+          "message": "付款條件（天數）"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "條款與條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "更新現有發票"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.desc": {
+          "source": "Update an existing purchase order in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.display_name": {
+          "source": "Update Purchase Order",
+          "message": "更新採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Purchase order date",
+          "message": "採購單日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.display_name": {
+          "source": "Delivery Date",
+          "message": "交貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.ZGVsaXZlcnlfZGF0ZQ.short_desc": {
+          "source": "Expected delivery date",
+          "message": "預計送達日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Purchase order line items",
+          "message": "採購單明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Purchase order notes",
+          "message": "採購單備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.display_name": {
+          "source": "Purchase Order",
+          "message": "採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cHVyY2hhc2VvcmRlcl9pZA.short_desc": {
+          "source": "The purchase order to update",
+          "message": "要更新的採購單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.display_name": {
+          "source": "Vendor",
+          "message": "廠商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.option.dmVuZG9yX2lk.short_desc": {
+          "source": "The vendor for this purchase order",
+          "message": "此採購單的供應商"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXB1cmNoYXNlLW9yZGVy.short_desc": {
+          "source": "Update an existing purchase order",
+          "message": "更新現有採購訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.desc": {
+          "source": "Update an existing package in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.display_name": {
+          "source": "Update Package",
+          "message": "更新包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.ZGF0ZQ.short_desc": {
+          "source": "Package date",
+          "message": "包裹日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Package line items",
+          "message": "包裹明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.bm90ZXM.short_desc": {
+          "source": "Package notes",
+          "message": "包裹備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package",
+          "message": "包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "The package to update",
+          "message": "要更新的包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXBhY2thZ2U.short_desc": {
+          "source": "Update an existing package",
+          "message": "更新現有包裹"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.desc": {
+          "source": "Update an existing sales order in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.display_name": {
+          "source": "Update Sales Order",
+          "message": "更新銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for this sales order",
+          "message": "此銷售訂單的客戶"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Sales order date",
+          "message": "銷售訂單日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Sales order line items",
+          "message": "銷售訂單明細項目"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Sales order notes",
+          "message": "銷售訂單備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.display_name": {
+          "source": "Sales Order",
+          "message": "銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2FsZXNvcmRlcl9pZA.short_desc": {
+          "source": "The sales order to update",
+          "message": "要更新的銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "發貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "預計發貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "Reference number",
+          "message": "參考編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "條款"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "條款與條件"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNhbGVzLW9yZGVy.short_desc": {
+          "source": "Update an existing sales order",
+          "message": "更新現有銷售訂單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.desc": {
+          "source": "Update an existing shipment order in Zoho Inventory",
+          "message": "更新 Zoho Inventory 中的現有出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.display_name": {
+          "source": "Update Shipment Order",
+          "message": "更新出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGF0ZQ.short_desc": {
+          "source": "Shipment date",
+          "message": "出貨日期"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "放送方式"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Method of delivery",
+          "message": "配送方式"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
+          "source": "Zoho Inventory organization",
+          "message": "Zoho Inventory 組織"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Shipment notes",
+          "message": "發貨備註"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment Order",
+          "message": "出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment order to update",
+          "message": "要更新的出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.display_name": {
+          "source": "Shipment Number",
+          "message": "發貨單號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcG1lbnRfbnVtYmVy.short_desc": {
+          "source": "Shipment order number",
+          "message": "發貨單編號"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.display_name": {
+          "source": "Shipping Charge",
+          "message": "運費"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.c2hpcHBpbmdfY2hhcmdl.short_desc": {
+          "source": "Shipping charge amount",
+          "message": "運費金額"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "追蹤號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Shipment tracking number",
+          "message": "發貨追蹤號碼"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.action.dXBkYXRlLXNoaXBtZW50LW9yZGVy.short_desc": {
+          "source": "Update an existing shipment order",
+          "message": "更新現有出貨單"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.desc": {
+          "source": "Zoho Inventory is an online inventory management software that helps businesses manage orders, warehousing, and shipping.\n\nThis integration supports contacts, items, item groups, item adjustments, packages, purchase orders, sales orders, and shipment orders.",
+          "message": "Zoho Inventory 是一款線上庫存管理軟體，可協助企業管理訂單、倉儲與運送。\n\n此整合支援聯絡人、項目、項目群組、項目調整、包裹、採購單、銷售訂單和出貨單。"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.display_name": {
+          "source": "Zoho Inventory",
+          "message": "Zoho Inventory"
+        },
+        "app.Wm9ob0ludmVudG9yeQ.short_desc": {
+          "source": "Zoho Inventory management software",
+          "message": "Zoho Inventory 管理軟體"
+        }
+      }
+    }
+  }
+}
